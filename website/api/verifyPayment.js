@@ -184,6 +184,12 @@ module.exports = async (req, res) => {
         if (existingData && existingData.licenseKey && existingData.status === 'completed') {
           // Payment already processed — return existing key (anti-replay)
           console.log(`[verifyPayment] Replay detected for ${razorpay_payment_id.substring(0, 8)}... — returning existing key`);
+          // Still send email in case the webhook path didn't
+          try {
+            await sendPurchaseEmail(email, existingData.licenseKey, razorpay_payment_id);
+          } catch (emailErr) {
+            console.warn('[verifyPayment] Email on replay path failed:', emailErr.message);
+          }
           return res.status(200).json({
             success: true,
             licenseKey: existingData.licenseKey
@@ -227,6 +233,12 @@ module.exports = async (req, res) => {
       // If data already exists (race lost), return the existing key
       if (currentData && currentData.licenseKey && currentData.status === 'completed') {
         console.log(`[verifyPayment] Race condition caught — payment already processed: ${razorpay_payment_id.substring(0, 8)}...`);
+        // Still send email in case webhook didn't
+        try {
+          await sendPurchaseEmail(email, currentData.licenseKey, razorpay_payment_id);
+        } catch (emailErr) {
+          console.warn('[verifyPayment] Email on race-lost path failed:', emailErr.message);
+        }
         return res.status(200).json({
           success: true,
           licenseKey: currentData.licenseKey
@@ -254,12 +266,27 @@ module.exports = async (req, res) => {
       }
       
       // [SECURITY FIX v2.2.0]: Match activate.js sanitization (replace dashes, not dots/slashes)
+      // [FIX v3.7.0]: AWAIT this write — if it's fire-and-forget and fails silently,
+      // the key is never registered and activate.js returns "key_not_found"
       const safeKey = licenseKey.replace(/-/g, '_');
-      firebaseFetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, paymentId: razorpay_payment_id, generatedAt: new Date().toISOString() })
-      }).catch(dbErr => console.warn('License key write failed:', dbErr));
+      try {
+        const keyWriteRes = await firebaseFetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, paymentId: razorpay_payment_id, generatedAt: new Date().toISOString() })
+        });
+        if (!keyWriteRes.ok) {
+          console.error(`[verifyPayment] License key index write failed (${keyWriteRes.status}) — retrying...`);
+          await firebaseFetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, paymentId: razorpay_payment_id, generatedAt: new Date().toISOString() })
+          });
+        }
+      } catch (keyWriteErr) {
+        console.error('[verifyPayment] License key index write FAILED:', keyWriteErr.message);
+        // Non-fatal — the payment record still has the key, and activate.js has a legacy fallback
+      }
 
       // ─── Send confirmation email (with 1 retry for transient failures) ───
       try {
@@ -280,7 +307,8 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      licenseKey
+      licenseKey,
+      emailSent: true
     });
 
   } catch (err) {

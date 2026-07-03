@@ -163,8 +163,36 @@ module.exports = async (req, res) => {
                 body: JSON.stringify({ paymentId: 'pre_v2.3_legacy', generatedAt: new Date().toISOString(), note: 'Auto-registered from existing activations' })
               }).catch(e => console.warn('[activate] Auto-register write failed:', e.message));
             } else {
-              console.log(`[activate] Key not found in purchase DB and no activations: ${safeKey.substring(0, 15)}...`);
-              return res.status(403).json({ success: false, error: 'key_not_found' });
+              // [FIX v3.7.0]: Before rejecting, check if the key exists in payments/ records
+              // This handles the case where licenses/keys/ write silently failed (fire-and-forget bug)
+              let foundInPayments = false;
+              try {
+                // Search payments by licenseKey (requires orderBy index, falls back to scan)
+                const paymentSearchUrl = `${DB_URL}/payments.json?orderBy="licenseKey"&equalTo="${encodeURIComponent(normalizedKey)}"&limitToLast=1`;
+                const paymentSearchRes = await firebaseFetch(paymentSearchUrl);
+                if (paymentSearchRes.ok) {
+                  const paymentResults = await paymentSearchRes.json();
+                  if (paymentResults && Object.keys(paymentResults).length > 0) {
+                    const firstPayment = Object.values(paymentResults)[0];
+                    if (firstPayment.status === 'completed') {
+                      foundInPayments = true;
+                      // Auto-register the missing key index
+                      console.log(`[activate] Key found in payments but missing from keys index — auto-registering: ${safeKey.substring(0, 15)}...`);
+                      await firebaseFetch(`${DB_URL}/licenses/keys/${safeKey}.json`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ paymentId: firstPayment.paymentId || 'recovered', email: firstPayment.email || '', generatedAt: new Date().toISOString(), note: 'Auto-recovered from payments record' })
+                      }).catch(e => console.warn('[activate] Auto-recover write failed:', e.message));
+                    }
+                  }
+                }
+              } catch (paymentSearchErr) {
+                console.warn('[activate] Payment fallback search failed:', paymentSearchErr.message);
+              }
+              if (!foundInPayments) {
+                console.log(`[activate] Key not found in purchase DB, activations, or payments: ${safeKey.substring(0, 15)}...`);
+                return res.status(403).json({ success: false, error: 'key_not_found' });
+              }
             }
           } else {
             console.log(`[activate] Key not found and activation check failed: ${safeKey.substring(0, 15)}...`);

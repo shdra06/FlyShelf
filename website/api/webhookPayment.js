@@ -1,6 +1,15 @@
 const crypto = require('crypto');
 const { firebaseFetch } = require('./_firebaseAdmin');
 
+// Safe import — if nodemailer isn't available, email is skipped (not fatal)
+let sendPurchaseEmail;
+try {
+  sendPurchaseEmail = require('./_email').sendPurchaseEmail;
+} catch (e) {
+  console.warn('[webhook] _email module not available:', e.message);
+  sendPurchaseEmail = async () => ({ skipped: true, reason: 'module_unavailable' });
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // Razorpay Webhook Handler — Server-to-Server (v2.0.0)
 //
@@ -180,14 +189,44 @@ module.exports = async (req, res) => {
 
     // Also store under license keys index
     // [SECURITY FIX v2.2.0]: Match activate.js sanitization (replace dashes, not dots/slashes)
+    // [FIX v3.7.0]: AWAIT this write — fire-and-forget failures cause key_not_found on activation
     const safeKey = licenseKey.replace(/-/g, '_');
-    firebaseFetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, paymentId, generatedAt: new Date().toISOString() })
-    }).catch(err => console.warn('[webhook] License index write failed:', err.message));
+    try {
+      const keyWriteRes = await firebaseFetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, paymentId, generatedAt: new Date().toISOString() })
+      });
+      if (!keyWriteRes.ok) {
+        console.error(`[webhook] License key index write failed (${keyWriteRes.status}) — retrying...`);
+        await firebaseFetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, paymentId, generatedAt: new Date().toISOString() })
+        });
+      }
+    } catch (keyWriteErr) {
+      console.error('[webhook] License key index write FAILED:', keyWriteErr.message);
+    }
 
     console.log(`[webhook] ✅ Key stored for ${paymentId}`);
+
+    // ─── Send confirmation email (with 1 retry for transient failures) ───
+    if (email) {
+      try {
+        let emailResult = await sendPurchaseEmail(email, licenseKey, paymentId);
+        if (emailResult && emailResult.error) {
+          console.warn('[webhook] Email attempt 1 failed, retrying in 1s...');
+          await new Promise(r => setTimeout(r, 1000));
+          emailResult = await sendPurchaseEmail(email, licenseKey, paymentId);
+        }
+        console.log(`[webhook] 📧 Email result:`, JSON.stringify(emailResult));
+      } catch (emailErr) {
+        console.warn('[webhook] Email send failed (non-blocking):', emailErr.message);
+      }
+    } else {
+      console.warn('[webhook] No email in payment notes — skipping email');
+    }
 
     // Razorpay expects 200 OK to confirm receipt
     return res.status(200).json({ status: 'ok', paymentId });

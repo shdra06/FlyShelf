@@ -880,5 +880,91 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  /* ==========================================
+     9. DYNAMIC DOWNLOAD COUNTER (GITHUB API)
+     Starts at 0, pre-fetches data, then animates
+     from 0 → total when the element scrolls into view.
+     ========================================== */
+  (function initDownloadCounter() {
+    const heroCount = document.getElementById('hero-download-count');
+    const statsCount = document.getElementById('stats-download-count');
+    if (!heroCount && !statsCount) return;
+
+    // Show 0 immediately so the visitor sees a number, not "..."
+    if (heroCount) heroCount.textContent = '0+';
+    if (statsCount) statsCount.textContent = '0+';
+
+    let fetchedTotal = null;   // will hold the number once the API responds
+    let heroAnimated = false;
+    let statsAnimated = false;
+
+    // --- Pre-fetch the download data in the background ---
+    fetch('https://api.github.com/repos/shdra06/FlyShelf/releases?per_page=100')
+      .then(res => { if (!res.ok) throw new Error('API error'); return res.json(); })
+      .then(releases => {
+        let total = 0;
+        releases.forEach(release => {
+          (release.assets || []).forEach(asset => {
+            if (asset.name.endsWith('.exe') || asset.name.endsWith('.apk') || asset.name.endsWith('.msix')) {
+              total += asset.download_count;
+            }
+          });
+        });
+        fetchedTotal = total || 71;  // baseline fallback
+        // If elements are already visible (above fold), trigger immediately
+        tryAnimate();
+      })
+      .catch(() => {
+        fetchedTotal = 71; // offline fallback
+        tryAnimate();
+      });
+
+    // --- Scroll-triggered animation via IntersectionObserver ---
+    const counterObserver = new IntersectionObserver((entries, obs) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.dataset.counterVisible = 'true';
+          obs.unobserve(entry.target);
+          tryAnimate();
+        }
+      });
+    }, { threshold: 0.3 });
+
+    if (heroCount) counterObserver.observe(heroCount);
+    if (statsCount) counterObserver.observe(statsCount);
+
+    function tryAnimate() {
+      if (fetchedTotal === null) return; // data not ready yet
+      if (heroCount && !heroAnimated && heroCount.dataset.counterVisible === 'true') {
+        heroAnimated = true;
+        animateCounter(heroCount, 0, fetchedTotal, 2200);
+      }
+      if (statsCount && !statsAnimated && statsCount.dataset.counterVisible === 'true') {
+        statsAnimated = true;
+        animateCounter(statsCount, 0, fetchedTotal, 2200);
+      }
+    }
+
+    // easeOutExpo: fast ramp then smooth landing
+    function easeOutExpo(t) {
+      return t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+    }
+
+    function animateCounter(el, start, end, duration) {
+      let t0 = null;
+      function tick(now) {
+        if (!t0) t0 = now;
+        const raw = Math.min((now - t0) / duration, 1);
+        const eased = easeOutExpo(raw);
+        const value = Math.floor(eased * (end - start) + start);
+        el.textContent = value.toLocaleString() + '+';
+        if (raw < 1) {
+          requestAnimationFrame(tick);
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+  })();
+
 });
 

@@ -6,14 +6,31 @@
   "hosting": {
     "public": "public",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
+    "redirects": [
       {
         "source": "/api/createOrder",
-        "function": "createRazorpayOrder"
+        "destination": "https://fly-shelf.vercel.app/api/createOrder",
+        "type": 307
       },
       {
         "source": "/api/verifyPayment",
-        "function": "verifyRazorpayPayment"
+        "destination": "https://fly-shelf.vercel.app/api/verifyPayment",
+        "type": 307
+      },
+      {
+        "source": "/api/activate",
+        "destination": "https://fly-shelf.vercel.app/api/activate",
+        "type": 307
+      },
+      {
+        "source": "/api/recoverKey",
+        "destination": "https://fly-shelf.vercel.app/api/recoverKey",
+        "type": 307
+      },
+      {
+        "source": "/api/revalidate",
+        "destination": "https://fly-shelf.vercel.app/api/revalidate",
+        "type": 307
       }
     ]
   }
