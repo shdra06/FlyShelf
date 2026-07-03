@@ -3642,6 +3642,8 @@
                                                             </Style>
                                                         </TextBox.Style>
                                                     </TextBox>
+                                                    <!-- Header separator line (matches bullet mode) -->
+                                                    <Border Height="1" Margin="10,0,10,2" Background="#25FFFFFF"/>
                                                     <!-- Embedded images (up to 5 for Pro, 1 for Free) -->
                                                     <ItemsControl ItemsSource="{Binding Images}" Margin="6,6,6,0">
                                                         <ItemsControl.ItemsPanel>
