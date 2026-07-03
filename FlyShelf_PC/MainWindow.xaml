@@ -1979,6 +1979,23 @@
                                            Text="{Binding FileName}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" FontWeight="SemiBold" FontSize="13" LineHeight="19" TextWrapping="Wrap" 
                                            TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" />
 
+                                <!-- Rich Markdown Preview — replaces raw TitleText for markdown items -->
+                                <TextBlock Name="MarkdownPreviewText"
+                                           settings:MarkdownInlineRenderer.MarkdownText="{Binding MarkdownPreviewContent}"
+                                           TextWrapping="Wrap" MaxHeight="{Binding CollapsedMaxHeight}"
+                                           TextTrimming="CharacterEllipsis" LineStackingStrategy="BlockLineHeight" LineHeight="18">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsMarkdownPreview}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
                                 <!-- Source App Label — small subtle "Copied from [app]" indicator -->
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                     <StackPanel.Style>
@@ -2137,11 +2154,9 @@
                              <Setter TargetName="TitleText" Property="Foreground" Value="{StaticResource CodeTextColor}" />
                              <Setter TargetName="TitleText" Property="FontSize" Value="11.5" />
                         </DataTrigger>
-                        <!-- Markdown styling with purple accent -->
+                        <!-- Markdown: hide raw TitleText, show rendered MarkdownPreviewText -->
                         <DataTrigger Binding="{Binding IsMarkdownPreview}" Value="True">
-                             <Setter TargetName="TitleText" Property="FontFamily" Value="Segoe UI, Inter" />
-                             <Setter TargetName="TitleText" Property="Foreground" Value="{StaticResource GeminiAccentColor}" />
-                             <Setter TargetName="TitleText" Property="FontSize" Value="12" />
+                             <Setter TargetName="TitleText" Property="Visibility" Value="Collapsed" />
                         </DataTrigger>
                         
                         <!-- Hover Effect on the Container -->

@@ -590,29 +590,45 @@ namespace FlyShelf.ViewModels
                     try
                     {
                         string possiblePath = capturedText;
+                        bool wasQuoted = false;
 
-                        // Strip surrounding quotes (VS Code / terminals often wrap paths in quotes)
+                        // Detect surrounding quotes — if the user copied a quoted path
+                        // (e.g. "E:\path\file.md" or 'E:\path\file.md'), treat it as
+                        // plain text, NOT as a file reference. Only strip quotes for
+                        // file:// URIs which are always meant as file references.
                         if (possiblePath.Length >= 2 && possiblePath[0] == '"' && possiblePath[possiblePath.Length - 1] == '"')
+                        {
+                            wasQuoted = true;
                             possiblePath = possiblePath.Substring(1, possiblePath.Length - 2);
+                        }
                         else if (possiblePath.Length >= 2 && possiblePath[0] == '\'' && possiblePath[possiblePath.Length - 1] == '\'')
+                        {
+                            wasQuoted = true;
                             possiblePath = possiblePath.Substring(1, possiblePath.Length - 2);
+                        }
 
                         // Handle file:// and file:/// URI schemes with percent-encoded chars
+                        // file:// URIs always indicate a file reference, even if quoted
                         if (possiblePath.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
                         {
+                            wasQuoted = false; // Override: file:// URIs are always file references
                             try { possiblePath = new Uri(possiblePath).LocalPath; } catch { } // Best-effort: failure is acceptable
                         }
 
-                        // Normalize path separators (VS Code on Windows sometimes uses forward slashes)
-                        possiblePath = possiblePath.Replace('/', '\\');
-
-                        // Trim trailing whitespace/newlines that may sneak in from drag payloads
-                        possiblePath = possiblePath.TrimEnd();
-                        
-                        if (File.Exists(possiblePath))
+                        // Only resolve as a file if the text was NOT quoted
+                        if (!wasQuoted)
                         {
-                            FlyShelf.Classes.Logger.LogAction("DRAG IN", $"Seamlessly resolved ambiguous text format to a localized physical file: {possiblePath}");
-                            item = new ClipboardItem(possiblePath);
+                            // Normalize path separators (VS Code on Windows sometimes uses forward slashes)
+                            possiblePath = possiblePath.Replace('/', '\\');
+
+                            // Trim trailing whitespace/newlines that may sneak in from drag payloads
+                            possiblePath = possiblePath.TrimEnd();
+                            
+                            if (File.Exists(possiblePath))
+                            {
+                                FlyShelf.Classes.Logger.LogAction("DRAG IN", $"Seamlessly resolved ambiguous text format to a localized physical file: {possiblePath}");
+                                item = new ClipboardItem(possiblePath);
+                            }
                         }
                     }
                     catch { } // Best-effort: failure is acceptable
@@ -638,9 +654,11 @@ namespace FlyShelf.ViewModels
                             bool classified = false;
 
                             // ═══ FILE PATH FALLBACK ═══
-                            // If the text looks like a file path with a known document extension but
-                            // File.Exists() failed (e.g. stale path, network drive, VS Code workspace-relative),
-                            // still classify it as a proper document card instead of plain text.
+                            // If the text looks like a file path with a known document extension
+                            // AND the file actually exists on disk, classify it as a document card.
+                            // If File.Exists fails (stale path, network drive, etc.), fall through
+                            // to normal text classification — paths that don't resolve to real files
+                            // should be treated as plain text.
                             string trimmedText = capturedText.Trim();
                             bool looksLikeFilePath = (trimmedText.Contains("\\") || trimmedText.Contains("/"))
                                                      && !trimmedText.Contains("\n")
@@ -650,21 +668,29 @@ namespace FlyShelf.ViewModels
                                 string lowTrimmed = trimmedText.ToLowerInvariant();
                                 if (lowTrimmed.EndsWith(".md") || lowTrimmed.EndsWith(".txt") || lowTrimmed.EndsWith(".doc") || lowTrimmed.EndsWith(".docx"))
                                 {
-                                    string pathExt = Path.GetExtension(trimmedText).ToUpperInvariant();
-                                    item.ItemType = ClipboardItemType.Document;
-                                    item.Extension = pathExt;
-                                    item.FileName = Path.GetFileName(trimmedText);
-                                    item.FilePath = trimmedText;
-                                    item.RawContent = capturedText;
+                                    // Normalize and check existence
+                                    string normalizedPath = trimmedText.Replace('/', '\\').TrimEnd();
+                                    bool fileExists = false;
+                                    try { fileExists = File.Exists(normalizedPath); } catch { }
 
-                                    if (pathExt == ".MD")
+                                    if (fileExists)
                                     {
-                                        // Read file contents if the file actually exists (best-effort)
-                                        try { if (File.Exists(trimmedText)) item.RawContent = File.ReadAllText(trimmedText); } catch { } // Best-effort: failure is acceptable
-                                        item.GenerateMarkdownIcon();
-                                    }
+                                        string pathExt = Path.GetExtension(normalizedPath).ToUpperInvariant();
+                                        item.ItemType = ClipboardItemType.Document;
+                                        item.Extension = pathExt;
+                                        item.FileName = Path.GetFileName(normalizedPath);
+                                        item.FilePath = normalizedPath;
+                                        item.RawContent = capturedText;
 
-                                    classified = true;
+                                        if (pathExt == ".MD")
+                                        {
+                                            // Read file contents for rich markdown preview
+                                            try { item.RawContent = File.ReadAllText(normalizedPath); } catch { }
+                                            item.GenerateMarkdownIcon();
+                                        }
+
+                                        classified = true;
+                                    }
                                 }
                             }
 

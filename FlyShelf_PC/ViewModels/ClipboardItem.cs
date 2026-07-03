@@ -377,6 +377,22 @@ namespace FlyShelf.ViewModels
             (ItemType == ClipboardItemType.Text && Extension == "MARKDOWN") ||
             (ItemType == ClipboardItemType.Document && 
              (Extension == ".MD" || Extension == "MD"));
+
+        /// <summary>
+        /// Returns the markdown source text for rich rendering in the clipboard card.
+        /// For markdown text items, this is the RawContent. For .md file items, RawContent
+        /// contains the file contents (read on capture). Limited to 3000 chars for perf.
+        /// </summary>
+        public string MarkdownPreviewContent
+        {
+            get
+            {
+                if (!IsMarkdownPreview) return string.Empty;
+                string content = !string.IsNullOrEmpty(RawContent) ? RawContent : FileName;
+                // Limit preview to 3000 chars for rendering performance in the card
+                return content.Length > 3000 ? content.Substring(0, 3000) + "\n..." : content;
+            }
+        }
         public bool IsJsonPreview => 
             (ItemType == ClipboardItemType.Code && Extension == "JSON") ||
             (ItemType == ClipboardItemType.Text && Extension == "JSON");
