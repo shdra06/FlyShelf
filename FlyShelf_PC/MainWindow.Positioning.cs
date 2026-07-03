@@ -928,7 +928,7 @@ namespace FlyShelf
             {
                 _scrollDecayTimer = new System.Windows.Threading.DispatcherTimer
                 {
-                    Interval = TimeSpan.FromMilliseconds(200) // Reset 200ms after scroll activity stops
+                    Interval = TimeSpan.FromMilliseconds(100) // Reset 100ms after scroll activity stops
                 };
                 _scrollDecayTimer.Tick += (s, ev) =>
                 {
