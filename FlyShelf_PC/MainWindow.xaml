@@ -3027,7 +3027,12 @@
                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
 
-
+                    <!-- Sync status indicator -->
+                    <StackPanel x:Name="NotesSyncStatusIndicator" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" 
+                                HorizontalAlignment="Left" Margin="10,0,0,0" Opacity="0.7">
+                        <Ellipse x:Name="NotesSyncDot" Width="6" Height="6" Fill="#10B981" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBlock x:Name="NotesSyncText" Text="Synced" FontSize="9" Foreground="#10B981" VerticalAlignment="Center"/>
+                    </StackPanel>
 
                     <!-- Mode toggle: Bullets ↔ Freeform -->
                     <Border Grid.Column="3" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesModeToggle_Click" Padding="8,3" Margin="0,0,4,0"
@@ -3231,6 +3236,7 @@
                                             <Grid Grid.Column="1">
                                             <Grid.RowDefinitions>
                                                 <RowDefinition Height="Auto"/> <!-- Header row -->
+                                                <RowDefinition Height="Auto"/> <!-- Header separator -->
                                                 <RowDefinition Height="Auto"/> <!-- Content row (collapsible) -->
                                                 <RowDefinition Height="Auto"/> <!-- Sub-bullets row (collapsible) -->
                                                 <RowDefinition Height="Auto"/> <!-- Tags row -->
@@ -3351,8 +3357,22 @@
                                                 </Border>
                                             </Grid>
 
+                                            <!-- Header separator line -->
+                                            <Border x:Name="BulletHeaderSeparator" Grid.Row="1" Height="1" Margin="22,0,8,2" Background="#25FFFFFF">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsCollapsed}" Value="False">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                            </Border>
+
                                             <!-- Bullet text content (collapsible) -->
-                                            <Border x:Name="BulletContent" Grid.Row="1" Margin="22,0,8,6">
+                                            <Border x:Name="BulletContent" Grid.Row="2" Margin="22,0,8,6">
                                                 <Border.Style>
                                                     <Style TargetType="Border">
                                                         <Setter Property="Visibility" Value="Visible"/>
@@ -3393,7 +3413,7 @@
                                             </Border>
 
                                             <!-- ── Sub-bullets (nested items, Shift+Enter) ── -->
-                                            <Border Grid.Row="2" Margin="26,0,8,4">
+                                            <Border Grid.Row="3" Margin="26,0,8,4">
                                                 <Border.Style>
                                                     <Style TargetType="Border">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -3461,7 +3481,7 @@
                                             </Border>
 
                                             <!-- Embedded image (optional, resizable via mouse wheel, up to 2 images) -->
-                                            <Border x:Name="BulletImageArea" Grid.Row="4" Margin="22,0,8,6">
+                                            <Border x:Name="BulletImageArea" Grid.Row="5" Margin="22,0,8,6">
 
                                                 <Border.Style>
                                                     <Style TargetType="Border">
@@ -3541,7 +3561,7 @@
                                             </Border>
 
                                             <!-- ═══ Tags chips row (visible when tags exist) ═══ -->
-                                            <ItemsControl x:Name="NoteTagsRow" Grid.Row="3" ItemsSource="{Binding Tags}" Margin="22,0,8,4">
+                                            <ItemsControl x:Name="NoteTagsRow" Grid.Row="4" ItemsSource="{Binding Tags}" Margin="22,0,8,4">
                                                 <ItemsControl.Style>
                                                     <Style TargetType="ItemsControl">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -3726,15 +3746,7 @@
                                                     <ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="12" Foreground="#22D3EE" VerticalAlignment="Center"/>
                                                 </Border>
 
-                                                <!-- AI Improve Button (quick one-click improve) -->
-                                                <Border x:Name="FreeformSectionImproveBtn" CornerRadius="6" Cursor="Hand"
-                                                        HorizontalAlignment="Right" VerticalAlignment="Top"
-                                                        Padding="5,4" Margin="0,4,108,0" Panel.ZIndex="10"
-                                                        Background="#1810B981" BorderBrush="#3010B981" BorderThickness="1"
-                                                        Opacity="1" IsHitTestVisible="True"
-                                                        MouseLeftButtonDown="NotesFreeformImprove_Click" ToolTip="AI Improve (fix grammar, clarity)">
-                                                    <ui:SymbolIcon Symbol="Sparkle24" FontSize="12" Foreground="#10B981" VerticalAlignment="Center"/>
-                                                </Border>
+                                                <!-- AI Improve Button removed — merged into AI dropdown menu -->
                                             </Grid>
                                         </Border>
                                         <DataTemplate.Triggers>
@@ -3853,6 +3865,13 @@
                         <TextBlock Text="•" FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                         <TextBlock x:Name="TodoCurrentDayLabel" Text="{Binding DisplayDate, FallbackValue='27, May'}" FontSize="12" FontWeight="SemiBold" 
                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Sync status indicator -->
+                    <StackPanel x:Name="TodoSyncStatusIndicator" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" 
+                                HorizontalAlignment="Left" Margin="10,0,0,0" Opacity="0.7">
+                        <Ellipse x:Name="TodoSyncDot" Width="6" Height="6" Fill="#10B981" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBlock x:Name="TodoSyncText" Text="Synced" FontSize="9" Foreground="#10B981" VerticalAlignment="Center"/>
                     </StackPanel>
 
                     <!-- Progress pill removed (UI bloat) -->

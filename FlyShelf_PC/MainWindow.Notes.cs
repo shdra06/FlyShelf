@@ -47,6 +47,7 @@ namespace FlyShelf
         private string? _notesUndoText = null;  // Stores pre-AI text for undo
         private FreeformSection? _notesUndoSection = null; // Which section the undo applies to
         private bool _freeformBulletMode = false; // True while typing inline bullets in freeform
+        private System.Windows.Threading.DispatcherTimer? _notesSyncStatusTimer;
 
         // ═══════════════════════════════════════════════════════════
         // TOGGLE NOTES PANEL
@@ -166,6 +167,47 @@ namespace FlyShelf
             NotesPanel.BeginAnimation(OpacityProperty, fadeAnim);
 
             SelectNoteDay(today);
+
+            // Update sync status indicator
+            UpdateNotesSyncStatus();
+
+            // Start periodic sync status timer (every 5s)
+            if (_notesSyncStatusTimer == null)
+            {
+                _notesSyncStatusTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(5)
+                };
+                _notesSyncStatusTimer.Tick += (s, ev) =>
+                {
+                    if (_isNotesActive || _isTodoActive)
+                        UpdateNotesSyncStatus();
+                };
+            }
+            _notesSyncStatusTimer.Start();
+        }
+
+        /// <summary>
+        /// Updates the sync status indicators in both Notes and Todo headers.
+        /// Shows green "Synced (N)" when peers are connected, orange "Offline" otherwise.
+        /// </summary>
+        private void UpdateNotesSyncStatus()
+        {
+            var count = Classes.PeerManager.Instance?.AliveCount ?? 0;
+            var isSynced = count > 0;
+
+            var colorHex = isSynced ? "#10B981" : "#F59E0B";
+            var text = isSynced ? $"Synced ({count})" : "Offline";
+            var brush = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString(colorHex));
+
+            NotesSyncDot.Fill = brush;
+            NotesSyncText.Text = text;
+            NotesSyncText.Foreground = brush;
+
+            TodoSyncDot.Fill = brush;
+            TodoSyncText.Text = text;
+            TodoSyncText.Foreground = brush;
         }
 
         /// <summary>
@@ -2496,22 +2538,43 @@ namespace FlyShelf
 
             var menu = new ContextMenu();
 
-            var summarize = new MenuItem { Header = "✨ Summarize" };
+            // Improve Writing (opens AI Diff window for grammar/clarity fix)
+            var improve = new MenuItem { Header = "Improve Writing", FontWeight = FontWeights.SemiBold };
+            improve.Click += (s, ev) =>
+            {
+                bool hasCloudKey = AiProviderService.Instance.HasCloudApiKey;
+                if (!LicenseManager.IsPro && !hasCloudKey)
+                {
+                    UpgradePrompt.ShowNotesAILimit(this);
+                    return;
+                }
+
+                var aiWindow = new FlyShelf.Windows.NotesAIDiffWindow(originalText);
+                aiWindow.Owner = this;
+                if (aiWindow.ShowDialog() == true && aiWindow.IsApplied)
+                {
+                    onApplyText(aiWindow.ImprovedText);
+                }
+            };
+            menu.Items.Add(improve);
+            menu.Items.Add(new Separator());
+
+            var summarize = new MenuItem { Header = "Summarize" };
             summarize.Click += (s, ev) => RunNotesAIAction("Summarize", originalText, onApplyText);
             menu.Items.Add(summarize);
 
-            var rewrite = new MenuItem { Header = "✍️ Rewrite" };
+            var rewrite = new MenuItem { Header = "Rewrite" };
             rewrite.Click += (s, ev) => RunNotesAIAction("Rewrite", originalText, onApplyText);
             menu.Items.Add(rewrite);
 
-            var organize = new MenuItem { Header = "🪄 Organize" };
+            var organize = new MenuItem { Header = "Organize" };
             organize.Click += (s, ev) => RunNotesAIAction("Organize", originalText, onApplyText);
             menu.Items.Add(organize);
 
             menu.Items.Add(new Separator());
 
             // Translate submenu with language options
-            var translate = new MenuItem { Header = "🌐 Translate" };
+            var translate = new MenuItem { Header = "Translate" };
             var languages = new[] { "English", "Spanish", "French", "German", "Japanese", "Chinese", "Hindi", "Arabic", "Korean", "Portuguese" };
             foreach (var lang in languages)
             {
@@ -2521,21 +2584,21 @@ namespace FlyShelf
             }
             menu.Items.Add(translate);
 
-            var expand = new MenuItem { Header = "💡 Expand" };
+            var expand = new MenuItem { Header = "Expand" };
             expand.Click += (s, ev) => RunNotesAIAction("Expand", originalText, onApplyText);
             menu.Items.Add(expand);
 
-            var explain = new MenuItem { Header = "🔍 Explain Simply" };
+            var explain = new MenuItem { Header = "Explain Simply" };
             explain.Click += (s, ev) => RunNotesAIAction("Explain", originalText, onApplyText);
             menu.Items.Add(explain);
 
             menu.Items.Add(new Separator());
 
-            var actions = new MenuItem { Header = "✅ Extract Actions" };
+            var actions = new MenuItem { Header = "Extract Actions" };
             actions.Click += (s, ev) => RunNotesAIAction("Actions", originalText, onApplyText);
             menu.Items.Add(actions);
 
-            var autoTag = new MenuItem { Header = "🏷️ Auto-Tag" };
+            var autoTag = new MenuItem { Header = "Auto-Tag" };
             autoTag.Click += (s, ev) => RunNotesAIAction("AutoTag", originalText, onApplyText);
             menu.Items.Add(autoTag);
 
