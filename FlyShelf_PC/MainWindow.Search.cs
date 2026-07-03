@@ -511,6 +511,7 @@ namespace FlyShelf
                             "Pinned" => item.IsPinned,
                             "PDF" => item.IsPdfPreview,
                             "Docs" => item.IsDocPreview,
+                            "Password" => item.IsPassword,
                             _ => true
                         };
                     }
@@ -532,6 +533,7 @@ namespace FlyShelf
                 UpdateFilterButtonHighlight(FilterBtn_Pinned, "Pinned");
                 UpdateFilterButtonHighlight(FilterBtn_Pdf, "PDF");
                 UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs");
+                UpdateFilterButtonHighlight(FilterBtn_Password, "Password");
 
                 // Render newly visible thumbnails immediately
                 RenderVisibleThumbnails();

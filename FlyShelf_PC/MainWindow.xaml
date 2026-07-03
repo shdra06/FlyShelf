@@ -708,6 +708,19 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Password Chip -->
+                    <Border x:Name="FilterBtn_Password" CornerRadius="10" Margin="1,0" Cursor="Hand"
+                            MouseLeftButtonDown="FilterCategory_Click" Tag="Password"
+                            Background="{DynamicResource FilterPasswordBg}"
+                            BorderBrush="{DynamicResource FilterPasswordBorder}" BorderThickness="1"
+                            Padding="8,5" SnapsToDevicePixels="True">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <ui:SymbolIcon Symbol="ShieldKeyhole24" Foreground="{DynamicResource TypeArchiveColor}" FontSize="13" Margin="0,0,4,0"/>
+                            <TextBlock Text="Keys" FontSize="10.5" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Separator -->
                     <Border Width="1" Height="20" Margin="3,0" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" VerticalAlignment="Center"/>
 

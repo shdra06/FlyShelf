@@ -128,6 +128,8 @@
     <SolidColorBrush x:Key="FilterPdfBorder"   Color="#30EF4444" options:Freeze="True"/>
     <SolidColorBrush x:Key="FilterDocsBg"      Color="#1860A5FA" options:Freeze="True"/>
     <SolidColorBrush x:Key="FilterDocsBorder"  Color="#3060A5FA" options:Freeze="True"/>
+    <SolidColorBrush x:Key="FilterPasswordBg"     Color="#18F59E0B" options:Freeze="True"/>
+    <SolidColorBrush x:Key="FilterPasswordBorder"  Color="#30F59E0B" options:Freeze="True"/>
 
     <!-- ═══ FIXED: Content Type Badge Backgrounds ═══ -->
     <SolidColorBrush x:Key="BadgeCodeBg"       Color="#1A10B981" options:Freeze="True"/>
