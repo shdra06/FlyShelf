@@ -161,7 +161,36 @@ namespace FlyShelf.Classes
                     byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"Chunk count mismatch. Transfer may be incomplete.\"}");
                     res.ContentType = "application/json";
                     await res.OutputStream.WriteAsync(errBytes, 0, errBytes.Length);
+                    try { res.Close(); } catch { } // PC-3 fix: close response on early exit
                     return;
+                }
+
+                // PC-2 fix: enforce the free-tier size limit BEFORE assembly by summing
+                // chunk sizes. Previously a 500MB file was fully written to disk and
+                // only then deleted - wasteful I/O and a temporary disk-space spike.
+                if (!LicenseManager.IsPro)
+                {
+                    long totalChunkBytes = 0;
+                    foreach (var cf in chunkFiles)
+                    {
+                        try { totalChunkBytes += new FileInfo(cf).Length; } catch { }
+                    }
+                    if (totalChunkBytes > 50L * 1024 * 1024)
+                    {
+                        try { Directory.Delete(chunkDir, true); } catch { }
+                        _chunkSessions.TryRemove(sessionId, out _);
+
+                        res.StatusCode = 413;
+                        byte[] preErrBytes = Encoding.UTF8.GetBytes("{\"error\":\"File transfer limited to 50 MB on Free tier.\"}");
+                        res.ContentType = "application/json";
+                        await res.OutputStream.WriteAsync(preErrBytes, 0, preErrBytes.Length);
+                        try { res.Close(); } catch { }
+
+                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                            FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ File rejected before assembly: exceeds 50 MB Free tier limit.");
+                        });
+                        return;
+                    }
                 }
 
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
