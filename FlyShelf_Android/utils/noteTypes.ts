@@ -98,10 +98,19 @@ export type TodoItem = {
   LastEditedByDevice?: string;
 };
 
+/** T-1: deletion tombstone - records a deleted item so the deletion
+ *  propagates across devices instead of the item resurrecting on merge. */
+export type TodoTombstone = {
+  Id: string;
+  DeletedAt: number; // unix ms
+};
+
 export type TodoDay = {
   Date: string;
   Items: TodoItem[];
   LastModified?: number;
+  /** Deletion tombstones (see TodoTombstone). Purged after 30 days. */
+  DeletedItems?: TodoTombstone[];
 };
 
 // ═══════════════════════════════════════════════════════════
