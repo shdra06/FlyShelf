@@ -2071,7 +2071,12 @@ export default function SyncScreen() {
       }
     };
     downloadBatch();
-    return () => { aborted = true; };
+    return () => {
+      aborted = true;
+      // I-4 fix: actively cancel in-flight downloads, not just future ones
+      activeResumables.forEach(r => { try { r.cancelAsync().catch(() => {}); } catch {} });
+      activeResumables.clear();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [richMediaDownloadTrigger]);
 
