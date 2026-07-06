@@ -266,7 +266,10 @@ namespace FlyShelf
                         {
                             using var proc = System.Diagnostics.Process.GetProcessById((int)processId);
                             processName = proc.ProcessName;
-                            try { processExePath = proc.MainModule?.FileName; } catch { } // Access denied for elevated processes
+                            // PERF (copy jitter fix): MainModule enumeration moved to the
+                            // icon-cache-miss path below. Accessing proc.MainModule walks the
+                            // process module list (5-50ms) and was paid on EVERY copy -
+                            // a visible UI-thread hitch while copying.
                         }
                         catch { }
 
@@ -331,6 +334,15 @@ namespace FlyShelf
                             {
                                 try
                                 {
+                                    // Resolve the exe path only once per app (icon-cache miss).
+                                    // MainModule is expensive; the result is cached below so this
+                                    // cost is paid at most once per source application.
+                                    try
+                                    {
+                                        using var procForIcon = System.Diagnostics.Process.GetProcessById((int)processId);
+                                        processExePath = procForIcon.MainModule?.FileName;
+                                    }
+                                    catch { } // Access denied for elevated processes
                                     if (!string.IsNullOrEmpty(processExePath) && System.IO.File.Exists(processExePath))
                                     {
                                         using var icon = System.Drawing.Icon.ExtractAssociatedIcon(processExePath);

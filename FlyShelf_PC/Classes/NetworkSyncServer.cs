@@ -103,20 +103,24 @@ namespace FlyShelf.Classes
         {
             if (_sseClipboardClients.IsEmpty) return;
             byte[] bytes = Encoding.UTF8.GetBytes($"data: {payload}\n\n");
-            var dead = new List<int>();
-            lock (_sseBroadcastLock)
+            // PERF (copy jitter fix): broadcast on a background task with async writes.
+            // The old code did synchronous Write/Flush under a lock on the CALLER's
+            // thread (often the UI thread via NotifyClipboardChanged) - one slow
+            // Cloudflare client could stall the UI for seconds on every copy.
+            _ = Task.Run(async () =>
             {
+                var dead = new List<int>();
                 foreach (var kvp in _sseClipboardClients)
                 {
                     try
                     {
-                        kvp.Value.OutputStream.Write(bytes, 0, bytes.Length);
-                        kvp.Value.OutputStream.Flush();
+                        await kvp.Value.OutputStream.WriteAsync(bytes, 0, bytes.Length);
+                        await kvp.Value.OutputStream.FlushAsync();
                     }
                     catch { dead.Add(kvp.Key); }
                 }
-            }
-            foreach (var id in dead) _sseClipboardClients.TryRemove(id, out _);
+                foreach (var id in dead) _sseClipboardClients.TryRemove(id, out _);
+            });
         }
 
         /// <summary>
@@ -142,8 +146,9 @@ namespace FlyShelf.Classes
 
             try
             {
-                // Keep alive with 20s heartbeat (Cloudflare has ~100s idle timeout)
-                while (true)
+                // Keep alive with 20s heartbeat (Cloudflare has ~100s idle timeout).
+                // Bounded by _isRunning so client loops exit on server shutdown.
+                while (_isRunning)
                 {
                     await Task.Delay(20000);
                     byte[] heartbeat = Encoding.UTF8.GetBytes(": heartbeat\n\n");
