@@ -2082,7 +2082,9 @@ export default function SyncScreen() {
 
   // ─── Send Text ───
   const transmitTextSecurely = async (payloadText: string) => {
-    const isDuplicate = clips.some(c => c.Raw === payloadText || c.Title === payloadText);
+    // I-6 fix: read the freshest clips via ref - the closure-captured `clips`
+    // can be stale when this is called from AppState/interval callbacks.
+    const isDuplicate = clipsStateRef.current.some(c => c.Raw === payloadText || c.Title === payloadText);
     if (isDuplicate) return;
     setIsSending(true);
     try {
