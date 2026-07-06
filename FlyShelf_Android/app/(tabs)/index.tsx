@@ -1994,6 +1994,10 @@ export default function SyncScreen() {
     const currentClips = clipsStateRef.current;
     if (currentClips.length === 0) return;
     let aborted = false;
+    // I-4 fix: track in-flight download resumables so cleanup can cancel them.
+    // The aborted flag alone only prevented NEW downloads from starting -
+    // in-progress downloads kept running as zombies after unmount/re-run.
+    const activeResumables = new Set<any>();
     // M-9: Process downloads in batches of 3 to limit concurrency
     const downloadBatch = async () => {
       const BATCH_SIZE = 3;
