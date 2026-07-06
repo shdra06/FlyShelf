@@ -41,4 +41,16 @@ app-example
 
 # generated native folders
 /ios
-/android
+
+# Android build artifacts (keep source, ignore build output)
+/android/build/
+/android/app/build/
+/android/app/.cxx/
+/android/.gradle/
+/android/.idea/
+/android/local.properties
+/android/app/debug.keystore
+/android/gradle/wrapper/gradle-wrapper.jar
+*.apk
+*.aab
+

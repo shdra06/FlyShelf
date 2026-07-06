@@ -37,10 +37,13 @@ FlyShelf_Android/node_modules/
 FlyShelf_Android/.expo/
 FlyShelf_Android/android/build/
 FlyShelf_Android/android/app/build/
+FlyShelf_Android/android/app/.cxx/
 FlyShelf_Android/android/.gradle/
 FlyShelf_Android/android/.idea/
 FlyShelf_Android/.idea/
 FlyShelf_Android/dist/
+FlyShelf_Android/**/*.apk
+FlyShelf_Android/**/*.aab
 
 # ─── Android Sensitive / Local-only Files ─────────────────────
 FlyShelf_Android/android/local.properties
