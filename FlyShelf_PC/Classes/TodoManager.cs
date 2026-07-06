@@ -557,7 +557,22 @@ namespace FlyShelf.Classes
         public static void RemoveItem(TodoDay day, TodoItem item)
         {
             day.Items.Remove(item);
+            RecordTombstone(day, item);
             ScheduleSave();
+        }
+
+        /// <summary>
+        /// T-1 fix: record a deletion tombstone so the delete propagates to
+        /// paired devices instead of the item resurrecting on next sync.
+        /// </summary>
+        private static void RecordTombstone(TodoDay day, TodoItem item)
+        {
+            if (string.IsNullOrEmpty(item?.Id)) return;
+            day.DeletedItems ??= new List<TodoTombstone>();
+            day.DeletedItems.RemoveAll(t => t.Id == item.Id);
+            long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            day.DeletedItems.Add(new TodoTombstone { Id = item.Id, DeletedAt = nowMs });
+            day.LastModified = nowMs;
         }
 
         public static void MarkDirty()
