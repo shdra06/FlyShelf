@@ -146,8 +146,9 @@ namespace FlyShelf.Classes
 
             try
             {
-                // Keep alive with 20s heartbeat (Cloudflare has ~100s idle timeout)
-                while (true)
+                // Keep alive with 20s heartbeat (Cloudflare has ~100s idle timeout).
+                // Bounded by _isRunning so client loops exit on server shutdown.
+                while (_isRunning)
                 {
                     await Task.Delay(20000);
                     byte[] heartbeat = Encoding.UTF8.GetBytes(": heartbeat\n\n");
