@@ -91,9 +91,20 @@ namespace FlyShelf.Classes
             }
 
             Logger.LogAction("PEER", $"v5 PeerManager starting [device={_myDeviceId}]");
-            _cts?.Cancel();
-            _cts?.Dispose();
+            // PC-8 fix: cancel first, then DEFER disposal. Disposing immediately raced
+            // with background tasks still holding the old token (heartbeat/discovery
+            // loops), which could throw ObjectDisposedException on restart.
+            var oldCts = _cts;
+            try { oldCts?.Cancel(); } catch { }
             _cts = new CancellationTokenSource();
+            if (oldCts != null)
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(10_000); // Grace period for tasks to observe cancellation
+                    try { oldCts.Dispose(); } catch { }
+                });
+            }
 
             // ═ ═ ═ FIX 1: Re-publish our own URLs to Firebase on startup ═ ═ ═
             // Ensures peers can always find us, even if ConfirmAndCleanup deleted them last session.
