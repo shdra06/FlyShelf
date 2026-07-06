@@ -958,28 +958,66 @@ namespace FlyShelf.Classes
                         }
                         else
                         {
-                            long localMod = 0;
-                            foreach (var item in localAllDay.Items)
+                            // T-1 fix: per-item merge with deletion tombstones.
+                            // Previously the entire day's Items collection was replaced when
+                            // the remote day was newer - concurrent edits to OTHER tasks were
+                            // silently lost. Items now merge by Id (newer LastEdited wins) and
+                            // deletions propagate via day.DeletedItems tombstones. An item
+                            // edited AFTER its deletion timestamp is revived (newer wins).
+                            bool dayChanged = false;
+
+                            var tombs = new Dictionary<string, long>(StringComparer.Ordinal);
+                            foreach (var t in localAllDay.DeletedItems ?? new List<TodoTombstone>())
+                                if (!string.IsNullOrEmpty(t.Id)) tombs[t.Id] = Math.Max(tombs.TryGetValue(t.Id, out var lv) ? lv : 0, t.DeletedAt);
+                            foreach (var t in remoteDay.DeletedItems ?? new List<TodoTombstone>())
+                                if (!string.IsNullOrEmpty(t.Id)) tombs[t.Id] = Math.Max(tombs.TryGetValue(t.Id, out var rv) ? rv : 0, t.DeletedAt);
+
+                            var itemsById = new Dictionary<string, TodoItem>(StringComparer.Ordinal);
+                            foreach (var li in localAllDay.Items)
+                                if (!string.IsNullOrEmpty(li.Id)) itemsById[li.Id] = li;
+                            foreach (var ri in remoteDay.Items)
                             {
-                                long iTs = new DateTimeOffset(item.LastEdited).ToUnixTimeMilliseconds();
-                                if (iTs > localMod) localMod = iTs;
+                                if (string.IsNullOrEmpty(ri.Id)) continue;
+                                bool exists = itemsById.TryGetValue(ri.Id, out var ex);
+                                if (!exists || ri.LastEdited > ex!.LastEdited)
+                                {
+                                    if (!string.IsNullOrEmpty(deviceName))
+                                    {
+                                        ri.LastEditedByDevice = deviceName;
+                                        if (string.IsNullOrEmpty(ri.CreatedByDevice))
+                                            ri.CreatedByDevice = exists ? ex!.CreatedByDevice : deviceName;
+                                    }
+                                    itemsById[ri.Id] = ri;
+                                    dayChanged = true;
+                                }
                             }
 
-                            if (remoteMod > localMod)
+                            var mergedItems = new List<TodoItem>();
+                            foreach (var it in itemsById.Values)
                             {
-                                localAllDay.Items = new System.Collections.ObjectModel.ObservableCollection<TodoItem>(remoteDay.Items);
-                                // Tag merged items with device origin
-                                if (!string.IsNullOrEmpty(deviceName))
+                                long editedMs = new DateTimeOffset(it.LastEdited).ToUnixTimeMilliseconds();
+                                if (tombs.TryGetValue(it.Id, out long deletedAt) && deletedAt >= editedMs)
                                 {
-                                    foreach (var item in localAllDay.Items)
-                                    {
-                                        item.LastEditedByDevice = deviceName;
-                                        if (string.IsNullOrEmpty(item.CreatedByDevice))
-                                            item.CreatedByDevice = deviceName;
-                                    }
+                                    dayChanged = true; // Deleted on some device, not edited since
+                                    continue;
                                 }
+                                if (tombs.Remove(it.Id)) dayChanged = true; // Edited after delete - revived
+                                mergedItems.Add(it);
+                            }
+
+                            long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                            localAllDay.DeletedItems = tombs
+                                .Where(kv => nowMs - kv.Value < 30L * 24 * 60 * 60 * 1000) // 30-day TTL
+                                .Select(kv => new TodoTombstone { Id = kv.Key, DeletedAt = kv.Value })
+                                .ToList();
+
+                            if (dayChanged)
+                            {
+                                localAllDay.Items = new System.Collections.ObjectModel.ObservableCollection<TodoItem>(
+                                    mergedItems.OrderBy(i => i.SortOrder).ToList());
                                 changed = true;
                             }
+                            localAllDay.LastModified = Math.Max(localAllDay.LastModified ?? 0, remoteMod);
                         }
                     }
                     if (changed)
