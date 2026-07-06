@@ -2752,23 +2752,31 @@ export default function SyncScreen() {
     qrProcessingRef.current = true;
     setIsQRScannerActive(false);
 
-    // Try to parse as FlyShelf QR payload
-    let qr: any = null;
-    try { qr = JSON.parse(data); } catch {}
+    // I-14 fix: try/finally guarantees the processing flag is always released.
+    // Previously, if executePairing (or clipboard access) threw, the flag stayed
+    // true forever and the QR scanner was permanently dead until app restart.
+    try {
+      // Try to parse as FlyShelf QR payload
+      let qr: any = null;
+      try { qr = JSON.parse(data); } catch {}
 
-    if (qr && qr.app === 'FlyShelf') {
-      // FlyShelf QR — do proper pairing
-      await executePairing({ key: qr.key, local: qr.local, global: qr.global, pin: qr.pin, name: qr.name, id: qr.id });
+      if (qr && qr.app === 'FlyShelf') {
+        // FlyShelf QR — do proper pairing
+        await executePairing({ key: qr.key, local: qr.local, global: qr.global, pin: qr.pin, name: qr.name, id: qr.id });
+        return;
+      }
+
+      // Not a FlyShelf QR — legacy behavior (copy text / open URL)
+      await Clipboard.setStringAsync(data);
+      if (Platform.OS === 'android') ToastAndroid.show('Copied QR content', ToastAndroid.SHORT);
+      if (data.toLowerCase().startsWith('http://') || data.toLowerCase().startsWith('https://')) Linking.openURL(data).catch(() => {});
+      setInputText(data);
+    } catch (e: any) {
+      syncLog('QR', `Scan handling failed: ${e?.message || e}`);
+      Alert.alert('QR Error', e?.message || 'Failed to process QR code.');
+    } finally {
       qrProcessingRef.current = false;
-      return;
     }
-
-    // Not a FlyShelf QR — legacy behavior (copy text / open URL)
-    await Clipboard.setStringAsync(data);
-    if (Platform.OS === 'android') ToastAndroid.show('Copied QR content', ToastAndroid.SHORT);
-    if (data.toLowerCase().startsWith('http://') || data.toLowerCase().startsWith('https://')) Linking.openURL(data).catch(() => {});
-    setInputText(data);
-    qrProcessingRef.current = false;
   };
 
 
