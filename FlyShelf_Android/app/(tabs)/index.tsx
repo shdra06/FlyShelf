@@ -2051,7 +2051,10 @@ export default function SyncScreen() {
                 }, 
                 (dp) => { const pct = dp.totalBytesExpectedToWrite > 0 ? dp.totalBytesWritten / dp.totalBytesExpectedToWrite : 0; setIncomingTransferProgress(p => ({...p, [transferId]: pct})); }
               );
-              const dlResult = await resumable.downloadAsync();
+              activeResumables.add(resumable);
+              let dlResult;
+              try { dlResult = await resumable.downloadAsync(); }
+              finally { activeResumables.delete(resumable); }
               setIncomingTransferProgress(p => { const n = {...p}; delete n[transferId]; return n; });
               if (dlResult && dlResult.status === 200) {
                 setDownloadedItems(prev => new Set(prev).add(item.id!));
