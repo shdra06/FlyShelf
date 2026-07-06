@@ -2786,9 +2786,14 @@ export default function SyncScreen() {
     setIsSending(true);
     const { uri: physicalPath, name, size, type } = payload;
     syncLog('UPLOAD', `Starting: ${name} (${type}) size=${size || '?'}`);
+    // I-10 fix: track the ACTUAL temp path so the finally block can delete it.
+    // The old cleanup rebuilt the name WITHOUT the timestamp prefix
+    // (sync_${name} vs sync_${timestamp}_${name}), so temp copies under
+    // SYNC_CACHE_BASE were never deleted - a disk leak on every upload.
+    let hydratedPath = '';
     try {
       const safeName = `sync_${NetworkClock.now()}_` + name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const hydratedPath = `${SYNC_CACHE_BASE}${safeName}`;
+      hydratedPath = `${SYNC_CACHE_BASE}${safeName}`;
       await FileSystem.copyAsync({ from: physicalPath, to: hydratedPath });
 
       if (targetDeviceOrGlobal === 'Global') {
