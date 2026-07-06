@@ -164,9 +164,14 @@ export default function TodoScreen() {
   const pollCountRef = useRef(0);
   const syncFailCountRef = useRef(0);
   const mountedRef = useRef(true);
+  // T-3 fix: mirror active timers in a ref so unmount cleanup can clear the
+  // interval handles directly. React does not run setState updaters on
+  // unmounted components, so cleanup must never rely on them.
+  const activeTimersRef = useRef<Record<string, { remaining: number; intervalId: ReturnType<typeof setInterval> }>>({});
 
-  // Keep ref in sync
+  // Keep refs in sync
   useEffect(() => { daysRef.current = days; }, [days]);
+  useEffect(() => { activeTimersRef.current = activeTimers; }, [activeTimers]);
 
   // Unmount guard
   useEffect(() => {
