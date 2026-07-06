@@ -912,6 +912,7 @@ namespace FlyShelf.Classes
                         i.CreatedByDevice, i.LastEditedByDevice,
                         ReminderAt = i.ReminderAt?.ToString("o", CultureInfo.InvariantCulture)
                     }).ToList(),
+                    DeletedItems = day.DeletedItems ?? new List<TodoTombstone>(),
                     LastModified = lastMod
                 };
             }).ToList();
