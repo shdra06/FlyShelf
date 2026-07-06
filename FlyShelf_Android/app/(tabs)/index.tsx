@@ -2971,7 +2971,7 @@ export default function SyncScreen() {
       }
       if (Platform.OS === 'android') ToastAndroid.show(`✅ ${name} sent!`, ToastAndroid.SHORT);
     } catch (err: any) { syncLog('UPLOAD', `FAILED: ${err?.message}`); Alert.alert('Upload Failed', err?.message || 'Unknown error');
-    } finally { try { await FileSystem.deleteAsync(`${SYNC_CACHE_BASE}sync_${name.replace(/[^a-zA-Z0-9.-]/g, '_')}`, { idempotent: true }); } catch {} }
+    } finally { if (hydratedPath) { try { await FileSystem.deleteAsync(hydratedPath, { idempotent: true }); } catch {} } }
     } catch (outerErr: any) { syncLog('UPLOAD', `CRASH: ${outerErr?.message}`); Alert.alert('Error', outerErr?.message || 'Unexpected error'); }
     setIsSending(false);
     setPendingUploadPayload(null);
