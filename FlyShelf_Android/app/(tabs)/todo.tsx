@@ -498,11 +498,12 @@ export default function TodoScreen() {
     restoreTimers();
 
     return () => {
-      // Clear interval handles but keep AsyncStorage data for restoration
-      setActiveTimers(prev => {
-        Object.values(prev).forEach(t => clearInterval(t.intervalId));
-        return prev;
-      });
+      // T-3 fix: clear interval handles from the ref (AsyncStorage data is kept
+      // for restoration). The previous code cleared them inside a setActiveTimers
+      // updater, but React does not invoke state updaters on unmounted
+      // components - the intervals leaked and kept firing forever.
+      Object.values(activeTimersRef.current).forEach(t => clearInterval(t.intervalId));
+      activeTimersRef.current = {};
     };
   }, []);
 
