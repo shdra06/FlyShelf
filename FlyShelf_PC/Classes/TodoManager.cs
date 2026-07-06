@@ -318,9 +318,22 @@ namespace FlyShelf.Classes
         }
     }
 
+    /// <summary>
+    /// T-1: deletion tombstone - records a deleted item so the deletion
+    /// propagates to paired devices instead of the item resurrecting on merge.
+    /// </summary>
+    public class TodoTombstone
+    {
+        public string Id { get; set; } = "";
+        public long DeletedAt { get; set; } // Unix ms
+    }
+
     public class TodoDay : INotifyPropertyChanged
     {
         public DateTime Date { get; set; } = DateTime.Today;
+
+        /// <summary>T-1: deletion tombstones for this day. Purged after 30 days during merge.</summary>
+        public List<TodoTombstone> DeletedItems { get; set; } = new();
 
         [JsonIgnore]
         public string DisplayDate => Date.ToString("dd, MMM", CultureInfo.InvariantCulture);
