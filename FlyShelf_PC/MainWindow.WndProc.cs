@@ -266,7 +266,10 @@ namespace FlyShelf
                         {
                             using var proc = System.Diagnostics.Process.GetProcessById((int)processId);
                             processName = proc.ProcessName;
-                            try { processExePath = proc.MainModule?.FileName; } catch { } // Access denied for elevated processes
+                            // PERF (copy jitter fix): MainModule enumeration moved to the
+                            // icon-cache-miss path below. Accessing proc.MainModule walks the
+                            // process module list (5-50ms) and was paid on EVERY copy -
+                            // a visible UI-thread hitch while copying.
                         }
                         catch { }
 
