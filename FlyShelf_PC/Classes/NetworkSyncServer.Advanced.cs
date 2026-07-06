@@ -25,6 +25,44 @@ namespace FlyShelf.Classes
         // ─── Chunked Upload System (bypasses Cloudflare 100MB limit) ───
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _chunkSessions = new();
 
+        // PC-1 fix: TTL sweeper for abandoned chunk sessions. If a client starts an
+        // upload but never finalizes, its temp directory would otherwise live forever.
+        // First sweep runs 2 minutes after startup (also cleans leftovers from crashed
+        // runs), then every 10 minutes. Sessions idle for over 1 hour are deleted.
+        private static readonly TimeSpan _chunkSessionTtl = TimeSpan.FromHours(1);
+        private static readonly System.Threading.Timer _chunkSweepTimer =
+            new(_ => SweepExpiredChunkSessions(), null, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(10));
+
+        private static void SweepExpiredChunkSessions()
+        {
+            try
+            {
+                string root = Path.Combine(Path.GetTempPath(), "FlyShelf_Chunks");
+                if (!Directory.Exists(root)) return;
+                var cutoff = DateTime.UtcNow - _chunkSessionTtl;
+                foreach (var dir in Directory.GetDirectories(root))
+                {
+                    try
+                    {
+                        // Chunk writes update the directory's LastWriteTime, so an old
+                        // timestamp means the session is abandoned (never finalized).
+                        if (Directory.GetLastWriteTimeUtc(dir) < cutoff)
+                        {
+                            Directory.Delete(dir, true);
+                            string sessionId = Path.GetFileName(dir);
+                            _chunkSessions.TryRemove(sessionId, out _);
+                            Logger.LogAction("CHUNK_SWEEP", $"Removed abandoned chunk session '{sessionId}' (idle > {_chunkSessionTtl.TotalMinutes:F0}min)");
+                        }
+                    }
+                    catch { } // Directory may be in active use - skip this cycle
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("CHUNK_SWEEP", $"Sweep error: {ex.Message}");
+            }
+        }
+
         private async Task HandleChunkUpload(HttpListenerRequest req, HttpListenerResponse res)
         {
             try
