@@ -95,6 +95,12 @@ namespace FlyShelf.Classes
 
         // ═══ Accept Loop ═══
 
+        // PC-10 fix: bound concurrent incoming connections (backpressure).
+        // Previously every accepted TCP connection spawned an unbounded Task.Run,
+        // allowing a LAN peer (or port scanner) to exhaust threads/memory (LAN DoS).
+        private const int MAX_CONCURRENT_CONNECTIONS = 16;
+        private readonly System.Threading.SemaphoreSlim _connectionGate = new(MAX_CONCURRENT_CONNECTIONS, MAX_CONCURRENT_CONNECTIONS);
+
         private async Task AcceptLoop(CancellationToken ct)
         {
             while (!ct.IsCancellationRequested && _isRunning)
@@ -102,7 +108,18 @@ namespace FlyShelf.Classes
                 try
                 {
                     var tcpClient = await _listener!.AcceptTcpClientAsync(ct);
-                    _ = Task.Run(() => HandleIncomingConnection(tcpClient, ct));
+                    if (!await _connectionGate.WaitAsync(0, ct))
+                    {
+                        // At capacity - reject immediately instead of queueing unbounded work
+                        Logger.LogAction("TCP_ENGINE", $"Connection rejected: {MAX_CONCURRENT_CONNECTIONS} concurrent connections already active");
+                        try { tcpClient.Dispose(); } catch { }
+                        continue;
+                    }
+                    _ = Task.Run(async () =>
+                    {
+                        try { await HandleIncomingConnection(tcpClient, ct); }
+                        finally { _connectionGate.Release(); }
+                    });
                 }
                 catch (OperationCanceledException) { break; }
                 catch (ObjectDisposedException) { break; }
