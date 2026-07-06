@@ -882,6 +882,9 @@ namespace FlyShelf.Classes
                     long iTs = new DateTimeOffset(item.LastEdited).ToUnixTimeMilliseconds();
                     if (iTs > lastMod) lastMod = iTs;
                 }
+                // T-1 fix: day.LastModified is bumped on deletions/merges - include it
+                // so peers see deletion knowledge even when no item edit is newer.
+                if (day.LastModified.HasValue && day.LastModified.Value > lastMod) lastMod = day.LastModified.Value;
                 if (lastMod == 0) lastMod = new DateTimeOffset(day.Date).ToUnixTimeMilliseconds();
 
                 return new {
