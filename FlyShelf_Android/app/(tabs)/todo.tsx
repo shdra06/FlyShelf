@@ -284,15 +284,59 @@ export default function TodoScreen() {
     } catch {}
   }, []);
 
-  // ─── Merge incoming days (last-write-wins by date) ─────
+  // ─── T-1 fix: per-item merge with deletion tombstones ─────
+  // Items merge by Id using per-item LastEdited (newer edit wins). Deletions
+  // are recorded as tombstones in day.DeletedItems so they propagate across
+  // devices instead of resurrecting; an item edited AFTER its deletion is
+  // revived (newer timestamp wins either way). The previous day-level
+  // last-write-wins silently discarded concurrent edits to other tasks.
   const mergeDays = useCallback((local: TodoDay[], remote: TodoDay[]): TodoDay[] => {
+    const ts = (iso?: string): number => {
+      if (!iso) return 0;
+      const t = new Date(iso).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+    const TOMBSTONE_TTL = 30 * 24 * 60 * 60 * 1000; // Purge tombstones after 30 days
     const map = new Map<string, TodoDay>();
     for (const d of local) map.set(d.Date, d);
     for (const rd of remote) {
       const existing = map.get(rd.Date);
-      if (!existing || (rd.LastModified || 0) > (existing.LastModified || 0)) {
-        map.set(rd.Date, rd);
+      if (!existing) { map.set(rd.Date, rd); continue; }
+
+      // 1. Union tombstones by Id (latest DeletedAt wins)
+      const tombs = new Map<string, number>();
+      for (const t of existing.DeletedItems || []) tombs.set(t.Id, Math.max(tombs.get(t.Id) || 0, t.DeletedAt));
+      for (const t of rd.DeletedItems || []) tombs.set(t.Id, Math.max(tombs.get(t.Id) || 0, t.DeletedAt));
+
+      // 2. Union items by Id (newer LastEdited wins)
+      const items = new Map<string, TodoItem>();
+      for (const li of existing.Items) items.set(li.Id, li);
+      for (const ri of rd.Items) {
+        const ex = items.get(ri.Id);
+        if (!ex || ts(ri.LastEdited) > ts(ex.LastEdited)) items.set(ri.Id, ri);
       }
+
+      // 3. Apply tombstones: deletion wins unless the item was edited after it
+      const now = NetworkClock.now();
+      const mergedItems: TodoItem[] = [];
+      for (const it of items.values()) {
+        const deletedAt = tombs.get(it.Id) || 0;
+        if (deletedAt > 0 && deletedAt >= ts(it.LastEdited)) continue; // stays deleted
+        if (deletedAt > 0) tombs.delete(it.Id); // edited after deletion - revived
+        mergedItems.push(it);
+      }
+      mergedItems.sort((a, b) => a.SortOrder - b.SortOrder);
+
+      const mergedTombs = Array.from(tombs.entries())
+        .filter(([, at]) => now - at < TOMBSTONE_TTL)
+        .map(([Id, DeletedAt]) => ({ Id, DeletedAt }));
+
+      map.set(rd.Date, {
+        ...existing,
+        Items: mergedItems,
+        DeletedItems: mergedTombs,
+        LastModified: Math.max(existing.LastModified || 0, rd.LastModified || 0),
+      });
     }
     return Array.from(map.values()).sort((a, b) => a.Date.localeCompare(b.Date));
   }, []);
