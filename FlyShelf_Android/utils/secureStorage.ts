@@ -262,3 +262,42 @@ export async function getSecureItem(key: string): Promise<string | null> {
 export async function removeSecureItem(key: string): Promise<void> {
   await AsyncStorage.removeItem(key);
 }
+
+/**
+ * SS-1/SS-3 fix: pre-derives the encryption key asynchronously so the
+ * synchronous encrypt/decrypt API never has to run PBKDF2 (100K iterations,
+ * 100-300ms) or a blocking Keystore read (200-500ms) on the JS thread
+ * during normal operation.
+ *
+ * First run (no stored key material yet): warmup intentionally does nothing
+ * and lets the lazy sync path own generation, avoiding a create/create race
+ * between two writers. Every subsequent launch is warmed asynchronously.
+ */
+export async function warmupSecureStorage(): Promise<void> {
+  try {
+    if (_cachedKey) return;
+    const crypto = getCryptoInstance();
+    if (!crypto || typeof crypto.pbkdf2 !== 'function') return;
+    const [saltId, password] = await Promise.all([
+      SecureStore.getItemAsync(DEVICE_SALT_ALIAS).catch(() => null),
+      SecureStore.getItemAsync(MASTER_KEY_ALIAS).catch(() => null),
+    ]);
+    if (!saltId || !password) return; // First run - lazy sync path owns generation
+    const saltSeed = `FlyShelf_SecureStorage_Salt_v2_${saltId}`;
+    await new Promise<void>((resolve) => {
+      crypto.pbkdf2(password, saltSeed, PBKDF2_ITERATIONS, KEY_SIZE, 'sha256', (err: any, key: any) => {
+        if (!err && key && !_cachedKey) _cachedKey = key;
+        resolve();
+      });
+    });
+  } catch (e) {
+    console.warn('[SecureStorage] Async key warmup failed - will derive lazily', e);
+  }
+}
+
+// Kick off warmup right after module load (deferred one tick so app startup
+// rendering is not delayed). By the time the first encrypt/decrypt runs,
+// the key is already cached and the JS thread never blocks.
+if (Platform.OS !== 'web') {
+  setTimeout(() => { void warmupSecureStorage(); }, 0);
+}
