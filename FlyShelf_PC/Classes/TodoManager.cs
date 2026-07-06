@@ -859,6 +859,7 @@ namespace FlyShelf.Classes
         public static void DeleteItem(TodoDay day, TodoItem item)
         {
             day.Items.Remove(item);
+            RecordTombstone(day, item);
             ScheduleSave();
         }
 
