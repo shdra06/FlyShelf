@@ -724,9 +724,16 @@ export default function TodoScreen() {
       {
         text: 'Delete', style: 'destructive', onPress: () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          // T-1 fix: record a deletion tombstone so the delete propagates to
+          // paired devices instead of the item resurrecting on next sync.
+          const deletedAt = NetworkClock.now();
           const updated = daysRef.current.map(d => {
             if (d.Date !== selectedDayKey) return d;
-            return { ...d, Items: d.Items.filter(i => i.Id !== itemId) };
+            return {
+              ...d,
+              Items: d.Items.filter(i => i.Id !== itemId),
+              DeletedItems: [...(d.DeletedItems || []).filter(t => t.Id !== itemId), { Id: itemId, DeletedAt: deletedAt }],
+            };
           });
           markModified(selectedDayKey, updated);
           if (expandedItemId === itemId) setExpandedItemId(null);
