@@ -2797,7 +2797,10 @@ export default function SyncScreen() {
 
   // ─── Heavy Upload ───
   const CLOUD_CHUNK_SIZE = 5 * 1024 * 1024; // 5MB for Cloudflare
-  const LAN_CHUNK_SIZE = 25 * 1024 * 1024; // 25MB for LAN (fewer round-trips)
+  // I-9 fix: 25MB LAN chunks were read as base64 (~33MB JS strings plus
+  // copies) and risked OOM crashes on low-RAM devices. 8MB keeps the peak
+  // around ~11MB while staying fast on LAN.
+  const LAN_CHUNK_SIZE = 8 * 1024 * 1024; // 8MB for LAN
   const LAN_CHUNK_THRESHOLD = 50 * 1024 * 1024; // 50MB — files above this use chunked even on LAN
 
   const executeHeavyUpload = async (targetDeviceOrGlobal: any, payloadOverride?: any) => {
