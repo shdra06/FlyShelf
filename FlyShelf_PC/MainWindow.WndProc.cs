@@ -334,6 +334,15 @@ namespace FlyShelf
                             {
                                 try
                                 {
+                                    // Resolve the exe path only once per app (icon-cache miss).
+                                    // MainModule is expensive; the result is cached below so this
+                                    // cost is paid at most once per source application.
+                                    try
+                                    {
+                                        using var procForIcon = System.Diagnostics.Process.GetProcessById((int)processId);
+                                        processExePath = procForIcon.MainModule?.FileName;
+                                    }
+                                    catch { } // Access denied for elevated processes
                                     if (!string.IsNullOrEmpty(processExePath) && System.IO.File.Exists(processExePath))
                                     {
                                         using var icon = System.Drawing.Icon.ExtractAssociatedIcon(processExePath);
