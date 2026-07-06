@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
@@ -21,6 +22,7 @@ public partial class App : Application
     private static bool _justCompletedOnboarding = false; // Set when onboarding wizard completes in this session
 
     // Shake Detection State
+    private static readonly object _shakeLock = new object();
     private static int _shakeCount = 0;
     private static int _lastSigDirX = 0; 
     private static int _lastSigDirY = 0; 
@@ -109,7 +111,7 @@ public partial class App : Application
                 }
                 else if (e.Args[i].Equals("--console-pid", StringComparison.OrdinalIgnoreCase) && i + 1 < e.Args.Length)
                 {
-                    int.TryParse(e.Args[i + 1], out consolePid);
+                    int.TryParse(e.Args[i + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out consolePid);
                 }
             }
         }
@@ -159,7 +161,7 @@ public partial class App : Application
                 if (activeConsolePid != -1 && !argsList.Contains("--console-pid"))
                 {
                     argsList.Add("--console-pid");
-                    argsList.Add(activeConsolePid.ToString());
+                    argsList.Add(activeConsolePid.ToString(CultureInfo.InvariantCulture));
                 }
 
                 FlyShelf.Classes.SparsePackageRegistrar.EnsureRegistered(argsList.ToArray());
@@ -170,7 +172,7 @@ public partial class App : Application
             Task.Run(async () =>
             {
                 await RunAITestAsync();
-                Dispatcher.Invoke(() => Shutdown());
+                Dispatcher.InvokeAsync(() => Shutdown());
             });
             return;
         }
@@ -189,17 +191,98 @@ public partial class App : Application
             }
         }
 
-        // 2. Mutex Check for single instance
-        const string appName = "FlyShelf_SingleInstance_Mutex_Global";
+        // 2. Variant-aware single-instance guard
+        // Each variant (EXE vs Store) gets its own mutex so we can detect cross-variant conflicts.
+        // The standalone EXE is the default/priority version.
+#if MSIX_STORE
+        const string ownMutex   = "FlyShelf_SingleInstance_Store";
+        const string rivalMutex = "FlyShelf_SingleInstance_Exe";
+        const string ownLabel   = "Microsoft Store";
+        const string rivalLabel = "Standalone EXE";
+#else
+        const string ownMutex   = "FlyShelf_SingleInstance_Exe";
+        const string rivalMutex = "FlyShelf_SingleInstance_Store";
+        const string ownLabel   = "Standalone EXE";
+#pragma warning disable CS0219 // rivalLabel is used only in MSIX_STORE build
+        const string rivalLabel = "Microsoft Store";
+#pragma warning restore CS0219
+#endif
+
         bool createdNew;
-        _mutex = new System.Threading.Mutex(true, appName, out createdNew);
+        _mutex = new System.Threading.Mutex(true, ownMutex, out createdNew);
 
         if (!createdNew)
         {
-            // Another instance is already running
+            // Same variant already running — silent exit (existing behavior)
             Application.Current.Shutdown();
             return;
         }
+
+        // ── Check if the OTHER variant is running ──
+        bool rivalRunning = false;
+        try
+        {
+            using var probe = System.Threading.Mutex.OpenExisting(rivalMutex);
+            rivalRunning = true;
+        }
+        catch (WaitHandleCannotBeOpenedException) { /* not running — good */ }
+        catch { /* ACL or other error — assume not running */ }
+
+        if (rivalRunning)
+        {
+#if MSIX_STORE
+            // Store launched but EXE (priority version) is already running — exit Store
+            MessageBox.Show(
+                "FlyShelf (Standalone EXE) is already running.\n\n" +
+                "The standalone version is the primary installation.\n" +
+                "Please use the EXE version or uninstall it first to use the Store version.",
+                "FlyShelf — Dual Installation Detected",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            try { _mutex.ReleaseMutex(); _mutex.Dispose(); } catch { }
+            _mutex = null;
+            Application.Current.Shutdown();
+            return;
+#else
+            // EXE launched but Store is already running — EXE takes priority, warn and proceed
+            MessageBox.Show(
+                "FlyShelf (Microsoft Store version) is also running.\n\n" +
+                "The standalone EXE is the primary version. Please close the Store version " +
+                "from the system tray to avoid sync port conflicts.\n\n" +
+                "Tip: You can uninstall the Store version from Windows Settings → Apps.",
+                "FlyShelf — Dual Installation Detected",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            // EXE proceeds — it's the priority version.
+#endif
+        }
+
+        // ── Legacy mutex check: old versions (pre-3.7) used a single shared name ──
+        bool legacyRunning = false;
+        try
+        {
+            using var legacyProbe = System.Threading.Mutex.OpenExisting("FlyShelf_SingleInstance_Mutex_Global");
+            legacyRunning = true;
+        }
+        catch (WaitHandleCannotBeOpenedException) { /* not running */ }
+        catch { /* assume not running */ }
+
+        if (legacyRunning)
+        {
+            MessageBox.Show(
+                "An older version of FlyShelf is already running.\n\n" +
+                "Please close the older instance or update it to continue.",
+                "FlyShelf — Version Conflict",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            try { _mutex.ReleaseMutex(); _mutex.Dispose(); } catch { }
+            _mutex = null;
+            Application.Current.Shutdown();
+            return;
+        }
+
+        FlyShelf.Classes.Logger.LogAction("STARTUP", $"Instance acquired: {ownLabel} variant");
+
 
         base.OnStartup(e);
 
@@ -293,15 +376,9 @@ public partial class App : Application
         try { FlyShelf.Classes.LicenseManager.Load(); }
         catch (Exception ex)
         {
-            FlyShelf.Classes.Logger.LogAction("LICENSE_RECOVERY", $"License load failed, deleting corrupt file: {ex.Message}");
-            try
-            {
-                string licensePath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "license.json");
-                if (System.IO.File.Exists(licensePath)) System.IO.File.Delete(licensePath);
-                FlyShelf.Classes.LicenseManager.Load();
-            }
-            catch { /* will trigger safe mode via outer handler */ throw; }
+            FlyShelf.Classes.Logger.LogAction("LICENSE_RECOVERY", $"License load failed: {ex.Message} — attempting recovery");
+            // Don't delete license.json — attempt normal load which has backup key recovery
+            FlyShelf.Classes.LicenseManager.Load();
         }
         FlyShelf.Classes.ReminderManager.Load();
         
@@ -644,6 +721,10 @@ public partial class App : Application
         try { FlyShelf.Classes.ReminderScheduler.Stop(); } catch { } // Best-effort: failure is acceptable
         try { FlyShelf.Classes.ReminderManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
 
+        // H-01: Flush all pending data to disk BEFORE network ops (which may hang)
+        try { FlyShelf.Classes.NoteManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
+        try { FlyShelf.Classes.TodoManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
+
         try
         {
             FlyShelf.Classes.NetworkSyncServer.Instance?.Stop();
@@ -661,10 +742,6 @@ public partial class App : Application
             FlyShelf.Classes.CloudDiscoveryManager.PushTunnelUrl("offline", false).Wait(1500);
         }
         catch { } // Best-effort: failure is acceptable
-        
-        // Flush any pending notes and todos to disk
-        try { FlyShelf.Classes.NoteManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
-        try { FlyShelf.Classes.TodoManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
 
         FlyShelf.Classes.Logger.Shutdown();
         base.OnExit(e);
@@ -687,6 +764,11 @@ public partial class App : Application
     {
         _shakeTimer = new System.Threading.Timer(state =>
         {
+            // App.xaml.cs shake state FIX: lock protects all shared shake state fields
+            // (_shakeCount, _lastSigDirX/Y, _lastShakeX/Y, etc.) from torn reads/writes
+            // across concurrent timer callbacks.
+            lock (_shakeLock)
+            {
             try
             {
                 // ═══ ADAPTIVE THROTTLING ═══
@@ -734,7 +816,7 @@ public partial class App : Application
                     POINT pt;
                     if (GetCursorPos(out pt))
                     {
-                        if (Environment.TickCount64 - _lastClipboardLaunchTime < 1500)
+                        if (Environment.TickCount64 - System.Threading.Interlocked.Read(ref _lastClipboardLaunchTime) < 1500)
                         {
                             _shakeCount = 0;
                             return;
@@ -749,18 +831,18 @@ public partial class App : Application
                             _shakeStartY = currentY;
                         }
 
-                        if (currentTime - _lastShakeTime > 900) // Increased turn reset to 900ms for slower/natural/regular interval shaking
+                        if (currentTime - System.Threading.Interlocked.Read(ref _lastShakeTime) > 900) // Increased turn reset to 900ms for slower/natural/regular interval shaking
                         {
                             if (_shakeCount > 0)
                             {
-                                FlyShelf.Classes.Logger.LogAction("SHAKE", $"Shake timer reset due to inactivity gap ({currentTime - _lastShakeTime}ms). Resetting count from {_shakeCount} to 0.");
+                                FlyShelf.Classes.Logger.LogAction("SHAKE", $"Shake timer reset due to inactivity gap ({currentTime - System.Threading.Interlocked.Read(ref _lastShakeTime)}ms). Resetting count from {_shakeCount} to 0.");
                             }
                             _shakeCount = 0;
                             _lastSigDirX = 0;
                             _lastSigDirY = 0;
                             _lastShakeX = currentX;
                             _lastShakeY = currentY;
-                            _lastShakeTime = currentTime;
+                            System.Threading.Interlocked.Exchange(ref _lastShakeTime, currentTime);
                         }
                         else
                         {
@@ -783,7 +865,7 @@ public partial class App : Application
                                     _lastSigDirY = 0;
                                     _lastShakeX = currentX;
                                     _lastShakeY = currentY;
-                                    _lastShakeTime = currentTime;
+                                    System.Threading.Interlocked.Exchange(ref _lastShakeTime, currentTime);
                                     return;
                                 }
 
@@ -799,7 +881,7 @@ public partial class App : Application
                                     _lastSigDirY = 0;
                                     _lastShakeX = currentX;
                                     _lastShakeY = currentY;
-                                    _lastShakeTime = currentTime;
+                                    System.Threading.Interlocked.Exchange(ref _lastShakeTime, currentTime);
                                     return;
                                 }
 
@@ -822,7 +904,7 @@ public partial class App : Application
                                 _lastSigDirY = deltaY;
                                 _lastShakeX = currentX;
                                 _lastShakeY = currentY;
-                                _lastShakeTime = currentTime;
+                                System.Threading.Interlocked.Exchange(ref _lastShakeTime, currentTime);
 
                                 if (reversed)
                                 {
@@ -848,7 +930,7 @@ public partial class App : Application
                                             return;
                                         }
 
-                                        _lastClipboardLaunchTime = Environment.TickCount64;
+                                        System.Threading.Interlocked.Exchange(ref _lastClipboardLaunchTime, Environment.TickCount64);
                                         FlyShelf.Classes.Logger.LogAction("SHAKE", $"🚀 Launching Clipboard Mini-Shelf at screen coordinates ({triggerX}, {triggerY}).");
 
                                         _instance?.Dispatcher.InvokeAsync(() => 
@@ -878,6 +960,7 @@ public partial class App : Application
                 }
             }
             catch { } // Best-effort: failure is acceptable
+            } // end lock (_shakeLock)
         }, null, 0, SHAKE_FAST_MS); // Start at fast rate; auto-throttles to slow after 30s idle
     }
 
@@ -1108,7 +1191,7 @@ public partial class App : Application
                         _ = System.Threading.Tasks.Task.Run(async () =>
                         {
                             await System.Threading.Tasks.Task.Delay(3000); // Let network stack fully stabilize
-                            srvCheck.ForceCheckTunnelHealth();
+                            await srvCheck.ForceCheckTunnelHealth();
                         });
                     }
                 }

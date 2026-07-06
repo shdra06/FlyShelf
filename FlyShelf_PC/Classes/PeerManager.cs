@@ -336,11 +336,11 @@ namespace FlyShelf.Classes
                     direct = DecryptUrlSafe(direct);
 
                     // Sanitize: reject non-URL values (e.g., "offline", failed decryption garbage)
-                    if (!string.IsNullOrEmpty(lan) && !lan.StartsWith("http")) lan = "";
-                    if (!string.IsNullOrEmpty(cf) && !cf.StartsWith("http")) cf = "";
-                    if (!string.IsNullOrEmpty(direct) && !direct.StartsWith("http")) direct = "";
+                    if (!string.IsNullOrEmpty(lan) && !lan.StartsWith("http", StringComparison.Ordinal)) lan = "";
+                    if (!string.IsNullOrEmpty(cf) && !cf.StartsWith("http", StringComparison.Ordinal)) cf = "";
+                    if (!string.IsNullOrEmpty(direct) && !direct.StartsWith("http", StringComparison.Ordinal)) direct = "";
 
-                    if (string.IsNullOrEmpty(lan) && !string.IsNullOrEmpty(direct) && !direct.Contains("trycloudflare"))
+                    if (string.IsNullOrEmpty(lan) && !string.IsNullOrEmpty(direct) && !direct.Contains("trycloudflare", StringComparison.Ordinal))
                         lan = direct;
 
                     // Track if any known peer has empty URLs (needs urlRequest)
@@ -485,8 +485,8 @@ namespace FlyShelf.Classes
             string cf = DecryptUrlSafe(globalUrl);
 
             // 2. Sanitize and validate URLs
-            if (!string.IsNullOrEmpty(lan) && !lan.StartsWith("http")) lan = "";
-            if (!string.IsNullOrEmpty(cf) && !cf.StartsWith("http")) cf = "";
+            if (!string.IsNullOrEmpty(lan) && !lan.StartsWith("http", StringComparison.Ordinal)) lan = "";
+            if (!string.IsNullOrEmpty(cf) && !cf.StartsWith("http", StringComparison.Ordinal)) cf = "";
 
             if (string.IsNullOrEmpty(lan) && string.IsNullOrEmpty(cf))
             {

@@ -27,6 +27,8 @@ export type NoteBullet = {
   IsPinned: boolean;
   SortOrder: number;
   SubBullets: SubBulletItem[];
+  CreatedByDevice?: string;
+  LastEditedByDevice?: string;
 };
 
 export type FreeformSection = {
@@ -87,11 +89,13 @@ export type TodoItem = {
   Tags: string[];
   Color: string;
   Description: string;
-  SubTasks: TodoItem[];
+  SubTasks: TodoItem[]; // NOTE: SubTasks are recursive but UI should enforce max depth (recommended: 3 levels)
   Recurrence: TodoRecurrence;
   SortOrder: number;
   TimerMinutes?: number | null;
   ReminderAt?: string | null;
+  CreatedByDevice?: string;
+  LastEditedByDevice?: string;
 };
 
 export type TodoDay = {
@@ -104,13 +108,14 @@ export type TodoDay = {
 // HELPERS
 // ═══════════════════════════════════════════════════════════
 
-/** Generate an 8-char hex ID (matches PC's Guid.ToString("N")[..8]) */
+/** Generate a 16-char hex ID (8 bytes) for better collision resistance */
 export const generateId = (): string => {
-  const bytes = new Uint8Array(4);
+  const bytes = new Uint8Array(8);
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     crypto.getRandomValues(bytes);
   } else {
-    for (let i = 0; i < 4; i++) bytes[i] = Math.floor(Math.random() * 256);
+    console.warn('[noteTypes] crypto.getRandomValues unavailable, using Math.random fallback');
+    for (let i = 0; i < 8; i++) bytes[i] = Math.floor(Math.random() * 256);
   }
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 };
@@ -149,7 +154,7 @@ export const createNoteDay = (date?: Date): NoteDay => ({
   LastModified: Date.now(),
 });
 
-/** Create a blank TodoItem */
+/** Create a blank TodoItem. SubTasks support nesting but enforce max depth of 3 in the UI. */
 export const createTodoItem = (text = ''): TodoItem => ({
   Id: generateId(),
   Text: text,
@@ -179,7 +184,9 @@ export const createTodoDay = (date?: Date): TodoDay => ({
 export const parseDate = (dateStr: string): Date => {
   if (!dateStr) return new Date();
   // Handle "2026-06-18T00:00:00" format
-  return new Date(dateStr);
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return new Date(); // Invalid date string — fall back to now
+  return d;
 };
 
 /** Format date for display: "18, Jun" */
@@ -208,7 +215,7 @@ export const getDueDateDisplay = (dueDateStr: string | null | undefined): string
   const dDate = new Date(d);
   dDate.setHours(0, 0, 0, 0);
   const diff = dDate.getTime() - today.getTime();
-  const daysDiff = Math.round(diff / (1000 * 60 * 60 * 24));
+  const daysDiff = Math.floor(diff / (1000 * 60 * 60 * 24));
   if (daysDiff === 0) return 'Today';
   if (daysDiff === 1) return 'Tomorrow';
   if (daysDiff === -1) return 'Yesterday';

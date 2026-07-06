@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -117,7 +118,7 @@ namespace FlyShelf.Classes
             }
 
             // Time-windowed dedup: skip if same content was pushed SUCCESSFULLY within last 10 seconds
-            string fingerprint = $"{item.ItemType}::{(item.RawContent ?? "").Substring(0, Math.Min(200, (item.RawContent ?? "").Length))}";
+            string fingerprint = $"{item.ItemType}::{(item.RawContent ?? "").AsSpan(0, Math.Min(200, (item.RawContent ?? "").Length))}";
             long nowMs = NetworkClock.UtcNowMs;
             lock (_recentPushTimes)
             {
@@ -162,15 +163,15 @@ namespace FlyShelf.Classes
                         // TEXT: push directly to all peers
                         string peerTitle = !string.IsNullOrEmpty(item.FileName)
                             ? item.FileName
-                            : (item.RawContent?.Length > 30 ? item.RawContent.Substring(0, 30) + "..." : item.RawContent ?? "");
+                            : (item.RawContent?.Length > 30 ? string.Concat(item.RawContent.AsSpan(0, 30), "...") : item.RawContent ?? "");
                         delivered = await PeerManager.Instance.PushTextToAllPeers(
-                            item.RawContent ?? "", peerTitle, item.ItemType.ToString());
+                            item.RawContent ?? "", peerTitle, item.ItemType.ToString("G"));
                     }
                     else if (isFileEarly)
                     {
                         // FILE: upload directly to all peers via multipart
                         delivered = await PeerManager.Instance.PushFileToAllPeers(
-                            item.FilePath, item.FileName ?? Path.GetFileName(item.FilePath), item.ItemType.ToString());
+                            item.FilePath, item.FileName ?? Path.GetFileName(item.FilePath), item.ItemType.ToString("G"));
                     }
 
                     if (delivered > 0)
@@ -207,7 +208,7 @@ namespace FlyShelf.Classes
         /// </summary>
         public static async Task PurgeStaleFileEntries(string deadUrl)
         {
-            if (string.IsNullOrEmpty(deadUrl) || !deadUrl.Contains("trycloudflare.com")) return;
+            if (string.IsNullOrEmpty(deadUrl) || !deadUrl.Contains("trycloudflare.com", StringComparison.Ordinal)) return;
             
             try
             {
@@ -240,12 +241,12 @@ namespace FlyShelf.Classes
                         string raw = entry.TryGetProperty("Raw", out var r) ? r.GetString() ?? "" : "";
                         string dlUrl = entry.TryGetProperty("DownloadUrl", out var d) ? d.GetString() ?? "" : "";
                         
-                        if (raw.Contains(deadUrl) || dlUrl.Contains(deadUrl))
+                        if (raw.Contains(deadUrl, StringComparison.Ordinal) || dlUrl.Contains(deadUrl, StringComparison.Ordinal))
                         {
                             string title = entry.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : "";
                             await DeleteFirebaseEntry(pairingKey, prop.Name);
                             purged++;
-                            Logger.LogAction("PURGE", $"Deleted MY stale file entry: {title} (dead URL: {deadUrl.Substring(0, Math.Min(40, deadUrl.Length))}...)");
+                            Logger.LogAction("PURGE", $"Deleted MY stale file entry: {title} (dead URL: {string.Concat(deadUrl.AsSpan(0, Math.Min(40, deadUrl.Length)), "...")});");
                         }
                     }
                     catch (Exception ex) { Logger.LogAction("PURGE", $"Failed to process entry during purge: {ex.Message}"); }
@@ -311,7 +312,7 @@ namespace FlyShelf.Classes
 
                 // Step 1: Mark this device as having downloaded the file
                 string markUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}/downloadedBy/{myDeviceId}.json"));
-                var markContent = new StringContent(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(), Encoding.UTF8, "application/json");
+                var markContent = new StringContent(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture), Encoding.UTF8, "application/json");
                 await _client.PutAsync(markUrl, markContent);
 
                 // Step 1b: Signal "downloaded" status so sender knows this device is done
@@ -484,7 +485,7 @@ namespace FlyShelf.Classes
                             if (prop.Value.TryGetProperty("GlobalUrl", out var gurl))
                             {
                                 string globalUrl = gurl.GetString() ?? "";
-                                if (!string.IsNullOrEmpty(globalUrl) && globalUrl.Contains("trycloudflare.com"))
+                                if (!string.IsNullOrEmpty(globalUrl) && globalUrl.Contains("trycloudflare.com", StringComparison.Ordinal))
                                 {
                                     Logger.LogAction("FIREBASE SSE", $"Found sender URL by name '{senderDeviceName}': {globalUrl}");
                                     return globalUrl;
@@ -534,7 +535,7 @@ namespace FlyShelf.Classes
                             if (prop.Value.TryGetProperty("LocalIp", out var lip))
                             {
                                 string lanUrl = lip.GetString() ?? "";
-                                if (!string.IsNullOrEmpty(lanUrl) && lanUrl.StartsWith("http"))
+                                if (!string.IsNullOrEmpty(lanUrl) && lanUrl.StartsWith("http", StringComparison.Ordinal))
                                 {
                                     Logger.LogAction("FIREBASE SSE", $"Found sender LAN URL by name '{senderDeviceName}': {lanUrl}");
                                     return lanUrl;
@@ -544,7 +545,7 @@ namespace FlyShelf.Classes
                             if (prop.Value.TryGetProperty("Url", out var urlProp))
                             {
                                 string directUrl = urlProp.GetString() ?? "";
-                                if (!string.IsNullOrEmpty(directUrl) && directUrl.StartsWith("http") && !directUrl.Contains("trycloudflare"))
+                                if (!string.IsNullOrEmpty(directUrl) && directUrl.StartsWith("http", StringComparison.Ordinal) && !directUrl.Contains("trycloudflare", StringComparison.Ordinal))
                                 {
                                     Logger.LogAction("FIREBASE SSE", $"Found sender direct URL by name '{senderDeviceName}': {directUrl}");
                                     return directUrl;

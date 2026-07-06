@@ -37,14 +37,12 @@ namespace FlyShelf.Windows
                 if (_instance.WindowState == WindowState.Minimized)
                     _instance.WindowState = WindowState.Normal;
                 _instance._vm.Resume();
-                _instance.Activate();
-                _instance.Show();
+                WindowHelper.ShowInForeground(_instance);
                 return;
             }
 
             _instance = new TransferManagerWindow();
-            _instance.Show();
-            _instance.Activate();
+            WindowHelper.ShowInForeground(_instance);
         }
 
         // ═══ Window Closing — hide instead of destroy (singleton) ═══

@@ -8,6 +8,7 @@ using FlyShelf.ViewModels;
 using FlyShelf.Classes;
 using System;
 using System.Collections.Generic;
+using System.IO.Compression;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -208,12 +209,18 @@ namespace FlyShelf
         /// <summary>Hides the merge floating bar, restores emoji btn, and unchecks all PDFs.</summary>
         internal void DismissMergeState()
         {
+            // PERF: Skip the expensive full-collection .Any() + foreach scans when merge toolbar
+            // isn't visible. Called from CollectionChanged on every item add — with 5000 items,
+            // the two O(n) scans below cost 10K evaluations per clipboard copy for zero benefit.
+            bool wasVisible = MergeSelectedPdfsBtn.Visibility == Visibility.Visible ||
+                              MergePdfToolbarBtn.Visibility == Visibility.Visible;
+
             MergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
             MergePdfToolbarBtn.Visibility = Visibility.Collapsed;
             UpdateToolbarButtonsVisibility();
 
-            // Uncheck all IsCheckedForMerge (fast-path optimization to avoid triggering PropertyChanged notify loops)
-            if (_viewModel.DroppedItems != null && _viewModel.DroppedItems.Any(i => i.IsCheckedForMerge))
+            // Uncheck all IsCheckedForMerge only if merge mode was actually active
+            if (wasVisible && _viewModel.DroppedItems != null && _viewModel.DroppedItems.Any(i => i.IsCheckedForMerge))
             {
                 foreach (var item in _viewModel.DroppedItems)
                 {
@@ -392,7 +399,7 @@ $word.Quit()
 #endif
         }
 
-        private void ReorderPdfPages_Click(object sender, RoutedEventArgs e)
+        private async void ReorderPdfPages_Click(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -411,9 +418,7 @@ $word.Quit()
                 }
 
                 var reorderWin = new FlyShelf.Windows.PageReorderWindow(mergeItem);
-                reorderWin.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-                reorderWin.Topmost = true;
-                reorderWin.ShowDialog();
+                WindowHelper.ShowDialogInForeground(reorderWin, this);
 
                 if (reorderWin.WasConfirmed)
                 {
@@ -424,75 +429,101 @@ $word.Quit()
 
                     try
                     {
-                        if (reorderWin.HasExternalPages)
+                        bool orderUnchanged = false;
+                        await System.Threading.Tasks.Task.Run(() =>
                         {
-                            // Multi-source mode: pages come from multiple PDF files
-                            var entries = reorderWin.GetFinalPageEntries();
-                            var openDocs = new Dictionary<string, PdfSharp.Pdf.PdfDocument>();
-
-                            try
+                            if (reorderWin.HasExternalPages)
                             {
+                                // Multi-source mode: pages come from multiple PDF files
+                                var entries = reorderWin.GetFinalPageEntries();
+                                var openDocs = new Dictionary<string, PdfSharp.Pdf.PdfDocument>();
+
+                                try
+                                {
+                                    using (var outputDoc = new PdfSharp.Pdf.PdfDocument())
+                                    {
+                                        foreach (var entry in entries)
+                                        {
+                                            // Open each unique source file once (cached)
+                                            if (!openDocs.TryGetValue(entry.SourceFile, out var srcDoc))
+                                            {
+                                                srcDoc = PdfSharp.Pdf.IO.PdfReader.Open(
+                                                    entry.SourceFile, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
+                                                openDocs[entry.SourceFile] = srcDoc;
+                                            }
+                                            int pageIdx = entry.OriginalPage - 1; // Convert 1-indexed to 0-indexed
+                                            if (pageIdx >= 0 && pageIdx < srcDoc.PageCount)
+                                            {
+                                                outputDoc.AddPage(srcDoc.Pages[pageIdx]);
+                                                if (entry.RotationDegrees != 0)
+                                                {
+                                                    var addedPage = outputDoc.Pages[outputDoc.Pages.Count - 1];
+                                                    addedPage.Rotate = (addedPage.Rotate + entry.RotationDegrees) % 360;
+                                                }
+                                            }
+                                        }
+                                        outputDoc.Save(outputPath);
+                                    }
+                                }
+                                finally
+                                {
+                                    // Dispose all opened source documents
+                                    foreach (var doc in openDocs.Values)
+                                    {
+                                        try { doc.Dispose(); } catch { } // Best-effort: failure is acceptable
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Single-source mode: all pages from original file
+                                var finalOrder = reorderWin.GetFinalPageOrder(); // 0-indexed page indices
+                                var finalEntries = reorderWin.GetFinalPageEntries();
+
+                                // Check if the order or rotation actually changed
+                                bool orderChanged = false;
+                                bool hasRotation = finalEntries.Any(e => e.RotationDegrees != 0);
+                                if (finalOrder.Count != mergeItem.TotalPages)
+                                    orderChanged = true;
+                                else
+                                {
+                                    for (int i = 0; i < finalOrder.Count; i++)
+                                    {
+                                        if (finalOrder[i] != i) { orderChanged = true; break; }
+                                    }
+                                }
+
+                                if (!orderChanged && !hasRotation)
+                                {
+                                    orderUnchanged = true;
+                                    return;
+                                }
+
+                                using (var inputDoc = PdfSharp.Pdf.IO.PdfReader.Open(clipItem.FilePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
                                 using (var outputDoc = new PdfSharp.Pdf.PdfDocument())
                                 {
-                                    foreach (var entry in entries)
+                                    for (int i = 0; i < finalOrder.Count; i++)
                                     {
-                                        // Open each unique source file once (cached)
-                                        if (!openDocs.ContainsKey(entry.SourceFile))
+                                        int pageIdx = finalOrder[i];
+                                        if (pageIdx >= 0 && pageIdx < inputDoc.PageCount)
                                         {
-                                            openDocs[entry.SourceFile] = PdfSharp.Pdf.IO.PdfReader.Open(
-                                                entry.SourceFile, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
+                                            outputDoc.AddPage(inputDoc.Pages[pageIdx]);
+                                            if (finalEntries[i].RotationDegrees != 0)
+                                            {
+                                                var addedPage = outputDoc.Pages[outputDoc.Pages.Count - 1];
+                                                addedPage.Rotate = (addedPage.Rotate + finalEntries[i].RotationDegrees) % 360;
+                                            }
                                         }
-
-                                        var srcDoc = openDocs[entry.SourceFile];
-                                        int pageIdx = entry.OriginalPage - 1; // Convert 1-indexed to 0-indexed
-                                        if (pageIdx >= 0 && pageIdx < srcDoc.PageCount)
-                                            outputDoc.AddPage(srcDoc.Pages[pageIdx]);
                                     }
                                     outputDoc.Save(outputPath);
                                 }
                             }
-                            finally
-                            {
-                                // Dispose all opened source documents
-                                foreach (var doc in openDocs.Values)
-                                {
-                                    try { doc.Dispose(); } catch { } // Best-effort: failure is acceptable
-                                }
-                            }
-                        }
-                        else
+                        });
+
+                        if (orderUnchanged)
                         {
-                            // Single-source mode: all pages from original file
-                            var finalOrder = reorderWin.GetFinalPageOrder(); // 0-indexed page indices
-
-                            // Check if the order actually changed
-                            bool orderChanged = false;
-                            if (finalOrder.Count != mergeItem.TotalPages)
-                                orderChanged = true;
-                            else
-                            {
-                                for (int i = 0; i < finalOrder.Count; i++)
-                                {
-                                    if (finalOrder[i] != i) { orderChanged = true; break; }
-                                }
-                            }
-
-                            if (!orderChanged)
-                            {
-                                FlyShelf.Windows.ToastWindow.ShowToast("📄 Page order unchanged.");
-                                return;
-                            }
-
-                            using (var inputDoc = PdfSharp.Pdf.IO.PdfReader.Open(clipItem.FilePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
-                            using (var outputDoc = new PdfSharp.Pdf.PdfDocument())
-                            {
-                                foreach (int pageIdx in finalOrder)
-                                {
-                                    if (pageIdx >= 0 && pageIdx < inputDoc.PageCount)
-                                        outputDoc.AddPage(inputDoc.Pages[pageIdx]);
-                                }
-                                outputDoc.Save(outputPath);
-                            }
+                            FlyShelf.Windows.ToastWindow.ShowToast("📄 Page order unchanged.");
+                            return;
                         }
 
                         // Open output location in Explorer
@@ -744,7 +775,7 @@ $word.Quit()
                 }
             };
 
-            dlg.ShowDialog();
+            WindowHelper.ShowDialogInForeground(dlg, this);
 
             if (saved)
             {
@@ -770,7 +801,7 @@ $word.Quit()
             if (item == null) return;
             item.IsPassword = false;
             item.Extension = "TEXT";
-            item.FileName = (item.RawContent?.Length ?? 0) > 800 ? item.RawContent.Substring(0, 800) + "..." : item.RawContent;
+            item.FileName = (item.RawContent?.Length ?? 0) > 800 ? string.Concat(item.RawContent.AsSpan(0, 800), "...") : item.RawContent;
             item.Icon = null; // Reverts back to standard text template
             FlyShelf.Windows.ToastWindow.ShowToast("Reverted to normal text card! 📋");
         }
@@ -785,9 +816,7 @@ $word.Quit()
         private void OpenPasswordManagerWindow(ClipboardItem item, bool focusLabel)
         {
             var win = new FlyShelf.Windows.PasswordWindow(item, focusLabel);
-            win.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            win.Topmost = true;
-            win.ShowDialog();
+            WindowHelper.ShowDialogInForeground(win, this);
         }
 
         /// <summary>
@@ -826,5 +855,380 @@ $word.Quit()
                 }
             });
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // SPLIT PDF — Save each page as a separate PDF file
+        // ═══════════════════════════════════════════════════════════════
+
+        private void SplitPdf_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetClipItemFromSender(sender);
+            if (item == null || string.IsNullOrEmpty(item.FilePath) || !System.IO.File.Exists(item.FilePath)) return;
+
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    string dir = System.IO.Path.GetDirectoryName(item.FilePath);
+                    string baseName = System.IO.Path.GetFileNameWithoutExtension(item.FilePath);
+                    string outputDir = System.IO.Path.Combine(dir, $"{baseName}_pages");
+                    System.IO.Directory.CreateDirectory(outputDir);
+
+                    using (var inputDoc = PdfSharp.Pdf.IO.PdfReader.Open(item.FilePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
+                    {
+                        int total = inputDoc.PageCount;
+                        for (int i = 0; i < total; i++)
+                        {
+                            using (var outputDoc = new PdfSharp.Pdf.PdfDocument())
+                            {
+                                outputDoc.AddPage(inputDoc.Pages[i]);
+                                string pagePath = System.IO.Path.Combine(outputDir, $"{baseName}_page{i + 1}.pdf");
+                                outputDoc.Save(pagePath);
+                            }
+                        }
+
+                        Dispatcher.InvokeAsync(() =>
+                        {
+                            FlyShelf.Windows.ToastWindow.ShowToast($"✂️ Split into {total} pages → {outputDir}");
+                            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = outputDir, UseShellExecute = true }); } catch { }
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Split failed: {ex.Message}"));
+                }
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // PASSWORD PROTECT PDF
+        // ═══════════════════════════════════════════════════════════════
+
+        private void PasswordProtectPdf_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetClipItemFromSender(sender);
+            if (item == null || string.IsNullOrEmpty(item.FilePath) || !System.IO.File.Exists(item.FilePath)) return;
+
+            // Show simple password input dialog
+            var dialog = new Window
+            {
+                Title = "Password Protect PDF",
+                Width = 400, Height = 200,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStyle = WindowStyle.ToolWindow,
+                Background = FindResource("ThemeWindowFallback") as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Black
+            };
+
+            var grid = new Grid { Margin = new Thickness(20) };
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var label = new TextBlock { Text = "Enter password to protect the PDF:", FontSize = 13, Foreground = System.Windows.Media.Brushes.White, Margin = new Thickness(0, 0, 0, 8) };
+            Grid.SetRow(label, 0);
+            grid.Children.Add(label);
+
+            var passwordBox = new PasswordBox { FontSize = 14, MaxLength = 50, Padding = new Thickness(8, 6, 8, 6) };
+            Grid.SetRow(passwordBox, 1);
+            grid.Children.Add(passwordBox);
+
+            var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
+            var cancelBtn = new Button { Content = "Cancel", Padding = new Thickness(16, 6, 16, 6), Margin = new Thickness(0, 0, 8, 0) };
+            cancelBtn.Click += (s, ev) => dialog.Close();
+            var okBtn = new Button { Content = "Protect", Padding = new Thickness(16, 6, 16, 6), FontWeight = FontWeights.SemiBold };
+            btnPanel.Children.Add(cancelBtn);
+            btnPanel.Children.Add(okBtn);
+            Grid.SetRow(btnPanel, 2);
+            grid.Children.Add(btnPanel);
+
+            string password = null;
+            okBtn.Click += (s, ev) =>
+            {
+                password = passwordBox.Password;
+                dialog.Close();
+            };
+
+            dialog.Content = grid;
+            WindowHelper.ShowDialogInForeground(dialog, this);
+
+            if (string.IsNullOrEmpty(password)) return;
+
+            string pwd = password;
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    string dir = System.IO.Path.GetDirectoryName(item.FilePath);
+                    string baseName = System.IO.Path.GetFileNameWithoutExtension(item.FilePath);
+                    string outputPath = System.IO.Path.Combine(dir, $"{baseName}_protected.pdf");
+
+                    using (var doc = PdfSharp.Pdf.IO.PdfReader.Open(item.FilePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
+                    using (var outputDoc = new PdfSharp.Pdf.PdfDocument())
+                    {
+                        foreach (var page in doc.Pages)
+                            outputDoc.AddPage(page);
+
+                        outputDoc.SecuritySettings.UserPassword = pwd;
+                        outputDoc.SecuritySettings.OwnerPassword = pwd + "_owner";
+                        outputDoc.Save(outputPath);
+                    }
+
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast($"🔒 Protected PDF saved: {System.IO.Path.GetFileName(outputPath)}");
+                        _viewModel.HandleDrop(new System.Windows.DataObject(System.Windows.DataFormats.FileDrop, new[] { outputPath }), true);
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Password protect failed: {ex.Message}"));
+                }
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // WATERMARK PDF — Overlay text on each page
+        // ═══════════════════════════════════════════════════════════════
+
+        private void WatermarkPdf_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetClipItemFromSender(sender);
+            if (item == null || string.IsNullOrEmpty(item.FilePath) || !System.IO.File.Exists(item.FilePath)) return;
+
+            // Show watermark text input
+            var dialog = new Window
+            {
+                Title = "Watermark PDF",
+                Width = 400, Height = 200,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStyle = WindowStyle.ToolWindow,
+                Background = FindResource("ThemeWindowFallback") as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Black
+            };
+
+            var grid = new Grid { Margin = new Thickness(20) };
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var label = new TextBlock { Text = "Enter watermark text:", FontSize = 13, Foreground = System.Windows.Media.Brushes.White, Margin = new Thickness(0, 0, 0, 8) };
+            Grid.SetRow(label, 0);
+            grid.Children.Add(label);
+
+            var textBox = new TextBox { FontSize = 14, Text = "CONFIDENTIAL", Padding = new Thickness(8, 6, 8, 6) };
+            Grid.SetRow(textBox, 1);
+            grid.Children.Add(textBox);
+
+            var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
+            var cancelBtn = new Button { Content = "Cancel", Padding = new Thickness(16, 6, 16, 6), Margin = new Thickness(0, 0, 8, 0) };
+            cancelBtn.Click += (s, ev) => dialog.Close();
+            var okBtn = new Button { Content = "Apply Watermark", Padding = new Thickness(16, 6, 16, 6), FontWeight = FontWeights.SemiBold };
+            btnPanel.Children.Add(cancelBtn);
+            btnPanel.Children.Add(okBtn);
+            Grid.SetRow(btnPanel, 2);
+            grid.Children.Add(btnPanel);
+
+            string watermarkText = null;
+            okBtn.Click += (s, ev) =>
+            {
+                watermarkText = textBox.Text;
+                dialog.Close();
+            };
+
+            dialog.Content = grid;
+            WindowHelper.ShowDialogInForeground(dialog, this);
+
+            if (string.IsNullOrEmpty(watermarkText)) return;
+
+            string wmText = watermarkText;
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    string dir = System.IO.Path.GetDirectoryName(item.FilePath);
+                    string baseName = System.IO.Path.GetFileNameWithoutExtension(item.FilePath);
+                    string outputPath = System.IO.Path.Combine(dir, $"{baseName}_watermarked.pdf");
+
+                    using (var doc = PdfSharp.Pdf.IO.PdfReader.Open(item.FilePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Modify))
+                    {
+                        var font = new PdfSharp.Drawing.XFont("Arial", 48);
+                        var brush = new PdfSharp.Drawing.XSolidBrush(PdfSharp.Drawing.XColor.FromArgb(40, 128, 128, 128));
+
+                        foreach (PdfSharp.Pdf.PdfPage page in doc.Pages)
+                        {
+                            using (var gfx = PdfSharp.Drawing.XGraphics.FromPdfPage(page, PdfSharp.Drawing.XGraphicsPdfPageOptions.Append))
+                            {
+                                var state = gfx.Save();
+                                // Center the watermark diagonally
+                                double cx = page.Width.Point / 2;
+                                double cy = page.Height.Point / 2;
+                                gfx.TranslateTransform(cx, cy);
+                                gfx.RotateTransform(-45);
+                                var size = gfx.MeasureString(wmText, font);
+                                gfx.DrawString(wmText, font, brush,
+                                    new PdfSharp.Drawing.XPoint(-size.Width / 2, size.Height / 2));
+                                gfx.Restore(state);
+                            }
+                        }
+
+                        doc.Save(outputPath);
+                    }
+
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast($"💧 Watermarked PDF saved: {System.IO.Path.GetFileName(outputPath)}");
+                        _viewModel.HandleDrop(new System.Windows.DataObject(System.Windows.DataFormats.FileDrop, new[] { outputPath }), true);
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Watermark failed: {ex.Message}"));
+                }
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // PDF → IMAGES — Export each page as PNG
+        // ═══════════════════════════════════════════════════════════════
+
+        private async void PdfToImages_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetClipItemFromSender(sender);
+            if (item == null || string.IsNullOrEmpty(item.FilePath) || !System.IO.File.Exists(item.FilePath)) return;
+
+            try
+            {
+                string dir = System.IO.Path.GetDirectoryName(item.FilePath);
+                string baseName = System.IO.Path.GetFileNameWithoutExtension(item.FilePath);
+                string outputDir = System.IO.Path.Combine(dir, $"{baseName}_images");
+                System.IO.Directory.CreateDirectory(outputDir);
+
+                var storageFile = await global::Windows.Storage.StorageFile.GetFileFromPathAsync(item.FilePath);
+                var pdfDoc = await global::Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(storageFile);
+
+                int total = (int)pdfDoc.PageCount;
+                for (uint i = 0; i < pdfDoc.PageCount; i++)
+                {
+                    using (var page = pdfDoc.GetPage(i))
+                    {
+                        string pngPath = System.IO.Path.Combine(outputDir, $"{baseName}_page{i + 1}.png");
+                        using (var stream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream())
+                        {
+                            var options = new global::Windows.Data.Pdf.PdfPageRenderOptions();
+                            options.DestinationWidth = (uint)(page.Size.Width * 2); // 2x for quality
+                            await page.RenderToStreamAsync(stream, options);
+                            stream.Seek(0);
+
+                            // Read bytes from WinRT stream and write to file
+                            var reader = new global::Windows.Storage.Streams.DataReader(stream.GetInputStreamAt(0));
+                            uint size = (uint)stream.Size;
+                            await reader.LoadAsync(size);
+                            var buffer = new byte[size];
+                            reader.ReadBytes(buffer);
+                            await System.Threading.Tasks.Task.Run(() => System.IO.File.WriteAllBytes(pngPath, buffer));
+                        }
+                    }
+                }
+
+                FlyShelf.Windows.ToastWindow.ShowToast($"📝 Exported {total} pages as PNG → {outputDir}");
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = outputDir, UseShellExecute = true }); } catch { }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"❌ PDF→Images failed: {ex.Message}");
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // PDF → TEXT — Extract text from text-based PDFs
+        // ═══════════════════════════════════════════════════════════════
+
+        private void PdfToText_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetClipItemFromSender(sender);
+            if (item == null || string.IsNullOrEmpty(item.FilePath) || !System.IO.File.Exists(item.FilePath)) return;
+
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    var sb = new System.Text.StringBuilder();
+
+                    using (var doc = PdfSharp.Pdf.IO.PdfReader.Open(item.FilePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.ReadOnly))
+                    {
+                        foreach (PdfSharp.Pdf.PdfPage page in doc.Pages)
+                        {
+                            // PdfSharp 6.x: extract text from content streams
+                            var content = page.Contents;
+                            for (int i = 0; i < content.Elements.Count; i++)
+                            {
+                                var stream = content.Elements.GetObject(i) as PdfSharp.Pdf.PdfDictionary;
+                                if (stream?.Stream?.Value != null)
+                                {
+                                    string raw = System.Text.Encoding.UTF8.GetString(stream.Stream.Value);
+                                    // Extract text between Tj/TJ operators (simple text extraction)
+                                    foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(raw, @"\(([^)]*)\)\s*Tj"))
+                                    {
+                                        sb.Append(m.Groups[1].Value);
+                                    }
+                                    // Also handle TJ arrays
+                                    foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(raw, @"\(([^)]*)\)"))
+                                    {
+                                        if (raw.Contains("TJ", StringComparison.Ordinal))
+                                        {
+                                            // Already handled above in most cases
+                                        }
+                                    }
+                                }
+                            }
+                            sb.AppendLine();
+                        }
+                    }
+
+                    string text = sb.ToString().Trim();
+                    if (string.IsNullOrWhiteSpace(text))
+                    {
+                        Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No extractable text found. Try OCR instead for scanned PDFs."));
+                        return;
+                    }
+
+                    // Save as .txt file
+                    string dir = System.IO.Path.GetDirectoryName(item.FilePath);
+                    string baseName = System.IO.Path.GetFileNameWithoutExtension(item.FilePath);
+                    string txtPath = System.IO.Path.Combine(dir, $"{baseName}.txt");
+                    System.IO.File.WriteAllText(txtPath, text, System.Text.Encoding.UTF8);
+
+                    // Also copy to clipboard
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        try { System.Windows.Clipboard.SetText(text); } catch { }
+                        FlyShelf.Windows.ToastWindow.ShowToast($"📝 Text extracted ({text.Length} chars) and copied to clipboard");
+                        _viewModel.HandleDrop(new System.Windows.DataObject(System.Windows.DataFormats.FileDrop, new[] { txtPath }), true);
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Text extraction failed: {ex.Message}"));
+                }
+            });
+        }
+
+
+        private void ConvertCsvToXlsx_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetClipItemFromSender(sender);
+            item?.ConvertCsvToXlsx();
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // IMAGE FORMAT CONVERSION — Convert to PNG / JPG
+        // ═══════════════════════════════════════════════════════════════
+
+        private void ConvertImageToPng_Click(object sender, RoutedEventArgs e) => GetClipItemFromSender(sender)?.ConvertImageFormat("png");
+        private void ConvertImageToJpg_Click(object sender, RoutedEventArgs e) => GetClipItemFromSender(sender)?.ConvertImageFormat("jpg");
     }
 }

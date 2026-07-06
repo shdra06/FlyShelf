@@ -6,6 +6,7 @@
 // Split from TableEditorWindow.xaml.cs for modularity
 // ---------------------------------------------------------------
 using System;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -40,9 +41,9 @@ namespace FlyShelf.Windows
                             ? "border: 1px solid #000; padding: 6px 10px; font-weight: bold; background-color: #D9E2F3; text-align: left;"
                             : "border: 1px solid #999; padding: 6px 10px; text-align: left;";
 
-                        sbHtml.Append($"<{tag} style=\"{style}\">");
+                        sbHtml.Append(CultureInfo.InvariantCulture, $"<{tag} style=\"{style}\">");
                         sbHtml.Append(System.Net.WebUtility.HtmlEncode(cellVal));
-                        sbHtml.Append($"</{tag}>\n");
+                        sbHtml.Append(CultureInfo.InvariantCulture, $"</{tag}>\n");
                     }
                     sbHtml.Append("</tr>\n");
                 }
@@ -59,10 +60,10 @@ namespace FlyShelf.Windows
                 int fragmentLen = Encoding.UTF8.GetByteCount(fragment);
                 int htmlEndLen = Encoding.UTF8.GetByteCount(htmlEnd);
 
-                header = header.Replace("SSSSSSSS", headerLen.ToString("D8"));
-                header = header.Replace("EEEEEEEE", (headerLen + htmlStartLen + fragmentLen + htmlEndLen).ToString("D8"));
-                header = header.Replace("FFFFFFFF", (headerLen + htmlStartLen).ToString("D8"));
-                header = header.Replace("GGGGGGGG", (headerLen + htmlStartLen + fragmentLen).ToString("D8"));
+                header = header.Replace("SSSSSSSS", headerLen.ToString("D8", CultureInfo.InvariantCulture));
+                header = header.Replace("EEEEEEEE", (headerLen + htmlStartLen + fragmentLen + htmlEndLen).ToString("D8", CultureInfo.InvariantCulture));
+                header = header.Replace("FFFFFFFF", (headerLen + htmlStartLen).ToString("D8", CultureInfo.InvariantCulture));
+                header = header.Replace("GGGGGGGG", (headerLen + htmlStartLen + fragmentLen).ToString("D8", CultureInfo.InvariantCulture));
 
                 string cfHtml = header + htmlStart + fragment + htmlEnd;
                 string tsv = BuildTsv();
@@ -123,7 +124,7 @@ namespace FlyShelf.Windows
             }
         }
 
-        private void SaveToFile_Click(object sender, RoutedEventArgs e)
+        private async void SaveToFile_Click(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -146,7 +147,7 @@ namespace FlyShelf.Windows
                         default: content = BuildCsv(); break;
                     }
 
-                    File.WriteAllText(dlg.FileName, content, Encoding.UTF8);
+                    await File.WriteAllTextAsync(dlg.FileName, content, Encoding.UTF8);
                     ToastWindow.ShowToast($"Table saved to {Path.GetFileName(dlg.FileName)} ✅");
                 }
             }
@@ -166,7 +167,7 @@ namespace FlyShelf.Windows
                     if (j > 0) sb.Append(',');
                     string val = _cells[i, j].Text;
                     if (val.Contains(',') || val.Contains('"') || val.Contains('\n'))
-                        sb.Append($"\"{val.Replace("\"", "\"\"")}\"");
+                        sb.Append(CultureInfo.InvariantCulture, $"\"{val.Replace("\"", "\"\"")}\"");
                     else
                         sb.Append(val);
                 }
@@ -211,7 +212,7 @@ namespace FlyShelf.Windows
                 for (int j = 0; j < _cols; j++)
                 {
                     string val = _cells[i, j].Text.PadRight(widths[j]);
-                    sb.Append($" {val} |");
+                    sb.Append(CultureInfo.InvariantCulture, $" {val} |");
                 }
                 sb.AppendLine();
 
@@ -220,7 +221,7 @@ namespace FlyShelf.Windows
                 {
                     sb.Append('|');
                     for (int j = 0; j < _cols; j++)
-                        sb.Append($" {new string('-', widths[j])} |");
+                        sb.Append(CultureInfo.InvariantCulture, $" {new string('-', widths[j])} |");
                     sb.AppendLine();
                 }
             }
@@ -244,7 +245,7 @@ namespace FlyShelf.Windows
                 for (int j = 0; j < _cols; j++)
                 {
                     string tag = (i == 0) ? "th" : "td";
-                    sb.Append($"<{tag}>{System.Net.WebUtility.HtmlEncode(_cells[i, j].Text)}</{tag}>");
+                    sb.Append(CultureInfo.InvariantCulture, $"<{tag}>{System.Net.WebUtility.HtmlEncode(_cells[i, j].Text)}</{tag}>");
                 }
                 sb.AppendLine("</tr>");
             }
@@ -467,7 +468,7 @@ namespace FlyShelf.Windows
         // INTERNAL TYPES
         // ═══════════════════════════════════════════════════════════════════
 
-        private class CellData
+        private sealed class CellData
         {
             public string text { get; set; } = string.Empty;
             public double conf { get; set; } = 1.0;

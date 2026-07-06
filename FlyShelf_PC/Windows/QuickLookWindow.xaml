@@ -182,7 +182,7 @@
                     <!-- Markdown Rendered Preview (WebView2 for modern JS support) -->
                     <wv2:WebView2 x:Name="MarkdownWebView"
                         Visibility="Collapsed"
-                        DefaultBackgroundColor="Transparent" />
+                        DefaultBackgroundColor="#1E1E2E" />
                     
                     <!-- Syntax-Highlighted Code Preview -->
                     <avalonEdit:TextEditor x:Name="CodePreview"

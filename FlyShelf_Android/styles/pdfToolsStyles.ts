@@ -1,17 +1,21 @@
-// PDF Tools Styles — Premium dark glassmorphic theme
+// PDF Tools Styles — Theme-aware factory
 import { StyleSheet, Dimensions } from 'react-native';
-import { colors, font, radius, space, shadows } from './theme';
+import { colors as defaultColors, font, radius, space, shadows as defaultShadows } from './theme';
+
+type ThemeColors = Record<string, any>;
+type ThemeShadows = Record<string, any>;
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_GAP = space.md;
 const CARD_W = (SCREEN_W - space.xl * 2 - CARD_GAP * 2) / 3;
 
-export default StyleSheet.create({
+export const createPdfToolsStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.create({
   // ── Layout ──
   safe: { flex: 1, backgroundColor: colors.bg.base },
   container: { flex: 1 },
   scroll: { flex: 1 },
   scrollContent: { padding: space.xl, paddingBottom: 40 },
+  pb100: { paddingBottom: 100 },
 
   // ── Header ──
   header: {
@@ -165,6 +169,7 @@ export default StyleSheet.create({
   emptyText: { fontFamily: font.medium, fontSize: 14, color: colors.text.tertiary, marginTop: space.md, textAlign: 'center' },
 
   // ── Recent PDFs ──
+  recentSection: { marginTop: space['2xl'] },
   sectionTitle: { fontFamily: font.semibold, fontSize: 15, color: colors.text.primary, marginBottom: space.md },
   recentItem: {
     flexDirection: 'row', alignItems: 'center',
@@ -188,6 +193,33 @@ export default StyleSheet.create({
   gap8: { gap: 8 },
   mt8: { marginTop: 8 },
   mt16: { marginTop: 16 },
+  mt20: { marginTop: 20 },
   mb16: { marginBottom: 16 },
   ph20: { paddingHorizontal: 20 },
+
+  // ── Info Tool ──
+  infoCard: {
+    backgroundColor: colors.bg.card, borderRadius: radius.lg,
+    padding: space.xl, borderWidth: 1, borderColor: colors.border.subtle,
+  },
+  infoRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', paddingVertical: space.sm,
+    borderBottomWidth: 1, borderBottomColor: colors.border.subtle,
+  },
+  infoLabel: { fontFamily: font.medium, fontSize: 13, color: colors.text.secondary },
+  infoValue: { fontFamily: font.semibold, fontSize: 13, color: colors.text.primary, textAlign: 'right' as any, flex: 1, marginLeft: space.md },
+
+  // ── Password Tool ──
+  inputWrapper: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.bg.input, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border.subtle,
+  },
+  inputAction: {
+    padding: space.md, justifyContent: 'center', alignItems: 'center',
+  },
 });
+
+/** @deprecated Use createPdfToolsStyles(colors, shadows) for theme support */
+export default createPdfToolsStyles(defaultColors, defaultShadows);

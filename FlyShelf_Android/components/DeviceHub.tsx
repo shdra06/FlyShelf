@@ -38,9 +38,15 @@ export type ActiveDevice = {
   latencyMs?: number;
   localUrl?: string;
   globalUrl?: string;
+  GlobalUrl?: string;       // Firebase casing variant
   isPro?: boolean;
   licenseKey?: string;
   lastSeen?: number;
+  // Runtime-enriched fields from LAN verification
+  _lanVerified?: boolean;
+  _lanUrl?: string;
+  DeviceType?: string;      // Firebase casing variant
+  [key: string]: unknown;   // Allow additional dynamic properties
 };
 
 type DeviceHubProps = {
@@ -54,6 +60,14 @@ type DeviceHubProps = {
 // ═══════════════════════════════════════════
 
 const MAX_DEVICES = 5;
+
+/** Safe haptic wrappers — silently swallow errors on unsupported devices */
+const safeHaptic = (style = HapticsModule.ImpactFeedbackStyle.Medium) => {
+  try { HapticsModule.impactAsync(style); } catch {}
+};
+const safeNotification = (type = HapticsModule.NotificationFeedbackType.Success) => {
+  try { HapticsModule.notificationAsync(type); } catch {}
+};
 
 // ═══════════════════════════════════════════
 // HELPERS
@@ -343,7 +357,7 @@ export default function DeviceHub({ visible, onClose, activeDevices = [] }: Devi
   // ── Handlers ──
 
   const handleRemoveDevice = useCallback((deviceId: string, deviceName: string) => {
-    HapticsModule.impactAsync(HapticsModule.ImpactFeedbackStyle.Medium);
+    safeHaptic(HapticsModule.ImpactFeedbackStyle.Medium);
     Alert.alert(
       'Remove Device',
       `Remove "${deviceName}" from your paired devices? This device will need to be re-paired to connect again.`,
@@ -354,7 +368,7 @@ export default function DeviceHub({ visible, onClose, activeDevices = [] }: Devi
           style: 'destructive',
           onPress: () => {
             removePairedDevice(deviceId);
-            HapticsModule.notificationAsync(HapticsModule.NotificationFeedbackType.Success);
+            safeNotification(HapticsModule.NotificationFeedbackType.Success);
           },
         },
       ]
@@ -364,12 +378,12 @@ export default function DeviceHub({ visible, onClose, activeDevices = [] }: Devi
   const handleCopyKey = useCallback(async () => {
     if (!pairingKey) return;
     await Clipboard.setStringAsync(pairingKey);
-    HapticsModule.impactAsync(HapticsModule.ImpactFeedbackStyle.Light);
+    safeHaptic(HapticsModule.ImpactFeedbackStyle.Light);
     Alert.alert('Copied', 'Pairing key copied to clipboard.');
   }, [pairingKey]);
 
   const handleRegenerateKey = useCallback(() => {
-    HapticsModule.impactAsync(HapticsModule.ImpactFeedbackStyle.Medium);
+    safeHaptic(HapticsModule.ImpactFeedbackStyle.Medium);
     Alert.alert(
       'Regenerate Key',
       'This will generate a new pairing key. All existing devices will need to re-pair. Are you sure?',
@@ -380,7 +394,7 @@ export default function DeviceHub({ visible, onClose, activeDevices = [] }: Devi
           style: 'destructive',
           onPress: async () => {
             await regeneratePairingKey();
-            HapticsModule.notificationAsync(HapticsModule.NotificationFeedbackType.Success);
+            safeNotification(HapticsModule.NotificationFeedbackType.Success);
           },
         },
       ]
@@ -407,7 +421,7 @@ export default function DeviceHub({ visible, onClose, activeDevices = [] }: Devi
 
   const toggleKeySection = useCallback(() => {
     setKeyExpanded(prev => !prev);
-    HapticsModule.impactAsync(HapticsModule.ImpactFeedbackStyle.Light);
+    safeHaptic(HapticsModule.ImpactFeedbackStyle.Light);
   }, []);
 
   // ── Limit bar calculations ──

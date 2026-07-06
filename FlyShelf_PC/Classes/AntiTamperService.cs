@@ -67,6 +67,11 @@ namespace FlyShelf.Classes
         /// </summary>
         public static bool CheckDebuggerPeriodic()
         {
+#if DEBUG
+            // Skip anti-debugger checks in Debug builds — running from Visual Studio
+            // with debugger attached would permanently disable Pro features.
+            return false;
+#else
             if (_debuggerDetected) return true;
             if (Interlocked.Increment(ref _antiDebugCounter) % 5 == 0)
             {
@@ -78,6 +83,7 @@ namespace FlyShelf.Classes
                 }
             }
             return false;
+#endif
         }
 
         // ═══ TIER SENTINEL ═══
@@ -180,6 +186,13 @@ namespace FlyShelf.Classes
             bool hasLicenseKey,
             Action onBinaryChanged)
         {
+#if DEBUG
+            // Skip assembly integrity check in development builds — the binary hash
+            // changes on every compilation, which would clear the JWT and force
+            // server re-activation on every launch, resetting the license to Free.
+            Logger.LogAction("INTEGRITY", "Skipped — Debug build");
+            return;
+#else
             if (_integrityChecked) return;
             _integrityChecked = true;
 
@@ -205,16 +218,15 @@ namespace FlyShelf.Classes
                     {
                         Logger.LogAction("INTEGRITY", $"Binary hash changed. Old: {storedHash.Substring(0, Math.Min(12, storedHash.Length))}..., New: {currentHash.Substring(0, 12)}...");
 
+                        // Always update the hash file FIRST so the next launch doesn't
+                        // re-trigger the binary change flow and loop forever.
+                        Directory.CreateDirectory(appDataDir);
+                        File.WriteAllText(hashFile, SignAssemblyHash(currentHash, keySecret));
+
                         if (isPro && hasLicenseKey)
                         {
                             // Notify LicenseManager to clear JWT and force re-activation
                             onBinaryChanged?.Invoke();
-                        }
-                        else
-                        {
-                            // Free tier — just update hash
-                            Directory.CreateDirectory(appDataDir);
-                            File.WriteAllText(hashFile, SignAssemblyHash(currentHash, keySecret));
                         }
                         return;
                     }
@@ -229,6 +241,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("INTEGRITY", $"Integrity check failed (non-fatal): {ex.Message}");
             }
+#endif
         }
     }
 }

@@ -1,28 +1,31 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:options="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    mc:Ignorable="options">
     <!-- Sunset Theme — Warm Orange -->
 
     <!-- Accent colors -->
-    <SolidColorBrush x:Key="ThemeAccent"          Color="#EA580C"/>
-    <SolidColorBrush x:Key="ThemeAccentLight"     Color="#FB923C"/>
-    <SolidColorBrush x:Key="ThemeAccentDark"      Color="#C2410C"/>
-    <SolidColorBrush x:Key="ThemeAccentBg"        Color="#20EA580C"/>
-    <SolidColorBrush x:Key="ThemeAccentBgHover"   Color="#40EA580C"/>
-    <SolidColorBrush x:Key="ThemeAccentBorder"    Color="#50EA580C"/>
+    <SolidColorBrush x:Key="ThemeAccent"          Color="#EA580C" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeAccentLight"     Color="#FB923C" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeAccentDark"      Color="#C2410C" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeAccentBg"        Color="#20EA580C" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeAccentBgHover"   Color="#40EA580C" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeAccentBorder"    Color="#50EA580C" options:Freeze="True"/>
     <Color x:Key="ThemeAccentColor">#EA580C</Color>
     <Color x:Key="ThemeAccentLightColor">#FB923C</Color>
     <Color x:Key="ThemeAccentDarkColor">#C2410C</Color>
 
     <!-- Header button chrome -->
-    <SolidColorBrush x:Key="ThemeHeaderBtnBg"             Color="#FF8B5A1B"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBorder"         Color="#FFB07525"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnFg"             Color="#F0FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBgHover"        Color="#FFA06A20"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBorderHover"    Color="#FFCC8830"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnFgHover"        Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBgPressed"      Color="#FFB87A28"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBorderPressed"  Color="#FFCC8830"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnFgPressed"      Color="#E0FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBg"             Color="#FF8B5A1B" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBorder"         Color="#FFB07525" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnFg"             Color="#F0FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBgHover"        Color="#FFA06A20" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBorderHover"    Color="#FFCC8830" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnFgHover"        Color="#FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBgPressed"      Color="#FFB87A28" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBorderPressed"  Color="#FFCC8830" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnFgPressed"      Color="#E0FFFFFF" options:Freeze="True"/>
     <Color x:Key="ThemeHeaderBtnBgColor">#FF8B5A1B</Color>
     <Color x:Key="ThemeHeaderBtnBorderColor">#FFB07525</Color>
     <Color x:Key="ThemeHeaderBtnBgHoverColor">#FFA06A20</Color>
@@ -33,56 +36,56 @@
     <Color x:Key="ThemeHeaderBtnFgPressedColor">#E0FFFFFF</Color>
 
     <!-- Overlay chrome -->
-    <SolidColorBrush x:Key="ThemeOverlayBg"           Color="#12FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeOverlayBgHover"      Color="#22FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeOverlayBgSelected"   Color="#15FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeOverlayBgPressed"    Color="#0AFFFFFF"/>
-    <SolidColorBrush x:Key="ThemeOverlayBorder"       Color="#18FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeOverlayBorderHover"  Color="#30FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeOverlayBorderStrong" Color="#40FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeOverlayBg"           Color="#12FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeOverlayBgHover"      Color="#22FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeOverlayBgSelected"   Color="#15FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeOverlayBgPressed"    Color="#0AFFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeOverlayBorder"       Color="#18FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeOverlayBorderHover"  Color="#30FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeOverlayBorderStrong" Color="#40FFFFFF" options:Freeze="True"/>
 
     <!-- Text -->
-    <SolidColorBrush x:Key="ThemeTextPrimary"     Color="#F1F5F9"/>
-    <SolidColorBrush x:Key="ThemeTextSecondary"   Color="#94A3B8"/>
-    <SolidColorBrush x:Key="ThemeTextMuted"       Color="#64748B"/>
-    <SolidColorBrush x:Key="ThemeTextOnAccent"    Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeTextPrimary"     Color="#F1F5F9" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeTextSecondary"   Color="#94A3B8" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeTextMuted"       Color="#64748B" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeTextOnAccent"    Color="#FFFFFF" options:Freeze="True"/>
 
     <!-- Separator / Shadow / Window -->
-    <SolidColorBrush x:Key="ThemeSeparator"       Color="#20FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeShadow"          Color="#000000"/>
-    <SolidColorBrush x:Key="ThemeWindowFallback"  Color="#2A1A08"/>
-    <SolidColorBrush x:Key="ThemeCodePreviewBg"   Color="#FF1E1E1E"/>
+    <SolidColorBrush x:Key="ThemeSeparator"       Color="#20FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeShadow"          Color="#000000" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeWindowFallback"  Color="#2A1A08" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeCodePreviewBg"   Color="#FF1E1E1E" options:Freeze="True"/>
 
     <!-- Chevron -->
-    <SolidColorBrush x:Key="ThemeChevronBg"          Color="#EE6E4818"/>
-    <SolidColorBrush x:Key="ThemeChevronBorder"      Color="#FF9A6820"/>
-    <SolidColorBrush x:Key="ThemeChevronBgHover"     Color="#F5805520"/>
-    <SolidColorBrush x:Key="ThemeChevronBorderHover" Color="#FFB07828"/>
+    <SolidColorBrush x:Key="ThemeChevronBg"          Color="#EE6E4818" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeChevronBorder"      Color="#FF9A6820" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeChevronBgHover"     Color="#F5805520" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeChevronBorderHover" Color="#FFB07828" options:Freeze="True"/>
 
     <!-- Overlay buttons -->
-    <SolidColorBrush x:Key="ThemeOverlayButtonBg"     Color="#F06E4818"/>
-    <SolidColorBrush x:Key="ThemeOverlayButtonBorder" Color="#FF9A6820"/>
+    <SolidColorBrush x:Key="ThemeOverlayButtonBg"     Color="#F06E4818" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeOverlayButtonBorder" Color="#FF9A6820" options:Freeze="True"/>
 
     <!-- Floating bar -->
-    <SolidColorBrush x:Key="ThemeFloatingBarBg"       Color="#F06A4515"/>
-    <SolidColorBrush x:Key="ThemeFloatingBarBorder"   Color="#FF8A5E1C"/>
+    <SolidColorBrush x:Key="ThemeFloatingBarBg"       Color="#F06A4515" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeFloatingBarBorder"   Color="#FF8A5E1C" options:Freeze="True"/>
 
     <!-- Overflow popup -->
-    <SolidColorBrush x:Key="ThemeOverflowBg"           Color="#F06A4515"/>
-    <SolidColorBrush x:Key="ThemeOverflowBorder"       Color="#608A5E1C"/>
+    <SolidColorBrush x:Key="ThemeOverflowBg"           Color="#F06A4515" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeOverflowBorder"       Color="#608A5E1C" options:Freeze="True"/>
     <Color x:Key="ThemeOverflowShadowColor">#5A3810</Color>
 
     <!-- Toast -->
-    <SolidColorBrush x:Key="ThemeToastBg"          Color="#F55A3810"/>
-    <SolidColorBrush x:Key="ThemeToastBorder"      Color="#FF8A5E1C"/>
-    <SolidColorBrush x:Key="ThemeToastInnerGlow"   Color="#20FB923C"/>
+    <SolidColorBrush x:Key="ThemeToastBg"          Color="#F55A3810" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeToastBorder"      Color="#FF8A5E1C" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeToastInnerGlow"   Color="#20FB923C" options:Freeze="True"/>
 
     <!-- Empty state icon -->
-    <SolidColorBrush x:Key="ThemeEmptyIcon"        Color="#40FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeEmptyIcon"        Color="#40FFFFFF" options:Freeze="True"/>
 
     <!-- Transfer / progress -->
-    <SolidColorBrush x:Key="ThemeTransferProgress" Color="#FB923C"/>
-    <SolidColorBrush x:Key="ThemeTransferText"     Color="#FDBA74"/>
+    <SolidColorBrush x:Key="ThemeTransferProgress" Color="#FB923C" options:Freeze="True"/>
+    <SolidColorBrush x:Key="ThemeTransferText"     Color="#FDBA74" options:Freeze="True"/>
 
     <!-- System accent overrides -->
     <Color x:Key="SystemAccentColor">#EA580C</Color>
@@ -92,13 +95,13 @@
     <Color x:Key="SystemAccentColorDark1">#C2410C</Color>
     <Color x:Key="SystemAccentColorDark2">#9A3412</Color>
     <Color x:Key="SystemAccentColorDark3">#7C2D12</Color>
-    <SolidColorBrush x:Key="SystemAccentColorBrush"       Color="#EA580C"/>
-    <SolidColorBrush x:Key="SystemAccentColorLight1Brush" Color="#FB923C"/>
-    <SolidColorBrush x:Key="SystemAccentColorLight2Brush" Color="#FDBA74"/>
-    <SolidColorBrush x:Key="SystemAccentColorLight3Brush" Color="#FED7AA"/>
-    <SolidColorBrush x:Key="SystemAccentColorDark1Brush"  Color="#C2410C"/>
-    <SolidColorBrush x:Key="SystemAccentColorDark2Brush"  Color="#9A3412"/>
-    <SolidColorBrush x:Key="SystemAccentColorDark3Brush"  Color="#7C2D12"/>
+    <SolidColorBrush x:Key="SystemAccentColorBrush"       Color="#EA580C" options:Freeze="True"/>
+    <SolidColorBrush x:Key="SystemAccentColorLight1Brush" Color="#FB923C" options:Freeze="True"/>
+    <SolidColorBrush x:Key="SystemAccentColorLight2Brush" Color="#FDBA74" options:Freeze="True"/>
+    <SolidColorBrush x:Key="SystemAccentColorLight3Brush" Color="#FED7AA" options:Freeze="True"/>
+    <SolidColorBrush x:Key="SystemAccentColorDark1Brush"  Color="#C2410C" options:Freeze="True"/>
+    <SolidColorBrush x:Key="SystemAccentColorDark2Brush"  Color="#9A3412" options:Freeze="True"/>
+    <SolidColorBrush x:Key="SystemAccentColorDark3Brush"  Color="#7C2D12" options:Freeze="True"/>
 
     <!-- MicaWPF accent overrides -->
     <Color x:Key="MicaWPF.Colors.SystemAccentColor">#EA580C</Color>
@@ -106,13 +109,13 @@
     <Color x:Key="MicaWPF.Colors.SystemAccentColorLight2">#FDBA74</Color>
     <Color x:Key="MicaWPF.Colors.SystemAccentColorDark1">#C2410C</Color>
     <Color x:Key="MicaWPF.Colors.SystemAccentColorDark2">#9A3412</Color>
-    <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColor"       Color="#EA580C"/>
-    <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorLight1" Color="#FB923C"/>
-    <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorLight2" Color="#FDBA74"/>
-    <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorDark1"  Color="#C2410C"/>
+    <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColor"       Color="#EA580C" options:Freeze="True"/>
+    <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorLight1" Color="#FB923C" options:Freeze="True"/>
+    <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorLight2" Color="#FDBA74" options:Freeze="True"/>
+    <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorDark1"  Color="#C2410C" options:Freeze="True"/>
 
     <!-- Theme marker -->
-    <SolidColorBrush x:Key="FlyShelf.ColorThemeMarker" Color="#EA580C"/>
+    <SolidColorBrush x:Key="FlyShelf.ColorThemeMarker" Color="#EA580C" options:Freeze="True"/>
 
     <!-- Theme-specific logo icon -->
     <BitmapImage x:Key="ThemeLogoIcon" UriSource="pack://application:,,,/Resources/FlyShelfIcon_SunsetFire.png" />

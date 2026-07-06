@@ -33,7 +33,7 @@ namespace FlyShelf.Classes
 
             // Try to reach the device and pair Ã¢â‚¬â€ LAN first, then Cloudflare
             string[] urls = new[] { info.localUrl, info.globalUrl }
-                .Where(u => !string.IsNullOrEmpty(u) && u.StartsWith("http"))
+                .Where(u => !string.IsNullOrEmpty(u) && u.StartsWith("http", StringComparison.Ordinal))
                 .ToArray();
 
             // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â CASE 1: Mobile device with no HTTP server Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
@@ -49,6 +49,7 @@ namespace FlyShelf.Classes
                 {
                     SettingsManager.Current.PairingKey = info.pairingKey;
                     SettingsManager.Save();
+                    SyncCrypto.ClearKeyCache();
                     Logger.LogAction("PAIR CODE", $"Adopted pairing key from {info.deviceName}: {info.pairingKey.Substring(0, 8)}...");
                     await CloudDiscoveryManager.RegisterRoomMembershipAsync(info.pairingKey);
                 }
@@ -62,15 +63,34 @@ namespace FlyShelf.Classes
                     true,
                     CloudDiscoveryManager.CachedLocalUrl ?? "");
 
-                Logger.LogAction("PAIR CODE", $"Ã¢Å“â€¦ Local-only paired with {info.deviceName} (key adoption)");
+                Logger.LogAction("PAIR CODE", $"✓ Local-only paired with {info.deviceName} (key adoption)");
                 
-                // Notify the code-provider that we joined Ã¢â‚¬â€ write a handshake to Firebase
+                // Notify the code-provider that we joined — write a handshake to Firebase
                 _ = WriteHandshakeToFirebase(info.pairingKey, info.deviceId);
+
+                // KEY FIX: Write our info back to the original pairing code node so the Android
+                // can discover us without needing Firebase room membership.
+                // Android polls pairing_codes/{code} — when it sees a 'response' field, it registers us.
+                _ = WriteResponseToPairingCode(code, info.pairingKey);
+
+                // Register in PeerManager for instant status display (mobile has no HTTP server,
+                // but PeerManager needs the entry for the UI to show the device)
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        if (PeerManager.Instance != null)
+                        {
+                            await PeerManager.Instance.ForceResync();
+                        }
+                    }
+                    catch (Exception ex) { Logger.LogAction("PAIR CODE", $"Post-pair ForceResync failed: {ex.Message}"); }
+                });
                 
                 return (true, info.deviceName);
             }
 
-            // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â CASE 2: Device has HTTP server Ã¢â‚¬â€ try to reach it Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+            // ═══ CASE 2: Device has HTTP server — try to reach it ═══ 
             foreach (var url in urls)
             {
                 try
@@ -98,6 +118,7 @@ namespace FlyShelf.Classes
                         {
                             SettingsManager.Current.PairingKey = info.pairingKey;
                             SettingsManager.Save();
+                            SyncCrypto.ClearKeyCache();
                             Logger.LogAction("PAIR CODE", $"Adopted pairing key from {info.deviceName}: {info.pairingKey.Substring(0, 8)}...");
                             await CloudDiscoveryManager.RegisterRoomMembershipAsync(info.pairingKey);
                         }
@@ -112,10 +133,38 @@ namespace FlyShelf.Classes
                             true,
                             CloudDiscoveryManager.CachedLocalUrl ?? "");
 
-                        Logger.LogAction("PAIR CODE", $"Ã¢Å“â€¦ Paired with {info.deviceName} via {url}");
+                        Logger.LogAction("PAIR CODE", $"✓ Paired with {info.deviceName} via {url}");
                         
                         // Notify the code-provider that we joined
                         _ = WriteHandshakeToFirebase(info.pairingKey, info.deviceId);
+                        _ = WriteResponseToPairingCode(code, info.pairingKey);
+
+                        // Register directly in PeerManager for instant LAN/Cloud status
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                if (PeerManager.Instance != null)
+                                {
+                                    string lanUrl = info.localUrl ?? "";
+                                    string cfUrl = info.globalUrl ?? "";
+                                    // Use AddManualPeer with the URL that worked
+                                    if (!string.IsNullOrEmpty(lanUrl) && lanUrl.StartsWith("http"))
+                                    {
+                                        await PeerManager.Instance.AddManualPeer(info.deviceId, info.deviceName, lanUrl);
+                                    }
+                                    else if (!string.IsNullOrEmpty(cfUrl) && cfUrl.StartsWith("http"))
+                                    {
+                                        await PeerManager.Instance.AddManualPeer(info.deviceId, info.deviceName, cfUrl);
+                                    }
+                                    else
+                                    {
+                                        await PeerManager.Instance.ForceResync();
+                                    }
+                                }
+                            }
+                            catch (Exception ex) { Logger.LogAction("PAIR CODE", $"Post-pair peer registration failed: {ex.Message}"); }
+                        });
                         
                         return (true, info.deviceName);
                     }
@@ -136,6 +185,7 @@ namespace FlyShelf.Classes
                 Logger.LogAction("PAIR CODE", $"Device {info.deviceName} unreachable — adopting key for deferred pairing");
                 SettingsManager.Current.PairingKey = info.pairingKey;
                 SettingsManager.Save();
+                SyncCrypto.ClearKeyCache();
                 await CloudDiscoveryManager.RegisterRoomMembershipAsync(info.pairingKey);
                 TryPairDevice(info.pairingKey, info.deviceId, info.deviceName, info.deviceType, "deferred");
                 
@@ -145,6 +195,7 @@ namespace FlyShelf.Classes
                     CloudDiscoveryManager.CachedLocalUrl ?? "");
                 
                 _ = WriteHandshakeToFirebase(info.pairingKey, info.deviceId);
+                _ = WriteResponseToPairingCode(code, info.pairingKey);
                 
                 return (true, info.deviceName + " ⏳");
             }
@@ -184,6 +235,47 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("PAIR HANDSHAKE", $"Failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Write our device info back to the original pairing code node so the Android
+        /// can discover us. Android polls pairing_codes/{code} and reads the 'response' field.
+        /// This avoids the Firebase membership requirement that blocks active_devices reads.
+        /// </summary>
+        private static async Task WriteResponseToPairingCode(string code, string pairingKey)
+        {
+            try
+            {
+                string myDeviceId = SettingsManager.Current.DeviceId ?? "";
+                string myDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
+                string localUrl = CloudDiscoveryManager.CachedLocalUrl ?? "";
+                string globalUrl = CloudDiscoveryManager.CachedGlobalUrl ?? "";
+                var response = new
+                {
+                    deviceId = myDeviceId,
+                    deviceName = myDeviceName,
+                    deviceType = "PC",
+                    pairingKey,
+                    localUrl,
+                    globalUrl,
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+                string json = JsonSerializer.Serialize(response);
+                string url = await AuthUrl($"pairing_codes/{code}/response.json");
+                var result = await _httpClient.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
+                Logger.LogAction("PAIR CODE", $"Wrote PC response to pairing code {code}: HTTP {(int)result.StatusCode}");
+
+                // Auto-expire after 5 minutes (same as pairing code TTL)
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(5 * 60_000);
+                    try { await _httpClient.DeleteAsync(await AuthUrl($"pairing_codes/{code}/response.json")); } catch { }
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("PAIR CODE", $"WriteResponseToPairingCode failed: {ex.Message}");
             }
         }
 
@@ -243,7 +335,23 @@ namespace FlyShelf.Classes
                     try { await _httpClient.DeleteAsync((await AuthUrl($"pairing_handshake/{pairingKey}/{prop.Name}.json"))); } catch (Exception ex) { Logger.LogAction("PAIR", $"Firebase pairing cleanup failed: {ex.Message}"); }
                 }
 
-                if (anyNew) Save();
+                if (anyNew)
+                {
+                    Save();
+                    // Instantly attempt to connect to the new device(s) for real-time status
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            if (PeerManager.Instance != null)
+                            {
+                                await PeerManager.Instance.ForceResync();
+                                Logger.LogAction("PAIR HANDSHAKE", "Triggered ForceResync after new handshake device");
+                            }
+                        }
+                        catch (Exception ex) { Logger.LogAction("PAIR HANDSHAKE", $"ForceResync failed: {ex.Message}"); }
+                    });
+                }
             }
             catch (Exception ex)
             {

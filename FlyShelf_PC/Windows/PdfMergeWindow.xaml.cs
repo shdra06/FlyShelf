@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -14,6 +15,7 @@ using MicaWPF.Controls;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 using Microsoft.Win32;
+using FlyShelf.Classes;
 
 namespace FlyShelf.Windows
 {
@@ -296,7 +298,7 @@ namespace FlyShelf.Windows
             }
         }
 
-        private void ReorderPages_Click(object sender, RoutedEventArgs e)
+        private async void ReorderPages_Click(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.Tag is PdfMergeItem item)
             {
@@ -308,11 +310,29 @@ namespace FlyShelf.Windows
 
                 var reorderWin = new PageReorderWindow(item);
                 reorderWin.Owner = this;
-                reorderWin.ShowDialog();
+                WindowHelper.ShowDialogInForeground(reorderWin, this);
 
                 if (reorderWin.WasConfirmed)
                 {
-                    item.SetCustomPageOrder(reorderWin.GetFinalPageOrder());
+                    if (reorderWin.WasOverwritten)
+                    {
+                        // File was changed on disk — reload the item in the merge list
+                        var newItem = await PdfMergeItem.CreateAsync(item.FilePath);
+                        int idx = MergeItems.IndexOf(item);
+                        if (idx >= 0)
+                        {
+                            MergeItems[idx] = newItem;
+                        }
+
+                        // Also bump the overwritten file to the top of the clipboard
+                        var dataObj = new DataObject();
+                        dataObj.SetData(DataFormats.FileDrop, new string[] { item.FilePath });
+                        _viewModel.HandleDrop(dataObj);
+                    }
+                    else
+                    {
+                        item.SetCustomPageOrder(reorderWin.GetFinalPageOrderEntries());
+                    }
                     PdfItemsList.Items.Refresh();
                     UpdateSummary();
                 }
@@ -407,15 +427,17 @@ namespace FlyShelf.Windows
                 return;
             }
 
-            var pageIndices = item.GetSelectedPageIndices();
-            if (pageIndices.Count == 0)
+            var pageEntries = item.GetSelectedPageEntries();
+            if (pageEntries.Count == 0)
             {
                 ToastWindow.ShowToast("No pages selected to save.");
                 return;
             }
 
-            // If all pages selected and no reorder, just open the original
-            if (pageIndices.Count == item.TotalPages && pageIndices.SequenceEqual(Enumerable.Range(0, item.TotalPages)))
+            // If all pages selected, no reorder, and no rotation, just open the original
+            if (pageEntries.Count == item.TotalPages 
+                && pageEntries.All(e => e.Rotation == 0)
+                && pageEntries.Select(e => e.PageIndex).SequenceEqual(Enumerable.Range(0, item.TotalPages)))
             {
                 System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{item.FilePath}\"");
                 return;
@@ -436,10 +458,17 @@ namespace FlyShelf.Windows
                     {
                         using (PdfDocument inputDoc = PdfReader.Open(item.FilePath, PdfDocumentOpenMode.Import))
                         {
-                            foreach (int idx in pageIndices)
+                            foreach (var entry in pageEntries)
                             {
-                                if (idx >= 0 && idx < inputDoc.PageCount)
-                                    outputDoc.AddPage(inputDoc.Pages[idx]);
+                                if (entry.PageIndex >= 0 && entry.PageIndex < inputDoc.PageCount)
+                                {
+                                    PdfPage page = inputDoc.Pages[entry.PageIndex];
+                                    if (entry.Rotation != 0)
+                                    {
+                                        page.Rotate = (page.Rotate + entry.Rotation) % 360;
+                                    }
+                                    outputDoc.AddPage(page);
+                                }
                             }
                         }
                         outputDoc.Save(outputPath);
@@ -456,7 +485,13 @@ namespace FlyShelf.Windows
             if (success && File.Exists(outputPath))
             {
                 FlyShelf.Classes.LicenseManager.RecordPdfSave();
-                ToastWindow.ShowToast($"✅ Saved {pageIndices.Count} pages → {outputName}");
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    var dataObj = new DataObject();
+                    dataObj.SetData(DataFormats.FileDrop, new string[] { outputPath });
+                    _viewModel.HandleDrop(dataObj, true);
+                    ToastWindow.ShowToast($"✅ Saved {pageEntries.Count} pages → {outputName}");
+                });
                 System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{outputPath}\"");
             }
             else
@@ -479,10 +514,10 @@ namespace FlyShelf.Windows
                 {
                     if (string.IsNullOrEmpty(file) || !File.Exists(file)) continue;
 
-                    string ext = Path.GetExtension(file).ToLower();
+                    string ext = Path.GetExtension(file).ToLower(CultureInfo.InvariantCulture);
                     if (ext == ".pdf")
                     {
-                        MergeItems.Add(new PdfMergeItem(file));
+                        MergeItems.Add(await PdfMergeItem.CreateAsync(file));
                     }
                     else if (ext == ".doc" || ext == ".docx")
                     {
@@ -490,7 +525,7 @@ namespace FlyShelf.Windows
                         string pdfPath = await FlyShelf.Classes.ConversionUtils.ConvertDocToPdfAsync(file);
                         if (!string.IsNullOrEmpty(pdfPath) && File.Exists(pdfPath))
                         {
-                            MergeItems.Add(new PdfMergeItem(pdfPath));
+                            MergeItems.Add(await PdfMergeItem.CreateAsync(pdfPath));
                         }
                         else
                         {
@@ -505,7 +540,7 @@ namespace FlyShelf.Windows
                             string pdfPath = await System.Threading.Tasks.Task.Run(() => FlyShelf.Classes.ConversionUtils.ConvertImageToPdf(file));
                             if (!string.IsNullOrEmpty(pdfPath) && File.Exists(pdfPath))
                             {
-                                MergeItems.Add(new PdfMergeItem(pdfPath));
+                                MergeItems.Add(await PdfMergeItem.CreateAsync(pdfPath));
                             }
                         }
                         catch (Exception ex)
@@ -649,16 +684,18 @@ namespace FlyShelf.Windows
                         {
                             try
                             {
-                                var pageIndices = item.GetSelectedPageIndices();
-                                if (pageIndices.Count == 0) continue;
-
                                 using (PdfDocument inputDocument = PdfReader.Open(item.FilePath, PdfDocumentOpenMode.Import))
                                 {
-                                    foreach (int idx in pageIndices)
+                                    var pageEntries = item.GetSelectedPageEntries();
+                                    foreach (var entry in pageEntries)
                                     {
-                                        if (idx >= 0 && idx < inputDocument.PageCount)
+                                        if (entry.PageIndex >= 0 && entry.PageIndex < inputDocument.PageCount)
                                         {
-                                            PdfPage page = inputDocument.Pages[idx];
+                                            PdfPage page = inputDocument.Pages[entry.PageIndex];
+                                            if (entry.Rotation != 0)
+                                            {
+                                                page.Rotate = (page.Rotate + entry.Rotation) % 360;
+                                            }
                                             outputDocument.AddPage(page);
                                             mergedPages++;
                                         }

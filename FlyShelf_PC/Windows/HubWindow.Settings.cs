@@ -5,6 +5,7 @@
 // Split from HubWindow.xaml.cs for modularity
 // ---------------------------------------------------------------
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -20,6 +21,8 @@ namespace FlyShelf.Windows
 {
     public partial class HubWindow
     {
+        private static readonly string[] s_plusSeparator = new[] { " + " };
+
         // ═══ Summon Hotkey Customization ═══
         private bool _isRecordingHotkey = false;
         private uint _recordedModifier = 0;
@@ -36,7 +39,7 @@ namespace FlyShelf.Windows
             if (HotkeyDisplay == null) return;
             HotkeyDisplay.Children.Clear();
             var display = SettingsManager.Current.HotkeyDisplayString;
-            var parts = display.Split(new[] { " + " }, StringSplitOptions.RemoveEmptyEntries);
+            var parts = display.Split(s_plusSeparator, StringSplitOptions.RemoveEmptyEntries);
             for (int i = 0; i < parts.Length; i++)
             {
                 if (i > 0)
@@ -268,7 +271,7 @@ namespace FlyShelf.Windows
                     return;
                 }
                 _networkLogsWindow = new NetworkLogsWindow();
-                _networkLogsWindow.Show();
+                WindowHelper.ShowInForeground(_networkLogsWindow);
             }
             catch { } // Best-effort: failure is acceptable
         }
@@ -319,9 +322,9 @@ namespace FlyShelf.Windows
 
                 var sb = new System.Text.StringBuilder();
                 sb.AppendLine("═══════════════════════════════════════════════════════════");
-                sb.AppendLine($"  FlyShelf Remote Diagnostic — {deviceName}");
-                sb.AppendLine($"  URL: {activeUrl}");
-                sb.AppendLine($"  Fetched: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  FlyShelf Remote Diagnostic — {deviceName}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  URL: {activeUrl}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  Fetched: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 sb.AppendLine("═══════════════════════════════════════════════════════════");
 
                 // ── SECTION 1: Health ──
@@ -349,17 +352,17 @@ namespace FlyShelf.Windows
                     }
 
                     string uptimeStr = uptime >= 3600 ? $"{uptime/3600}h {(uptime%3600)/60}m" : $"{uptime/60}m {uptime%60}s";
-                    sb.AppendLine($"  Version:    v{version}");
-                    sb.AppendLine($"  Device ID:  {devId}");
-                    sb.AppendLine($"  Type:       {devType}");
-                    sb.AppendLine($"  Uptime:     {uptimeStr}");
-                    sb.AppendLine($"  Peers:      {peers} connected");
-                    sb.AppendLine($"  LAN:        {(string.IsNullOrEmpty(lanUrl) ? "—" : lanUrl)}");
-                    sb.AppendLine($"  Cloudflare: {(string.IsNullOrEmpty(cfUrl) ? "—" : cfUrl)}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  Version:    v{version}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  Device ID:  {devId}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  Type:       {devType}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  Uptime:     {uptimeStr}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  Peers:      {peers} connected");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  LAN:        {(string.IsNullOrEmpty(lanUrl) ? "—" : lanUrl)}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  Cloudflare: {(string.IsNullOrEmpty(cfUrl) ? "—" : cfUrl)}");
                 }
                 catch (Exception ex)
                 {
-                    sb.AppendLine($"  ❌ Failed to fetch health: {ex.Message}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  ❌ Failed to fetch health: {ex.Message}");
                 }
 
                 // ── SECTION 2: Clipboard Contents ──
@@ -400,33 +403,33 @@ namespace FlyShelf.Windows
                         };
 
                         sb.AppendLine();
-                        sb.AppendLine($"  {icon} [{idx}] {type.ToUpper()} — {time}");
-                        if (!string.IsNullOrEmpty(title)) sb.AppendLine($"     Title:  {title}");
-                        if (!string.IsNullOrEmpty(fileName) && fileName != title) sb.AppendLine($"     File:   {fileName}");
-                        if (!string.IsNullOrEmpty(source)) sb.AppendLine($"     From:   {source} ({sourceType})");
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"  {icon} [{idx}] {type.ToUpper(CultureInfo.InvariantCulture)} — {time}");
+                        if (!string.IsNullOrEmpty(title)) sb.AppendLine(CultureInfo.InvariantCulture, $"     Title:  {title}");
+                        if (!string.IsNullOrEmpty(fileName) && fileName != title) sb.AppendLine(CultureInfo.InvariantCulture, $"     File:   {fileName}");
+                        if (!string.IsNullOrEmpty(source)) sb.AppendLine(CultureInfo.InvariantCulture, $"     From:   {source} ({sourceType})");
 
                         if (type == "Text" || type == "Url")
                         {
-                            string preview = raw.Length > 200 ? raw.Substring(0, 200) + "..." : raw;
+                            string preview = raw.Length > 200 ? string.Concat(raw.AsSpan(0, 200), "...") : raw;
                             preview = preview.Replace("\r\n", "\\n").Replace("\n", "\\n");
-                            sb.AppendLine($"     Content: {preview}");
+                            sb.AppendLine(CultureInfo.InvariantCulture, $"     Content: {preview}");
                         }
                         else if (type == "Image" || type == "QRCode")
                         {
-                            if (!string.IsNullOrEmpty(previewUrl)) sb.AppendLine($"     Preview: {baseUrl}{previewUrl}");
-                            if (!string.IsNullOrEmpty(downloadUrl) && downloadUrl.StartsWith("/")) sb.AppendLine($"     Download: {baseUrl}{downloadUrl}");
+                            if (!string.IsNullOrEmpty(previewUrl)) sb.AppendLine(CultureInfo.InvariantCulture, $"     Preview: {baseUrl}{previewUrl}");
+                            if (!string.IsNullOrEmpty(downloadUrl) && downloadUrl.StartsWith('/')) sb.AppendLine(CultureInfo.InvariantCulture, $"     Download: {baseUrl}{downloadUrl}");
                         }
                         else if (!string.IsNullOrEmpty(downloadUrl))
                         {
-                            if (downloadUrl.StartsWith("/")) sb.AppendLine($"     Download: {baseUrl}{downloadUrl}");
-                            else if (downloadUrl.StartsWith("http")) sb.AppendLine($"     Path: {downloadUrl}");
+                            if (downloadUrl.StartsWith('/')) sb.AppendLine(CultureInfo.InvariantCulture, $"     Download: {baseUrl}{downloadUrl}");
+                            else if (downloadUrl.StartsWith("http", StringComparison.Ordinal)) sb.AppendLine(CultureInfo.InvariantCulture, $"     Path: {downloadUrl}");
                         }
                     }
 
                     if (idx == 0) sb.AppendLine("  (clipboard is empty)");
-                    else sb.AppendLine($"\n  — {idx} items on clipboard");
+                    else sb.AppendLine(CultureInfo.InvariantCulture, $"\n  — {idx} items on clipboard");
                 }
-                catch (Exception ex) { sb.AppendLine($"  ❌ Failed to fetch clipboard: {ex.Message}"); }
+                catch (Exception ex) { sb.AppendLine(CultureInfo.InvariantCulture, $"  ❌ Failed to fetch clipboard: {ex.Message}"); }
 
                 // ── SECTION 3: Logs ──
                 sb.AppendLine();
@@ -458,16 +461,16 @@ namespace FlyShelf.Windows
                                 else if (logEl.ValueKind == System.Text.Json.JsonValueKind.String)
                                     line = logEl.GetString() ?? "";
                                 if (string.IsNullOrWhiteSpace(line)) continue;
-                                if (line.Contains("[HTTP]") && (line.Contains("GET /api/health") || line.Contains("GET /health"))) continue;
+                                if (line.Contains("[HTTP]", StringComparison.Ordinal) && (line.Contains("GET /api/health", StringComparison.Ordinal) || line.Contains("GET /health", StringComparison.Ordinal))) continue;
                                 sb.AppendLine(line);
                                 count++;
                             }
                         }
-                        sb.AppendLine($"\n— {count} log entries (health noise filtered)");
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"\n— {count} log entries (health noise filtered)");
                     }
-                    else { sb.AppendLine($"  ❌ HTTP {logResp.StatusCode}: {logJson}"); }
+                    else { sb.AppendLine(CultureInfo.InvariantCulture, $"  ❌ HTTP {logResp.StatusCode}: {logJson}"); }
                 }
-                catch (Exception ex) { sb.AppendLine($"  ❌ Failed to fetch logs: {ex.Message}"); }
+                catch (Exception ex) { sb.AppendLine(CultureInfo.InvariantCulture, $"  ❌ Failed to fetch logs: {ex.Message}"); }
 
                 ClipboardHelper.SafeSetText(sb.ToString());
                 ToastWindow.ShowToast($"📋 Full diagnostic from {deviceName} copied!");
@@ -536,11 +539,11 @@ namespace FlyShelf.Windows
             }
         }
 
-        private void CopyServerDiagnostics_Click(object sender, RoutedEventArgs e)
+        private async void CopyServerDiagnostics_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                string diagnostics = GetServerDiagnostics();
+                string diagnostics = await System.Threading.Tasks.Task.Run(() => GetServerDiagnostics());
                 string systemInfo = $"=== FlyShelf Server Diagnostics ===\n" +
                     $"PC Name: {Environment.MachineName}\n" +
                     $"OS: {Environment.OSVersion}\n" +
@@ -566,9 +569,9 @@ namespace FlyShelf.Windows
                 for (int i = startIdx; i < allLines.Length; i++)
                 {
                     string line = allLines[i];
-                    if (line.Contains("[BIND]") || line.Contains("[NETWORK") || line.Contains("[TCP PROXY]") ||
-                        line.Contains("[CLOUDFLARE]") || line.Contains("[CF_STDERR]") || line.Contains("[HEARTBEAT]") ||
-                        line.Contains("[FIREBASE SYNC]") || line.Contains("[DIAGNOSTICS]") || (line.Contains("[HTTP]") && line.Contains("health")))
+                    if (line.Contains("[BIND]", StringComparison.Ordinal) || line.Contains("[NETWORK", StringComparison.Ordinal) || line.Contains("[TCP PROXY]", StringComparison.Ordinal) ||
+                        line.Contains("[CLOUDFLARE]", StringComparison.Ordinal) || line.Contains("[CF_STDERR]", StringComparison.Ordinal) || line.Contains("[HEARTBEAT]", StringComparison.Ordinal) ||
+                        line.Contains("[FIREBASE SYNC]", StringComparison.Ordinal) || line.Contains("[DIAGNOSTICS]", StringComparison.Ordinal) || (line.Contains("[HTTP]", StringComparison.Ordinal) && line.Contains("health", StringComparison.Ordinal)))
                     {
                         relevantLines.Add(line);
                     }
@@ -651,18 +654,18 @@ namespace FlyShelf.Windows
                         bool contentMatch = clip.RawContent != null && clip.RawContent.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0;
                         bool formatMatch = clip.FormatIdentifier != null && clip.FormatIdentifier.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0;
                         
-                        bool extMatch = !string.IsNullOrEmpty(clip.Extension) && clip.Extension.Replace(".", "").Trim().ToLowerInvariant() == q;
+                        bool extMatch = !string.IsNullOrEmpty(clip.Extension) && string.Equals(clip.Extension.Replace(".", "", StringComparison.Ordinal).Trim(), q, StringComparison.OrdinalIgnoreCase);
                         bool pathExtMatch = false;
                         if (!string.IsNullOrEmpty(clip.FilePath))
                         {
                             try
                             {
-                                string ext = System.IO.Path.GetExtension(clip.FilePath).Replace(".", "").Trim().ToLowerInvariant();
-                                pathExtMatch = ext == q;
+                                string ext = System.IO.Path.GetExtension(clip.FilePath).Replace(".", "", StringComparison.Ordinal).Trim();
+                                pathExtMatch = string.Equals(ext, q, StringComparison.OrdinalIgnoreCase);
                             }
                             catch { } // Best-effort: failure is acceptable
                         }
-                        bool typeMatch = clip.ItemType.ToString().ToLowerInvariant() == q;
+                        bool typeMatch = string.Equals(clip.ItemType.ToString(), q, StringComparison.OrdinalIgnoreCase);
 
                         passesSearch = nameMatch || contentMatch || formatMatch || extMatch || pathExtMatch || typeMatch;
                     }
@@ -789,7 +792,7 @@ namespace FlyShelf.Windows
                     for (int i = 0; i < RetentionCombo.Items.Count; i++)
                     {
                         var item = RetentionCombo.Items[i] as System.Windows.Controls.ComboBoxItem;
-                        if (item?.Tag?.ToString() == FlyShelf.Classes.SettingsManager.Current.ClipboardRetentionDays.ToString())
+                        if (item?.Tag?.ToString() == FlyShelf.Classes.SettingsManager.Current.ClipboardRetentionDays.ToString(CultureInfo.InvariantCulture))
                         {
                             RetentionCombo.SelectedIndex = i;
                             break;
@@ -833,17 +836,17 @@ namespace FlyShelf.Windows
                     {
                         if (isPro)
                         {
-                            if (text.StartsWith("[Locked] ")) item.Content = text.Substring(9);
+                            if (text.StartsWith("[Locked] ", StringComparison.Ordinal)) item.Content = text.Substring(9);
                         }
                         else
                         {
-                            if (!text.StartsWith("[Locked] ")) item.Content = "[Locked] " + text;
+                            if (!text.StartsWith("[Locked] ", StringComparison.Ordinal)) item.Content = "[Locked] " + text;
                         }
                     }
                     else
                     {
                         // Remove lock from 14 and 30 days since they are now free
-                        if (text.StartsWith("[Locked] ")) item.Content = text.Substring(9);
+                        if (text.StartsWith("[Locked] ", StringComparison.Ordinal)) item.Content = text.Substring(9);
                     }
                 }
             }
@@ -1060,7 +1063,7 @@ namespace FlyShelf.Windows
             if (!string.IsNullOrEmpty(settings.AiApiKey))
             {
                 string key = settings.AiApiKey;
-                HubAiApiKeyBox.Text = key.Length > 8 ? key.Substring(0, 4) + "..." + key.Substring(key.Length - 4) : "••••••••";
+                HubAiApiKeyBox.Text = key.Length > 8 ? string.Concat(key.AsSpan(0, 4), "...", key.AsSpan(key.Length - 4)) : "••••••••";
                 HubAiApiKeyBox.Tag = "masked";
                 HubAiApiKeyStatus.Text = "✅ API key configured";
                 HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
@@ -1116,7 +1119,7 @@ namespace FlyShelf.Windows
 
             if (!string.IsNullOrEmpty(newKey))
             {
-                HubAiApiKeyBox.Text = newKey.Length > 8 ? newKey.Substring(0, 4) + "..." + newKey.Substring(newKey.Length - 4) : "••••••••";
+                HubAiApiKeyBox.Text = newKey.Length > 8 ? string.Concat(newKey.AsSpan(0, 4), "...", newKey.AsSpan(newKey.Length - 4)) : "••••••••";
                 HubAiApiKeyBox.Tag = "masked";
                 HubAiApiKeyStatus.Text = "✅ API key saved and encrypted!";
                 HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));

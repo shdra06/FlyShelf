@@ -1,6 +1,8 @@
-﻿using System;
+using System;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using PdfSharp.Pdf;
@@ -23,7 +25,13 @@ namespace FlyShelf.Windows
         // Which pages are selected (1-indexed). null = all pages
         private HashSet<int> _selectedPages;
         // Custom page order from reorder window (0-indexed). null = default order
-        private List<int> _customPageOrder;
+        private List<PageOrderEntry> _customPageOrder;
+        
+        public class PageOrderEntry
+        {
+            public int PageIndex { get; set; }
+            public int Rotation { get; set; }
+        }
         
         public string PageRangeText
         {
@@ -47,7 +55,7 @@ namespace FlyShelf.Windows
         private bool[] _pageSelected;
         public bool[] PageSelected => _pageSelected;
 
-        public PdfMergeItem(string filePath)
+        public PdfMergeItem(string filePath, bool skipLoad = false)
         {
             FilePath = filePath;
             FileName = Path.GetFileName(filePath);
@@ -56,12 +64,22 @@ namespace FlyShelf.Windows
             {
                 var fi = new FileInfo(filePath);
                 FileSize = fi.Length > 1_048_576 
-                    ? $"{fi.Length / 1_048_576.0:F1} MB" 
-                    : $"{fi.Length / 1024.0:F0} KB";
+                    ? string.Create(CultureInfo.InvariantCulture, $"{fi.Length / 1_048_576.0:F1} MB") 
+                    : string.Create(CultureInfo.InvariantCulture, $"{fi.Length / 1024.0:F0} KB");
             }
             catch { FileSize = ""; }
 
-            LoadPageCount();
+            if (!skipLoad) LoadPageCount();
+        }
+
+        /// <summary>
+        /// Async factory method — use instead of constructor to avoid blocking the UI thread.
+        /// </summary>
+        public static async Task<PdfMergeItem> CreateAsync(string filePath)
+        {
+            var item = new PdfMergeItem(filePath, skipLoad: true);
+            await item.LoadPageCountAsync();
+            return item;
         }
 
         private void LoadPageCount()
@@ -80,38 +98,69 @@ namespace FlyShelf.Windows
             catch (Exception ex)
             {
                 TotalPages = 0;
-                _pageSelected = new bool[0];
-                Error = ex.Message.Length > 60 ? ex.Message.Substring(0, 60) + "..." : ex.Message;
+                _pageSelected = Array.Empty<bool>();
+                Error = ex.Message.Length > 60 ? string.Concat(ex.Message.AsSpan(0, 60), "...") : ex.Message;
             }
         }
 
         /// <summary>
-        /// Returns the 0-indexed page indices to include in the merge, respecting custom order.
+        /// Async version of LoadPageCount — offloads PdfReader.Open to a background thread.
         /// </summary>
-        public List<int> GetSelectedPageIndices()
+        private async Task LoadPageCountAsync()
         {
-            // Custom order takes priority (already 0-indexed)
+            try
+            {
+                int count = await Task.Run(() =>
+                {
+                    using (var doc = PdfReader.Open(FilePath, PdfDocumentOpenMode.Import))
+                    {
+                        return doc.PageCount;
+                    }
+                });
+                TotalPages = count;
+                _pageSelected = new bool[TotalPages];
+                for (int i = 0; i < TotalPages; i++) _pageSelected[i] = true; // All selected by default
+                _selectedPages = null; // null = all
+                Error = null;
+            }
+            catch (Exception ex)
+            {
+                TotalPages = 0;
+                _pageSelected = Array.Empty<bool>();
+                Error = ex.Message.Length > 60 ? string.Concat(ex.Message.AsSpan(0, 60), "...") : ex.Message;
+            }
+        }
+
+        /// <summary>
+        /// Returns the 0-indexed page entries (index + rotation) to include in the merge.
+        /// </summary>
+        public List<PageOrderEntry> GetSelectedPageEntries()
+        {
             if (_customPageOrder != null)
-                return new List<int>(_customPageOrder);
+                return new List<PageOrderEntry>(_customPageOrder);
 
             if (_selectedPages == null)
             {
-                // All pages
-                return Enumerable.Range(0, TotalPages).ToList();
+                return Enumerable.Range(0, TotalPages).Select(i => new PageOrderEntry { PageIndex = i, Rotation = 0 }).ToList();
             }
-            return _selectedPages.OrderBy(p => p).Select(p => p - 1).ToList(); // Convert 1-indexed to 0-indexed
+            return _selectedPages.OrderBy(p => p).Select(p => new PageOrderEntry { PageIndex = p - 1, Rotation = 0 }).ToList();
         }
 
         /// <summary>
-        /// Set a custom page order from the reorder window (0-indexed page numbers).
+        /// Legacy compatibility: Returns 0-indexed page indices.
         /// </summary>
-        public void SetCustomPageOrder(List<int> order)
+        public List<int> GetSelectedPageIndices() => GetSelectedPageEntries().Select(e => e.PageIndex).ToList();
+
+        /// <summary>
+        /// Set a custom page order from the reorder window.
+        /// </summary>
+        public void SetCustomPageOrder(List<PageOrderEntry> order)
         {
             _customPageOrder = order;
             // Also update the selection set to match
-            _selectedPages = new HashSet<int>(order.Select(i => i + 1));
+            _selectedPages = new HashSet<int>(order.Select(e => e.PageIndex + 1));
             for (int i = 0; i < TotalPages; i++)
-                _pageSelected[i] = order.Contains(i);
+                _pageSelected[i] = order.Any(e => e.PageIndex == i);
             OnPropertyChanged(nameof(PageRangeText));
             OnPropertyChanged(nameof(PageInfo));
         }
@@ -171,7 +220,7 @@ namespace FlyShelf.Windows
         /// </summary>
         public bool SetPageRange(string rangeText)
         {
-            if (string.IsNullOrWhiteSpace(rangeText) || rangeText.Trim().ToLower() == "all")
+            if (string.IsNullOrWhiteSpace(rangeText) || string.Equals(rangeText.Trim(), "all", StringComparison.OrdinalIgnoreCase))
             {
                 SelectAll();
                 return true;
@@ -183,17 +232,17 @@ namespace FlyShelf.Windows
                 foreach (var part in rangeText.Split(','))
                 {
                     var trimmed = part.Trim();
-                    if (trimmed.Contains('-'))
+                    if (trimmed.Contains('-', StringComparison.Ordinal))
                     {
                         var bounds = trimmed.Split('-');
-                        int start = int.Parse(bounds[0].Trim());
-                        int end = int.Parse(bounds[1].Trim());
+                        int start = int.Parse(bounds[0].Trim(), System.Globalization.CultureInfo.InvariantCulture);
+                        int end = int.Parse(bounds[1].Trim(), System.Globalization.CultureInfo.InvariantCulture);
                         for (int i = start; i <= end && i <= TotalPages; i++)
                             if (i >= 1) pages.Add(i);
                     }
                     else
                     {
-                        int p = int.Parse(trimmed);
+                        int p = int.Parse(trimmed, System.Globalization.CultureInfo.InvariantCulture);
                         if (p >= 1 && p <= TotalPages) pages.Add(p);
                     }
                 }
@@ -294,14 +343,14 @@ namespace FlyShelf.Windows
                 }
                 else
                 {
-                    ranges.Add(start == end ? start.ToString() : $"{start}-{end}");
+                    ranges.Add(start == end ? start.ToString(CultureInfo.InvariantCulture) : string.Create(CultureInfo.InvariantCulture, $"{start}-{end}"));
                     start = end = sorted[i];
                 }
             }
-            ranges.Add(start == end ? start.ToString() : $"{start}-{end}");
+            ranges.Add(start == end ? start.ToString(CultureInfo.InvariantCulture) : string.Create(CultureInfo.InvariantCulture, $"{start}-{end}"));
             
             string result = string.Join(", ", ranges);
-            return result.Length > 30 ? result.Substring(0, 27) + "..." : result;
+            return result.Length > 30 ? string.Concat(result.AsSpan(0, 27), "...") : result;
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

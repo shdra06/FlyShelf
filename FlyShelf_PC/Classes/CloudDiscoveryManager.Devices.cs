@@ -48,11 +48,11 @@ namespace FlyShelf.Classes
                 bool urlsActuallyEncrypted = true;
                 try
                 {
-                    if (url.Contains("trycloudflare.com"))
+                    if (url.Contains("trycloudflare.com", StringComparison.Ordinal))
                         encryptedGlobalUrl = SyncCrypto.Encrypt(url) ?? "";
                     if (!string.IsNullOrEmpty(localIp))
                         encryptedLocalIp = SyncCrypto.Encrypt(localIp) ?? "";
-                    string plainUrl = localIp.Contains("http") ? localIp : url;
+                    string plainUrl = localIp.Contains("http", StringComparison.Ordinal) ? localIp : url;
                     if (!string.IsNullOrEmpty(plainUrl))
                         encryptedUrl = SyncCrypto.Encrypt(plainUrl) ?? "";
                     if (!string.IsNullOrEmpty(tlsUrl))
@@ -62,9 +62,9 @@ namespace FlyShelf.Classes
                 {
                     // Fallback to plaintext if encryption fails (e.g., no pairing key yet)
                     urlsActuallyEncrypted = false;
-                    encryptedGlobalUrl = url.Contains("trycloudflare.com") ? url : "";
+                    encryptedGlobalUrl = url.Contains("trycloudflare.com", StringComparison.Ordinal) ? url : "";
                     encryptedLocalIp = localIp;
-                    encryptedUrl = localIp.Contains("http") ? localIp : url;
+                    encryptedUrl = localIp.Contains("http", StringComparison.Ordinal) ? localIp : url;
                     encryptedTlsUrl = tlsUrl;
                 }
 
@@ -253,8 +253,8 @@ namespace FlyShelf.Classes
                             if (prop.Value.TryGetProperty("Timestamp", out var ts))
                                 deviceTs = (long)ts.GetDouble();
 
-                            bool isOldFormat = prop.Name.Contains('-') && !prop.Name.StartsWith("PC_") && !prop.Name.StartsWith("Mobile_");
-                            bool isModernFormat = prop.Name.StartsWith("PC_") || prop.Name.StartsWith("Mobile_");
+                            bool isOldFormat = prop.Name.Contains('-') && !prop.Name.StartsWith("PC_", StringComparison.Ordinal) && !prop.Name.StartsWith("Mobile_", StringComparison.Ordinal);
+                            bool isModernFormat = prop.Name.StartsWith("PC_", StringComparison.Ordinal) || prop.Name.StartsWith("Mobile_", StringComparison.Ordinal);
 
                             if (isOldFormat)
                             {

@@ -45,7 +45,7 @@ namespace FlyShelf.Classes
                     Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
                         System.Media.SystemSounds.Exclamation.Play();
-                        new FlyShelf.Windows.ReminderAlertWindow(reminder).Show();
+                        WindowHelper.ShowInForeground(new FlyShelf.Windows.ReminderAlertWindow(reminder));
                     });
                 }
 

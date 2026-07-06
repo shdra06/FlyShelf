@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -30,6 +31,8 @@ namespace FlyShelf.Windows
         public string SourceLabel { get; set; }
         /// <summary>True if this page was imported from an external PDF (not the original).</summary>
         public bool IsExternal { get; set; }
+        /// <summary>Rotation to apply when saving (0, 90, 180, 270).</summary>
+        public int RotationDegrees { get; set; } = 0;
     }
 
     public partial class PageReorderWindow : MicaWindow
@@ -64,6 +67,7 @@ namespace FlyShelf.Windows
         private int _currentDragOverIndex = -1;
 
         public bool WasConfirmed { get; private set; }
+        public bool WasOverwritten { get; private set; }
         /// <summary>True if external pages were added (caller needs to use multi-source save).</summary>
         public bool HasExternalPages => _pageEntries.Any(p => p.IsExternal);
 
@@ -74,17 +78,29 @@ namespace FlyShelf.Windows
             _item = item;
 
             // Build initial page entries from the original PDF
-            var indices = item.GetSelectedPageIndices().Select(i => i + 1).ToList();
-            if (indices.Count == 0)
-                indices = Enumerable.Range(1, item.TotalPages).ToList();
-
-            _pageEntries = indices.Select(p => new PageEntry
+            var entries = item.GetSelectedPageEntries();
+            if (entries.Count == 0)
             {
-                OriginalPage = p,
-                SourceFile = item.FilePath,
-                SourceLabel = item.FileName,
-                IsExternal = false
-            }).ToList();
+                _pageEntries = Enumerable.Range(1, item.TotalPages).Select(p => new PageEntry
+                {
+                    OriginalPage = p,
+                    SourceFile = item.FilePath,
+                    SourceLabel = item.FileName,
+                    IsExternal = false,
+                    RotationDegrees = 0
+                }).ToList();
+            }
+            else
+            {
+                _pageEntries = entries.Select(e => new PageEntry
+                {
+                    OriginalPage = e.PageIndex + 1,
+                    SourceFile = item.FilePath,
+                    SourceLabel = item.FileName,
+                    IsExternal = false,
+                    RotationDegrees = e.Rotation
+                }).ToList();
+            }
 
             HeaderText.Text = $"Reorder Pages — {item.FileName}";
 
@@ -93,7 +109,7 @@ namespace FlyShelf.Windows
             _scrollTimer.Tick += ScrollTimer_Tick;
 
             RebuildGrid(false);
-            LoadThumbnailsAsync(_item.FilePath, _item.TotalPages);
+            _ = LoadThumbnailsAsync(_item.FilePath, _item.TotalPages);
         }
 
         /// <summary>
@@ -107,6 +123,18 @@ namespace FlyShelf.Windows
         /// Used when HasExternalPages is false.
         /// </summary>
         public List<int> GetFinalPageOrder() => _pageEntries.Select(p => p.OriginalPage - 1).ToList();
+
+        /// <summary>
+        /// Returns the final page order with rotation info for the original file context.
+        /// </summary>
+        public List<PdfMergeItem.PageOrderEntry> GetFinalPageOrderEntries()
+        {
+            return _pageEntries.Select(p => new PdfMergeItem.PageOrderEntry
+            {
+                PageIndex = p.OriginalPage - 1,
+                Rotation = p.RotationDegrees
+            }).ToList();
+        }
 
         // ═══════════════════════════════════════════════════════════════
         // AUTO-SCROLL during drag
@@ -151,7 +179,7 @@ namespace FlyShelf.Windows
 
         private static string ThumbKey(string sourcePath, int pageNum) => $"{sourcePath}:{pageNum}";
 
-        private async void LoadThumbnailsAsync(string pdfPath, int totalPages)
+        private async Task LoadThumbnailsAsync(string pdfPath, int totalPages)
         {
             try
             {
@@ -272,7 +300,7 @@ namespace FlyShelf.Windows
 
                         // Try to find old position by matching the entry
                         string posKey = oldPositions.Keys.FirstOrDefault(k =>
-                            k.StartsWith($"{entry.SourceFile}:{entry.OriginalPage}:"));
+                            k.StartsWith($"{entry.SourceFile}:{entry.OriginalPage}:", StringComparison.Ordinal));
 
                         if (posKey != null && oldPositions.TryGetValue(posKey, out var oldPos))
                         {
@@ -302,6 +330,8 @@ namespace FlyShelf.Windows
             }
 
             UpdateInfo();
+            if (OverwriteBtn != null)
+                OverwriteBtn.Visibility = HasExternalPages ? Visibility.Collapsed : Visibility.Visible;
         }
 
         private Border CreatePageTile(int orderIndex, PageEntry entry)
@@ -326,6 +356,13 @@ namespace FlyShelf.Windows
             }
             cellGrid.Children.Add(img);
 
+            // Apply existing rotation to the thumbnail
+            if (entry.RotationDegrees != 0)
+            {
+                img.RenderTransformOrigin = new Point(0.5, 0.5);
+                img.RenderTransform = new RotateTransform(entry.RotationDegrees);
+            }
+
             // Source badge for external pages (top-left corner)
             if (entry.IsExternal)
             {
@@ -338,7 +375,7 @@ namespace FlyShelf.Windows
                     VerticalAlignment = VerticalAlignment.Top
                 };
                 string shortName = entry.SourceLabel.Length > 12
-                    ? entry.SourceLabel.Substring(0, 10) + "…"
+                    ? string.Concat(entry.SourceLabel.AsSpan(0, 10), "…")
                     : entry.SourceLabel;
                 srcBadge.Child = new TextBlock
                 {
@@ -351,6 +388,37 @@ namespace FlyShelf.Windows
                 srcBadge.ToolTip = entry.SourceLabel;
                 cellGrid.Children.Add(srcBadge);
             }
+
+            // Rotate button (top-right corner)
+            var rotateBtn = new Border
+            {
+                Width = 22,
+                Height = 22,
+                CornerRadius = new CornerRadius(11),
+                Background = new SolidColorBrush(Color.FromArgb(180, 50, 50, 50)),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 4, 4, 0),
+                Opacity = 0.7,
+                Cursor = Cursors.Hand,
+                Child = new TextBlock
+                {
+                    Text = "↻",
+                    FontSize = 13,
+                    Foreground = Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+            rotateBtn.ToolTip = "Rotate 90°";
+            rotateBtn.MouseLeftButtonDown += (s, e) =>
+            {
+                e.Handled = true; // Prevent tile drag/selection
+                entry.RotationDegrees = (entry.RotationDegrees + 90) % 360;
+                img.RenderTransformOrigin = new Point(0.5, 0.5);
+                img.RenderTransform = new RotateTransform(entry.RotationDegrees);
+            };
+            cellGrid.Children.Add(rotateBtn);
 
             var labelStack = new StackPanel
             {
@@ -369,7 +437,7 @@ namespace FlyShelf.Windows
             };
             orderBadge.Child = new TextBlock
             {
-                Text = (orderIndex + 1).ToString(),
+                Text = (orderIndex + 1).ToString(CultureInfo.InvariantCulture),
                 FontSize = 11,
                 FontWeight = FontWeights.Bold,
                 Foreground = Brushes.White,
@@ -649,7 +717,7 @@ namespace FlyShelf.Windows
                             if (child is StackPanel sp && sp.VerticalAlignment == VerticalAlignment.Bottom)
                             {
                                 if (sp.Children.Count > 0 && sp.Children[0] is Border badge && badge.Child is TextBlock tb)
-                                    tb.Text = (i + 1).ToString();
+                                    tb.Text = (i + 1).ToString(CultureInfo.InvariantCulture);
                                 break;
                             }
                         }
@@ -749,11 +817,37 @@ namespace FlyShelf.Windows
             RebuildGrid(true);
         }
 
+        private void ResetDefault_Click(object sender, RoutedEventArgs e)
+        {
+            // Remove external pages and restore original page order (1, 2, 3 ...)
+            _pageEntries = _pageEntries
+                .Where(p => !p.IsExternal)
+                .OrderBy(p => p.OriginalPage)
+                .ToList();
+
+            // If all pages were external (edge case), rebuild from original item
+            if (_pageEntries.Count == 0)
+            {
+                _pageEntries = Enumerable.Range(1, _item.TotalPages)
+                    .Select(p => new PageEntry
+                    {
+                        OriginalPage = p,
+                        SourceFile = _item.FilePath,
+                        SourceLabel = _item.FileName,
+                        IsExternal = false
+                    }).ToList();
+            }
+
+            _selectedIndices.Clear();
+            RebuildGrid(true);
+            FlyShelf.Windows.ToastWindow.ShowToast("🔄 Page order reset to default");
+        }
+
         // ═══════════════════════════════════════════════════════════════
         // ADD PAGES FROM EXTERNAL PDF
         // ═══════════════════════════════════════════════════════════════
 
-        private void AddPages_Click(object sender, RoutedEventArgs e)
+        private async void AddPages_Click(object sender, RoutedEventArgs e)
         {
             var dlg = new Microsoft.Win32.OpenFileDialog
             {
@@ -768,11 +862,13 @@ namespace FlyShelf.Windows
             {
                 try
                 {
-                    int pageCount;
-                    using (var doc = PdfSharp.Pdf.IO.PdfReader.Open(filePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
+                    int pageCount = await System.Threading.Tasks.Task.Run(() =>
                     {
-                        pageCount = doc.PageCount;
-                    }
+                        using (var doc = PdfSharp.Pdf.IO.PdfReader.Open(filePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
+                        {
+                            return doc.PageCount;
+                        }
+                    });
 
                     if (pageCount == 0)
                     {
@@ -801,7 +897,7 @@ namespace FlyShelf.Windows
                     }
 
                     // Load thumbnails for the new file
-                    LoadThumbnailsAsync(filePath, pageCount);
+                    _ = LoadThumbnailsAsync(filePath, pageCount);
 
                     ToastWindow.ShowToast($"✅ Added {pageCount} pages from {fileName}");
                 }
@@ -860,6 +956,97 @@ namespace FlyShelf.Windows
             }
             WasConfirmed = true;
             Close();
+        }
+
+        private async void Overwrite_Click(object sender, RoutedEventArgs e)
+        {
+            if (HasExternalPages)
+            {
+                ToastWindow.ShowToast("⚠️ Cannot overwrite original file when external pages are added.");
+                return;
+            }
+
+            if (_pageEntries.Count == 0)
+            {
+                ToastWindow.ShowToast("⚠️ No pages remaining.");
+                return;
+            }
+
+            var result = MessageBox.Show(
+                $"This will overwrite the original file:\n{_item.FileName}\n\nAre you sure?",
+                "Confirm Overwrite",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (result != MessageBoxResult.Yes) return;
+
+            OverwriteBtn.IsEnabled = false;
+            ConfirmBtn.IsEnabled = false;
+            OverwriteBtn.Content = "Saving...";
+
+            string tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".pdf");
+            bool success = await System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    using (var outputDoc = new PdfSharp.Pdf.PdfDocument())
+                    {
+                        using (var inputDoc = PdfSharp.Pdf.IO.PdfReader.Open(_item.FilePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
+                        {
+                            foreach (var entry in _pageEntries)
+                            {
+                                int idx = entry.OriginalPage - 1;
+                                if (idx >= 0 && idx < inputDoc.PageCount)
+                                {
+                                    var page = inputDoc.Pages[idx];
+                                    if (entry.RotationDegrees != 0)
+                                    {
+                                        page.Rotate = (page.Rotate + entry.RotationDegrees) % 360;
+                                    }
+                                    outputDoc.AddPage(page);
+                                }
+                            }
+                        }
+                        outputDoc.Save(tempPath);
+                    }
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Overwrite failed: {ex.Message}");
+                    return false;
+                }
+            });
+
+            if (success && File.Exists(tempPath))
+            {
+                try
+                {
+                    // Overwrite the original file
+                    File.Copy(tempPath, _item.FilePath, true);
+                    File.Delete(tempPath);
+
+                    ToastWindow.ShowToast($"✅ Original file overwritten: {_item.FileName}");
+                    
+                    WasOverwritten = true;
+                    WasConfirmed = true; 
+                    Close();
+                }
+                catch (Exception ex)
+                {
+                    ToastWindow.ShowToast($"❌ Failed to overwrite: {ex.Message}");
+                    OverwriteBtn.IsEnabled = true;
+                    ConfirmBtn.IsEnabled = true;
+                    OverwriteBtn.Content = "Save & Overwrite";
+                }
+            }
+            else
+            {
+                ToastWindow.ShowToast("❌ Failed to generate rotated/reordered PDF.");
+                OverwriteBtn.IsEnabled = true;
+                ConfirmBtn.IsEnabled = true;
+                OverwriteBtn.Content = "Save & Overwrite";
+            }
         }
 
         protected override void OnClosed(EventArgs e)

@@ -53,6 +53,7 @@ namespace FlyShelf
             // Guard: if the Down handler flagged a special element (PdfMergeToggle, etc.), don't paste
             if (_shouldPreventDrag)
             {
+                _shouldPreventDrag = false; // Always reset to avoid sticking
                 e.Handled = true;
                 return;
             }
@@ -128,11 +129,6 @@ namespace FlyShelf
         /// </summary>
         private async System.Threading.Tasks.Task CopyItemAndPaste(ClipboardItem clipboardObj, bool hideWindow)
         {
-            try
-            {
-                _viewModel.MoveItemToTop(clipboardObj);
-            }
-            catch (Exception ex) { Classes.Logger.LogAction("MOVE_TO_TOP_ERROR", ex.Message); }
 
             bool clipboardDataSet = false;
             try
@@ -169,13 +165,18 @@ namespace FlyShelf
                     {
                         try
                         {
-                            var bmp = new BitmapImage();
-                            bmp.BeginInit();
-                            bmp.UriSource = new Uri(clipboardObj.FilePath);
-                            bmp.CacheOption = BitmapCacheOption.OnLoad;
-                            bmp.DecodePixelWidth = 1024; // Cap decode size to reduce UI thread stall
-                            bmp.EndInit();
-                            bmp.Freeze();
+                            var bmp = await System.Threading.Tasks.Task.Run(() =>
+                            {
+                                var bytes = System.IO.File.ReadAllBytes(clipboardObj.FilePath);
+                                var bi = new BitmapImage();
+                                bi.BeginInit();
+                                bi.StreamSource = new System.IO.MemoryStream(bytes);
+                                bi.CacheOption = BitmapCacheOption.OnLoad;
+                                bi.DecodePixelWidth = 1024; // Cap decode size to reduce UI thread stall
+                                bi.EndInit();
+                                bi.Freeze();
+                                return bi;
+                            });
                             dataObj.SetImage(bmp);
                         }
                         catch (Exception ex) { Classes.Logger.LogAction("IMAGE_CLIPBOARD_ERROR", ex.Message); }
@@ -265,6 +266,20 @@ namespace FlyShelf
                 keybd_event(VK_V, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
                 keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
             }
+
+            // PERF FIX: Defer MoveItemToTop to Background priority so it never blocks
+            // the paste-and-dismiss flow. ObservableCollection.Move() triggers expensive
+            // WPF VirtualizingStackPanel re-layout (de-virtualizing all containers between
+            // oldIndex and 0). By running it after the window is hidden and Ctrl+V has fired,
+            // the user sees zero lag — the collection mutation happens invisibly.
+            Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    _viewModel.MoveItemToTop(clipboardObj);
+                }
+                catch (Exception ex) { Classes.Logger.LogAction("MOVE_TO_TOP_ERROR", ex.Message); }
+            }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
         private void ShelfListView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -419,13 +434,18 @@ namespace FlyShelf
                                 try
                                 {
                                     // Load a tiny thumbnail instead of full image — avoids 1-2s freeze on large files
-                                    var bmp = new BitmapImage();
-                                    bmp.BeginInit();
-                                    bmp.UriSource = new Uri(firstItem.FilePath);
-                                    bmp.CacheOption = BitmapCacheOption.OnLoad;
-                                    bmp.DecodePixelWidth = 128; // Lightweight thumbnail for drag preview
-                                    bmp.EndInit();
-                                    bmp.Freeze();
+                                    var bmp = await System.Threading.Tasks.Task.Run(() =>
+                                    {
+                                        var bytes = System.IO.File.ReadAllBytes(firstItem.FilePath);
+                                        var bi = new BitmapImage();
+                                        bi.BeginInit();
+                                        bi.StreamSource = new System.IO.MemoryStream(bytes);
+                                        bi.CacheOption = BitmapCacheOption.OnLoad;
+                                        bi.DecodePixelWidth = 128; // Lightweight thumbnail for drag preview
+                                        bi.EndInit();
+                                        bi.Freeze();
+                                        return bi;
+                                    });
                                     dataObj.SetImage(bmp);
                                 }
                                 catch (Exception ex) { Classes.Logger.LogAction("DRAG_IMAGE_ERROR", ex.Message); }

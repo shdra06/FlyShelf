@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -247,7 +248,7 @@ namespace FlyShelf.Classes
             {
                 string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SpawnDiag");
                 Directory.CreateDirectory(dir);
-                string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+                string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture);
 
                 // ═══ CSV ═══
                 string csvPath = Path.Combine(dir, $"spawn_frames_{timestamp}.csv");
@@ -264,7 +265,7 @@ namespace FlyShelf.Classes
 
                 foreach (var f in _frames)
                 {
-                    csv.AppendLine($"{f.FrameIndex},{f.TimeSinceSpawnMs:F3},{f.DeltaFromLastFrameMs:F3}," +
+                    csv.AppendLine(CultureInfo.InvariantCulture, $"{f.FrameIndex},{f.TimeSinceSpawnMs:F3},{f.DeltaFromLastFrameMs:F3}," +
                         $"{f.Phase},{f.Event}," +
                         $"{f.WindowLeft:F1},{f.WindowTop:F1},{f.WindowWidth:F1},{f.ActualHeight:F1}," +
                         $"{f.WindowOpacity:F4},{f.RootContentOpacity:F4},{f.SlideTransformY:F3},{f.TransformType}," +
@@ -282,7 +283,7 @@ namespace FlyShelf.Classes
                 var report = new StringBuilder();
                 report.AppendLine("╔══════════════════════════════════════════════════════════════╗");
                 report.AppendLine("║         FLYSHELF SPAWN DIAGNOSTIC — FRAME-BY-FRAME          ║");
-                report.AppendLine($"║  {DateTime.Now:yyyy-MM-dd HH:mm:ss}  |  {_frames.Count} frames captured         ║");
+                report.AppendLine(CultureInfo.InvariantCulture, $"║  {DateTime.Now:yyyy-MM-dd HH:mm:ss}  |  {_frames.Count} frames captured         ║");
                 report.AppendLine("╚══════════════════════════════════════════════════════════════╝");
                 report.AppendLine();
 
@@ -300,7 +301,7 @@ namespace FlyShelf.Classes
                     if (posJump > 5 && curr.WindowOpacity > 0.01 && prev.WindowOpacity > 0.01)
                     {
                         anomalyCount++;
-                        report.AppendLine($"  ⚠ POSITION JUMP at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
+                        report.AppendLine(CultureInfo.InvariantCulture, $"  ⚠ POSITION JUMP at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
                             $"Top {prev.WindowTop:F1} → {curr.WindowTop:F1} (Δ{posJump:F1}px) while opacity={curr.WindowOpacity:F3}");
                     }
 
@@ -309,7 +310,7 @@ namespace FlyShelf.Classes
                     if (opJump > 0.15 && curr.WindowOpacity > 0 && prev.WindowOpacity > 0)
                     {
                         anomalyCount++;
-                        report.AppendLine($"  ⚠ OPACITY JUMP at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
+                        report.AppendLine(CultureInfo.InvariantCulture, $"  ⚠ OPACITY JUMP at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
                             $"{prev.WindowOpacity:F3} → {curr.WindowOpacity:F3} (Δ{opJump:F3})");
                     }
 
@@ -322,7 +323,7 @@ namespace FlyShelf.Classes
                         if (prevDir < -0.1 && currDir > 0.5) // Was decreasing, suddenly increased
                         {
                             anomalyCount++;
-                            report.AppendLine($"  ⚠ SLIDE REVERSAL at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
+                            report.AppendLine(CultureInfo.InvariantCulture, $"  ⚠ SLIDE REVERSAL at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
                                 $"SlideY {prevprev.SlideTransformY:F2} → {prev.SlideTransformY:F2} → {curr.SlideTransformY:F2}");
                         }
                     }
@@ -331,14 +332,14 @@ namespace FlyShelf.Classes
                     if (curr.DeltaFromLastFrameMs > 25)
                     {
                         anomalyCount++;
-                        report.AppendLine($"  ⚠ FRAME DROP at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
+                        report.AppendLine(CultureInfo.InvariantCulture, $"  ⚠ FRAME DROP at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
                             $"gap={curr.DeltaFromLastFrameMs:F1}ms (expected ~16ms)");
                     }
 
                     // 5. Phase changes
                     if (curr.Phase != prev.Phase)
                     {
-                        report.AppendLine($"  → Phase change at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
+                        report.AppendLine(CultureInfo.InvariantCulture, $"  → Phase change at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
                             $"{prev.Phase} → {curr.Phase}");
                     }
 
@@ -346,7 +347,7 @@ namespace FlyShelf.Classes
                     if (curr.WindowTop > -1000 && curr.WindowOpacity > 0.01 && !curr.IsCurrentlySummoned)
                     {
                         anomalyCount++;
-                        report.AppendLine($"  ⚠ VISIBLE BUT NOT SUMMONED at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
+                        report.AppendLine(CultureInfo.InvariantCulture, $"  ⚠ VISIBLE BUT NOT SUMMONED at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
                             $"Top={curr.WindowTop:F1} opacity={curr.WindowOpacity:F3}");
                     }
 
@@ -354,7 +355,7 @@ namespace FlyShelf.Classes
                     if (curr.NotesPanelVisibility != prev.NotesPanelVisibility ||
                         Math.Abs(curr.NotesPanelOpacity - prev.NotesPanelOpacity) > 0.05)
                     {
-                        report.AppendLine($"  → NOTES PANEL change at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
+                        report.AppendLine(CultureInfo.InvariantCulture, $"  → NOTES PANEL change at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
                             $"Vis={prev.NotesPanelVisibility}→{curr.NotesPanelVisibility} " +
                             $"Op={prev.NotesPanelOpacity:F2}→{curr.NotesPanelOpacity:F2}");
                     }
@@ -364,7 +365,7 @@ namespace FlyShelf.Classes
                     if (heightDelta > 2 && curr.IsShowAnimating)
                     {
                         anomalyCount++;
-                        report.AppendLine($"  ⚠ HEIGHT CHANGE DURING ANIM at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
+                        report.AppendLine(CultureInfo.InvariantCulture, $"  ⚠ HEIGHT CHANGE DURING ANIM at frame {i} ({curr.TimeSinceSpawnMs:F1}ms): " +
                             $"{prev.ActualHeight:F1} → {curr.ActualHeight:F1} (Δ{heightDelta:F1}px)");
                     }
                 }
@@ -372,7 +373,7 @@ namespace FlyShelf.Classes
                 if (anomalyCount == 0)
                     report.AppendLine("  ✓ No anomalies detected.");
                 else
-                    report.AppendLine($"\n  Total anomalies: {anomalyCount}");
+                    report.AppendLine(CultureInfo.InvariantCulture, $"\n  Total anomalies: {anomalyCount}");
 
                 // ═══ FRAME-BY-FRAME TIMELINE ═══
                 report.AppendLine("\n═══ FRAME-BY-FRAME TIMELINE ═══");
@@ -388,7 +389,7 @@ namespace FlyShelf.Classes
                     if (f.IsTodoActive) notes += " [TODO]";
                     if (f.DeltaFromLastFrameMs > 25) notes += " [SLOW]";
 
-                    report.AppendLine($"{f.FrameIndex,5} | {f.TimeSinceSpawnMs,8:F2} | {f.DeltaFromLastFrameMs,5:F1} | " +
+                    report.AppendLine(CultureInfo.InvariantCulture, $"{f.FrameIndex,5} | {f.TimeSinceSpawnMs,8:F2} | {f.DeltaFromLastFrameMs,5:F1} | " +
                         $"{f.Phase,-14} | {f.WindowOpacity,7:F4} | {f.SlideTransformY,7:F3} | {f.WindowTop,8:F1} | {f.ActualHeight,7:F1} | {notes}");
                 }
 
@@ -397,7 +398,7 @@ namespace FlyShelf.Classes
                 // Log paths
                 Logger.LogAction("SPAWN_DIAG", $"CSV: {csvPath}");
                 Logger.LogAction("SPAWN_DIAG", $"Report: {reportPath}");
-                Logger.LogAction("SPAWN_DIAG", $"Frames: {_frames.Count}, Anomalies: {anomalyCount}");
+                Logger.LogAction("SPAWN_DIAG", string.Create(CultureInfo.InvariantCulture, $"Frames: {_frames.Count}, Anomalies: {anomalyCount}"));
             }
             catch (Exception ex)
             {

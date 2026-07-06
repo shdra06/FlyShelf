@@ -59,7 +59,7 @@ namespace FlyShelf.Windows
             for (int i = 0; i < 96; i++)
             {
                 var slot = baseDate.AddMinutes(i * 15);
-                string label = slot.ToString("h:mm tt");
+                string label = slot.ToString("h:mm tt", CultureInfo.InvariantCulture);
 
                 var border = new Border
                 {
@@ -112,12 +112,12 @@ namespace FlyShelf.Windows
 
         private void UpdateDateDisplay()
         {
-            DateDisplay.Text = _selectedDate.ToString("MMM dd, yyyy");
+            DateDisplay.Text = _selectedDate.ToString("MMM dd, yyyy", CultureInfo.InvariantCulture);
         }
 
         private void UpdateTimeDisplay()
         {
-            TimeDisplay.Text = _selectedTime.ToString("h:mm tt");
+            TimeDisplay.Text = _selectedTime.ToString("h:mm tt", CultureInfo.InvariantCulture);
         }
 
         // ─── Window events ────────────────────────────────────────
@@ -224,12 +224,12 @@ namespace FlyShelf.Windows
         private void ScrollToSelectedTime()
         {
             // Find and scroll to the matching time slot
-            string target = _selectedTime.ToString("h:mm tt");
+            string target = _selectedTime.ToString("h:mm tt", CultureInfo.InvariantCulture);
             for (int i = 0; i < TimeSlotPanel.Children.Count; i++)
             {
                 if (TimeSlotPanel.Children[i] is Border b && b.Tag is DateTime slot)
                 {
-                    if (slot.ToString("h:mm tt") == target)
+                    if (slot.ToString("h:mm tt", CultureInfo.InvariantCulture) == target)
                     {
                         // Scroll the slot into view after layout
                         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
@@ -245,12 +245,12 @@ namespace FlyShelf.Windows
 
         private void HighlightSelectedTimeSlot()
         {
-            string target = _selectedTime.ToString("h:mm tt");
+            string target = _selectedTime.ToString("h:mm tt", CultureInfo.InvariantCulture);
             foreach (var child in TimeSlotPanel.Children)
             {
                 if (child is Border b && b.Tag is DateTime slot)
                 {
-                    if (slot.ToString("h:mm tt") == target)
+                    if (slot.ToString("h:mm tt", CultureInfo.InvariantCulture) == target)
                     {
                         b.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#28F59E0B"));
                         if (b.Child is TextBlock tb)

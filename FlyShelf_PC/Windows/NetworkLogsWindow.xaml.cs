@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -33,31 +34,30 @@ namespace FlyShelf.Windows
             public Brush DeviceTextColor => IsLocal
                 ? new SolidColorBrush(Color.FromArgb(255, 63, 185, 80))
                 : new SolidColorBrush(Color.FromArgb(255, 188, 140, 255));
-            public Brush RowBackground => Category.Contains("ERROR")
+            public Brush RowBackground => Category.Contains("ERROR", StringComparison.OrdinalIgnoreCase)
                 ? new SolidColorBrush(Color.FromArgb(15, 248, 81, 73))
                 : Brushes.Transparent;
 
             private static Brush GetCategoryColor(string cat)
             {
                 if (string.IsNullOrEmpty(cat)) return new SolidColorBrush(Color.FromRgb(180, 180, 180));
-                string upper = cat.ToUpper();
-                if (upper.Contains("ERROR") || upper.Contains("FAULT")) return new SolidColorBrush(Color.FromRgb(248, 81, 73));
-                if (upper.Contains("PEER") || upper.Contains("WS")) return new SolidColorBrush(Color.FromRgb(163, 113, 247));
-                if (upper.Contains("CLIPBOARD")) return new SolidColorBrush(Color.FromRgb(240, 136, 62));
-                if (upper.Contains("HTTP")) return new SolidColorBrush(Color.FromRgb(88, 166, 255));
-                if (upper.Contains("CLOUDFLARE") || upper.Contains("CF_") || upper.Contains("TUNNEL")) return new SolidColorBrush(Color.FromRgb(121, 192, 255));
-                if (upper.Contains("FIREBASE")) return new SolidColorBrush(Color.FromRgb(255, 166, 87));
-                if (upper.Contains("PUSH")) return new SolidColorBrush(Color.FromRgb(63, 185, 80));
-                if (upper.Contains("DOWNLOAD")) return new SolidColorBrush(Color.FromRgb(210, 168, 255));
-                if (upper.Contains("SERVER") || upper.Contains("BIND")) return new SolidColorBrush(Color.FromRgb(255, 123, 114));
-                if (upper.Contains("SECURITY")) return new SolidColorBrush(Color.FromRgb(255, 200, 50));
+                if (cat.Contains("ERROR", StringComparison.OrdinalIgnoreCase) || cat.Contains("FAULT", StringComparison.OrdinalIgnoreCase)) return new SolidColorBrush(Color.FromRgb(248, 81, 73));
+                if (cat.Contains("PEER", StringComparison.OrdinalIgnoreCase) || cat.Contains("WS", StringComparison.OrdinalIgnoreCase)) return new SolidColorBrush(Color.FromRgb(163, 113, 247));
+                if (cat.Contains("CLIPBOARD", StringComparison.OrdinalIgnoreCase)) return new SolidColorBrush(Color.FromRgb(240, 136, 62));
+                if (cat.Contains("HTTP", StringComparison.OrdinalIgnoreCase)) return new SolidColorBrush(Color.FromRgb(88, 166, 255));
+                if (cat.Contains("CLOUDFLARE", StringComparison.OrdinalIgnoreCase) || cat.Contains("CF_", StringComparison.OrdinalIgnoreCase) || cat.Contains("TUNNEL", StringComparison.OrdinalIgnoreCase)) return new SolidColorBrush(Color.FromRgb(121, 192, 255));
+                if (cat.Contains("FIREBASE", StringComparison.OrdinalIgnoreCase)) return new SolidColorBrush(Color.FromRgb(255, 166, 87));
+                if (cat.Contains("PUSH", StringComparison.OrdinalIgnoreCase)) return new SolidColorBrush(Color.FromRgb(63, 185, 80));
+                if (cat.Contains("DOWNLOAD", StringComparison.OrdinalIgnoreCase)) return new SolidColorBrush(Color.FromRgb(210, 168, 255));
+                if (cat.Contains("SERVER", StringComparison.OrdinalIgnoreCase) || cat.Contains("BIND", StringComparison.OrdinalIgnoreCase)) return new SolidColorBrush(Color.FromRgb(255, 123, 114));
+                if (cat.Contains("SECURITY", StringComparison.OrdinalIgnoreCase)) return new SolidColorBrush(Color.FromRgb(255, 200, 50));
                 return new SolidColorBrush(Color.FromRgb(180, 190, 200));
             }
         }
 
         private readonly ObservableCollection<LogEntry> _allLogs = new();
         private readonly ObservableCollection<LogEntry> _filteredLogs = new();
-        private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(8) };
+        private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(8) };
         private Timer? _pollTimer;
         private int _pollIntervalMs = 2000;
         private string _activeDeviceFilter = "*";
@@ -66,7 +66,7 @@ namespace FlyShelf.Windows
         private bool _userScrolledUp = false;
         private bool _isClosing = false;
         private string _localDevice = Environment.MachineName;
-        private readonly Dictionary<string, long> _lastSeenTimestamp = new(); // device → last ts
+        private readonly ConcurrentDictionary<string, long> _lastSeenTimestamp = new(); // device → last ts
         private int _totalEntries = 0;
 
         public NetworkLogsWindow()
@@ -137,7 +137,7 @@ namespace FlyShelf.Windows
             try
             {
                 // Get since timestamp to avoid duplicates
-                long since = _lastSeenTimestamp.GetValueOrDefault(deviceName, 0);
+                long since = _lastSeenTimestamp.TryGetValue(deviceName, out var ts) ? ts : 0;
 
                 string requestUrl = $"{baseUrl}/api/logs?lines=100&device={Uri.EscapeDataString(deviceName)}";
                 if (!isLocal)
@@ -163,7 +163,7 @@ namespace FlyShelf.Windows
                 if (!response.IsSuccessStatusCode) return;
 
                 string json = await response.Content.ReadAsStringAsync();
-                var doc = JsonDocument.Parse(json);
+                using var doc = JsonDocument.Parse(json);
 
                 if (!doc.RootElement.TryGetProperty("logs", out var logsArr)) return;
 
@@ -191,8 +191,19 @@ namespace FlyShelf.Windows
                     string category = ExtractCategory(logLine);
 
                     // Simple dedup: check if we already have this exact log line from this device
+                    var entry = new LogEntry
+                    {
+                        DeviceName = logDevice,
+                        LogText = logLine,
+                        Category = category,
+                        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                        IsLocal = isLocal || logDevice.Equals(_localDevice, StringComparison.OrdinalIgnoreCase)
+                    };
+
+                    // M-6/M-7 FIX: Dedup check + add must be atomic, so both run inside
+                    // Dispatcher.Invoke on the UI thread (naturally serialized).
                     bool isDuplicate = false;
-                    lock (_allLogs)
+                    Dispatcher.Invoke(() =>
                     {
                         // Check last 200 entries for duplicates
                         int checkStart = Math.Max(0, _allLogs.Count - 200);
@@ -204,34 +215,25 @@ namespace FlyShelf.Windows
                                 break;
                             }
                         }
-                    }
+
+                        if (!isDuplicate)
+                        {
+                            _allLogs.Add(entry);
+                            _totalEntries++;
+
+                            // Cap at 2000 entries
+                            while (_allLogs.Count > 2000)
+                                _allLogs.RemoveAt(0);
+                        }
+                    });
 
                     if (isDuplicate) continue;
-
-                    var entry = new LogEntry
-                    {
-                        DeviceName = logDevice,
-                        LogText = logLine,
-                        Category = category,
-                        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                        IsLocal = isLocal || logDevice.Equals(_localDevice, StringComparison.OrdinalIgnoreCase)
-                    };
-
-                    Dispatcher.Invoke(() =>
-                    {
-                        _allLogs.Add(entry);
-                        _totalEntries++;
-
-                        // Cap at 2000 entries
-                        while (_allLogs.Count > 2000)
-                            _allLogs.RemoveAt(0);
-                    });
 
                     addedNew = true;
                 }
 
                 if (addedNew)
-                    _lastSeenTimestamp[deviceName] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    _lastSeenTimestamp[deviceName] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); // ConcurrentDictionary — thread-safe
             }
             catch (TaskCanceledException) { } // Timeout — normal for unreachable devices
             catch (HttpRequestException) { } // Network error — device offline
@@ -252,7 +254,7 @@ namespace FlyShelf.Windows
                 if (_activeDeviceFilter != "*" && !entry.DeviceName.Equals(_activeDeviceFilter, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                if (!string.IsNullOrEmpty(_activeCategoryFilter) && !entry.Category.ToUpper().Contains(_activeCategoryFilter.ToUpper()))
+                if (!string.IsNullOrEmpty(_activeCategoryFilter) && !entry.Category.Contains(_activeCategoryFilter, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 _filteredLogs.Add(entry);
@@ -318,7 +320,7 @@ namespace FlyShelf.Windows
             {
                 var urls = peers.Values
                     .Where(p => !string.IsNullOrEmpty(p.ActiveUrl))
-                    .Select(p => $"{p.DeviceName}: {(p.ActiveUrl.Contains("trycloudflare") ? "☁ CF" : "🏠 LAN")}")
+                    .Select(p => $"{p.DeviceName}: {(p.ActiveUrl.Contains("trycloudflare", StringComparison.OrdinalIgnoreCase) ? "☁ CF" : "🏠 LAN")}")
                     .ToList();
                 StatusRight.Text = string.Join(" | ", urls);
             }
@@ -348,13 +350,13 @@ namespace FlyShelf.Windows
         private static string StripDevicePrefix(string line)
         {
             // Remove "[💻 PC] " or "[📱 Mobile] " prefixes
-            if (line.StartsWith("[") && line.Length > 5)
+            if (line.StartsWith('[') && line.Length > 5)
             {
                 int closeIdx = line.IndexOf(']');
                 if (closeIdx > 0 && closeIdx < 20)
                 {
                     string inside = line.Substring(1, closeIdx - 1);
-                    if (inside.Contains("PC") || inside.Contains("Mobile") || inside.Contains("💻") || inside.Contains("📱"))
+                    if (inside.Contains("PC", StringComparison.Ordinal) || inside.Contains("Mobile", StringComparison.Ordinal) || inside.Contains("💻", StringComparison.Ordinal) || inside.Contains("📱", StringComparison.Ordinal))
                     {
                         return line.Substring(closeIdx + 1).TrimStart();
                     }
@@ -436,7 +438,7 @@ namespace FlyShelf.Windows
         {
             _isClosing = true;
             _pollTimer?.Dispose();
-            _httpClient.Dispose();
+            // M-12: _httpClient is now static readonly — do not dispose per-instance
         }
     }
 }

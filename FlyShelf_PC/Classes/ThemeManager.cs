@@ -587,11 +587,16 @@ namespace FlyShelf.Classes
                 // Persist the choice
                 SettingsManager.Current.ColorThemeName = themeName;
 
+                // ═══ v3.7.0: Switch WPF-UI and MicaWPF base theme (Light/Dark) ═══
+                // ArcticSnow is a light theme — needs Light mode Mica backdrop + system controls
+                bool isLightTheme = themeName.Equals("ArcticSnow", StringComparison.OrdinalIgnoreCase);
+                SwitchSystemThemeMode(app, isLightTheme);
+
                 // Auto-apply matching wallpaper for dark themes
                 // ArcticSnow and Default use desktop wallpaper (handled by clearing path)
                 ApplyColorThemeWallpaper(themeName);
 
-                Logger.LogAction("COLOR_THEME", $"Applied color theme: '{themeName}'");
+                Logger.LogAction("COLOR_THEME", $"Applied color theme: '{themeName}' (mode: {(isLightTheme ? "Light" : "Dark")})");
 
                 // Update Aero UI resources to match the active color theme
                 ApplyAeroThemeOverrides(themeName);
@@ -699,6 +704,110 @@ namespace FlyShelf.Classes
             }
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // SYSTEM THEME MODE SWITCH (v3.7.0)
+        // Switches WPF-UI and MicaWPF base theme dictionaries between Light/Dark.
+        // Required because ArcticSnow is a light theme but the app defaults to Dark.
+        // ═══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Switches the WPF-UI ThemesDictionary and MicaWPF ThemeDictionary
+        /// between Light and Dark mode at runtime.
+        /// </summary>
+        private void SwitchSystemThemeMode(System.Windows.Application app, bool toLight)
+        {
+            try
+            {
+                string targetMode = toLight ? "Light" : "Dark";
+                string oppositeMode = toLight ? "Dark" : "Light";
+                var dicts = app.Resources.MergedDictionaries;
+
+                // ─── Replace WPF-UI ThemesDictionary ───
+                System.Windows.ResourceDictionary? wpfUiThemeDict = null;
+                foreach (var d in dicts)
+                {
+                    if (d.Source != null && d.Source.OriginalString.Contains("Wpf.Ui") && d.Source.OriginalString.Contains("Theme"))
+                    {
+                        wpfUiThemeDict = d;
+                        break;
+                    }
+                }
+                // Also check by type name for WPF-UI 4.x
+                if (wpfUiThemeDict == null)
+                {
+                    foreach (var d in dicts)
+                    {
+                        if (d.GetType().FullName?.Contains("ThemesDictionary") == true)
+                        {
+                            wpfUiThemeDict = d;
+                            break;
+                        }
+                    }
+                }
+                if (wpfUiThemeDict != null)
+                {
+                    int idx = dicts.IndexOf(wpfUiThemeDict);
+                    dicts.Remove(wpfUiThemeDict);
+                    var newWpfUi = new Wpf.Ui.Markup.ThemesDictionary { Theme = toLight ? Wpf.Ui.Appearance.ApplicationTheme.Light : Wpf.Ui.Appearance.ApplicationTheme.Dark };
+                    dicts.Insert(idx, newWpfUi);
+                }
+
+                // ─── Replace MicaWPF ThemeDictionary ───
+                System.Windows.ResourceDictionary? micaThemeDict = null;
+                foreach (var d in dicts)
+                {
+                    if (d.Source != null && d.Source.OriginalString.Contains("MicaWPF") && d.Source.OriginalString.Contains("Theme"))
+                    {
+                        micaThemeDict = d;
+                        break;
+                    }
+                }
+                if (micaThemeDict == null)
+                {
+                    foreach (var d in dicts)
+                    {
+                        if (d.GetType().FullName?.Contains("MicaWPF") == true && d.GetType().Name.Contains("ThemeDictionary"))
+                        {
+                            micaThemeDict = d;
+                            break;
+                        }
+                    }
+                }
+                if (micaThemeDict != null)
+                {
+                    int idx = dicts.IndexOf(micaThemeDict);
+                    dicts.Remove(micaThemeDict);
+                    var newMica = new MicaWPF.Styles.ThemeDictionary { Theme = toLight ? MicaWPF.Core.Enums.WindowsTheme.Light : MicaWPF.Core.Enums.WindowsTheme.Dark };
+                    dicts.Insert(idx, newMica);
+                }
+
+                // ─── Also update Mica backdrop on HubWindow if open ───
+                try
+                {
+                    foreach (System.Windows.Window win in System.Windows.Application.Current.Windows)
+                    {
+                        var hwnd = new System.Windows.Interop.WindowInteropHelper(win).Handle;
+                        if (hwnd != IntPtr.Zero)
+                        {
+                            // DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+                            int useDarkMode = toLight ? 0 : 1;
+                            DwmSetWindowAttribute(hwnd, 20, ref useDarkMode, sizeof(int));
+                        }
+                    }
+                }
+                catch { }
+
+                Logger.LogAction("COLOR_THEME", $"System theme mode switched to {targetMode}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("COLOR_THEME", $"System theme mode switch failed: {ex.Message}");
+            }
+        }
+
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll", PreserveSig = true)]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
         /// <summary>
         /// Removes the current color theme ResourceDictionary from the app's merged dictionaries.
         /// </summary>
@@ -754,8 +863,8 @@ namespace FlyShelf.Classes
                 RemoveColorThemeDict(app);
                 SettingsManager.Current.ColorThemeName = "Default";
 
-                // Only remove the color overlay — preserve the user's current display mode
-                // (mica, desktop, glass, or theme). Don't force a mode switch.
+                // v3.7.0: Restore Dark system theme when switching away from ArcticSnow
+                SwitchSystemThemeMode(app, false);
 
                 // Reset Aero UI resources to light defaults
                 ApplyAeroThemeOverrides("Default");
@@ -808,6 +917,24 @@ namespace FlyShelf.Classes
             // Themed modes — vibrant tinted backgrounds with dark text for each theme
             switch (themeName)
             {
+                case "ArcticSnow":
+                    // Warm cream/ivory — cozy paper-like light theme
+                    SetAeroResource(app, "AltCardBg", "#C0FBF5EC");
+                    SetAeroResource(app, "AltCardBgHover", "#E8FFF8F0");
+                    SetAeroResource(app, "AltCardBorder", "#186B5B3A");
+                    SetAeroResource(app, "AltCardBorderHover", "#286B5B3A");
+                    SetAeroResource(app, "AltTextPrimary", "#2C1810");
+                    SetAeroResource(app, "AltTextSecondary", "#5C4A3A");
+                    SetAeroResource(app, "AltTextTertiary", "#9C8A7A");
+                    SetAeroResource(app, "AltSearchBg", "#A0FBF5EC");
+                    SetAeroResource(app, "AltSearchBorder", "#1C6B5B3A");
+                    SetAeroResource(app, "AltSearchFg", "#7A6A5A");
+                    SetAeroResource(app, "AltBottomBarBg", "#D8F5EFE4");
+                    SetAeroResource(app, "AltBottomBarBorder", "#1C6B5B3A");
+                    SetAeroResource(app, "AltSidebarHover", "#186B5B3A");
+                    SetAeroResource(app, "AltTimestampFg", "#7A6A5A");
+                    SetAeroResource(app, "AltSubtitleFg", "#7A6A5A");
+                    break;
                 case "Midnight":
                     // Vibrant indigo-tinted — luminous periwinkle cards
                     SetAeroResource(app, "AltCardBg", "#C0E8ECFF");
@@ -988,7 +1115,14 @@ namespace FlyShelf.Classes
                                 grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#05FFFFFF"), 0.5));
                                 grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#08FFFFFF"), 1.0));
                                 break;
-                            default: // ArcticSnow / Default — light gradient handled by overlay
+                            case "ArcticSnow":
+                                // Warm creamy ivory gradient — cozy paper feel
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFFBF5EC"), 0.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFF8F2E8"), 0.4));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFFFF8F0"), 0.8));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFF5EFE4"), 1.0));
+                                break;
+                            default: // Default — light gradient handled by overlay
                                 grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFF0F7FF"), 0.0));
                                 grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFF5F5F5"), 0.5));
                                 grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFFAFAFA"), 1.0));

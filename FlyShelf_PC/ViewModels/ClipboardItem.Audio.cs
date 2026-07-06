@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
@@ -12,17 +13,25 @@ namespace FlyShelf.ViewModels
     public partial class ClipboardItem
     {
         // Shared static player to ensure only ONE audio plays globally across all cards (no overlapping sounds)
-        private static readonly MediaPlayer _sharedPlayer = new MediaPlayer();
+        // [FIX M-8]: Lazy init to ensure MediaPlayer is created on UI thread
+        private static MediaPlayer? _sharedPlayer;
+        private static MediaPlayer SharedPlayer => _sharedPlayer ??= InitSharedPlayer();
+
+        private static MediaPlayer InitSharedPlayer()
+        {
+            var player = System.Windows.Application.Current?.Dispatcher?.Invoke(() => new MediaPlayer()) ?? new MediaPlayer();
+            player.MediaOpened += SharedPlayer_MediaOpened;
+            player.MediaEnded += SharedPlayer_MediaEnded;
+            player.MediaFailed += SharedPlayer_MediaFailed;
+            return player;
+        }
         private static ClipboardItem? _playingItem;
         private static DispatcherTimer? _playbackTimer;
         private static bool _isUpdatingPositionFromTimer = false;
 
         static ClipboardItem()
         {
-            // Set up static events on the shared media player
-            _sharedPlayer.MediaOpened += SharedPlayer_MediaOpened;
-            _sharedPlayer.MediaEnded += SharedPlayer_MediaEnded;
-            _sharedPlayer.MediaFailed += SharedPlayer_MediaFailed;
+            // Event hookup is now done in InitSharedPlayer() during lazy initialization
         }
 
         // --- PROPERTIES ---
@@ -57,7 +66,7 @@ namespace FlyShelf.ViewModels
                     // If the user seeks from the UI, update the media player position
                     if (!_isUpdatingPositionFromTimer && _playingItem == this)
                     {
-                        _sharedPlayer.Position = TimeSpan.FromSeconds(value);
+                        SharedPlayer.Position = TimeSpan.FromSeconds(value);
                         UpdatePlaybackText();
                     }
                 }
@@ -138,10 +147,10 @@ namespace FlyShelf.ViewModels
                 bool needsLoad = true;
                 try
                 {
-                    if (_sharedPlayer.Source != null)
+                    if (SharedPlayer.Source != null)
                     {
                         // Compare sources to allow resuming
-                        string currentSrc = _sharedPlayer.Source.IsFile ? _sharedPlayer.Source.LocalPath : _sharedPlayer.Source.AbsoluteUri;
+                        string currentSrc = SharedPlayer.Source.IsFile ? SharedPlayer.Source.LocalPath : SharedPlayer.Source.AbsoluteUri;
                         string targetSrc = !string.IsNullOrEmpty(FilePath) && File.Exists(FilePath) ? Path.GetFullPath(FilePath) : RawContent;
                         
                         if (string.Equals(currentSrc, targetSrc, StringComparison.OrdinalIgnoreCase))
@@ -170,10 +179,10 @@ namespace FlyShelf.ViewModels
                         return;
                     }
 
-                    _sharedPlayer.Open(sourceUri);
+                    SharedPlayer.Open(sourceUri);
                 }
 
-                _sharedPlayer.Play();
+                SharedPlayer.Play();
                 IsAudioPlaying = true;
 
                 // Start the polling timer
@@ -200,7 +209,7 @@ namespace FlyShelf.ViewModels
             {
                 if (_playingItem == this)
                 {
-                    _sharedPlayer.Pause();
+                    SharedPlayer.Pause();
                     IsAudioPlaying = false;
                     _playbackTimer?.Stop();
                 }
@@ -220,8 +229,8 @@ namespace FlyShelf.ViewModels
             try
             {
                 _playbackTimer?.Stop();
-                _sharedPlayer.Stop();
-                _sharedPlayer.Close();
+                SharedPlayer.Stop();
+                SharedPlayer.Close();
                 if (_playingItem != null)
                 {
                     _playingItem.StopAudioInternal();
@@ -239,7 +248,7 @@ namespace FlyShelf.ViewModels
             {
                 Application.Current?.Dispatcher?.InvokeAsync(() =>
                 {
-                    double durSeconds = _sharedPlayer.NaturalDuration.HasTimeSpan ? _sharedPlayer.NaturalDuration.TimeSpan.TotalSeconds : 0;
+                    double durSeconds = SharedPlayer.NaturalDuration.HasTimeSpan ? SharedPlayer.NaturalDuration.TimeSpan.TotalSeconds : 0;
                     _playingItem.AudioDuration = durSeconds;
                     _playingItem.UpdatePlaybackText();
                 });
@@ -253,7 +262,7 @@ namespace FlyShelf.ViewModels
                 Application.Current?.Dispatcher?.InvokeAsync(() =>
                 {
                     _playbackTimer?.Stop();
-                    _sharedPlayer.Stop();
+                    SharedPlayer.Stop();
                     _playingItem.StopAudioInternal();
                     _playingItem = null;
                 });
@@ -282,7 +291,7 @@ namespace FlyShelf.ViewModels
                 _isUpdatingPositionFromTimer = true;
                 try
                 {
-                    double pos = _sharedPlayer.Position.TotalSeconds;
+                    double pos = SharedPlayer.Position.TotalSeconds;
                     _playingItem.AudioPosition = pos;
                     _playingItem.UpdatePlaybackText();
                 }
@@ -304,8 +313,8 @@ namespace FlyShelf.ViewModels
                 return "0:00";
             var t = TimeSpan.FromSeconds(seconds);
             if (t.TotalHours >= 1)
-                return t.ToString(@"h\:mm\:ss");
-            return t.ToString(@"m\:ss");
+                return t.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture);
+            return t.ToString(@"m\:ss", CultureInfo.InvariantCulture);
         }
     }
 }

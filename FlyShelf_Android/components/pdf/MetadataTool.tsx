@@ -5,16 +5,20 @@ import * as Haptics from 'expo-haptics';
 import { colors } from '../../styles/theme';
 import s from '../../styles/pdfToolsStyles';
 import { getPdfInfo, setPdfMetadata } from '../../utils/pdfToolsUtils';
+import { getPdfPageInfo } from '../../utils/pdfUtils';
 import { SelectedFile } from './types';
 import ResultView from './ResultView';
+import ProcessingOverlay from './ProcessingOverlay';
 
 interface MetadataToolProps {
   onBack: () => void;
   onPickFile: () => Promise<SelectedFile[]>;
+  saveRecent?: (name: string, path: string, pages: number, tool: 'metadata') => void;
 }
 
-export default function MetadataTool({ onBack, onPickFile }: MetadataToolProps) {
+export default function MetadataTool({ onBack, onPickFile, saveRecent }: MetadataToolProps) {
   const [file, setFile] = useState<SelectedFile | null>(null);
+  const [pageCount, setPageCount] = useState(0);
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [subject, setSubject] = useState('');
@@ -34,11 +38,17 @@ export default function MetadataTool({ onBack, onPickFile }: MetadataToolProps) 
         setAuthor(info.author || '');
         setSubject(info.subject || '');
         setKeywords('');
-      } catch {
-        // Silently fail if info can't be read
-      } finally {
-        setLoading(false);
+      } catch (err: any) {
+        Alert.alert('Read Error', err?.message || 'Could not read PDF metadata. You can still set new values.');
       }
+      // Read page count separately so it succeeds even if metadata read fails
+      try {
+        const pageInfo = await getPdfPageInfo(files[0].uri);
+        setPageCount(pageInfo.pageCount);
+      } catch {
+        // Page count will remain 0 if read fails
+      }
+      setLoading(false);
     }
   };
 
@@ -54,6 +64,7 @@ export default function MetadataTool({ onBack, onPickFile }: MetadataToolProps) 
         keywords: keywords ? keywords.split(',').map(k => k.trim()) : undefined,
       });
       setResultPath(outPath);
+      saveRecent?.(file.name, outPath, pageCount, 'metadata');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       Alert.alert('Save Failed', e.message);
@@ -66,7 +77,7 @@ export default function MetadataTool({ onBack, onPickFile }: MetadataToolProps) 
     return (
       <View style={s.modalOverlay}>
         <View style={s.modalHeader}>
-          <Pressable style={s.backBtn} onPress={onBack}><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
+          <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
           <Text style={s.modalTitle}>Success</Text>
         </View>
         <ResultView path={resultPath} onDone={onBack} />
@@ -76,13 +87,14 @@ export default function MetadataTool({ onBack, onPickFile }: MetadataToolProps) 
 
   return (
     <View style={s.modalOverlay}>
+      <ProcessingOverlay visible={loading && !!file} text="Saving metadata…" />
       <View style={s.modalHeader}>
-        <Pressable style={s.backBtn} onPress={onBack}><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
+        <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
         <Text style={s.modalTitle}>Edit Metadata</Text>
       </View>
       <ScrollView style={s.modalScroll}>
         {!file ? (
-          <Pressable style={s.btnPrimary} onPress={handlePick}>
+          <Pressable style={s.btnPrimary} onPress={handlePick} accessibilityRole="button" accessibilityLabel="Pick PDF file">
             <Text style={s.btnPrimaryText}>Pick PDF</Text>
           </Pressable>
         ) : (
@@ -91,8 +103,9 @@ export default function MetadataTool({ onBack, onPickFile }: MetadataToolProps) 
               <Ionicons name="document" size={20} color={colors.type.pdf} style={s.fileIcon} />
               <View style={s.fileInfo}>
                 <Text style={s.fileName}>{file.name}</Text>
+                {pageCount > 0 && <Text style={s.fileMeta}>{pageCount} pages</Text>}
               </View>
-              <Pressable style={s.btnSmall} onPress={() => setFile(null)}>
+              <Pressable style={s.btnSmall} onPress={() => { setFile(null); setPageCount(0); }} accessibilityRole="button" accessibilityLabel="Remove selected file">
                 <Ionicons name="close" size={20} color={colors.text.secondary} />
               </Pressable>
             </View>
@@ -112,7 +125,7 @@ export default function MetadataTool({ onBack, onPickFile }: MetadataToolProps) 
       </ScrollView>
       {file && (
         <View style={s.modalActions}>
-          <Pressable style={s.btnPrimary} onPress={handleSave} disabled={loading}>
+          <Pressable style={s.btnPrimary} onPress={handleSave} disabled={loading} accessibilityRole="button" accessibilityLabel="Save metadata">
             <Text style={s.btnPrimaryText}>{loading ? 'Saving...' : 'Save Metadata'}</Text>
           </Pressable>
         </View>

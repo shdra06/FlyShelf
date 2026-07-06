@@ -155,6 +155,7 @@ namespace FlyShelf.Classes
         public static void StartPeriodicResync()
         {
             _resyncTimer?.Stop();
+            _resyncTimer?.Dispose();
             _resyncTimer = new System.Timers.Timer(6 * 60 * 60 * 1000); // 6 hours
             _resyncTimer.Elapsed += async (s, e) =>
             {
@@ -238,7 +239,10 @@ namespace FlyShelf.Classes
                 if (storedTime.Year < 2024 || storedTime.Year > 2100) return;
 
                 // Sanity check: TickCount64 should have moved forward since the anchor was saved
-                if (Environment.TickCount64 < storedTick) return;
+                // M-12 FIX: Also detect reboot — if storedTick is unreasonably far from current TickCount64,
+                // the anchor is stale (machine likely rebooted since it was saved)
+                if (Environment.TickCount64 < storedTick || Math.Abs(Environment.TickCount64 - storedTick) > 7 * 24 * 3600 * 1000L)
+                    return;
 
                 _anchorNtpTime = storedTime;
                 _anchorTickCount = storedTick;

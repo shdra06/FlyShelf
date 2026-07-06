@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -22,6 +23,7 @@ namespace FlyShelf.Classes
         private readonly SemaphoreSlim _startLock = new SemaphoreSlim(1, 1); // Prevents concurrent StartTunnelCore from QUIC/exit/health triggers
         private int _healthCheckCount = 0;                // Counts health ticks for periodic public URL check
         private long _lastRetryScheduledTicks;             // Debounce: prevents multiple queued retries
+        private CancellationTokenSource? _restartCts;      // C-01: Cancel overlapping restart tasks
         private static readonly HttpClient _healthClient = new() { Timeout = TimeSpan.FromSeconds(10) };
 
         private volatile string _globalUrl = "Offline";
@@ -163,30 +165,34 @@ namespace FlyShelf.Classes
                     {
                         if (string.IsNullOrEmpty(e.Data)) return;
                         // Only log errors/warnings, not verbose info lines
-                        bool isImportant = e.Data.Contains("ERR") || e.Data.Contains("WRN") || e.Data.Contains("trycloudflare.com") || e.Data.Contains("failed") || e.Data.Contains("error");
+                        bool isImportant = e.Data.Contains("ERR", StringComparison.Ordinal) || e.Data.Contains("WRN", StringComparison.Ordinal) || e.Data.Contains("trycloudflare.com", StringComparison.Ordinal) || e.Data.Contains("failed", StringComparison.Ordinal) || e.Data.Contains("error", StringComparison.Ordinal);
                         if (isImportant) Logger.LogAction("CF_STDERR", e.Data);
 
                         // Track QUIC/datagram failures — if the QUIC connection keeps dying,
                         // restart the tunnel with protocol switch instead of waiting 3 health failures
-                        if (e.Data.Contains("failed to run the datagram handler") ||
-                            e.Data.Contains("control stream encountered a failure") ||
-                            e.Data.Contains("no recent network activity"))
+                        if (e.Data.Contains("failed to run the datagram handler", StringComparison.Ordinal) ||
+                            e.Data.Contains("control stream encountered a failure", StringComparison.Ordinal) ||
+                            e.Data.Contains("no recent network activity", StringComparison.Ordinal))
                         {
-                            _quicErrorCount++;
+                            Interlocked.Increment(ref _quicErrorCount);
                             if (_quicErrorCount >= 5 && !_stopped)
                             {
-                                int quicCount = _quicErrorCount;
-                                _quicErrorCount = 0;
+                                int quicCount = Interlocked.Exchange(ref _quicErrorCount, 0);
                                 Logger.LogAction("CLOUDFLARE", $"⚡ {quicCount} QUIC failures detected — auto-restarting tunnel with protocol switch...");
                                 _consecutiveFailures++; // This triggers protocol toggle in StartTunnelCore
                                 StopHealthMonitor();
                                 GlobalUrl = "QUIC failing — restarting...";
                                 GlobalUrlUpdated?.Invoke(GlobalUrl);
+                                // C-01: Cancel any previous restart task before starting a new one
+                                _restartCts?.Cancel();
+                                _restartCts = new CancellationTokenSource();
+                                var token = _restartCts.Token;
                                 _ = Task.Run(async () =>
                                 {
                                     KillExisting();
-                                    await Task.Delay(2000);
-                                    await StartTunnelCore();
+                                    await Task.Delay(2000, token);
+                                    if (!token.IsCancellationRequested)
+                                        await StartTunnelCore();
                                 });
                                 return;
                             }
@@ -195,7 +201,7 @@ namespace FlyShelf.Classes
                         Match match = Regex.Match(e.Data, @"https://([a-zA-Z0-9-]+)\.trycloudflare\.com");
                         if (match.Success)
                         {
-                            string subdomain = match.Groups[1].Value.ToLower();
+                            string subdomain = match.Groups[1].Value.ToLower(CultureInfo.InvariantCulture);
                             // Skip known Cloudflare system subdomains — NOT tunnel URLs
                             if (subdomain == "api" || subdomain == "dash" || subdomain == "login" || subdomain == "www")
                             {
@@ -203,7 +209,7 @@ namespace FlyShelf.Classes
                                 return;
                             }
                             // Track old URL for stale entry cleanup
-                            if (GlobalUrl.Contains("trycloudflare.com") && GlobalUrl != match.Value)
+                            if (GlobalUrl.Contains("trycloudflare.com", StringComparison.Ordinal) && GlobalUrl != match.Value)
                             {
                                 PreviousGlobalUrl = GlobalUrl;
                             }
@@ -211,7 +217,7 @@ namespace FlyShelf.Classes
                             tunnelUrlReceived = true;
                             IsTunnelVerified = false; // Not verified until self-ping succeeds
                             _consecutiveFailures = 0; // Reset on success
-                            _quicErrorCount = 0;       // Reset QUIC error count on new URL
+                            Interlocked.Exchange(ref _quicErrorCount, 0); // Reset QUIC error count on new URL
                             Logger.LogAction("CLOUDFLARE", $"Tunnel URL received: {GlobalUrl} (waiting for DNS propagation before publishing...)");
                             // DON'T fire GlobalUrlUpdated here — URL is published to Firebase
                             // only AFTER DNS verification succeeds (in the verification block below).
@@ -405,12 +411,14 @@ namespace FlyShelf.Classes
         private void StartHealthMonitor()
         {
             StopHealthMonitor();
-            _healthFailCount = 0;
-            _healthCheckCount = 0;
+            Interlocked.Exchange(ref _healthFailCount, 0);
+            Interlocked.Exchange(ref _healthCheckCount, 0);
             _healthTimer = new System.Timers.Timer(60_000); // Every 60s
             _healthTimer.Elapsed += async (s, e) =>
             {
-                if (_stopped || string.IsNullOrEmpty(GlobalUrl) || !GlobalUrl.Contains("trycloudflare.com")) return;
+                try
+                {
+                if (_stopped || string.IsNullOrEmpty(GlobalUrl) || !GlobalUrl.Contains("trycloudflare.com", StringComparison.Ordinal)) return;
                 try
                 {
                     // Ping localhost instead of public URL — avoids DNS resolution failures
@@ -418,7 +426,7 @@ namespace FlyShelf.Classes
                     var resp = await client.GetAsync($"http://localhost:{_localPort}/api/health");
                     if (resp.IsSuccessStatusCode)
                     {
-                        _healthFailCount = 0; // Healthy
+                        Interlocked.Exchange(ref _healthFailCount, 0); // Healthy
                         if (!IsTunnelVerified)
                         {
                             IsTunnelVerified = true;
@@ -427,7 +435,7 @@ namespace FlyShelf.Classes
                     }
                     else
                     {
-                        _healthFailCount++;
+                        Interlocked.Increment(ref _healthFailCount);
                         if (IsTunnelVerified && _healthFailCount >= 2)
                         {
                             IsTunnelVerified = false;
@@ -438,13 +446,13 @@ namespace FlyShelf.Classes
                 }
                 catch (Exception ex)
                 {
-                    _healthFailCount++;
+                    Interlocked.Increment(ref _healthFailCount);
                     Logger.LogAction("CLOUDFLARE HEALTH", $"Ping failed ({_healthFailCount}/3): {ex.Message}");
                 }
 
                 // Every 5th check, verify the public URL too to detect edge failures
-                _healthCheckCount++;
-                if (_healthCheckCount % 5 == 0 && !string.IsNullOrEmpty(GlobalUrl) && GlobalUrl.Contains("trycloudflare.com"))
+                Interlocked.Increment(ref _healthCheckCount);
+                if (_healthCheckCount % 5 == 0 && !string.IsNullOrEmpty(GlobalUrl) && GlobalUrl.Contains("trycloudflare.com", StringComparison.Ordinal))
                 {
                     try
                     {
@@ -453,13 +461,13 @@ namespace FlyShelf.Classes
                         if (!publicResp.IsSuccessStatusCode)
                         {
                             Logger.LogAction("CLOUDFLARE", "Public URL health check failed — tunnel may be stale");
-                            _healthFailCount++;
+                            Interlocked.Increment(ref _healthFailCount);
                         }
                     }
                     catch
                     {
                         Logger.LogAction("CLOUDFLARE", "Public URL unreachable — scheduling restart");
-                        _healthFailCount++;
+                        Interlocked.Increment(ref _healthFailCount);
                     }
                 }
 
@@ -474,8 +482,18 @@ namespace FlyShelf.Classes
                     await Task.Delay(3000);
                     _ = Task.Run(() => StartTunnelCore());
                 }
+
+                // C-02: Manually restart timer at end of handler to prevent overlapping ticks
+                if (!_stopped) _healthTimer?.Start();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("CLOUDFLARE HEALTH", $"Unhandled exception in health timer: {ex.Message}");
+                    // Restart timer even on error to prevent health monitoring from stopping permanently
+                    if (!_stopped) try { _healthTimer?.Start(); } catch { } // Best-effort: failure is acceptable
+                }
             };
-            _healthTimer.AutoReset = true;
+            _healthTimer.AutoReset = false;
             _healthTimer.Start();
             Logger.LogAction("CLOUDFLARE HEALTH", "Health monitor started (60s interval)");
         }
@@ -491,9 +509,9 @@ namespace FlyShelf.Classes
         /// to avoid waiting up to 60s for the periodic health timer.
         /// If the tunnel is dead, triggers a restart immediately.
         /// </summary>
-        public async void ForceCheckTunnelHealth()
+        public async Task ForceCheckTunnelHealth()
         {
-            if (_stopped || string.IsNullOrEmpty(GlobalUrl) || !GlobalUrl.Contains("trycloudflare.com"))
+            if (_stopped || string.IsNullOrEmpty(GlobalUrl) || !GlobalUrl.Contains("trycloudflare.com", StringComparison.Ordinal))
             {
                 Logger.LogAction("CLOUDFLARE HEALTH", "Force check skipped — tunnel not active");
                 return;
@@ -506,7 +524,7 @@ namespace FlyShelf.Classes
                 if (resp.IsSuccessStatusCode)
                 {
                     Logger.LogAction("CLOUDFLARE HEALTH", "✅ Force check passed — tunnel is alive");
-                    _healthFailCount = 0;
+                    Interlocked.Exchange(ref _healthFailCount, 0);
                     return;
                 }
                 Logger.LogAction("CLOUDFLARE HEALTH", $"Force check failed: HTTP {(int)resp.StatusCode}");
@@ -534,14 +552,16 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
-        /// Calculate retry delay with exponential backoff: 5s, 10s, 20s, 30s, 30s, 30s...
+        /// Calculate retry delay with exponential backoff: 5s, 10s, 20s, 30s… up to 5 min for sustained failures.
         /// Never gives up — tunnel is critical for cross-network file sync.
+        /// M-07: After 10 consecutive retries, cap increases to 300s (5 min) to avoid hammering.
         /// </summary>
         private int GetRetryDelay()
         {
             int baseDelay = 5_000;
-            int delay = baseDelay * (int)Math.Pow(2, Math.Min(_consecutiveFailures, 3)); // Cap at 40s
-            return Math.Min(delay, 30_000); // Never more than 30s
+            int delay = baseDelay * (int)Math.Pow(2, Math.Min(_consecutiveFailures, 6)); // Exponential up to 320s
+            int cap = _consecutiveFailures >= 10 ? 300_000 : 30_000; // 5 min cap after 10 failures, else 30s
+            return Math.Min(delay, cap);
         }
 
         private void ScheduleRetry(int delayMs)
@@ -634,6 +654,7 @@ namespace FlyShelf.Classes
 
         public void Stop()
         {
+            _restartCts?.Cancel(); // C-01: Cancel any pending restart task
             _stopped = true; // Prevents all auto-retry logic
             StopHealthMonitor();
             KillExisting();

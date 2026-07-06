@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -136,8 +137,8 @@ namespace FlyShelf.Classes
                 if (d == DateTime.Today) return "Today";
                 if (d == DateTime.Today.AddDays(1)) return "Tomorrow";
                 if (d == DateTime.Today.AddDays(-1)) return "Yesterday";
-                if (d.Year == DateTime.Today.Year) return d.ToString("MMM d");
-                return d.ToString("MMM d, yyyy");
+                if (d.Year == DateTime.Today.Year) return d.ToString("MMM d", CultureInfo.InvariantCulture);
+                return d.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
             }
         }
         [JsonIgnore] public bool IsOverdue => _dueDate.HasValue && _dueDate.Value.Date < DateTime.Today && !_isDone;
@@ -253,6 +254,10 @@ namespace FlyShelf.Classes
             set { if (_sortOrder != value) { _sortOrder = value; OnPropertyChanged(nameof(SortOrder)); } }
         }
 
+        // ── Device Origin (tracks which device created/edited this item) ──
+        public string? CreatedByDevice { get; set; }
+        public string? LastEditedByDevice { get; set; }
+
         // ── Timer (existing) ────────────────────────────────────
         /// <summary>Timer duration in minutes for this task (null = no timer set)</summary>
         private int? _timerMinutes;
@@ -280,10 +285,10 @@ namespace FlyShelf.Classes
         public string TimerDisplay => HasTimer ? $"{_timerMinutes}m" : "";
 
         [JsonIgnore]
-        public string ReminderDisplay => HasReminder ? _reminderAt!.Value.ToString("h:mm tt") : "";
+        public string ReminderDisplay => HasReminder ? _reminderAt!.Value.ToString("h:mm tt", CultureInfo.InvariantCulture) : "";
 
         [JsonIgnore]
-        public string CreatedAtDisplay => CreatedAt.ToString("h:mm tt");
+        public string CreatedAtDisplay => CreatedAt.ToString("h:mm tt", CultureInfo.InvariantCulture);
 
         private bool _isExpanded = false;
         [JsonIgnore]
@@ -318,13 +323,13 @@ namespace FlyShelf.Classes
         public DateTime Date { get; set; } = DateTime.Today;
 
         [JsonIgnore]
-        public string DisplayDate => Date.ToString("dd, MMM");
+        public string DisplayDate => Date.ToString("dd, MMM", CultureInfo.InvariantCulture);
 
         [JsonIgnore]
-        public string DayNumber => Date.Day.ToString();
+        public string DayNumber => Date.Day.ToString(CultureInfo.InvariantCulture);
 
         [JsonIgnore]
-        public string MonthName => Date.ToString("MMM");
+        public string MonthName => Date.ToString("MMM", CultureInfo.InvariantCulture);
 
         [JsonIgnore]
         public string FullLabel => DisplayDate;
@@ -730,9 +735,9 @@ namespace FlyShelf.Classes
                 var items = day.Items.ToList();
                 foreach (var item in items)
                 {
-                    bool matchText = !string.IsNullOrEmpty(item.Text) && item.Text.ToLowerInvariant().Contains(q);
-                    bool matchDesc = !string.IsNullOrEmpty(item.Description) && item.Description.ToLowerInvariant().Contains(q);
-                    bool matchTags = item.Tags.Any(t => t.ToLowerInvariant().Contains(q));
+                    bool matchText = !string.IsNullOrEmpty(item.Text) && item.Text.Contains(q, StringComparison.OrdinalIgnoreCase);
+                    bool matchDesc = !string.IsNullOrEmpty(item.Description) && item.Description.Contains(q, StringComparison.OrdinalIgnoreCase);
+                    bool matchTags = item.Tags.Any(t => t.Contains(q, StringComparison.OrdinalIgnoreCase));
                     if (matchText || matchDesc || matchTags)
                     {
                         results.Add((day, item));
@@ -740,7 +745,7 @@ namespace FlyShelf.Classes
                     // Also search subtasks
                     foreach (var sub in item.SubTasks.ToList())
                     {
-                        if (!string.IsNullOrEmpty(sub.Text) && sub.Text.ToLowerInvariant().Contains(q))
+                        if (!string.IsNullOrEmpty(sub.Text) && sub.Text.Contains(q, StringComparison.OrdinalIgnoreCase))
                         {
                             results.Add((day, sub));
                         }
@@ -851,20 +856,20 @@ namespace FlyShelf.Classes
                 if (lastMod == 0) lastMod = new DateTimeOffset(day.Date).ToUnixTimeMilliseconds();
 
                 return new {
-                    Date = day.Date.ToString("o"),
+                    Date = day.Date.ToString("o", CultureInfo.InvariantCulture),
                     Items = day.Items.Select(i => new {
                         i.Id, i.Text, i.IsDone,
-                        CreatedAt = i.CreatedAt.ToString("o"),
-                        LastEdited = i.LastEdited.ToString("o"),
+                        CreatedAt = i.CreatedAt.ToString("o", CultureInfo.InvariantCulture),
+                        LastEdited = i.LastEdited.ToString("o", CultureInfo.InvariantCulture),
                         Priority = (int)i.Priority,
-                        DueDate = i.DueDate?.ToString("o"),
+                        DueDate = i.DueDate?.ToString("o", CultureInfo.InvariantCulture),
                         i.Tags, i.Color, i.Description,
                         SubTasks = i.SubTasks.Select(s => new {
                             s.Id, s.Text, s.IsDone,
-                            CreatedAt = s.CreatedAt.ToString("o"),
-                            LastEdited = s.LastEdited.ToString("o"),
+                            CreatedAt = s.CreatedAt.ToString("o", CultureInfo.InvariantCulture),
+                            LastEdited = s.LastEdited.ToString("o", CultureInfo.InvariantCulture),
                             Priority = (int)s.Priority,
-                            DueDate = s.DueDate?.ToString("o"),
+                            DueDate = s.DueDate?.ToString("o", CultureInfo.InvariantCulture),
                             s.Tags, s.Color, s.Description,
                             SubTasks = new List<object>(),
                             Recurrence = (int)s.Recurrence,
@@ -872,7 +877,8 @@ namespace FlyShelf.Classes
                         }).ToList(),
                         Recurrence = (int)i.Recurrence,
                         i.SortOrder, i.TimerMinutes,
-                        ReminderAt = i.ReminderAt?.ToString("o")
+                        i.CreatedByDevice, i.LastEditedByDevice,
+                        ReminderAt = i.ReminderAt?.ToString("o", CultureInfo.InvariantCulture)
                     }).ToList(),
                     LastModified = lastMod
                 };
@@ -881,7 +887,7 @@ namespace FlyShelf.Classes
             return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = false });
         }
 
-        public static void MergeFromMobile(string json)
+        public static void MergeFromMobile(string json, string? deviceName = null)
         {
             if (string.IsNullOrWhiteSpace(json)) return;
             try
@@ -905,6 +911,16 @@ namespace FlyShelf.Classes
                         if (localAllDay == null)
                         {
                             _allDays.Add(remoteDay);
+                            // Tag new day's items with device origin
+                            if (!string.IsNullOrEmpty(deviceName))
+                            {
+                                foreach (var item in remoteDay.Items)
+                                {
+                                    item.LastEditedByDevice = deviceName;
+                                    if (string.IsNullOrEmpty(item.CreatedByDevice))
+                                        item.CreatedByDevice = deviceName;
+                                }
+                            }
                             changed = true;
                         }
                         else
@@ -919,6 +935,16 @@ namespace FlyShelf.Classes
                             if (remoteMod > localMod)
                             {
                                 localAllDay.Items = new System.Collections.ObjectModel.ObservableCollection<TodoItem>(remoteDay.Items);
+                                // Tag merged items with device origin
+                                if (!string.IsNullOrEmpty(deviceName))
+                                {
+                                    foreach (var item in localAllDay.Items)
+                                    {
+                                        item.LastEditedByDevice = deviceName;
+                                        if (string.IsNullOrEmpty(item.CreatedByDevice))
+                                            item.CreatedByDevice = deviceName;
+                                    }
+                                }
                                 changed = true;
                             }
                         }

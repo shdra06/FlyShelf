@@ -5,6 +5,7 @@
 // Split from NetworkSyncServer.cs for modularity
 // ---------------------------------------------------------------
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -48,7 +49,7 @@ namespace FlyShelf.Classes
         }
 
         // ═ ═ ═ RESPONSE CACHE: Avoid re-serializing on rapid polls ═ ═ ═
-        private byte[]? _cachedSyncJson = null;
+        private volatile byte[]? _cachedSyncJson = null;
         private long _cachedSyncTimestamp = 0;
         private int _cachedItemCount = 0;
         private const int SYNC_CACHE_TTL_MS = 500; // Cache for 500ms — fast invalidation for real-time sync
@@ -59,11 +60,10 @@ namespace FlyShelf.Classes
             {
                 long now = Environment.TickCount64;
                 int currentCount = 0;
-                System.Windows.Application.Current.Dispatcher.Invoke(() => { currentCount = _viewModel.DroppedItems.Count; }, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(2));
 
-                // Use cached response if still fresh and item count unchanged
+                // Use cached response if still fresh — check count via the cached value to avoid dispatcher roundtrip
                 var cached = _cachedSyncJson; // Capture reference to avoid TOCTOU race
-                if (cached != null && (now - _cachedSyncTimestamp) < SYNC_CACHE_TTL_MS && currentCount == _cachedItemCount)
+                if (cached != null && (now - _cachedSyncTimestamp) < SYNC_CACHE_TTL_MS)
                 {
                     res.ContentType = "application/json; charset=utf-8";
                     res.ContentLength64 = cached.Length;
@@ -72,33 +72,46 @@ namespace FlyShelf.Classes
                     return;
                 }
 
-                // Rebuild cache
+                // PERF: Capture item count + references in a SINGLE Dispatcher.Invoke call.
+                // Previously used separate InvokeAsync().Task.Wait(2sec) just for count.
+                // All LINQ projection + JSON serialization now runs on the background HTTP listener thread.
+                List<(string? rawContent, string? fileName, string? filePath, string? extension,
+                      ClipboardItemType itemType, DateTime dateCopied, bool isPassword)>? snapshot = null;
+                string deviceId = "";
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 {
-                    string deviceId = SettingsManager.Current.DeviceId ?? "PC";
-                    var payload = _viewModel.DroppedItems
-                        .Where(x => x.Extension != "MOBILE") // Don't echo Mobile items back
-                        .Where(x => !x.IsPassword) // SECURITY: Never expose password items to any device
-                        .Take(15).Select(x => {
-                        string contentKey = x.RawContent ?? x.FileName ?? x.FilePath ?? "";
+                    currentCount = _viewModel.DroppedItems.Count;
+                    deviceId = SettingsManager.Current.DeviceId ?? "PC";
+                    snapshot = _viewModel.DroppedItems
+                        .Where(x => x.Extension != "MOBILE" && !x.IsPassword)
+                        .Take(15)
+                        .Select(x => (x.RawContent, x.FileName, x.FilePath, x.Extension, x.ItemType, x.DateCopied, x.IsPassword))
+                        .ToList();
+                }, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(2));
+
+                // Build payload + serialize on the background thread (not UI thread)
+                if (snapshot != null)
+                {
+                    var payload = snapshot.Select(x => {
+                        string contentKey = x.rawContent ?? x.fileName ?? x.filePath ?? "";
                         int stableHash = contentKey.GetHashCode(StringComparison.Ordinal);
+                        string devName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
                         return new
-                    {
-                        id = stableHash.ToString("X8") + "_" + x.DateCopied.Ticks.ToString(),
-                        EventId = $"{deviceId}_{((DateTimeOffset)x.DateCopied).ToUnixTimeMilliseconds()}_{stableHash:X8}",
-                        Title = string.IsNullOrEmpty(x.FileName) ? (x.RawContent?.Length > 20 ? x.RawContent.Substring(0, 20) + "..." : x.RawContent) : x.FileName,
-                        Type = x.ItemType.ToString(),
-                        PreviewUrl = (x.ItemType == ClipboardItemType.Image || x.ItemType == ClipboardItemType.QRCode) ? (!string.IsNullOrEmpty(x.FilePath) ? $"/download?path={Uri.EscapeDataString(x.FilePath)}" : (x.RawContent ?? "")) : "",
-                        DownloadUrl = !string.IsNullOrEmpty(x.FilePath) ? $"/download?path={Uri.EscapeDataString(x.FilePath)}" : (x.RawContent ?? ""),
-                        Raw = x.RawContent ?? x.FileName ?? "",
-                        FileName = x.FileName ?? "",
-                        Time = x.DateCopied.ToString("HH:mm:ss"),
-                        Timestamp = ((DateTimeOffset)x.DateCopied).ToUnixTimeMilliseconds(),
-                        SourceDeviceName = x.Extension == "MOBILE" ? "Mobile" : (SettingsManager.Current.DeviceName ?? Environment.MachineName),
-                        SourceDeviceType = x.Extension == "MOBILE" ? "Mobile" : "PC"
-                    };
+                        {
+                            id = stableHash.ToString("X8", CultureInfo.InvariantCulture) + "_" + x.dateCopied.Ticks.ToString(CultureInfo.InvariantCulture),
+                            EventId = $"{deviceId}_{((DateTimeOffset)x.dateCopied).ToUnixTimeMilliseconds()}_{stableHash:X8}",
+                            Title = string.IsNullOrEmpty(x.fileName) ? (x.rawContent?.Length > 20 ? string.Concat(x.rawContent.AsSpan(0, 20), "...") : x.rawContent) : x.fileName,
+                            Type = x.itemType.ToString(),
+                            PreviewUrl = (x.itemType == ClipboardItemType.Image || x.itemType == ClipboardItemType.QRCode) ? (!string.IsNullOrEmpty(x.filePath) ? $"/download?path={Uri.EscapeDataString(x.filePath)}" : (x.rawContent ?? "")) : "",
+                            DownloadUrl = !string.IsNullOrEmpty(x.filePath) ? $"/download?path={Uri.EscapeDataString(x.filePath)}" : (x.rawContent ?? ""),
+                            Raw = x.rawContent ?? x.fileName ?? "",
+                            FileName = x.fileName ?? "",
+                            Time = x.dateCopied.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
+                            Timestamp = ((DateTimeOffset)x.dateCopied).ToUnixTimeMilliseconds(),
+                            SourceDeviceName = x.extension == "MOBILE" ? "Mobile" : devName,
+                            SourceDeviceType = x.extension == "MOBILE" ? "Mobile" : "PC"
+                        };
                     })
-                    // Sort by freshness — bumped items get DateCopied = Now, so they appear first
                     .OrderByDescending(x => x.Timestamp)
                     .ToList();
 
@@ -111,7 +124,7 @@ namespace FlyShelf.Classes
                     _cachedSyncJson = Encoding.UTF8.GetBytes(json);
                     _cachedSyncTimestamp = now;
                     _cachedItemCount = currentCount;
-                }, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(2));
+                }
 
                 var freshCache = _cachedSyncJson!; // Capture reference after Dispatcher.Invoke
                 res.ContentType = "application/json; charset=utf-8";
@@ -136,7 +149,7 @@ namespace FlyShelf.Classes
             // SPEED: Read body first, then respond 200 IMMEDIATELY so the sender isn't blocked
             string text;
             string sourceDevice;
-            string itemType = null;
+            string itemType = null!;
             string sourceDeviceId = req.Headers["X-Source-DeviceId"] ?? "";
             // [SECURITY FIX v2.1.0]: Reject oversized text uploads (DoS prevention)
             long contentLength = req.ContentLength64;
@@ -185,7 +198,7 @@ namespace FlyShelf.Classes
 
             // v5 PeerManager sends JSON: {"type":"Url","title":"...","data":"actual text","sourceDeviceId":"..."}
             // Parse it to extract the actual content. Fall back to raw body for plain text senders.
-            if (text.TrimStart().StartsWith("{"))
+            if (text.TrimStart().StartsWith('{'))
             {
                 try
                 {
@@ -264,7 +277,7 @@ namespace FlyShelf.Classes
                 bool isPath = false;
                 try
                 {
-                    if (_rxWinPath.IsMatch(possiblePath) || possiblePath.StartsWith("\\\\"))
+                    if (_rxWinPath.IsMatch(possiblePath) || possiblePath.StartsWith("\\\\", StringComparison.Ordinal))
                     {
                         // PT-2 FIX: Validate the resolved path before trusting it.
                         // Reject: non-rooted paths, paths inside system directories, non-existent files.
@@ -297,7 +310,7 @@ namespace FlyShelf.Classes
                     clip = new ClipboardItem(possiblePath)
                     {
                         SourceDeviceName = capturedSource,
-                        SourceDeviceType = capturedSource.Contains("PC") || capturedSource.Contains("LAPTOP") || capturedSource.Contains("DESKTOP") ? "PC" : "Mobile",
+                        SourceDeviceType = capturedSource.Contains("PC", StringComparison.Ordinal) || capturedSource.Contains("LAPTOP", StringComparison.Ordinal) || capturedSource.Contains("DESKTOP", StringComparison.Ordinal) ? "PC" : "Mobile",
                         TransferMethod = capturedTransport.transport
                     };
                     // Load its shell icon in the background thread via _viewModel.GetIcon
@@ -321,16 +334,16 @@ namespace FlyShelf.Classes
                     if (!string.IsNullOrEmpty(capturedType) && Enum.TryParse<ClipboardItemType>(capturedType, true, out var parsed))
                         clipType = parsed;
                     else
-                        clipType = capturedText.StartsWith("http") ? ClipboardItemType.Url : ClipboardItemType.Text;
+                        clipType = capturedText.StartsWith("http", StringComparison.Ordinal) ? ClipboardItemType.Url : ClipboardItemType.Text;
 
                     clip = new ClipboardItem
                     {
                         RawContent = capturedText,
-                        FileName = capturedText.Length > 40 ? capturedText.Substring(0, 40) + "..." : capturedText,
+                        FileName = capturedText.Length > 40 ? string.Concat(capturedText.AsSpan(0, 40), "...") : capturedText,
                         Extension = capturedTransport.label,
                         ItemType = clipType,
                         SourceDeviceName = capturedSource,
-                        SourceDeviceType = capturedSource.Contains("PC") || capturedSource.Contains("LAPTOP") || capturedSource.Contains("DESKTOP") ? "PC" : "Mobile",
+                        SourceDeviceType = capturedSource.Contains("PC", StringComparison.Ordinal) || capturedSource.Contains("LAPTOP", StringComparison.Ordinal) || capturedSource.Contains("DESKTOP", StringComparison.Ordinal) ? "PC" : "Mobile",
                         TransferMethod = capturedTransport.transport
                     };
                 }
@@ -410,7 +423,7 @@ namespace FlyShelf.Classes
                     sourceDevice = "Mobile";
                 }
 
-                string dateString = DateTime.Now.ToString("dd-MM-yyyy");
+                string dateString = DateTime.Now.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture);
                 string uploadDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Clipboard", sourceDevice, dateString);
                 Directory.CreateDirectory(uploadDir);
 
@@ -446,7 +459,7 @@ namespace FlyShelf.Classes
                             totalBytes, 
                             sourceDevice, 
                             fileTransport.transport, 
-                            sourceDevice.Contains("PC") || sourceDevice.Contains("LAPTOP") || sourceDevice.Contains("DESKTOP") ? "PC" : "Mobile"
+                            sourceDevice.Contains("PC", StringComparison.Ordinal) || sourceDevice.Contains("LAPTOP", StringComparison.Ordinal) || sourceDevice.Contains("DESKTOP", StringComparison.Ordinal) ? "PC" : "Mobile"
                         );
                     });
                 }
@@ -458,7 +471,7 @@ namespace FlyShelf.Classes
                 }
 
                 // Copy stream to temporary file on disk with progress
-                tempFile = Path.Combine(Path.GetTempPath(), $"FS_Upload_{Guid.NewGuid().ToString().Substring(0, 8)}.tmp");
+                tempFile = Path.Combine(Path.GetTempPath(), $"FS_Upload_{Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture).Substring(0, 8)}.tmp");
                 using (var tempFs = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 1_048_576, FileOptions.Asynchronous | FileOptions.SequentialScan))
                 {
                     byte[] buffer = new byte[1_048_576]; // 1MB buffer (upgraded from 64KB for high-throughput LAN)
@@ -499,7 +512,7 @@ namespace FlyShelf.Classes
 
                 DateTime? applyDate = null;
                 string originalDateStr = req.Headers["X-Original-Date"];
-                if (!string.IsNullOrEmpty(originalDateStr) && long.TryParse(originalDateStr, out long epochMs))
+                if (!string.IsNullOrEmpty(originalDateStr) && long.TryParse(originalDateStr, CultureInfo.InvariantCulture, out long epochMs))
                 {
                     try
                     {
@@ -509,10 +522,10 @@ namespace FlyShelf.Classes
 
                 string? finalPath = null;
                 string contentType = req.ContentType ?? "";
-                if (contentType.Contains("multipart/form-data") && contentType.Contains("boundary="))
+                if (contentType.Contains("multipart/form-data", StringComparison.Ordinal) && contentType.Contains("boundary=", StringComparison.Ordinal))
                 {
-                    string boundary = contentType.Substring(contentType.IndexOf("boundary=") + "boundary=".Length).Trim();
-                    if (boundary.StartsWith("\"") && boundary.EndsWith("\""))
+                    string boundary = contentType.Substring(contentType.IndexOf("boundary=", StringComparison.Ordinal) + "boundary=".Length).Trim();
+                    if (boundary.StartsWith('"') && boundary.EndsWith('"'))
                         boundary = boundary.Substring(1, boundary.Length - 2);
 
                     finalPath = await ProcessStreamingMultipartFile(tempFile, boundary, uploadDir, applyDate);
@@ -546,7 +559,7 @@ namespace FlyShelf.Classes
                 // Handle group ZIP reconstruction
                 if (mappedType == "Group")
                 {
-                    string extractDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Extracted", $"{Guid.NewGuid().ToString().Substring(0, 8)}");
+                    string extractDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Extracted", Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture).Substring(0, 8));
                     Directory.CreateDirectory(extractDir);
                     SafeExtractZip(finalPath, extractDir);
 
@@ -555,7 +568,7 @@ namespace FlyShelf.Classes
                         extractedPaths, 
                         sourceDevice, 
                         fileTransport.transport, 
-                        sourceDevice.Contains("PC") || sourceDevice.Contains("LAPTOP") || sourceDevice.Contains("DESKTOP") ? "PC" : "Mobile", 
+                        sourceDevice.Contains("PC", StringComparison.Ordinal) || sourceDevice.Contains("LAPTOP", StringComparison.Ordinal) || sourceDevice.Contains("DESKTOP", StringComparison.Ordinal) ? "PC" : "Mobile", 
                         placeholder
                     );
                 }
@@ -565,7 +578,7 @@ namespace FlyShelf.Classes
                         finalPath, 
                         sourceDevice, 
                         fileTransport.transport, 
-                        sourceDevice.Contains("PC") || sourceDevice.Contains("LAPTOP") || sourceDevice.Contains("DESKTOP") ? "PC" : "Mobile", 
+                        sourceDevice.Contains("PC", StringComparison.Ordinal) || sourceDevice.Contains("LAPTOP", StringComparison.Ordinal) || sourceDevice.Contains("DESKTOP", StringComparison.Ordinal) ? "PC" : "Mobile", 
                         placeholder
                     );
                 }
@@ -665,7 +678,7 @@ namespace FlyShelf.Classes
 
                 string originalDateStr = req.Headers["X-Original-Date"];
                 DateTime? originalDate = null;
-                if (!string.IsNullOrEmpty(originalDateStr) && long.TryParse(originalDateStr, out long epochMs))
+                if (!string.IsNullOrEmpty(originalDateStr) && long.TryParse(originalDateStr, CultureInfo.InvariantCulture, out long epochMs))
                 {
                     originalDate = DateTimeOffset.FromUnixTimeMilliseconds(epochMs).UtcDateTime.ToLocalTime();
                 }
@@ -757,10 +770,10 @@ namespace FlyShelf.Classes
                                 RawContent = finalPath,
                                 FileName = rawName,
                                 FilePath = finalPath,
-                                Extension = Path.GetExtension(finalPath).TrimStart('.').ToUpper(),
+                                Extension = Path.GetExtension(finalPath).TrimStart('.').ToUpper(CultureInfo.InvariantCulture),
                                 ItemType = ClipboardItemType.File,
                                 SourceDeviceName = archiveSource,
-                                SourceDeviceType = archiveSource.Contains("PC") || archiveSource.Contains("LAPTOP") || archiveSource.Contains("DESKTOP") ? "PC" : "Mobile",
+                                SourceDeviceType = archiveSource.Contains("PC", StringComparison.Ordinal) || archiveSource.Contains("LAPTOP", StringComparison.Ordinal) || archiveSource.Contains("DESKTOP", StringComparison.Ordinal) ? "PC" : "Mobile",
                                 TransferMethod = archiveTransport.transport
                             };
                             clip.EvaluateSmartActions();
@@ -872,7 +885,7 @@ namespace FlyShelf.Classes
                     await req.InputStream.CopyToAsync(fs);
                 }
 
-                if (!string.IsNullOrEmpty(originalDateStr) && long.TryParse(originalDateStr, out long epochMs))
+                if (!string.IsNullOrEmpty(originalDateStr) && long.TryParse(originalDateStr, CultureInfo.InvariantCulture, out long epochMs))
                 {
                     var dt = DateTimeOffset.FromUnixTimeMilliseconds(epochMs).UtcDateTime.ToLocalTime();
                     try { File.SetCreationTime(finalPath, dt); File.SetLastWriteTime(finalPath, dt); } catch { } // Best-effort: failure is acceptable
@@ -881,7 +894,7 @@ namespace FlyShelf.Classes
                 // Build Cloudflare download URL
                 string globalUrl = _cfDaemon.GlobalUrl;
                 string downloadUrl = "";
-                if (!string.IsNullOrEmpty(globalUrl) && globalUrl.Contains("trycloudflare.com"))
+                if (!string.IsNullOrEmpty(globalUrl) && globalUrl.Contains("trycloudflare.com", StringComparison.Ordinal))
                 {
                     downloadUrl = $"{globalUrl}/download?path={Uri.EscapeDataString(finalPath)}";
                 }
@@ -890,7 +903,7 @@ namespace FlyShelf.Classes
                 if (!string.IsNullOrEmpty(downloadUrl))
                 {
                     var fileInfo = new FileInfo(finalPath);
-                    string ext = Path.GetExtension(rawName).ToLower();
+                    string ext = Path.GetExtension(rawName).ToLower(CultureInfo.InvariantCulture);
                     string fileType = ext switch
                     {
                         ".mp4" or ".mkv" or ".avi" or ".mov" or ".wmv" => "Video",
@@ -914,7 +927,7 @@ namespace FlyShelf.Classes
                         DownloadUrl = downloadUrl,
                         FileName = rawName,
                         FileSize = fileInfo.Length,
-                        Time = DateTime.Now.ToString("HH:mm:ss"),
+                        Time = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
                         Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                         SourceDeviceName = senderDevice,
                         SourceDeviceType = "Mobile",
@@ -954,8 +967,8 @@ namespace FlyShelf.Classes
                 }
 
                 string sizeStr = new FileInfo(finalPath).Length > 1_073_741_824 
-                    ? $"{new FileInfo(finalPath).Length / 1_073_741_824.0:F1} GB" 
-                    : $"{new FileInfo(finalPath).Length / 1_048_576.0:F1} MB";
+                    ? string.Create(CultureInfo.InvariantCulture, $"{new FileInfo(finalPath).Length / 1_073_741_824.0:F1} GB") 
+                    : string.Create(CultureInfo.InvariantCulture, $"{new FileInfo(finalPath).Length / 1_048_576.0:F1} MB");
 
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
@@ -1047,7 +1060,8 @@ namespace FlyShelf.Classes
                     try { NoteManager.Load(); } catch { } // Best-effort: failure is acceptable
                 }
 
-                NoteManager.MergeFromMobile(json);
+                string deviceName = req.Headers["X-Device-Name"] ?? "Unknown";
+                NoteManager.MergeFromMobile(json, deviceName);
 
                 // Invalidate cache
                 _cachedNotesJson = null;
@@ -1130,7 +1144,8 @@ namespace FlyShelf.Classes
                     try { TodoManager.Load(); } catch { } // Best-effort: failure is acceptable
                 }
 
-                TodoManager.MergeFromMobile(json);
+                string deviceName = req.Headers["X-Device-Name"] ?? "Unknown";
+                TodoManager.MergeFromMobile(json, deviceName);
 
                 // Invalidate cache
                 _cachedTodosJson = null;

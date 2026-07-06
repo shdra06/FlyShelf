@@ -45,22 +45,22 @@ namespace FlyShelf.Windows
             Wpf.Ui.Controls.SymbolRegular symbol;
             string accentKey; // Theme token key for accent color lookup
 
-            if (msgLower.Contains("failed") || msgLower.Contains("error") || msgLower.Contains("❌") || msgLower.Contains("busy") || msgLower.Contains("timeout") || msgLower.Contains("offline") || msgLower.Contains("unreachable"))
+            if (msgLower.Contains("failed", StringComparison.Ordinal) || msgLower.Contains("error", StringComparison.Ordinal) || msgLower.Contains("❌", StringComparison.Ordinal) || msgLower.Contains("busy", StringComparison.Ordinal) || msgLower.Contains("timeout", StringComparison.Ordinal) || msgLower.Contains("offline", StringComparison.Ordinal) || msgLower.Contains("unreachable", StringComparison.Ordinal))
             {
                 symbol = Wpf.Ui.Controls.SymbolRegular.ErrorCircle24;
                 accentKey = "DangerColor"; // Rose/Red from palette
             }
-            else if (msgLower.Contains("warning") || msgLower.Contains("⚠️") || msgLower.Contains("⚠") || msgLower.Contains("limit") || msgLower.Contains("retry"))
+            else if (msgLower.Contains("warning", StringComparison.Ordinal) || msgLower.Contains("⚠️", StringComparison.Ordinal) || msgLower.Contains("⚠", StringComparison.Ordinal) || msgLower.Contains("limit", StringComparison.Ordinal) || msgLower.Contains("retry", StringComparison.Ordinal))
             {
                 symbol = Wpf.Ui.Controls.SymbolRegular.Warning24;
                 accentKey = "WarningColor"; // Amber from palette
             }
-            else if (msgLower.Contains("copy") || msgLower.Contains("copied") || msgLower.Contains("clipboard") || msgLower.Contains("📋"))
+            else if (msgLower.Contains("copy", StringComparison.Ordinal) || msgLower.Contains("copied", StringComparison.Ordinal) || msgLower.Contains("clipboard", StringComparison.Ordinal) || msgLower.Contains("📋", StringComparison.Ordinal))
             {
                 symbol = Wpf.Ui.Controls.SymbolRegular.Clipboard24;
                 accentKey = "ThemeAccentLight"; // Theme accent light
             }
-            else if (msgLower.Contains("sync") || msgLower.Contains("pairing") || msgLower.Contains("paired") || msgLower.Contains("device") || msgLower.Contains("lan") || msgLower.Contains("cloudflare"))
+            else if (msgLower.Contains("sync", StringComparison.Ordinal) || msgLower.Contains("pairing", StringComparison.Ordinal) || msgLower.Contains("paired", StringComparison.Ordinal) || msgLower.Contains("device", StringComparison.Ordinal) || msgLower.Contains("lan", StringComparison.Ordinal) || msgLower.Contains("cloudflare", StringComparison.Ordinal))
             {
                 symbol = Wpf.Ui.Controls.SymbolRegular.Router24;
                 accentKey = "InfoColor"; // Sky/info from palette
@@ -244,15 +244,15 @@ namespace FlyShelf.Windows
 
             string smartMessage = MakeMessageSmart(message);
 
-            // Anti-spam: skip exact duplicate within 500ms
-            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            if (_lastMessage == smartMessage && (now - _lastMessageTime) < 500)
-                return;
-            _lastMessage = smartMessage;
-            _lastMessageTime = now;
-
             Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
+                // M-11 FIX: Anti-spam check runs on UI thread (naturally serialized)
+                long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                if (_lastMessage == smartMessage && (now - _lastMessageTime) < 500)
+                    return;
+                _lastMessage = smartMessage;
+                _lastMessageTime = now;
+
                 lock (_poolLock)
                 {
                     if (_isShowing)
@@ -364,14 +364,14 @@ namespace FlyShelf.Windows
             message = message.Replace(" via Cloudflare!", "!");
 
             // Clean up double-spaces
-            while (message.Contains("  "))
+            while (message.Contains("  ", StringComparison.Ordinal))
             {
                 message = message.Replace("  ", " ");
             }
 
             // Remove trailing spaces / colons/ periods where unnecessary
             message = message.Trim();
-            if (message.EndsWith("! !")) message = message.Substring(0, message.Length - 2) + "!";
+            if (message.EndsWith("! !", StringComparison.Ordinal)) message = message[..^2] + "!";
 
             return message;
         }

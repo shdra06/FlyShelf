@@ -33,6 +33,9 @@ namespace FlyShelf
         private List<NotesSidebarItem> _sidebarItems = new();
         private Brush? _originalHeaderBg = null;
         private static readonly SolidColorBrush _notesHeaderBrush = new(Color.FromRgb(0x1A, 0x1A, 0x2E));
+
+        // CA1861: Static readonly array for notes tag presets
+        private static readonly string[] s_notePresetTags = { "Work", "Personal", "Ideas", "Important", "Reference", "Project" };
         private TextBox? _lastFocusedBulletTextBox = null;
         private DateTime _lastBulletAddedTime = DateTime.MinValue;
         private bool _isNotesSidebarCollapsed = false;
@@ -585,7 +588,7 @@ namespace FlyShelf
             }
 
             var monthDate = new DateTime(year, month, 1);
-            NotesCurrentDayLabel.Text = "Notes · " + monthDate.ToString("MMMM yyyy");
+            NotesCurrentDayLabel.Text = "Notes · " + monthDate.ToString("MMMM yyyy", System.Globalization.CultureInfo.CurrentCulture);
 
             UpdateSidebarSelectionVisuals();
 
@@ -1107,7 +1110,7 @@ namespace FlyShelf
                 if (tb.Text.Length > NOTES_HARD_LIMIT)
                 {
                     int caretPos = tb.CaretIndex;
-                    tb.Text = tb.Text.Substring(0, NOTES_HARD_LIMIT);
+                    tb.Text = tb.Text[..NOTES_HARD_LIMIT];
                     tb.CaretIndex = Math.Min(caretPos, NOTES_HARD_LIMIT);
                     Windows.ToastWindow.ShowToast("⚠️ Note limit reached (10,000 chars max)");
                 }
@@ -1224,7 +1227,7 @@ namespace FlyShelf
                             if (f != null && IsImageFile(f))
                             {
                                 string destDir = NoteManager.GetImagesDirectory();
-                                string destFile = Path.Combine(destDir, $"note_img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 6)}_{Path.GetFileName(f)}");
+                                string destFile = Path.Combine(destDir, $"note_img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}_{Path.GetFileName(f)}");
                                 await Task.Run(() => File.Copy(f, destFile, overwrite: true));
                                 AssignImageToBullet(bullet, destFile, 140);
                             }
@@ -1291,7 +1294,7 @@ namespace FlyShelf
                         lineStart = (lineStart < 0) ? 0 : lineStart + 1;
 
                         // Check if this line starts with "• " and remove it
-                        if (lineStart + 2 <= text.Length && text.Substring(lineStart, 2) == "\u2022 ")
+                        if (lineStart + 2 <= text.Length && text.AsSpan(lineStart, 2).SequenceEqual("\u2022 ".AsSpan()))
                         {
                             tb.Text = text.Remove(lineStart, 2);
                             tb.CaretIndex = Math.Max(lineStart, caret - 2);
@@ -1362,7 +1365,7 @@ namespace FlyShelf
                             {
                                 if (!CanAddImageToSection(section)) return; // block paste
                                 string destDir = NoteManager.GetImagesDirectory();
-                                string destFile = Path.Combine(destDir, $"note_img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 6)}_{Path.GetFileName(f)}");
+                                string destFile = Path.Combine(destDir, $"note_img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}_{Path.GetFileName(f)}");
                                 await Task.Run(() => File.Copy(f, destFile, overwrite: true));
                                 var freeformImg = new FreeformImage
                                 {
@@ -1462,8 +1465,7 @@ namespace FlyShelf
 
                 try { _activeReminderCreateWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                 var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow(parsedTitle, calculatedDue);
-                reminderWindow.Show();
-                reminderWindow.Activate();
+                WindowHelper.ShowInForeground(reminderWindow);
                 _activeReminderCreateWindow = reminderWindow;
             }
         }
@@ -1497,8 +1499,7 @@ namespace FlyShelf
                 var defaultDue = DateTime.Today.AddDays(1).AddHours(9);
                 try { _activeReminderCreateWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                 var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow("Note Reminder", defaultDue);
-                reminderWindow.Show();
-                reminderWindow.Activate();
+                WindowHelper.ShowInForeground(reminderWindow);
                 _activeReminderCreateWindow = reminderWindow;
                 return;
             }
@@ -1514,8 +1515,7 @@ namespace FlyShelf
 
             try { _activeReminderCreateWindow?.Close(); } catch { } // Best-effort: failure is acceptable
             var window = new FlyShelf.Windows.ReminderCreateWindow(parsedTitle, calculatedDue);
-            window.Show();
-            window.Activate();
+            WindowHelper.ShowInForeground(window);
             _activeReminderCreateWindow = window;
         }
 
@@ -1530,8 +1530,7 @@ namespace FlyShelf
                 {
                     string dayLabel = $"📝 {_selectedNoteDay.DisplayDate}";
                     var expandWindow = new FlyShelf.Windows.NoteExpandWindow(section, dayLabel);
-                    expandWindow.Show();
-                    expandWindow.Activate();
+                    WindowHelper.ShowInForeground(expandWindow);
                 }
             }
             catch (Exception ex)
@@ -1780,7 +1779,7 @@ namespace FlyShelf
                 if (tb.Text.Length > NOTES_HARD_LIMIT)
                 {
                     int caretPos = tb.CaretIndex;
-                    tb.Text = tb.Text.Substring(0, NOTES_HARD_LIMIT);
+                    tb.Text = tb.Text[..NOTES_HARD_LIMIT];
                     tb.CaretIndex = Math.Min(caretPos, NOTES_HARD_LIMIT);
                     Windows.ToastWindow.ShowToast("⚠️ Section limit reached (10,000 chars max)");
                 }
@@ -2018,8 +2017,8 @@ namespace FlyShelf
 
             var items = monthsWithContent.Select(m => new NotesMonthPickerItem
             {
-                MonthName = new DateTime(m.Year, m.Month, 1).ToString("MMMM"),
-                YearText = m.Year.ToString(),
+                MonthName = new DateTime(m.Year, m.Month, 1).ToString("MMMM", System.Globalization.CultureInfo.CurrentCulture),
+                YearText = m.Year.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 DayCount = NoteManager.Days.Count(d => d.Date.Month == m.Month && d.Date.Year == m.Year) + " days",
                 Month = m.Month,
                 Year = m.Year
@@ -2151,9 +2150,9 @@ namespace FlyShelf
                 var sb = new System.Text.StringBuilder();
                 foreach (var (header, content) in items)
                 {
-                    sb.AppendLine($"## {header}");
+                    sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"## {header}");
                     if (!string.IsNullOrEmpty(content))
-                        sb.AppendLine($"  {content}");
+                        sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"  {content}");
                     sb.AppendLine();
                 }
                 // Append to last freeform section
@@ -2290,7 +2289,7 @@ namespace FlyShelf
                     // Tags submenu  ── cyan tag icon
                     var tagMenu = new MenuItem { Header = "Tags" };
                     tagMenu.Icon = MakeIcon("🏷", "#00D2FF");
-                    string[] presetTags = { "Work", "Personal", "Ideas", "Important", "Reference", "Project" };
+                    string[] presetTags = s_notePresetTags;
                     foreach (var tag in presetTags)
                     {
                         bool hasTag = bullet.Tags.Contains(tag);
@@ -2301,8 +2300,7 @@ namespace FlyShelf
                         string ct = tag;
                         mi.Click += (s, ev) =>
                         {
-                            if (bullet.Tags.Contains(ct)) bullet.Tags.Remove(ct);
-                            else bullet.Tags.Add(ct);
+                            if (!bullet.Tags.Remove(ct)) bullet.Tags.Add(ct);
                             bullet.Tags = new List<string>(bullet.Tags);
                             NoteManager.MarkDirty();
                         };
@@ -2333,8 +2331,7 @@ namespace FlyShelf
                             {
                                 te.Handled = true;
                                 string newTag = textBox.Text.Trim();
-                                if (bullet.Tags.Contains(newTag)) bullet.Tags.Remove(newTag);
-                                else bullet.Tags.Add(newTag);
+                                if (!bullet.Tags.Remove(newTag)) bullet.Tags.Add(newTag);
                                 bullet.Tags = new List<string>(bullet.Tags);
                                 NoteManager.MarkDirty();
                                 popup.IsOpen = false;
@@ -2400,8 +2397,7 @@ namespace FlyShelf
 
                         try { _activeReminderCreateWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                         var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow(parsedTitle, calculatedDue);
-                        reminderWindow.Show();
-                        reminderWindow.Activate();
+                        WindowHelper.ShowInForeground(reminderWindow);
                         _activeReminderCreateWindow = reminderWindow;
                     };
                     menu.Items.Add(reminderItem);

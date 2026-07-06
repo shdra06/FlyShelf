@@ -7,6 +7,7 @@
  *  - Right-side action buttons slot
  *  - Built-in safe area padding
  *  - Subtle bottom border that fades in on scroll
+ *  - Dynamic light/dark theming via useAppTheme
  */
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
@@ -16,7 +17,8 @@ import Animated, {
   Extrapolation,
   SharedValue,
 } from 'react-native-reanimated';
-import { colors, font, space, component, typography } from '../styles/theme';
+import { useAppTheme } from '../hooks/useAppTheme';
+import { font, space, component } from '../styles/theme';
 
 interface ScreenHeaderProps {
   title: string;
@@ -27,6 +29,15 @@ interface ScreenHeaderProps {
   rightActions?: React.ReactNode;
   /** Optional left action (e.g., back button) */
   leftAction?: React.ReactNode;
+  /** Optional status badge (e.g., device online indicator) rendered below title */
+  statusBadge?: React.ReactNode;
+  /** Optional color overrides for custom-themed headers */
+  colorOverrides?: {
+    background?: string;
+    title?: string;
+    subtitle?: string;
+    border?: string;
+  };
 }
 
 export default function ScreenHeader({
@@ -35,7 +46,16 @@ export default function ScreenHeader({
   scrollY,
   rightActions,
   leftAction,
+  statusBadge,
+  colorOverrides,
 }: ScreenHeaderProps) {
+  const { colors } = useAppTheme();
+
+  const bgColor = colorOverrides?.background ?? colors.bg.base;
+  const titleColor = colorOverrides?.title ?? colors.text.primary;
+  const subtitleColor = colorOverrides?.subtitle ?? colors.text.tertiary;
+  const borderColor = colorOverrides?.border ?? colors.border.subtle;
+
   const animatedTitle = useAnimatedStyle(() => {
     if (!scrollY) return {};
     const fontSize = interpolate(scrollY.value, [0, 80], [28, 20], Extrapolation.CLAMP);
@@ -57,28 +77,29 @@ export default function ScreenHeader({
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: bgColor }]}>
       <View style={styles.content}>
         {leftAction && <View style={styles.leftAction}>{leftAction}</View>}
         <View style={styles.titleArea}>
           <Animated.Text
-            style={[styles.title, animatedTitle]}
+            style={[styles.title, { color: titleColor }, animatedTitle]}
             numberOfLines={1}
           >
             {title}
           </Animated.Text>
           {subtitle && (
             <Animated.Text
-              style={[styles.subtitle, animatedSubtitle]}
+              style={[styles.subtitle, { color: subtitleColor }, animatedSubtitle]}
               numberOfLines={1}
             >
               {subtitle}
             </Animated.Text>
           )}
+          {statusBadge}
         </View>
         {rightActions && <View style={styles.rightActions}>{rightActions}</View>}
       </View>
-      <Animated.View style={[styles.borderLine, animatedBorder]} />
+      <Animated.View style={[styles.borderLine, { backgroundColor: borderColor }, animatedBorder]} />
     </View>
   );
 }
@@ -86,7 +107,6 @@ export default function ScreenHeader({
 const styles = StyleSheet.create({
   container: {
     paddingTop: component.safeTop,
-    backgroundColor: colors.bg.base,
     zIndex: 10,
   },
   content: {
@@ -105,13 +125,11 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: font.extrabold,
     fontSize: 28,
-    color: colors.text.primary,
     letterSpacing: -0.6,
   },
   subtitle: {
     fontFamily: font.medium,
     fontSize: 13,
-    color: colors.text.tertiary,
     letterSpacing: 0.2,
     marginTop: 2,
   },
@@ -123,6 +141,5 @@ const styles = StyleSheet.create({
   },
   borderLine: {
     height: 1,
-    backgroundColor: colors.border.subtle,
   },
 });

@@ -141,7 +141,7 @@ namespace FlyShelf.Windows
             createWin.Owner = this;
             createWin.WindowStartupLocation = WindowStartupLocation.CenterOwner;
             createWin.Closed += (s, ev) => RefreshList();
-            createWin.Show();
+            WindowHelper.ShowInForeground(createWin);
         }
 
         private void ToggleDone_Click(object sender, RoutedEventArgs e)

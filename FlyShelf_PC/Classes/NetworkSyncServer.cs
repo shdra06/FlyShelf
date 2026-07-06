@@ -56,7 +56,7 @@ namespace FlyShelf.Classes
             //   X-Forwarded-For — standard proxy header added by CF
             //   X-Forwarded-Proto — "https" when coming through CF tunnel
             string host = req.Headers["Host"] ?? req.Url?.Host ?? "";
-            bool isCf = host.Contains(".trycloudflare.com")
+            bool isCf = host.Contains(".trycloudflare.com", StringComparison.Ordinal)
                       || !string.IsNullOrEmpty(req.Headers["Cf-Connecting-Ip"])
                       || !string.IsNullOrEmpty(req.Headers["Cf-Ray"])
                       || !string.IsNullOrEmpty(req.Headers["X-Forwarded-For"])
@@ -94,6 +94,7 @@ namespace FlyShelf.Classes
         // ═══════════════════════════════════════════════════════════════════
         private readonly ConcurrentDictionary<int, HttpListenerResponse> _sseClipboardClients = new();
         private int _sseClipboardClientIdCounter = 0;
+        private readonly object _sseBroadcastLock = new();
 
         /// <summary>
         /// Broadcasts a clipboard change event to all connected SSE web clients.
@@ -103,14 +104,17 @@ namespace FlyShelf.Classes
             if (_sseClipboardClients.IsEmpty) return;
             byte[] bytes = Encoding.UTF8.GetBytes($"data: {payload}\n\n");
             var dead = new List<int>();
-            foreach (var kvp in _sseClipboardClients)
+            lock (_sseBroadcastLock)
             {
-                try
+                foreach (var kvp in _sseClipboardClients)
                 {
-                    kvp.Value.OutputStream.Write(bytes, 0, bytes.Length);
-                    kvp.Value.OutputStream.Flush();
+                    try
+                    {
+                        kvp.Value.OutputStream.Write(bytes, 0, bytes.Length);
+                        kvp.Value.OutputStream.Flush();
+                    }
+                    catch { dead.Add(kvp.Key); }
                 }
-                catch { dead.Add(kvp.Key); }
             }
             foreach (var id in dead) _sseClipboardClients.TryRemove(id, out _);
         }
@@ -195,7 +199,7 @@ namespace FlyShelf.Classes
         /// Forces an immediate tunnel health check — used on wake from sleep
         /// to avoid waiting up to 60s for the periodic health timer.
         /// </summary>
-        public void ForceCheckTunnelHealth() => _cfDaemon.ForceCheckTunnelHealth();
+        public Task ForceCheckTunnelHealth() => _cfDaemon.ForceCheckTunnelHealth();
 
         // SECURITY (C-01): Restrict downloads to FlyShelf's own directories only.
         // Previously included Downloads, Desktop, Documents, OneDrive — too broad.
@@ -300,7 +304,7 @@ namespace FlyShelf.Classes
                 foreach (var root in _allowedRoots)
                 {
                     string allowedRoot = Path.GetFullPath(root);
-                    string rootWithSeparator = allowedRoot.EndsWith(Path.DirectorySeparatorChar.ToString())
+                    string rootWithSeparator = allowedRoot.EndsWith(Path.DirectorySeparatorChar)
                         ? allowedRoot
                         : allowedRoot + Path.DirectorySeparatorChar;
 
@@ -319,22 +323,32 @@ namespace FlyShelf.Classes
 
         /// <summary>
         /// Returns all file paths currently held by clipboard items.
+        /// PERF: Uses InvokeAsync instead of blocking Invoke to prevent UI thread freeze.
         /// </summary>
         private HashSet<string> GetAllActiveFilePaths()
         {
             var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                var tcs = new System.Threading.Tasks.TaskCompletionSource<HashSet<string>>();
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    foreach (var item in _viewModel.DroppedItems)
+                    try
                     {
-                        if (!string.IsNullOrEmpty(item.FilePath))
-                            paths.Add(Path.GetFullPath(item.FilePath));
-                        if (!string.IsNullOrEmpty(item.ZippedArchivePath))
-                            paths.Add(Path.GetFullPath(item.ZippedArchivePath));
+                        foreach (var item in _viewModel.DroppedItems)
+                        {
+                            if (!string.IsNullOrEmpty(item.FilePath))
+                                paths.Add(Path.GetFullPath(item.FilePath));
+                            if (!string.IsNullOrEmpty(item.ZippedArchivePath))
+                                paths.Add(Path.GetFullPath(item.ZippedArchivePath));
+                        }
+                        tcs.TrySetResult(paths);
                     }
-                }, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(2));
+                    catch (Exception ex) { tcs.TrySetException(ex); }
+                }, System.Windows.Threading.DispatcherPriority.Background);
+                // Wait with timeout — non-blocking to the UI thread (only blocks this background thread)
+                if (tcs.Task.Wait(TimeSpan.FromSeconds(2)))
+                    return tcs.Task.Result;
             }
             catch { } // Best-effort: failure is acceptable
             return paths;
@@ -346,7 +360,7 @@ namespace FlyShelf.Classes
             _viewModel = viewModel;
             _cfDaemon.GlobalUrlUpdated += (url) => { 
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.RefreshLocalServerData()); 
-                if (!string.IsNullOrEmpty(url) && url.Contains(".trycloudflare.com"))
+                if (!string.IsNullOrEmpty(url) && url.Contains(".trycloudflare.com", StringComparison.Ordinal))
                 {
                     // Purge Firebase entries with the old dead Cloudflare URL before caching the new one
                     string oldUrl = _cfDaemon.PreviousGlobalUrl;

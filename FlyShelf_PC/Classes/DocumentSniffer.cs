@@ -2,12 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using System.Globalization;
 using System.Linq;
 using FlyShelf.ViewModels;
 
 namespace FlyShelf.Classes
 {
-    public class DocumentSniffer
+    public sealed class DocumentSniffer
     {
         private List<FileSystemWatcher> _watchers = new List<FileSystemWatcher>();
         private FlyShelfViewModel _viewModel;
@@ -136,11 +137,11 @@ namespace FlyShelf.Classes
 
         private async Task OnFileDetectedCore(FileSystemEventArgs e)
         {
-            string ext = Path.GetExtension(e.FullPath).ToLower();
+            string ext = Path.GetExtension(e.FullPath).ToLower(CultureInfo.InvariantCulture);
             if (ext != ".pdf" && ext != ".docx" && ext != ".doc" && ext != ".lnk") return;
 
             string fileName = Path.GetFileName(e.FullPath);
-            if (fileName.StartsWith("~$")) return;
+            if (fileName.StartsWith("~$", StringComparison.Ordinal)) return;
 
             // Debouncing fast duplicate events from web browsers downloading chunks
             if (_recentlyTriggeredFiles.ContainsKey(e.FullPath)) return;
@@ -162,7 +163,7 @@ namespace FlyShelf.Classes
                         
                         if (string.IsNullOrEmpty(targetPath)) return;
                         
-                        string targetExt = Path.GetExtension(targetPath).ToLower();
+                        string targetExt = Path.GetExtension(targetPath).ToLower(CultureInfo.InvariantCulture);
                         if (targetExt != ".docx" && targetExt != ".doc" && targetExt != ".pdf") return;
                     }
                     else return;

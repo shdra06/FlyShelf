@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -26,7 +27,7 @@ namespace FlyShelf.Windows
                 : actionType;
             HeaderTitle.Text = $"{displayAction} Note";
             SubtitleText.Text = $"Powered by {AiProviderService.Instance.ActiveProviderName}";
-            LoadingText.Text = $"AI is working on your {displayAction.ToLower()}...";
+            LoadingText.Text = $"AI is working on your {displayAction.ToLower(CultureInfo.InvariantCulture)}...";
 
             // Kick off generation
             Loaded += NotesAIWindow_Loaded;

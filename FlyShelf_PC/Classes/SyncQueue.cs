@@ -210,6 +210,8 @@ namespace FlyShelf.Classes
                     {
                         FileName = j.Item?.FileName ?? "",
                         RawContent = j.Item?.RawContent ?? "",
+                        ItemType = j.Item?.ItemType ?? ClipboardItemType.Text,
+                        FilePath = j.Item?.FilePath ?? "",
                         Channel = j.Channel,
                         EnqueuedAt = j.EnqueuedAt,
                         Attempts = j.Attempts
@@ -247,7 +249,9 @@ namespace FlyShelf.Classes
                     var item = new ClipboardItem
                     {
                         FileName = entry.FileName ?? "",
-                        RawContent = entry.RawContent ?? ""
+                        RawContent = entry.RawContent ?? "",
+                        ItemType = entry.ItemType,
+                        FilePath = entry.FilePath ?? ""
                     };
                     _queue.Enqueue(new SyncJob
                     {
@@ -284,6 +288,8 @@ namespace FlyShelf.Classes
         {
             public string? FileName { get; set; }
             public string? RawContent { get; set; }
+            public ClipboardItemType ItemType { get; set; }
+            public string? FilePath { get; set; }
             public string? Channel { get; set; }
             public long EnqueuedAt { get; set; }
             public int Attempts { get; set; }

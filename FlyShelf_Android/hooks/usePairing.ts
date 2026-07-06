@@ -25,7 +25,7 @@ export function usePairing(pairedDevicesCount: number): UsePairingReturn {
 
   // Load paired PC name on startup
   useEffect(() => {
-    getSecureItem('pairedPcName').then(name => { if (name) setPairedPcName(name); });
+    getSecureItem('pairedPcName').then(name => { if (name) setPairedPcName(name); }).catch(() => {});
   }, []);
 
   // Clear pairedPcName when all paired devices are removed in Settings

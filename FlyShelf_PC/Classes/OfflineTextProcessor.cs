@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -102,7 +103,7 @@ namespace FlyShelf.Classes
                 // Capitalize first letter of each line
                 if (char.IsLower(line[0]))
                 {
-                    line = char.ToUpper(line[0]) + line.Substring(1);
+                    line = char.ToUpper(line[0], CultureInfo.InvariantCulture) + line[1..];
                 }
 
                 // Ensure line ends with punctuation if it looks like a sentence
@@ -178,7 +179,7 @@ namespace FlyShelf.Classes
 
                 // Generate a heading from the group's most common meaningful word
                 string heading = GenerateGroupHeading(group);
-                sb.AppendLine($"## {heading}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"## {heading}");
 
                 foreach (var sentence in group)
                 {
@@ -272,14 +273,14 @@ namespace FlyShelf.Classes
 
         private static bool IsBulletOrHeading(string line)
         {
-            return line.StartsWith("-") || line.StartsWith("•") || line.StartsWith("*")
-                || line.StartsWith("#") || line.StartsWith("→") || Regex.IsMatch(line, @"^\d+[.)]");
+            return line.StartsWith('-') || line.StartsWith('•') || line.StartsWith('*')
+                || line.StartsWith('#') || line.StartsWith('→') || Regex.IsMatch(line, @"^\d+[.)]");
         }
 
         private static string FormatBullet(string sentence)
         {
             // Don't double-bullet
-            if (sentence.StartsWith("- ") || sentence.StartsWith("• ") || sentence.StartsWith("* "))
+            if (sentence.StartsWith("- ", StringComparison.Ordinal) || sentence.StartsWith("• ", StringComparison.Ordinal) || sentence.StartsWith("* ", StringComparison.Ordinal))
                 return sentence;
 
             // Strip existing bullet markers
@@ -290,7 +291,7 @@ namespace FlyShelf.Classes
 
             // Capitalize first letter
             if (char.IsLower(cleaned[0]))
-                cleaned = char.ToUpper(cleaned[0]) + cleaned.Substring(1);
+                cleaned = char.ToUpper(cleaned[0], CultureInfo.InvariantCulture) + cleaned[1..];
 
             return "• " + cleaned;
         }
@@ -349,7 +350,7 @@ namespace FlyShelf.Classes
                 return "Notes";
 
             // Take top 1-2 words as heading, capitalize
-            var headingWords = allWords.Take(2).Select(w => char.ToUpper(w[0]) + w.Substring(1));
+            var headingWords = allWords.Take(2).Select(w => char.ToUpper(w[0], CultureInfo.InvariantCulture) + w[1..]);
             return string.Join(" & ", headingWords);
         }
     }

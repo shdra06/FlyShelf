@@ -48,17 +48,17 @@ namespace FlyShelf.ViewModels
 
                                 this.EvaluateSmartActions();
 
-                                this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs("ItemType"));
+                                this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(ItemType)));
 
-                                this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs("RawContent"));
+                                this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(RawContent)));
 
-                                this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs("IsImagePreview"));
+                                this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsImagePreview)));
 
 
 
                                 // Suppress toast and auto-copy for FlyShelf's own pairing QR codes
 
-                                if (result.Text.Contains("\"app\":\"FlyShelf\""))
+                                if (result.Text.Contains("\"app\":\"FlyShelf\"", StringComparison.Ordinal))
 
                                 {
 
@@ -261,6 +261,10 @@ $word.Quit();
 
 
 
+                    // [SECURITY FIX]: Write script to temp file to prevent command injection via FilePath (CWE-78)
+                    string scriptPath = Path.Combine(Path.GetTempPath(), $"flyshelf_convert_{Guid.NewGuid():N}.ps1");
+                    File.WriteAllText(scriptPath, script);
+
                     var psi = new System.Diagnostics.ProcessStartInfo
 
 
@@ -273,7 +277,7 @@ $word.Quit();
 
 
 
-                        Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -Command \"{script}\"",
+                        Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File \"{scriptPath}\"",
 
 
 
@@ -307,6 +311,9 @@ $word.Quit();
 
 
                     }
+
+                    // Clean up temp script file
+                    try { File.Delete(scriptPath); } catch { }
 
 
 
@@ -446,9 +453,9 @@ $word.Quit();
                             this.ItemType = ClipboardItemType.QRCode;
                             this.RawContent = result.Text;
                             this.EvaluateSmartActions();
-                            this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs("ItemType"));
-                            this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs("RawContent"));
-                            this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs("IsImagePreview"));
+                            this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(ItemType)));
+                            this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(RawContent)));
+                            this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsImagePreview)));
 
                             FlyShelf.Classes.ClipboardHelper.SafeSetText(result.Text, suppressEcho: true, echoDelayMs: 500);
 

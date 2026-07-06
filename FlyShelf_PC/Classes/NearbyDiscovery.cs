@@ -4,6 +4,7 @@
 // UDP broadcast probes on port 8999. Session-only pairing.
 // ---------------------------------------------------------------
 using System;
+using System.Globalization;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -58,6 +59,7 @@ namespace FlyShelf.Classes
         private UdpClient? _listener;
         private CancellationTokenSource? _cts;
         private readonly ConcurrentDictionary<string, NearbyDeviceInfo> _discovered = new();
+        private static readonly System.Net.Http.HttpClient _latencyClient = new() { Timeout = TimeSpan.FromSeconds(3) };
 
         public IReadOnlyCollection<NearbyDeviceInfo> DiscoveredDevices =>
             _discovered.Values.OrderByDescending(d => d.DiscoveredAt).ToList();
@@ -152,9 +154,9 @@ namespace FlyShelf.Classes
                 var interfaces = NetworkInterface.GetAllNetworkInterfaces()
                     .Where(ni => ni.OperationalStatus == OperationalStatus.Up
                               && ni.NetworkInterfaceType != NetworkInterfaceType.Loopback
-                              && !ni.Description.ToLower().Contains("virtual")
-                              && !ni.Description.ToLower().Contains("vmware")
-                              && !ni.Description.ToLower().Contains("hyper-v"))
+                              && !ni.Description.Contains("virtual", StringComparison.OrdinalIgnoreCase)
+                              && !ni.Description.Contains("vmware", StringComparison.OrdinalIgnoreCase)
+                              && !ni.Description.Contains("hyper-v", StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
                 foreach (var ni in interfaces)
@@ -337,8 +339,7 @@ namespace FlyShelf.Classes
                 try
                 {
                     var sw = System.Diagnostics.Stopwatch.StartNew();
-                    using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-                    var resp = await client.GetAsync($"http://{ip}:{httpPort}/api/health");
+                    var resp = await _latencyClient.GetAsync($"http://{ip}:{httpPort}/api/health");
                     sw.Stop();
                     info.LatencyMs = (int)sw.ElapsedMilliseconds;
                 }
@@ -424,7 +425,7 @@ namespace FlyShelf.Classes
             string compositeKey = APP_KEY_BASE + (string.IsNullOrEmpty(pairingKey) ? "" : "_" + pairingKey);
             using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(compositeKey));
             byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(deviceId));
-            return Convert.ToHexString(hash).Substring(0, 16).ToLower();
+            return Convert.ToHexString(hash).Substring(0, 16).ToLower(CultureInfo.InvariantCulture);
         }
 
         private static bool VerifyProbeHmac(string deviceId, string hmacStr, string pairingKey = "")

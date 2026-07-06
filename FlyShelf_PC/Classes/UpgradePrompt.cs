@@ -348,7 +348,7 @@ namespace FlyShelf.Classes
             grid.Children.Add(buttonPanel);
 
             dialog.Content = grid;
-            dialog.Show();
+            WindowHelper.ShowInForeground(dialog);
             return true;
         }
 
@@ -672,7 +672,7 @@ namespace FlyShelf.Classes
 
             outerBorder.Child = rootGrid;
             dialog.Content = outerBorder;
-            dialog.ShowDialog();
+            WindowHelper.ShowDialogInForeground(dialog);
         }
 
         // ═════════════════════════════════════════════════════════════

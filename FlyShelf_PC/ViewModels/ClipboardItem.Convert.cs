@@ -7,6 +7,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -201,7 +202,7 @@ namespace FlyShelf.ViewModels
 
                 // Write PDF
                 using (var fs = new FileStream(outputPdf, FileMode.Create))
-                using (var writer = new StreamWriter(fs, System.Text.Encoding.ASCII))
+                using (var writer = new StreamWriter(fs, System.Text.Encoding.GetEncoding("ISO-8859-1")))
                 {
                     var offsets = new List<long>();
                     writer.Write("%PDF-1.4\n");
@@ -317,7 +318,7 @@ namespace FlyShelf.ViewModels
                     if (proc == null) return false;
 
                     // Register cancellation to kill LibreOffice if the other converter wins
-                    ct.Register(() => { try { if (!proc.HasExited) proc.Kill(); } catch { } /* Best-effort: failure is acceptable */ });
+                    using var reg = ct.Register(() => { try { if (!proc.HasExited) proc.Kill(); } catch { } /* Best-effort: failure is acceptable */ });
 
                     bool exited = proc.WaitForExit(30000); // 30s — enough for LO cold start
                     if (!exited || ct.IsCancellationRequested)
@@ -635,6 +636,8 @@ namespace FlyShelf.ViewModels
                 return;
             }
 
+            // NOTE (M-18): Image format conversions (PNG↔JPG) share the same quota as image-to-PDF
+            // conversions by design — both are part of the "Image Convert" feature tier.
             if (!FlyShelf.Classes.LicenseManager.CanConvertImageToPdf())
             {
                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
@@ -953,7 +956,7 @@ namespace FlyShelf.ViewModels
             for (int r = 0; r < rows.Count; r++)
             {
                 int rowNum = r + 1;
-                sb.Append($"<row r=\"{rowNum}\">");
+                sb.Append(CultureInfo.InvariantCulture, $"<row r=\"{rowNum}\">");
                 for (int c = 0; c < rows[r].Length; c++)
                 {
                     string cellRef = $"{ColIndexToLetter(c)}{rowNum}";
@@ -963,11 +966,11 @@ namespace FlyShelf.ViewModels
                     if (double.TryParse(val, System.Globalization.NumberStyles.Any,
                         System.Globalization.CultureInfo.InvariantCulture, out double numVal))
                     {
-                        sb.Append($"<c r=\"{cellRef}\"><v>{numVal.ToString(System.Globalization.CultureInfo.InvariantCulture)}</v></c>");
+                        sb.Append(CultureInfo.InvariantCulture, $"<c r=\"{cellRef}\"><v>{numVal.ToString(System.Globalization.CultureInfo.InvariantCulture)}</v></c>");
                     }
                     else
                     {
-                        sb.Append($"<c r=\"{cellRef}\" t=\"inlineStr\"><is><t>{XmlEscape(val)}</t></is></c>");
+                        sb.Append(CultureInfo.InvariantCulture, $"<c r=\"{cellRef}\" t=\"inlineStr\"><is><t>{XmlEscape(val)}</t></is></c>");
                     }
                 }
                 sb.Append("</row>");

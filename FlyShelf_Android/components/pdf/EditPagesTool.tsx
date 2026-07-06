@@ -9,6 +9,7 @@ import { getPdfPageInfo } from '../../utils/pdfUtils';
 import { reorderPages, rotatePages, addImagePages } from '../../utils/pdfToolsUtils';
 import { SelectedFile, PageEntry } from './types';
 import ResultView from './ResultView';
+import ProcessingOverlay from './ProcessingOverlay';
 
 interface EditPagesToolProps {
   onBack: () => void;
@@ -61,7 +62,11 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
       Alert.alert('Error', 'A PDF must have at least one page.');
       return;
     }
-    setPages(prev => prev.filter((_, i) => i !== idx));
+    setPages(prev =>
+      prev
+        .filter((_, i) => i !== idx)
+        .map((p, i) => ({ ...p, index: i }))
+    );
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
@@ -92,9 +97,10 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
       
       const rotated = pages.filter(p => p.rotation !== 0);
       if (rotated.length > 0) {
-        for (const p of rotated) {
-          const idx = pages.indexOf(p);
-          outPath = await rotatePages(outPath, [idx + 1], p.rotation as 0 | 90 | 180 | 270);
+        for (let i = 0; i < pages.length; i++) {
+          const p = pages[i];
+          if (p.rotation === 0) continue;
+          outPath = await rotatePages(outPath, [i + 1], p.rotation as 0 | 90 | 180 | 270);
         }
       }
       
@@ -112,7 +118,7 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
     return (
       <View style={s.modalOverlay}>
         <View style={s.modalHeader}>
-          <Pressable style={s.backBtn} onPress={onBack}><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
+          <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
           <Text style={s.modalTitle}>Success</Text>
         </View>
         <ResultView path={resultPath} onDone={onBack} />
@@ -122,12 +128,13 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
 
   return (
     <View style={s.modalOverlay}>
+      <ProcessingOverlay visible={loading} text="Processing pages…" />
       <View style={s.modalHeader}>
-        <Pressable style={s.backBtn} onPress={onBack}><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
+        <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
         <Text style={s.modalTitle}>Edit Pages</Text>
         {file && !loading && (
           <View style={s.headerRight}>
-            <Pressable style={s.btnSmall} onPress={handleAddImages}>
+            <Pressable style={s.btnSmall} onPress={handleAddImages} accessibilityRole="button" accessibilityLabel="Add images">
               <Ionicons name="add" size={20} color={colors.accent.primary} />
             </Pressable>
           </View>
@@ -135,7 +142,7 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
       </View>
       <ScrollView style={s.modalScroll} contentContainerStyle={s.pb100}>
         {!file ? (
-          <Pressable style={[s.btnPrimary, s.mb16]} onPress={handlePick}>
+          <Pressable style={[s.btnPrimary, s.mb16]} onPress={handlePick} accessibilityRole="button" accessibilityLabel="Pick PDF">
             <Text style={s.btnPrimaryText}>Pick PDF</Text>
           </Pressable>
         ) : loading ? (
@@ -149,16 +156,16 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
                 {p.rotation !== 0 && <Text style={s.pageRotation}>Rotated {p.rotation}°</Text>}
               </View>
               <View style={s.pageActions}>
-                <Pressable style={s.btnSmall} onPress={() => movePage(i, -1)} disabled={i === 0}>
+                <Pressable style={s.btnSmall} onPress={() => movePage(i, -1)} disabled={i === 0} accessibilityRole="button" accessibilityLabel="Move page up">
                   <Ionicons name="arrow-up" size={14} color={i === 0 ? colors.text.disabled : colors.text.secondary} />
                 </Pressable>
-                <Pressable style={s.btnSmall} onPress={() => movePage(i, 1)} disabled={i === pages.length - 1}>
+                <Pressable style={s.btnSmall} onPress={() => movePage(i, 1)} disabled={i === pages.length - 1} accessibilityRole="button" accessibilityLabel="Move page down">
                   <Ionicons name="arrow-down" size={14} color={i === pages.length - 1 ? colors.text.disabled : colors.text.secondary} />
                 </Pressable>
-                <Pressable style={s.btnSmall} onPress={() => rotatePage(i)}>
+                <Pressable style={s.btnSmall} onPress={() => rotatePage(i)} accessibilityRole="button" accessibilityLabel="Rotate page">
                   <Ionicons name="refresh" size={14} color={colors.accent.primary} />
                 </Pressable>
-                <Pressable style={s.btnSmall} onPress={() => deletePage(i)}>
+                <Pressable style={s.btnSmall} onPress={() => deletePage(i)} accessibilityRole="button" accessibilityLabel="Delete page">
                   <Ionicons name="trash-outline" size={14} color={colors.accent.error} />
                 </Pressable>
               </View>
@@ -168,7 +175,7 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
       </ScrollView>
       {file && !loading && (
         <View style={s.modalActions}>
-          <Pressable style={s.btnPrimary} onPress={handleSave}>
+          <Pressable style={s.btnPrimary} onPress={handleSave} accessibilityRole="button" accessibilityLabel="Save changes">
             <Text style={s.btnPrimaryText}>Save Changes</Text>
           </Pressable>
         </View>

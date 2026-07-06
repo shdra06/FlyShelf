@@ -48,7 +48,7 @@ namespace FlyShelf.Classes
                 tempWindow.Show();
 
                 // Create a isolated temp directory for WebView2 user data to avoid file access permission issues
-                string userDataFolder = Path.Combine(Path.GetTempPath(), "FlyShelf_WebView2_" + Guid.NewGuid().ToString().Substring(0, 8));
+                string userDataFolder = Path.Combine(Path.GetTempPath(), "FlyShelf_WebView2_" + Guid.NewGuid().ToString()[..8]);
                 var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
                 await webView.EnsureCoreWebView2Async(env);
 
@@ -66,7 +66,7 @@ namespace FlyShelf.Classes
                         {
                             tcs.TrySetResult(true);
                         }
-                        else if (msg != null && msg.StartsWith("RENDER_ERROR:"))
+                        else if (msg != null && msg.StartsWith("RENDER_ERROR:", StringComparison.Ordinal))
                         {
                             tcs.TrySetException(new Exception(msg.Substring(13)));
                         }

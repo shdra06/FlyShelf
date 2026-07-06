@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -201,7 +202,7 @@ namespace FlyShelf.Windows
                         var rotated = new System.Windows.Media.Imaging.TransformedBitmap(original, new System.Windows.Media.RotateTransform(90));
                         rotated.Freeze();
 
-                        string ext = System.IO.Path.GetExtension(filePath).ToLower();
+                        string ext = System.IO.Path.GetExtension(filePath).ToLower(CultureInfo.InvariantCulture);
                         System.Windows.Media.Imaging.BitmapEncoder encoder;
                         if (ext == ".png") encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
                         else if (ext == ".bmp") encoder = new System.Windows.Media.Imaging.BmpBitmapEncoder();
@@ -217,16 +218,20 @@ namespace FlyShelf.Windows
 
                     await System.Threading.Tasks.Task.Delay(320);
 
-                    byte[] freshBytes = System.IO.File.ReadAllBytes(filePath);
-                    var freshBitmap = new System.Windows.Media.Imaging.BitmapImage();
-                    using (var ms = new System.IO.MemoryStream(freshBytes))
+                    var freshBitmap = await System.Threading.Tasks.Task.Run(() =>
                     {
-                        freshBitmap.BeginInit();
-                        freshBitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                        freshBitmap.StreamSource = ms;
-                        freshBitmap.EndInit();
-                        freshBitmap.Freeze();
-                    }
+                        byte[] freshBytes = System.IO.File.ReadAllBytes(filePath);
+                        var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                        using (var ms = new System.IO.MemoryStream(freshBytes))
+                        {
+                            bmp.BeginInit();
+                            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                            bmp.StreamSource = ms;
+                            bmp.EndInit();
+                            bmp.Freeze();
+                        }
+                        return bmp;
+                    });
 
                     if (targetImage != null)
                         targetImage.RenderTransform = null;
@@ -240,6 +245,16 @@ namespace FlyShelf.Windows
                         targetImage.RenderTransform = null;
                     FlyShelf.Classes.Logger.LogAction("ROTATE", "Failed: " + ex.Message);
                 }
+            }
+        }
+
+        internal void QuickLookSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
+            {
+                var mainWin = System.Windows.Application.Current.MainWindow as MainWindow;
+                mainWin?.ShowQuickLookForItem(item);
+                e.Handled = true;
             }
         }
     }

@@ -745,7 +745,7 @@ namespace FlyShelf
         private IntPtr _previousForegroundWindow = IntPtr.Zero;
         private static int _clipboardWriteRefCount = 0;
         /// <summary>When true, clipboard monitoring is paused because Notes or Todo panel is open.</summary>
-        internal static bool _clipboardPanelSuppressed = false;
+        internal static volatile bool _clipboardPanelSuppressed = false;
         internal static bool _isWritingClipboard
         {
             get => System.Threading.Volatile.Read(ref _clipboardWriteRefCount) > 0;

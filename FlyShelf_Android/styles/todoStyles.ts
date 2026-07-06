@@ -1,11 +1,14 @@
 import { StyleSheet, Platform } from 'react-native';
-import { colors, font, radius, space, shadows } from './theme';
+import { colors as defaultColors, font, radius, space, shadows as defaultShadows } from './theme';
+
+type ThemeColors = Record<string, any>;
+type ThemeShadows = Record<string, any>;
 
 // ═══════════════════════════════════════════════════════════
-// TODO SCREEN — PREMIUM DARK STYLES
+// TODO SCREEN — THEMED STYLES
 // ═══════════════════════════════════════════════════════════
 
-export const todoStyles = StyleSheet.create({
+export const createTodoStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.create({
   // ─── Layout ─────────────────────────────────────────────
   container: {
     flex: 1,
@@ -59,6 +62,8 @@ export const todoStyles = StyleSheet.create({
     paddingVertical: space.sm,
     paddingLeft: space.xl,
     marginBottom: space.sm,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   dayChip: {
     paddingHorizontal: space.lg,
@@ -723,3 +728,6 @@ export const todoStyles = StyleSheet.create({
     paddingTop: space.sm,
   },
 });
+
+/** @deprecated Use createTodoStyles(colors, shadows) for theme support */
+export const todoStyles = createTodoStyles(defaultColors, defaultShadows);

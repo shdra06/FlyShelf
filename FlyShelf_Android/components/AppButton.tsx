@@ -4,8 +4,9 @@
  * Variants: primary, secondary, ghost, danger
  * Sizes: sm (34px), md (44px), lg (52px)
  * Features: Spring press animation, built-in haptics, icon slots, loading state
+ * Dynamic light/dark theming via useAppTheme
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Text, ActivityIndicator, ViewStyle, TextStyle, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -16,7 +17,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
-import { colors, font, radius, space, spring as springConfig } from '../styles/theme';
+import { useAppTheme } from '../hooks/useAppTheme';
+import { font, radius, space, spring as springConfig } from '../styles/theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -52,6 +54,7 @@ export default function AppButton({
   haptic = true,
   style,
 }: AppButtonProps) {
+  const { colors } = useAppTheme();
   const pressed = useSharedValue(0);
 
   const handlePress = () => {
@@ -73,6 +76,48 @@ export default function AppButton({
     const scale = interpolate(pressed.value, [0, 1], [1, 0.96]);
     return { transform: [{ scale }] };
   });
+
+  const variantContainerStyles: Record<ButtonVariant, ViewStyle> = useMemo(() => ({
+    primary: {
+      backgroundColor: colors.accent.primary,
+    },
+    secondary: {
+      backgroundColor: colors.bg.card,
+      borderWidth: 1,
+      borderColor: colors.border.medium,
+    },
+    ghost: {
+      backgroundColor: 'transparent',
+    },
+    danger: {
+      backgroundColor: colors.accent.errorDim,
+      borderWidth: 1,
+      borderColor: 'rgba(248,113,113,0.2)',
+    },
+  }), [colors]);
+
+  const variantTextStyles: Record<ButtonVariant, TextStyle> = useMemo(() => ({
+    primary: {
+      fontFamily: font.semibold,
+      color: '#FFFFFF',
+      letterSpacing: 0.2,
+    },
+    secondary: {
+      fontFamily: font.semibold,
+      color: colors.text.secondary,
+      letterSpacing: 0.2,
+    },
+    ghost: {
+      fontFamily: font.semibold,
+      color: colors.accent.primary,
+      letterSpacing: 0.2,
+    },
+    danger: {
+      fontFamily: font.semibold,
+      color: colors.accent.error,
+      letterSpacing: 0.2,
+    },
+  }), [colors]);
 
   const containerStyle: ViewStyle = {
     ...variantContainerStyles[variant],
@@ -111,45 +156,3 @@ export default function AppButton({
     </GestureDetector>
   );
 }
-
-const variantContainerStyles: Record<ButtonVariant, ViewStyle> = {
-  primary: {
-    backgroundColor: colors.accent.primary,
-  },
-  secondary: {
-    backgroundColor: colors.bg.card,
-    borderWidth: 1,
-    borderColor: colors.border.medium,
-  },
-  ghost: {
-    backgroundColor: 'transparent',
-  },
-  danger: {
-    backgroundColor: colors.accent.errorDim,
-    borderWidth: 1,
-    borderColor: 'rgba(248,113,113,0.2)',
-  },
-};
-
-const variantTextStyles: Record<ButtonVariant, TextStyle> = {
-  primary: {
-    fontFamily: font.semibold,
-    color: '#FFFFFF',
-    letterSpacing: 0.2,
-  },
-  secondary: {
-    fontFamily: font.semibold,
-    color: colors.text.secondary,
-    letterSpacing: 0.2,
-  },
-  ghost: {
-    fontFamily: font.semibold,
-    color: colors.accent.primary,
-    letterSpacing: 0.2,
-  },
-  danger: {
-    fontFamily: font.semibold,
-    color: colors.accent.error,
-    letterSpacing: 0.2,
-  },
-};

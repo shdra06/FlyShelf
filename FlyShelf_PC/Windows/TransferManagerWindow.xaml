@@ -4,6 +4,7 @@
         xmlns:controls="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
         xmlns:classes="clr-namespace:FlyShelf.Classes"
         xmlns:vm="clr-namespace:FlyShelf.ViewModels"
+        xmlns:emoji="clr-namespace:Emoji.Wpf;assembly=Emoji.Wpf"
         Title="FlyShelf — Transfer Manager"
         Height="650" Width="850"
         MinWidth="600" MinHeight="450"
@@ -50,7 +51,7 @@
             <DockPanel Margin="14,0">
                 <!-- Title -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="⚡" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <emoji:TextBlock Text="⚡" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" />
                     <TextBlock Text="Transfer Manager" 
                                Foreground="{DynamicResource ThemeAccentLight}" 
                                FontWeight="SemiBold" FontSize="13" 
@@ -82,7 +83,7 @@
                 <!-- Upload speed -->
                 <Border Style="{StaticResource UploadSpeedBadge}">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="📤" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0" />
+                        <emoji:TextBlock Text="📤" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0" />
                         <TextBlock Text="Upload" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
                                    FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
                         <TextBlock Text="{Binding TotalUploadSpeedText}" 
@@ -93,7 +94,7 @@
                 <!-- Download speed -->
                 <Border Style="{StaticResource DownloadSpeedBadge}">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="📥" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0" />
+                        <emoji:TextBlock Text="📥" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0" />
                         <TextBlock Text="Download" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
                                    FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
                         <TextBlock Text="{Binding TotalDownloadSpeedText}" 
@@ -172,7 +173,9 @@
             <!-- Empty state -->
             <StackPanel Style="{StaticResource EmptyStateContainer}"
                         Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}">
-                <TextBlock Text="📂" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,12" Opacity="0.4" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12" Opacity="0.6">
+                    <emoji:TextBlock Text="📂" FontSize="48" HorizontalAlignment="Center" />
+                </StackPanel>
                 <TextBlock Text="No transfers yet" 
                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
                            FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,6" />

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, useWindowDimensions, Modal, Alert, ScrollView, Image, Platform, FlatList, ToastAndroid, Linking, TextInput, NativeModules, Pressable } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, useWindowDimensions, Modal, Alert, ScrollView, Image, Platform, FlatList, ToastAndroid, Linking, TextInput, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
@@ -11,10 +11,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSettings } from '../../context/SettingsContext';
 import { database } from '../../firebaseConfig';
 import { ref as dbRef, push, set, onValue, query } from 'firebase/database';
-import { colors, font, radius, shadows, space, component } from '../../styles/theme';
+import { font, radius, space, component } from '../../styles/theme';
+import { useAppTheme } from '../../hooks/useAppTheme';
 import AnimatedCard from '../../components/AnimatedCard';
 import AnimatedPressable from '../../components/AnimatedPressable';
-import { decryptDeviceList, isValidPairingKey } from '../../utils/networkHelpers';
+import { decryptDeviceList, isValidPairingKey, resolveBestPcUrl } from '../../utils/networkHelpers';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -23,12 +24,40 @@ import ScreenHeader from '../../components/ScreenHeader';
 
 type DeviceGroup = { id: string; name: string; deviceNames: string[] };
 
+interface MediaAsset {
+  id: string;
+  uri: string;
+  filename: string;
+  mediaType: string;
+  width?: number;
+  height?: number;
+  creationTime: number;
+  duration?: number;
+  source?: string;
+  fileSize?: number;
+}
+
+interface FirebaseDevice {
+  firebaseKey?: string;
+  DeviceName: string;
+  DeviceType?: string;
+  IsOnline?: boolean;
+  Url?: string;
+  GlobalUrl?: string;
+  connectionType?: string;
+  resolvedUrl?: string;
+  // Allow PairedDevice fields to pass through
+  [key: string]: unknown;
+}
+
 const getThumbSize = (w: number) => (w - 50) / 4;
 
 type SourceFilter = 'Camera' | 'WhatsApp' | 'Downloads' | 'All';
 
-export default function ConnectScreen() {
-  const { pcLocalIp, deviceName, defaultTargetDeviceName, pairingKey } = useSettings();
+export default function FilesScreen() {
+  const { colors, shadows } = useAppTheme();
+  const s = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
+  const { pcLocalIp, deviceName, defaultTargetDeviceName, pairingKey, pairedDevices } = useSettings();
   const { width: screenWidth } = useWindowDimensions();
   const THUMB_SIZE = getThumbSize(screenWidth);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -45,12 +74,12 @@ export default function ConnectScreen() {
   const [showEndPicker, setShowEndPicker] = useState(false);
   
   // Media state
-  const [mediaAssets, setMediaAssets] = useState<any[]>([]);
+  const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
   const [isScanning, setIsScanning] = useState(false);
-  const [activeTab, setActiveTab] = useState<'Images'|'Videos'|'PDFs'|'Docs'|'All'>('PDFs');
+  const [activeTab, setActiveTab] = useState<'Images'|'Videos'|'PDFs'|'Docs'|'All'>('All');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('All');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [enlargedPreview, setEnlargedPreview] = useState<any>(null);
+  const [enlargedPreview, setEnlargedPreview] = useState<MediaAsset | null>(null);
   
   // Upload state
   const [isUploading, setIsUploading] = useState(false);
@@ -58,26 +87,19 @@ export default function ConnectScreen() {
   const [uploadTotal, setUploadTotal] = useState(0);
   const [uploadProgress, setUploadProgress] = useState<Record<string, string>>({});
   
-  // Device state — two categories
-  const [localDevices, setLocalDevices] = useState<any[]>([]);
-  const [globalDevices, setGlobalDevices] = useState<any[]>([]);
-  const [allFirebaseDevices, setAllFirebaseDevices] = useState<any[]>([]);
-  
-  // Screen mode
-  const [selectedTarget, setSelectedTarget] = useState<any>(null);
-  const [browserFiles, setBrowserFiles] = useState<any[]>([]);
-  const [urlPopup, setUrlPopup] = useState<{ device: any, localUrl: string, globalUrl: string } | null>(null);
+  // Files browser state
+  const [fileSearchText, setFileSearchText] = useState('');
+  const [browserFiles, setBrowserFiles] = useState<MediaAsset[]>([]);
 
-  // Device Groups — synced via Firebase for cross-device access
-  const [deviceGroups, setDeviceGroups] = useState<DeviceGroup[]>([]);
+  // Device & group state
+  const [allFirebaseDevices, setAllFirebaseDevices] = useState<FirebaseDevice[]>([]);
+  const [selectedTarget, setSelectedTarget] = useState<FirebaseDevice | null>(null);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState<DeviceGroup | null>(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [selectedGroupDevices, setSelectedGroupDevices] = useState<Set<string>>(new Set());
-
-  // Files browser state (must be before any early returns to satisfy hooks rules)
-  const [isConnectExpanded, setIsConnectExpanded] = useState(false);
-  const [fileSearchText, setFileSearchText] = useState('');
+  const [urlPopup, setUrlPopup] = useState<{ device: FirebaseDevice; localUrl: string; globalUrl: string } | null>(null);
+  const [deviceGroups, setDeviceGroups] = useState<DeviceGroup[]>([]);
 
   // Real-time Firebase sync for groups
   useEffect(() => {
@@ -125,147 +147,22 @@ export default function ConnectScreen() {
     ]);
   };
 
-  // Device discovery — hybrid: direct LAN probe + Firebase fallback
+  // Device discovery — now simplified to use global context
   useEffect(() => {
-    // Direct LAN probe using pcLocalIp from settings — most reliable, no Firebase needed
-    const probeLocalPc = async (): Promise<any | null> => {
-      if (!pcLocalIp) return null;
-      const candidates: string[] = [];
-      const parts = pcLocalIp.split(',').map(s => s.trim()).filter(Boolean);
-      for (const rawIp of parts) {
-        if (rawIp.startsWith('http')) {
-          candidates.push(rawIp.endsWith('/') ? rawIp.slice(0, -1) : rawIp);
-        } else {
-          const withPort = rawIp.includes(':') ? rawIp : `${rawIp}:8999`;
-          candidates.push(`http://${withPort}`);
-        }
-        const baseIp = rawIp.replace(/^https?:\/\//, '').split(':')[0];
-        if (baseIp && !candidates.includes(`http://${baseIp}:8999`)) {
-          candidates.push(`http://${baseIp}:8999`);
-        }
-      }
-      for (const url of candidates) {
-        try {
-          const res = await fetch(`${url}/api/health`, { 
-            method: 'GET', 
-            headers: { 
-              'X-FlyShelf-Client': 'MobileCompanion',
-              'X-Pairing-Key': pairingKey || ''
-            }, 
-            signal: AbortSignal.timeout(2000) 
-          });
-          if (res.ok) {
-            return { 
-              DeviceName: 'PC', DeviceType: 'PC', IsOnline: true, 
-              resolvedUrl: url, connectionType: 'local', firebaseKey: 'local_direct',
-              Url: url, LocalIp: url
-            };
-          }
-        } catch(e) {}
-      }
-      return null;
-    };
-
-    if (!pairingKey || !isValidPairingKey(pairingKey)) { setLocalDevices([]); setGlobalDevices([]); setAllFirebaseDevices([]); return; }
+    if (!pairingKey || !isValidPairingKey(pairingKey)) { return; }
     const nodesRef = query(dbRef(database, `active_devices/${pairingKey}`));
     const unsubscribeNodes = onValue(nodesRef, async (snapshot) => {
-      const locals: any[] = [];
-      const globals: any[] = [];
-      const directPc = await probeLocalPc();
-      
-      let allDevs: any[] = [];
       if (snapshot.exists()) {
         const data = snapshot.val();
         const filtered = Object.keys(data).map(k => ({ ...data[k], firebaseKey: k })).filter(d => d.IsOnline);
-        allDevs = await decryptDeviceList(filtered);
+        const allDevs = await decryptDeviceList(filtered);
         setAllFirebaseDevices(allDevs);
       } else {
         setAllFirebaseDevices([]);
       }
-      
-      for (const dev of allDevs) {
-        let localReachable = false;
-        let resolvedLocalUrl = '';
-        
-        if (directPc && dev.DeviceType === 'PC') {
-          localReachable = true;
-          resolvedLocalUrl = directPc.resolvedUrl;
-          directPc.DeviceName = dev.DeviceName || directPc.DeviceName;
-          directPc.GlobalUrl = dev.GlobalUrl;
-        } else {
-          const localCandidates: string[] = [];
-          if (dev.Url) {
-            dev.Url.split(',').forEach((u: string) => {
-              const cleaned = u.trim();
-              if (cleaned.startsWith('http') && !cleaned.includes('trycloudflare.com')) {
-                const noTrail = cleaned.endsWith('/') ? cleaned.slice(0, -1) : cleaned;
-                if (!localCandidates.includes(noTrail)) localCandidates.push(noTrail);
-              }
-            });
-          }
-          if (dev.LocalIp) {
-            dev.LocalIp.split(',').forEach((ip: string) => {
-              const clean = ip.trim().startsWith('http') ? ip.trim() : `http://${ip.trim()}`;
-              const noTrail = clean.endsWith('/') ? clean.slice(0, -1) : clean;
-              if (!localCandidates.includes(noTrail)) localCandidates.push(noTrail);
-            });
-          }
-          for (const url of localCandidates) {
-            try {
-              const res = await fetch(`${url}/api/health`, { 
-                method: 'GET', 
-                headers: { 
-                  'X-FlyShelf-Client': 'MobileCompanion',
-                  'X-Pairing-Key': pairingKey || ''
-                }, 
-                signal: AbortSignal.timeout(2000) 
-              });
-              if (res.ok) { localReachable = true; resolvedLocalUrl = url; break; }
-            } catch(e) {}
-          }
-        }
-        
-        if (localReachable && !locals.find(l => l.DeviceName === dev.DeviceName)) {
-          locals.push({ ...dev, resolvedUrl: resolvedLocalUrl, connectionType: 'local' });
-        }
-        
-        const hasCloudflare = dev.GlobalUrl && dev.GlobalUrl.includes('trycloudflare.com');
-        if (hasCloudflare && !localReachable) {
-          try {
-            const cfUrl = dev.GlobalUrl.endsWith('/') ? dev.GlobalUrl.slice(0, -1) : dev.GlobalUrl;
-            const res = await fetch(`${cfUrl}/api/health`, { 
-              method: 'GET', 
-              headers: { 
-                'X-FlyShelf-Client': 'MobileCompanion',
-                'X-Pairing-Key': pairingKey || ''
-              }, 
-              signal: AbortSignal.timeout(3000) 
-            });
-            if (res.ok) {
-              globals.push({ ...dev, resolvedUrl: cfUrl, connectionType: 'cloudflare' });
-            } else {
-              globals.push({ ...dev, resolvedUrl: cfUrl, connectionType: 'cloudflare-unverified' });
-            }
-          } catch {
-            const cfUrl = dev.GlobalUrl.endsWith('/') ? dev.GlobalUrl.slice(0, -1) : dev.GlobalUrl;
-            globals.push({ ...dev, resolvedUrl: cfUrl, connectionType: 'cloudflare-unverified' });
-          }
-        } else if (!localReachable && !hasCloudflare) {
-          globals.push({ ...dev, resolvedUrl: '', connectionType: 'sync-only' });
-        }
-      }
-      
-      // If direct probe found PC but no Firebase entry matched, add as standalone
-      if (directPc && !locals.find(l => l.DeviceType === 'PC')) {
-        locals.push(directPc);
-      }
-      
-      setLocalDevices(locals);
-      setGlobalDevices(globals);
     });
-    
     return () => unsubscribeNodes();
-  }, [deviceName, pcLocalIp, pairingKey]);
+  }, [pairingKey]);
 
   // Permissions + auto-scan on mount
   const hasScannedRef = useRef(false);
@@ -275,25 +172,8 @@ export default function ConnectScreen() {
         const { status } = await MediaLibrary.requestPermissionsAsync(false, ['photo', 'video']);
         setHasPermission(status === 'granted');
         
-        // On Android 11+, also check/prompt for All Files Access (needed for documents)
-        if (Platform.OS === 'android') {
-          try {
-            const { DocumentScanner } = NativeModules;
-            if (DocumentScanner) {
-              const hasAllFiles = await DocumentScanner.hasAllFilesPermission();
-              if (!hasAllFiles) {
-                Alert.alert(
-                  'File Access Required',
-                  'FlyShelf needs "All Files Access" to scan your PDFs, documents, and other files.\n\nTap "Grant" to open settings and enable it.',
-                  [
-                    { text: 'Later', style: 'cancel' },
-                    { text: 'Grant', onPress: () => DocumentScanner.requestAllFilesPermission() }
-                  ]
-                );
-              }
-            }
-          } catch {}
-        }
+        // On Android 11+, All Files Access may be needed for document scanning.
+        // A more robust check would involve a dedicated Expo plugin / native module.
       } catch { setHasPermission(false); }
     })();
   }, []);
@@ -307,7 +187,7 @@ export default function ConnectScreen() {
   }, [hasPermission]);
 
   // Media scan — uses native MediaStore for instant document discovery
-  const scanMedia = async () => {
+  const scanMedia = useCallback(async () => {
     if (hasPermission === false) {
       if (Platform.OS === 'android') ToastAndroid.show('Permission denied — enable storage access in Settings', ToastAndroid.LONG);
       return;
@@ -342,28 +222,8 @@ export default function ConnectScreen() {
         console.warn('MediaLibrary scan failed:', mediaErr?.message);
       }
 
-      // 2. Native MediaStore scan for PDFs, docs, archives (instant — same as Android file manager)
+      // 2. Native Document Scanner (Disabled as module is missing — using fallback scan instead)
       let nativeScanWorked = false;
-      if (Platform.OS === 'android') {
-        try {
-          const { DocumentScanner } = NativeModules;
-          if (DocumentScanner && typeof DocumentScanner.scanDocuments === 'function') {
-            const docs: any[] = await DocumentScanner.scanDocuments();
-            if (docs && docs.length > 0) {
-              allFound = [...allFound, ...docs];
-              nativeScanWorked = true;
-              ToastAndroid.show(`📄 Found ${docs.length} documents`, ToastAndroid.SHORT);
-            } else {
-              ToastAndroid.show('No documents found via MediaStore', ToastAndroid.SHORT);
-            }
-          } else {
-            console.warn('DocumentScanner module not available');
-          }
-        } catch (e: any) {
-          console.warn('DocumentScanner native module failed:', e?.message);
-          if (Platform.OS === 'android') ToastAndroid.show('Native scan failed, using fallback...', ToastAndroid.SHORT);
-        }
-      }
 
       // 3. Always run fallback filesystem scan to supplement (catches files MediaStore might miss)
       if (!nativeScanWorked) {
@@ -382,7 +242,7 @@ export default function ConnectScreen() {
       }
     } catch (e) { console.error(e); }
     setIsScanning(false);
-  };
+  }, [startDate, endDate, hasPermission]);
 
   // Fallback filesystem scan (for non-Android or if native module fails)
   const fallbackFileScan = async (allFound: any[]) => {
@@ -414,7 +274,9 @@ export default function ConnectScreen() {
               else if (lowerFile.match(/\.(doc|docx|txt|xlsx|xls|pptx|ppt|odt|rtf|csv)$/)) mediaType = 'doc';
               else if (lowerFile.match(/\.(apk|zip|rar|7z|tar|gz)$/)) mediaType = 'doc';
               if (!mediaType) continue;
-              const modTimeMs = (fInfo.modificationTime || 0) * 1000;
+              const rawModTime = fInfo.modificationTime || 0;
+              // Sanity check: if modificationTime is already in ms (>1e12), don't multiply
+              const modTimeMs = rawModTime > 1e12 ? rawModTime : rawModTime * 1000;
               allFound.push({ id: fullPath, uri: fullPath, filename: file, creationTime: modTimeMs, mediaType, source, fileSize: (fInfo as any).size || 0 });
             }
           } catch {}
@@ -465,6 +327,7 @@ export default function ConnectScreen() {
 
   // Execute transfer
   const executeTransfer = async (targetNode: any) => {
+    if (!pairingKey) { Alert.alert('Error', 'No pairing key configured.'); return; }
     const allItems = [...getFilteredAssets(), ...browserFiles];
     const targetQueue = allItems.filter(a => selectedIds.has(a.id));
     
@@ -479,13 +342,12 @@ export default function ConnectScreen() {
     
     if (targetNode.connectionType === 'sync-only' || !resolvedUrl) {
       // Find any PC with Cloudflare to relay through
-      const allDevs = [...localDevices, ...globalDevices];
-      const relayPC = allDevs.find(d => d.DeviceType === 'PC' && d.resolvedUrl && d.connectionType !== 'sync-only');
+      const relayPC = pairedDevices.find(d => d.deviceType === 'PC' && d.isOnline && d.globalUrl);
       
       if (relayPC) {
-        resolvedUrl = relayPC.resolvedUrl;
+        resolvedUrl = relayPC.localUrl || relayPC.globalUrl;
         useRelay = true;
-        if (Platform.OS === 'android') ToastAndroid.show(`📡 Relaying via ${relayPC.DeviceName}`, ToastAndroid.SHORT);
+        if (Platform.OS === 'android') ToastAndroid.show(`📡 Relaying via ${relayPC.deviceName}`, ToastAndroid.SHORT);
       } else {
         Alert.alert("No Route Available", "No PC with Cloudflare is online to relay files.\n\nEnsure at least one PC is running FlyShelf with internet access.");
         return;
@@ -610,19 +472,8 @@ export default function ConnectScreen() {
           chunkAttempt++;
           // Re-resolve URL on retry (tunnel URL may have changed)
           if (chunkAttempt > 1 && baseUrl.includes('trycloudflare.com')) {
-            try {
-              const res = await fetch(`${baseUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKey }, signal: AbortSignal.timeout(3000) });
-              if (!res.ok) {
-                // Health check failed — try to re-discover from other available devices
-                const allDevs = [...localDevices, ...globalDevices];
-                const freshPc = allDevs.find(d => d.DeviceType === 'PC' && d.resolvedUrl && d.connectionType !== 'sync-only' && d.resolvedUrl !== baseUrl);
-                if (freshPc) baseUrl = freshPc.resolvedUrl;
-              }
-            } catch {
-              const allDevs = [...localDevices, ...globalDevices];
-              const freshPc = allDevs.find(d => d.DeviceType === 'PC' && d.resolvedUrl && d.connectionType !== 'sync-only' && d.resolvedUrl !== baseUrl);
-              if (freshPc) baseUrl = freshPc.resolvedUrl;
-            }
+            const freshPc = pairedDevices.find(d => d.deviceType === 'PC' && d.isOnline && (d.localUrl || d.globalUrl));
+            if (freshPc) baseUrl = freshPc.localUrl || freshPc.globalUrl || baseUrl;
           }
           try {
             const res = await FileSystem.uploadAsync(`${baseUrl}/api/upload_chunk`, chunkTempUri, {
@@ -766,7 +617,7 @@ export default function ConnectScreen() {
         onLongPress={() => {
           const { localUrl, globalUrl } = getDeviceUrls();
           if (localUrl || globalUrl) setUrlPopup({ device, localUrl, globalUrl });
-          else if (Platform.OS === 'android') ToastAndroid.show('No URLs available', ToastAndroid.SHORT);
+          else { if (Platform.OS === 'android') ToastAndroid.show('No URLs available', ToastAndroid.SHORT); }
         }}
         activeOpacity={0.7}
         accessibilityLabel={`${device.DeviceName || 'Unknown'}, ${device.DeviceType}, ${type === 'local' ? 'local network' : 'cloud'}`}
@@ -942,8 +793,8 @@ export default function ConnectScreen() {
                       </View>
                     )}
                     {asset.source === 'Browse' && (
-                      <View style={{ position: 'absolute', top: 4, left: 4, backgroundColor: '#4A62EB', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
-                        <Text style={{ color: '#FFF', fontSize: 7, fontWeight: 'bold' }}>FILE</Text>
+                      <View style={{ position: 'absolute', top: 4, left: 4, backgroundColor: colors.accent.primary, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
+                        <Text style={{ color: colors.text.primary, fontSize: 7, fontWeight: 'bold' }}>FILE</Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -952,7 +803,7 @@ export default function ConnectScreen() {
               {allDisplayItems.length === 0 && !isScanning && (
                 <View style={{ width: '100%', alignItems: 'center', marginTop: 40 }}>
                   <Ionicons name="search" size={40} color={colors.text.tertiary} />
-                  <Text style={{ color: '#6B7280', marginTop: 12, fontSize: 14 }}>No files found. Try scanning or browsing.</Text>
+                  <Text style={{ color: colors.text.tertiary, marginTop: 12, fontSize: 14 }}>No files found. Try scanning or browsing.</Text>
                 </View>
               )}
             </View>
@@ -964,7 +815,7 @@ export default function ConnectScreen() {
           <View style={{ position: 'absolute', bottom: 20, left: 20, right: 20 }}>
             <TouchableOpacity style={s.sendButton} onPress={() => executeTransfer(selectedTarget)} activeOpacity={0.8} accessibilityLabel={`Send ${selectedIds.size} items to ${selectedTarget.DeviceName}`} accessibilityRole="button">
               <Text style={s.sendButtonText}>Send {selectedIds.size} Items to {selectedTarget.DeviceName}</Text>
-              <Text style={{ color: '#CCFBF1', fontSize: 10, marginTop: 3 }}>{buildBatchName()}</Text>
+              <Text style={{ color: colors.accent.success, fontSize: 10, marginTop: 3 }}>{buildBatchName()}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -973,8 +824,8 @@ export default function ConnectScreen() {
         <Modal visible={!!enlargedPreview} animationType="fade" transparent>
           <View style={[s.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.95)' }]}>
             <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setEnlargedPreview(null)} accessibilityLabel="Close preview" accessibilityRole="button">
-              <View style={{ padding: 10, backgroundColor: '#2A2F3A', borderRadius: 20 }}>
-                <Ionicons name="close" size={24} color="#FFF" />
+              <View style={{ padding: 10, backgroundColor: colors.bg.cardHover, borderRadius: 20 }}>
+                <Ionicons name="close" size={24} color={colors.text.primary} />
               </View>
             </TouchableOpacity>
             {enlargedPreview && (enlargedPreview.mediaType === 'photo' || enlargedPreview.mediaType === 'video') ? (
@@ -982,7 +833,7 @@ export default function ConnectScreen() {
             ) : (
               <View style={{ alignItems: 'center' }}>
                 <Ionicons name="document" size={80} color={colors.accent.warning} />
-                <Text style={{ color: '#FFF', marginTop: 20, fontSize: 18, fontWeight: 'bold' }}>{enlargedPreview?.filename}</Text>
+                <Text style={{ color: colors.text.primary, marginTop: 20, fontSize: 18, fontWeight: 'bold' }}>{enlargedPreview?.filename}</Text>
               </View>
             )}
           </View>
@@ -1034,8 +885,8 @@ export default function ConnectScreen() {
       try {
         const uri = asset.uri || asset.localUri;
         if (uri) await Sharing.shareAsync(uri.startsWith('file://') ? uri : `file://${uri}`);
-      } catch {
-        Alert.alert('Cannot Open', e?.message || 'No app available to open this file.');
+      } catch (shareErr: any) {
+        Alert.alert('Cannot Open', shareErr?.message || 'No app available to open this file.');
       }
     }
   };
@@ -1046,7 +897,9 @@ export default function ConnectScreen() {
       if (!uri) return;
       const fileUri = uri.startsWith('file://') ? uri : `file://${uri}`;
       await Sharing.shareAsync(fileUri);
-    } catch {}
+    } catch (e: any) {
+      if (Platform.OS === 'android') ToastAndroid.show('Share failed: ' + (e?.message || 'unknown error'), ToastAndroid.SHORT);
+    }
   };
 
 
@@ -1054,17 +907,33 @@ export default function ConnectScreen() {
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({ onScroll: (e) => { scrollY.value = e.contentOffset.y; } });
 
+  const flatListData = useMemo(() => {
+    let items = [...getFilteredAssets(), ...browserFiles];
+    if (fileSearchText) items = items.filter(a => (a.filename || '').toLowerCase().includes(fileSearchText.toLowerCase()));
+    return items;
+  }, [mediaAssets, activeTab, sourceFilter, browserFiles, fileSearchText]);
+
+  // ─── Connection status badge for header ───
+  const archiveConnectionBadge = useMemo(() => {
+    const pcUrl = resolveBestPcUrl(pairedDevices, pcLocalIp);
+    if (pcUrl) {
+      return pcUrl.includes('trycloudflare.com') ? '🟡 Cloud' : '🟢 LAN';
+    }
+    const hasOnlinePc = allFirebaseDevices.some(d => d.DeviceType === 'PC' && d.IsOnline);
+    return hasOnlinePc ? '🟡 Cloud' : '⚪ Offline';
+  }, [pairedDevices, pcLocalIp, allFirebaseDevices]);
+
   // ─── MAIN SCREEN: Files Browser ───
   return (
     <LinearGradient colors={[colors.bg.base, colors.bg.baseEnd]} style={{ flex: 1 }}>
     <View style={s.container}>
       <ScreenHeader
         title="Files"
-        subtitle="Documents & Media"
+        subtitle={`Documents & Media • ${archiveConnectionBadge}`}
         scrollY={scrollY}
         rightActions={
           <Pressable
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/pdf-tools'); }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/pdf-tools' as any); }}
             style={{ padding: 8, borderRadius: 10, backgroundColor: colors.accent.primaryDim }}
             accessibilityLabel="PDF Tools"
             accessibilityRole="button"
@@ -1103,7 +972,7 @@ export default function ConnectScreen() {
       {/* Count + Actions */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 6, marginBottom: 4 }}>
         <Text style={{ color: colors.text.secondary, fontSize: 12, fontFamily: font.semibold }}>
-          {[...getFilteredAssets(), ...browserFiles].filter(a => !fileSearchText || (a.filename || '').toLowerCase().includes(fileSearchText.toLowerCase())).length} files · {selectedIds.size} selected
+          {flatListData.length} files · {selectedIds.size} selected
         </Text>
         <TouchableOpacity style={{ backgroundColor: colors.bg.cardHover, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: colors.border.subtle }} onPress={() => toggleSelectAll([...getFilteredAssets(), ...browserFiles])} accessibilityLabel="Select all files" accessibilityRole="button">
           <Text style={{ color: colors.text.primary, fontSize: 10, fontFamily: font.bold }}>Select All</Text>
@@ -1118,11 +987,8 @@ export default function ConnectScreen() {
         </View>
       ) : (
         <FlatList
-          data={(() => {
-            let items = [...getFilteredAssets(), ...browserFiles];
-            if (fileSearchText) items = items.filter(a => (a.filename || '').toLowerCase().includes(fileSearchText.toLowerCase()));
-            return items;
-          })()}
+          data={flatListData}
+          onScroll={scrollHandler}
           keyExtractor={(item, idx) => item.id || `f_${idx}`}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: selectedIds.size > 0 ? 180 : 100 }}
           renderItem={({ item: asset }) => {
@@ -1176,33 +1042,45 @@ export default function ConnectScreen() {
           <Text style={{ color: colors.text.secondary, fontSize: 11, marginBottom: 8, textAlign: 'center', fontFamily: font.medium }}>{selectedIds.size} file(s) selected</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity style={{ flex: 1, backgroundColor: colors.accent.info, paddingVertical: 14, borderRadius: 14, alignItems: 'center' }} onPress={() => {
-              const sel = [...getFilteredAssets(), ...browserFiles].filter(a => selectedIds.has(a.id));
+              const sel = flatListData.filter(a => selectedIds.has(a.id));
               if (sel.length === 1) shareFile(sel[0]);
               else Alert.alert('Share', 'Select a single file to share via Android.');
             }} accessibilityLabel="Share selected file" accessibilityRole="button">
-              <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📤 Share</Text>
+              <Text style={{ color: colors.text.primary, fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📤 Share</Text>
             </TouchableOpacity>
             {(() => {
-              const selPdfs = [...getFilteredAssets(), ...browserFiles].filter(a => selectedIds.has(a.id) && (a.mediaType === 'pdf' || a.mediaType === 'doc'));
+              const selPdfs = flatListData.filter(a => selectedIds.has(a.id) && (a.mediaType === 'pdf' || a.mediaType === 'doc'));
               return selPdfs.length >= 2 ? (
                 <TouchableOpacity style={{ flex: 1, backgroundColor: colors.accent.warning, paddingVertical: 14, borderRadius: 14, alignItems: 'center' }} onPress={() => {
-                  const allDevs = [...localDevices, ...globalDevices];
-                  const pc = allDevs.find((d: any) => d.DeviceType === 'PC' && d.resolvedUrl);
+                  const pc = pairedDevices.find(d => d.deviceType === 'PC' && d.isOnline);
                   if (!pc) { Alert.alert('No PC', 'Connect to a PC to merge files.'); return; }
-                  setSelectedTarget(pc);
-                  executeTransfer(pc);
+                  const target = { ...pc, resolvedUrl: pc.localUrl || pc.globalUrl, DeviceName: pc.deviceName };
+                  setSelectedTarget(target);
+                  executeTransfer(target);
                 }} accessibilityLabel="Merge selected files on PC" accessibilityRole="button">
                   <Text style={{ color: colors.bg.base, fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📑 Merge on PC</Text>
                 </TouchableOpacity>
               ) : null;
             })()}
             <TouchableOpacity style={{ flex: 1, backgroundColor: colors.accent.success, paddingVertical: 14, borderRadius: 14, alignItems: 'center' }} onPress={() => {
-              const allDevs = [...localDevices, ...globalDevices];
-              if (allDevs.length === 0) { Alert.alert('No Devices', 'Expand Connect section below.'); return; }
-              if (allDevs.length === 1) { setSelectedTarget(allDevs[0]); executeTransfer(allDevs[0]); return; }
-              Alert.alert('Send to:', '', allDevs.map((d: any) => ({ text: `${d.DeviceName} (${d.connectionType === 'local' ? 'LAN' : 'Cloud'})`, onPress: () => { setSelectedTarget(d); executeTransfer(d); } })).concat([{ text: 'Cancel' } as any]));
+              const onlineDevs = pairedDevices.filter(d => d.isOnline);
+              if (onlineDevs.length === 0) { Alert.alert('No Devices', 'Connect to a device first.'); return; }
+              if (onlineDevs.length === 1) { 
+                const target = { ...onlineDevs[0], resolvedUrl: onlineDevs[0].localUrl || onlineDevs[0].globalUrl, DeviceName: onlineDevs[0].deviceName };
+                setSelectedTarget(target); 
+                executeTransfer(target); 
+                return; 
+              }
+              Alert.alert('Send to:', '', onlineDevs.map(d => ({ 
+                text: `${d.deviceName} (${d.connectionType === 'LAN' ? 'LAN' : 'Cloud'})`, 
+                onPress: () => { 
+                  const target = { ...d, resolvedUrl: d.localUrl || d.globalUrl, DeviceName: d.deviceName };
+                  setSelectedTarget(target); 
+                  executeTransfer(target); 
+                } 
+              })).concat([{ text: 'Cancel' } as any]));
             }} accessibilityLabel={`Send ${selectedIds.size} files to device`} accessibilityRole="button">
-              <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📡 Send</Text>
+              <Text style={{ color: colors.text.primary, fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📡 Send</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1213,12 +1091,12 @@ export default function ConnectScreen() {
       <Modal visible={!!enlargedPreview} animationType="fade" transparent>
         <View style={[s.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.95)' }]}>
           <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setEnlargedPreview(null)} accessibilityLabel="Close preview" accessibilityRole="button">
-            <View style={{ padding: 10, backgroundColor: '#2A2F3A', borderRadius: 20 }}><Ionicons name="close" size={24} color="#FFF" /></View>
+            <View style={{ padding: 10, backgroundColor: colors.bg.cardHover, borderRadius: 20 }}><Ionicons name="close" size={24} color={colors.text.primary} /></View>
           </TouchableOpacity>
           {enlargedPreview && (enlargedPreview.mediaType === 'photo' || enlargedPreview.mediaType === 'video') ? (
             <Image source={{ uri: enlargedPreview.uri }} style={{ width: '100%', height: '80%', resizeMode: 'contain' }} />
           ) : (
-            <View style={{ alignItems: 'center' }}><Ionicons name="document" size={80} color={colors.accent.warning} /><Text style={{ color: '#FFF', marginTop: 20, fontSize: 18, fontWeight: 'bold' }}>{enlargedPreview?.filename}</Text></View>
+            <View style={{ alignItems: 'center' }}><Ionicons name="document" size={80} color={colors.accent.warning} /><Text style={{ color: colors.text.primary, marginTop: 20, fontSize: 18, fontWeight: 'bold' }}>{enlargedPreview?.filename}</Text></View>
           )}
         </View>
       </Modal>
@@ -1226,10 +1104,10 @@ export default function ConnectScreen() {
       {/* URL Popup */}
       <Modal visible={!!urlPopup} transparent animationType="fade" onRequestClose={() => setUrlPopup(null)}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }} activeOpacity={1} onPress={() => setUrlPopup(null)}>
-          <View style={{ backgroundColor: '#1C1F26', borderRadius: 20, padding: 24, width: '85%', borderWidth: 1, borderColor: '#2A2F3A' }}>
-            <Text style={{ color: '#FFF', fontSize: 18, fontWeight: '800', marginBottom: 16 }}>{urlPopup?.device?.DeviceName}</Text>
-            {urlPopup?.localUrl ? (<View style={{ marginBottom: 16 }}><Text style={{ color: '#10B981', fontSize: 11, fontWeight: '700', marginBottom: 6 }}>⚡ LOCAL</Text><Text style={{ color: '#CCC', fontSize: 12 }} selectable>{urlPopup.localUrl}</Text><TouchableOpacity onPress={() => { Linking.openURL(urlPopup!.localUrl); setUrlPopup(null); }} style={{ marginTop: 8, backgroundColor: '#10B981', padding: 10, borderRadius: 10, alignItems: 'center' }}><Text style={{ color: '#FFF', fontWeight: '700' }}>Open</Text></TouchableOpacity></View>) : null}
-            {urlPopup?.globalUrl ? (<View><Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '700', marginBottom: 6 }}>☁️ GLOBAL</Text><Text style={{ color: '#CCC', fontSize: 12 }} selectable>{urlPopup.globalUrl}</Text><TouchableOpacity onPress={() => { Linking.openURL(urlPopup!.globalUrl); setUrlPopup(null); }} style={{ marginTop: 8, backgroundColor: '#3B82F6', padding: 10, borderRadius: 10, alignItems: 'center' }}><Text style={{ color: '#FFF', fontWeight: '700' }}>Open</Text></TouchableOpacity></View>) : null}
+          <View style={{ backgroundColor: colors.bg.card, borderRadius: 20, padding: 24, width: '85%', borderWidth: 1, borderColor: colors.border.subtle }}>
+            <Text style={{ color: colors.text.primary, fontSize: 18, fontWeight: '800', marginBottom: 16 }}>{urlPopup?.device?.DeviceName}</Text>
+            {urlPopup?.localUrl ? (<View style={{ marginBottom: 16 }}><Text style={{ color: colors.accent.success, fontSize: 11, fontWeight: '700', marginBottom: 6 }}>⚡ LOCAL</Text><Text style={{ color: colors.text.secondary, fontSize: 12 }} selectable>{urlPopup.localUrl}</Text><TouchableOpacity onPress={() => { Linking.openURL(urlPopup!.localUrl); setUrlPopup(null); }} style={{ marginTop: 8, backgroundColor: colors.accent.success, padding: 10, borderRadius: 10, alignItems: 'center' }}><Text style={{ color: colors.text.primary, fontWeight: '700' }}>Open</Text></TouchableOpacity></View>) : null}
+            {urlPopup?.globalUrl ? (<View><Text style={{ color: colors.accent.info, fontSize: 11, fontWeight: '700', marginBottom: 6 }}>☁️ GLOBAL</Text><Text style={{ color: colors.text.secondary, fontSize: 12 }} selectable>{urlPopup.globalUrl}</Text><TouchableOpacity onPress={() => { Linking.openURL(urlPopup!.globalUrl); setUrlPopup(null); }} style={{ marginTop: 8, backgroundColor: colors.accent.info, padding: 10, borderRadius: 10, alignItems: 'center' }}><Text style={{ color: colors.text.primary, fontWeight: '700' }}>Open</Text></TouchableOpacity></View>) : null}
           </View>
         </TouchableOpacity>
       </Modal>
@@ -1237,23 +1115,23 @@ export default function ConnectScreen() {
       {/* Group Modal */}
       <Modal visible={showGroupModal} transparent animationType="slide" onRequestClose={() => setShowGroupModal(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 }}>
-          <View style={{ backgroundColor: '#1A1F2E', borderRadius: 20, padding: 20, maxHeight: '80%' }}>
-            <Text style={{ color: '#FFF', fontSize: 18, fontWeight: '800', marginBottom: 16 }}>{editingGroup ? 'Edit Group' : 'Create Group'}</Text>
-            <TextInput value={newGroupName} onChangeText={setNewGroupName} placeholder="Group name..." placeholderTextColor="#4A5568" style={{ backgroundColor: '#0F1118', borderRadius: 10, padding: 12, color: '#FFF', fontSize: 14, marginBottom: 16, borderWidth: 1, borderColor: '#2A2F3A' }} />
+          <View style={{ backgroundColor: colors.bg.elevated, borderRadius: 20, padding: 20, maxHeight: '80%' }}>
+            <Text style={{ color: colors.text.primary, fontSize: 18, fontWeight: '800', marginBottom: 16 }}>{editingGroup ? 'Edit Group' : 'Create Group'}</Text>
+            <TextInput value={newGroupName} onChangeText={setNewGroupName} placeholder="Group name..." placeholderTextColor={colors.text.secondary} style={{ backgroundColor: colors.bg.base, borderRadius: 10, padding: 12, color: colors.text.primary, fontSize: 14, marginBottom: 16, borderWidth: 1, borderColor: colors.border.subtle }} />
             <ScrollView style={{ maxHeight: 250 }}>
-              {[...localDevices, ...globalDevices, ...allFirebaseDevices].filter((d: any, i: number, a: any[]) => a.findIndex((x: any) => x.DeviceName === d.DeviceName) === i).map((dev: any, i: number) => {
-                const isSel = selectedGroupDevices.has(dev.DeviceName);
+              {pairedDevices.filter((d, i, a) => a.findIndex(x => x.deviceName === d.deviceName) === i).map((dev, i) => {
+                const isSel = selectedGroupDevices.has(dev.deviceName);
                 return (
-                  <TouchableOpacity key={`gd_${i}`} onPress={() => { const n = new Set(selectedGroupDevices); isSel ? n.delete(dev.DeviceName) : n.add(dev.DeviceName); setSelectedGroupDevices(n); }} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: isSel ? '#F59E0B15' : '#0F1118', borderRadius: 10, marginBottom: 6, borderWidth: 1, borderColor: isSel ? '#F59E0B44' : '#1E293B' }}>
-                    <View style={{ width: 22, height: 22, borderRadius: 6, marginRight: 10, backgroundColor: isSel ? '#F59E0B' : '#2A2F3A', alignItems: 'center', justifyContent: 'center' }}>{isSel && <Text style={{ color: '#000', fontWeight: '900' }}>✓</Text>}</View>
-                    <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '600' }}>{dev.DeviceName || 'Unknown'}</Text>
+                  <TouchableOpacity key={`gd_${i}`} onPress={() => { const n = new Set(selectedGroupDevices); isSel ? n.delete(dev.deviceName) : n.add(dev.deviceName); setSelectedGroupDevices(n); }} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: isSel ? colors.accent.warning + '15' : colors.bg.base, borderRadius: 10, marginBottom: 6, borderWidth: 1, borderColor: isSel ? colors.accent.warning + '44' : colors.bg.elevated }}>
+                    <View style={{ width: 22, height: 22, borderRadius: 6, marginRight: 10, backgroundColor: isSel ? colors.accent.warning : colors.bg.cardHover, alignItems: 'center', justifyContent: 'center' }}>{isSel && <Text style={{ color: colors.bg.base, fontWeight: '900' }}>✓</Text>}</View>
+                    <Text style={{ color: colors.text.primary, fontSize: 13, fontWeight: '600' }}>{dev.deviceName || 'Unknown'}</Text>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-              <TouchableOpacity onPress={() => setShowGroupModal(false)} style={{ flex: 1, padding: 12, borderRadius: 10, backgroundColor: '#2A2F3A', alignItems: 'center' }}><Text style={{ color: '#8A8F98', fontWeight: '700' }}>Cancel</Text></TouchableOpacity>
-              <TouchableOpacity onPress={createOrUpdateGroup} style={{ flex: 1, padding: 12, borderRadius: 10, backgroundColor: '#F59E0B', alignItems: 'center' }}><Text style={{ color: '#000', fontWeight: '800' }}>{editingGroup ? 'Save' : 'Create'}</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowGroupModal(false)} style={{ flex: 1, padding: 12, borderRadius: 10, backgroundColor: colors.bg.cardHover, alignItems: 'center' }}><Text style={{ color: colors.text.secondary, fontWeight: '700' }}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity onPress={createOrUpdateGroup} style={{ flex: 1, padding: 12, borderRadius: 10, backgroundColor: colors.accent.warning, alignItems: 'center' }}><Text style={{ color: colors.bg.base, fontWeight: '800' }}>{editingGroup ? 'Save' : 'Create'}</Text></TouchableOpacity>
             </View>
           </View>
         </View>
@@ -1263,53 +1141,53 @@ export default function ConnectScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const createStyles = (c: any, sh: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent' },
   header: { paddingTop: 60, paddingHorizontal: space['2xl'], marginBottom: space.lg },
-  title: { fontSize: 30, fontFamily: font.extrabold, color: colors.text.primary, letterSpacing: -0.8 },
-  subtitle: { fontSize: 13, fontFamily: font.medium, color: colors.text.tertiary, marginTop: 4, textTransform: 'uppercase', letterSpacing: 1.5 },
-  sectionTitle: { color: colors.text.primary, fontSize: 16, fontFamily: font.bold },
-  card: { backgroundColor: colors.bg.card, marginHorizontal: space.xl, borderRadius: radius.xl, padding: space['2xl'], borderWidth: 1, borderColor: colors.border.subtle, borderTopColor: colors.innerHighlight, marginTop: space.xl, ...shadows.card },
-  deviceCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg.input, borderRadius: radius.lg, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border.subtle },
+  title: { fontSize: 30, fontFamily: font.extrabold, color: c.text.primary, letterSpacing: -0.8 },
+  subtitle: { fontSize: 13, fontFamily: font.medium, color: c.text.tertiary, marginTop: 4, textTransform: 'uppercase', letterSpacing: 1.5 },
+  sectionTitle: { color: c.text.primary, fontSize: 16, fontFamily: font.bold },
+  card: { backgroundColor: c.bg.card, marginHorizontal: space.xl, borderRadius: radius.xl, padding: space['2xl'], borderWidth: 1, borderColor: c.border.subtle, borderTopColor: c.innerHighlight, marginTop: space.xl, ...sh.card },
+  deviceCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: c.bg.input, borderRadius: radius.lg, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: c.border.subtle },
   deviceIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  deviceName: { color: colors.text.primary, fontSize: 15, fontFamily: font.bold },
+  deviceName: { color: c.text.primary, fontSize: 15, fontFamily: font.bold },
   badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   badgeText: { fontSize: 10, fontFamily: font.bold },
-  emptyCard: { padding: space['2xl'], backgroundColor: colors.bg.input, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border.subtle, alignItems: 'center' },
-  dateBtn: { flex: 1, backgroundColor: colors.bg.card, borderRadius: radius.md, padding: 10, borderWidth: 1, borderColor: colors.border.subtle },
-  dateLabel: { color: colors.text.tertiary, fontSize: 9, fontFamily: font.bold, marginBottom: 2 },
-  dateValue: { color: colors.text.primary, fontSize: 12, fontFamily: font.semibold },
+  emptyCard: { padding: space['2xl'], backgroundColor: c.bg.input, borderRadius: radius.lg, borderWidth: 1, borderColor: c.border.subtle, alignItems: 'center' },
+  dateBtn: { flex: 1, backgroundColor: c.bg.card, borderRadius: radius.md, padding: 10, borderWidth: 1, borderColor: c.border.subtle },
+  dateLabel: { color: c.text.tertiary, fontSize: 9, fontFamily: font.bold, marginBottom: 2 },
+  dateValue: { color: c.text.primary, fontSize: 12, fontFamily: font.semibold },
   sourceChip: { 
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.bg.card, 
+    backgroundColor: c.bg.card, 
     borderRadius: radius.pill, 
     paddingHorizontal: 14, 
     paddingVertical: 8, 
     borderWidth: 1, 
-    borderColor: colors.border.subtle,
+    borderColor: c.border.subtle,
     minHeight: 38
   },
-  sourceChipActive: { backgroundColor: colors.accent.successDim, borderColor: colors.accent.success },
+  sourceChipActive: { backgroundColor: c.accent.successDim, borderColor: c.accent.success },
   sourceChipText: { 
-    color: colors.text.secondary, 
+    color: c.text.secondary, 
     fontSize: 12, 
     fontFamily: font.semibold,
     textAlign: 'center',
     includeFontPadding: false
   },
-  sourceChipTextActive: { color: colors.accent.success },
+  sourceChipTextActive: { color: c.accent.success },
   tabRow: { flexDirection: 'row', paddingHorizontal: space.xl, marginBottom: 6, gap: 4, flexWrap: 'wrap' },
-  tab: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#1C202B', minHeight: 36, justifyContent: 'center' },
-  tabActive: { backgroundColor: '#4A62EB' },
-  tabText: { color: '#8A8F98', fontSize: 12, fontFamily: font.bold },
-  tabTextActive: { color: '#FFFFFF' },
-  checkCircle: { position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 2, borderColor: '#FFF', alignItems: 'center', justifyContent: 'center' },
-  checkCircleActive: { backgroundColor: colors.accent.success },
-  sendButton: { backgroundColor: colors.accent.success, paddingVertical: 18, borderRadius: 18, alignItems: 'center', ...shadows.glow(colors.accent.success) },
-  sendButtonText: { color: '#FFF', fontSize: 16, fontFamily: font.extrabold },
+  tab: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, backgroundColor: c.bg.card, minHeight: 36, justifyContent: 'center' },
+  tabActive: { backgroundColor: c.accent.primary },
+  tabText: { color: c.text.secondary, fontSize: 12, fontFamily: font.bold },
+  tabTextActive: { color: c.text.primary },
+  checkCircle: { position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 2, borderColor: c.text.primary, alignItems: 'center', justifyContent: 'center' },
+  checkCircleActive: { backgroundColor: c.accent.success },
+  sendButton: { backgroundColor: c.accent.success, paddingVertical: 18, borderRadius: 18, alignItems: 'center', ...sh.glow(c.accent.success) },
+  sendButtonText: { color: c.text.primary, fontSize: 16, fontFamily: font.extrabold },
   controlBtn: { paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
-  controlBtnText: { color: '#FFF', fontSize: 14, fontFamily: font.bold },
+  controlBtnText: { color: c.text.primary, fontSize: 14, fontFamily: font.bold },
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 });

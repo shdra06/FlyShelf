@@ -5,6 +5,7 @@
 // Split from NetworkSyncServer.cs for modularity
 // ---------------------------------------------------------------
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.IO;
@@ -226,10 +227,10 @@ namespace FlyShelf.Classes
                             RawContent = finalPath,
                             FileName = rawName,
                             FilePath = finalPath,
-                            Extension = Path.GetExtension(finalPath).TrimStart('.').ToUpper(),
+                            Extension = Path.GetExtension(finalPath).TrimStart('.').ToUpper(CultureInfo.InvariantCulture),
                             ItemType = ClipboardItemType.File,
                             SourceDeviceName = sourceDevice,
-                            SourceDeviceType = sourceDevice.Contains("PC") || sourceDevice.Contains("LAPTOP") || sourceDevice.Contains("DESKTOP") ? "PC" : "Mobile",
+                            SourceDeviceType = sourceDevice.Contains("PC", StringComparison.Ordinal) || sourceDevice.Contains("LAPTOP", StringComparison.Ordinal) || sourceDevice.Contains("DESKTOP", StringComparison.Ordinal) ? "PC" : "Mobile",
                             TransferMethod = chunkTransport.transport
                         };
                         clip.EvaluateSmartActions();
@@ -443,8 +444,8 @@ namespace FlyShelf.Classes
                             long physicalDataStart = filenameIdx + headerEndRel + 4;
                             
                             string headerStr = Encoding.UTF8.GetString(headBuffer, 0, (int)physicalDataStart);
-                            int nameIndexStart = headerStr.IndexOf("filename=\"") + 10;
-                            int nameEnd = headerStr.IndexOf("\"", nameIndexStart);
+                            int nameIndexStart = headerStr.IndexOf("filename=\"", StringComparison.Ordinal) + 10;
+                            int nameEnd = headerStr.IndexOf('"', nameIndexStart);
                             string fileName = headerStr.Substring(nameIndexStart, nameEnd - nameIndexStart);
                             if (string.IsNullOrWhiteSpace(fileName)) fileName = "uploaded_file.dat";
                             fileName = Path.GetFileName(fileName);
@@ -590,11 +591,11 @@ namespace FlyShelf.Classes
                     string localPath = "";
 
                     // Optimization: Bypass download if URL points to our own download server and path exists
-                    if (url.Contains("/download?path="))
+                    if (url.Contains("/download?path=", StringComparison.Ordinal))
                     {
                         try
                         {
-                            int qIdx = url.IndexOf("?path=");
+                            int qIdx = url.IndexOf("?path=", StringComparison.Ordinal);
                             if (qIdx != -1)
                             {
                                 string pathParam = url.Substring(qIdx + 6);
@@ -628,7 +629,7 @@ namespace FlyShelf.Classes
                             string cleanUrl = url;
                             int qMarkIdx = url.IndexOf('?');
                             if (qMarkIdx != -1) cleanUrl = url.Substring(0, qMarkIdx);
-                            string ext = Path.GetExtension(cleanUrl).ToLower();
+                            string ext = Path.GetExtension(cleanUrl).ToLower(CultureInfo.InvariantCulture);
                             if (string.IsNullOrEmpty(ext)) ext = ".pdf"; // default fallback
 
                             string tempFile = Path.Combine(mergeTempDir, Guid.NewGuid().ToString() + ext);
@@ -652,7 +653,7 @@ namespace FlyShelf.Classes
                     if (!string.IsNullOrEmpty(localPath) && File.Exists(localPath))
                     {
                         // Convert image to PDF if necessary
-                        string ext = Path.GetExtension(localPath).ToLower();
+                        string ext = Path.GetExtension(localPath).ToLower(CultureInfo.InvariantCulture);
                         if (ext == ".png" || ext == ".jpg" || ext == ".jpeg")
                         {
                             try
@@ -805,8 +806,8 @@ namespace FlyShelf.Classes
         {
             if (string.IsNullOrEmpty(remoteIp)) return false;
             // 127.x, 10.x, 192.168.x, 172.16-31.x = local/LAN
-            if (remoteIp.StartsWith("127.") || remoteIp.StartsWith("10.") || remoteIp.StartsWith("192.168.")) return true;
-            if (remoteIp.StartsWith("172."))
+            if (remoteIp.StartsWith("127.", StringComparison.Ordinal) || remoteIp.StartsWith("10.", StringComparison.Ordinal) || remoteIp.StartsWith("192.168.", StringComparison.Ordinal)) return true;
+            if (remoteIp.StartsWith("172.", StringComparison.Ordinal))
             {
                 if (int.TryParse(remoteIp.Split('.').ElementAtOrDefault(1), out int b) && b >= 16 && b <= 31) return true;
             }

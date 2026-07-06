@@ -23,7 +23,7 @@ namespace FlyShelf.Windows
     {
         private readonly FreeformSection _section;
         private readonly System.Windows.Threading.DispatcherTimer _saveTimer;
-        private bool _isPinned = true;
+        private bool _isPinned = false;
         private bool _isDirty = false;
         private bool _isLoading = false;
 
@@ -448,7 +448,7 @@ namespace FlyShelf.Windows
                 var charCount = text.TrimEnd('\r', '\n').Length;
                 var wordCount = string.IsNullOrWhiteSpace(text)
                     ? 0
-                    : text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+                    : text.Split(' ', '\n', '\r', '\t').Length;
 
                 WordCountBadge.Text = $"{wordCount} word{(wordCount == 1 ? "" : "s")}";
                 CharCountLabel.Text = $"{charCount} char{(charCount == 1 ? "" : "s")}";
@@ -689,7 +689,7 @@ namespace FlyShelf.Windows
                 if (para != null)
                 {
                     string paraText = new TextRange(para.ContentStart, para.ContentEnd).Text;
-                    if (paraText.StartsWith("☐") || paraText.StartsWith("☑"))
+                    if (paraText.StartsWith('☐') || paraText.StartsWith('☑'))
                     {
                         var pos = para.ContentStart;
                         while (pos != null && pos.CompareTo(para.ContentEnd) < 0)
@@ -774,12 +774,12 @@ namespace FlyShelf.Windows
                 string url;
                 string displayText;
 
-                if (selectedText.StartsWith("http") || selectedText.StartsWith("www."))
+                if (selectedText.StartsWith("http", StringComparison.Ordinal) || selectedText.StartsWith("www.", StringComparison.Ordinal))
                 {
                     url = selectedText;
                     displayText = selectedText;
                 }
-                else if (clipboardText.StartsWith("http") || clipboardText.StartsWith("www."))
+                else if (clipboardText.StartsWith("http", StringComparison.Ordinal) || clipboardText.StartsWith("www.", StringComparison.Ordinal))
                 {
                     url = clipboardText;
                     displayText = string.IsNullOrEmpty(selectedText) ? clipboardText : selectedText;
@@ -790,7 +790,7 @@ namespace FlyShelf.Windows
                     return;
                 }
 
-                if (!url.StartsWith("http")) url = "https://" + url;
+                if (!url.StartsWith("http", StringComparison.Ordinal)) url = "https://" + url;
 
                 var hyperlink = new Hyperlink(new Run(displayText))
                 {
@@ -868,8 +868,8 @@ namespace FlyShelf.Windows
             var para = NoteRichTextBox.CaretPosition?.Paragraph;
             if (para == null) return;
 
-            bool isCode = para.FontFamily?.Source?.Contains("Consolas") == true
-                       || para.FontFamily?.Source?.Contains("Cascadia") == true;
+            bool isCode = para.FontFamily?.Source?.Contains("Consolas", StringComparison.Ordinal) == true
+                       || para.FontFamily?.Source?.Contains("Cascadia", StringComparison.Ordinal) == true;
             if (isCode)
             {
                 // Remove code block styling

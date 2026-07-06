@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Globalization;
 using FlyShelf.Classes;
 
 namespace FlyShelf.Windows
@@ -43,8 +44,8 @@ namespace FlyShelf.Windows
                 NotesText.Visibility = Visibility.Visible;
             }
 
-            TimeText.Text = _reminder.DueAt.ToLocalTime().ToString("h:mm tt");
-            DateText.Text = _reminder.DueAt.ToLocalTime().ToString("MMM dd, yyyy • h:mm tt");
+            TimeText.Text = _reminder.DueAt.ToLocalTime().ToString("h:mm tt", CultureInfo.InvariantCulture);
+            DateText.Text = _reminder.DueAt.ToLocalTime().ToString("MMM dd, yyyy • h:mm tt", CultureInfo.InvariantCulture);
 
             if (_reminder.Repeat != RepeatMode.None)
             {

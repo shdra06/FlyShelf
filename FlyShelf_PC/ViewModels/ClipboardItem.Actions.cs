@@ -217,7 +217,7 @@ namespace FlyShelf.ViewModels
                     string displayPreview;
                     if (fullPreview.Length > 300)
                     {
-                        displayPreview = fullPreview.Substring(0, 300) + $"\n\n... ({fullPreview.Length - 300:N0} more characters truncated)";
+                        displayPreview = string.Concat(fullPreview.AsSpan(0, 300), $"\n\n... ({fullPreview.Length - 300:N0} more characters truncated)");
                     }
                     else
                     {
@@ -580,35 +580,21 @@ namespace FlyShelf.ViewModels
 
 
 
+                // [SECURITY FIX]: Write compile command to temp .bat file to prevent command injection (CWE-78)
+                string compileCommand = $"@echo off\r\ntitle FlyShelf C/C++ Compiler\r\necho [FlyShelf Engine] Executing g++ on payload...\r\ng++ \"{sourceFile}\" -o \"{exeName}\"\r\necho -----------------------------------------\r\n\"{exeName}\"";
+                string batPath = Path.Combine(Path.GetTempPath(), $"flyshelf_compile_{Guid.NewGuid():N}.bat");
+                File.WriteAllText(batPath, compileCommand);
+
                 var startInfo = new ProcessStartInfo
-
-
-
                 {
-
-
-
                     FileName = "cmd.exe",
-
-
-
-                    Arguments = $"/k title FlyShelf C/C++ Compiler && echo [FlyShelf Engine] Executing g++ on payload... && g++ \"{sourceFile}\" -o \"{exeName}\" && echo ----------------------------------------- && \"{exeName}\"",
-
-
-
+                    Arguments = $"/k \"{batPath}\"",
                     UseShellExecute = true,
-
-
-
                     CreateNoWindow = false
-
-
-
                 };
 
-
-
                 Process.Start(startInfo);
+                // Note: .bat cleanup is fire-and-forget; cmd.exe holds the file open while running
 
 
 
@@ -640,7 +626,7 @@ namespace FlyShelf.ViewModels
                     if (ItemType == ClipboardItemType.Group)
                     {
                         // Group: zip all file paths stored in RawContent
-                        string[] paths = RawContent.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                        string[] paths = RawContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
                         // [SECURITY FIX v2.1.0]: Use full GUID to prevent predictable temp file names (CWE-377)
                         string tempZip = Path.Combine(Path.GetTempPath(), $"FlyShelf_Group_{Guid.NewGuid():N}.zip");
                         if (File.Exists(tempZip)) File.Delete(tempZip);

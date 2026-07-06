@@ -35,7 +35,7 @@ namespace FlyShelf.Classes
             // Legacy pre-v2.1.0 migration: plaintext JSON files start with '{' or '['.
             // Accept them for this load so the caller can parse them, but flag for re-encryption.
             string trimmed = ciphertext.Trim();
-            if (trimmed.StartsWith("{") || trimmed.StartsWith("["))
+            if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
             {
                 Logger.LogAction("SECURE_STORAGE", "Legacy plaintext detected — will be encrypted on next save");
                 LegacyMigrationNeeded = true;

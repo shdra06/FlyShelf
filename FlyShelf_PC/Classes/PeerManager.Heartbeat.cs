@@ -102,7 +102,7 @@ namespace FlyShelf.Classes
                 if (string.IsNullOrEmpty(pk)) pk = DevicePairingManager.EnsurePairingKey();
                 if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
 
-                var resp = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                using var resp = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
                 return resp.IsSuccessStatusCode;
             }
             catch (Exception ex)

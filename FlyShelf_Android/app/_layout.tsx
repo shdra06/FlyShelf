@@ -2,10 +2,12 @@
 import { install as installCrypto } from 'react-native-quick-crypto';
 installCrypto();
 
+import NetInfo from '@react-native-community/netinfo';
+
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { LogBox } from 'react-native';
+import { LogBox, useColorScheme } from 'react-native';
 import 'react-native-reanimated';
 import { useEffect, useCallback } from 'react';
 import * as BackgroundFetch from 'expo-background-fetch';
@@ -26,7 +28,7 @@ LogBox.ignoreLogs([
   '@firebase/database: FIREBASE WARNING'
 ]);
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+
 import { SettingsProvider } from '../context/SettingsContext';
 import ErrorBoundary from '../components/ErrorBoundary';
 
@@ -39,6 +41,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
     }),
 });
 
@@ -51,6 +55,13 @@ const BACKGROUND_FETCH_TASK = 'background-clipboard-sync';
 if (Platform.OS !== 'web') {
   TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
     try {
+       // C-11: Check network connectivity before attempting Firebase query
+       // Prevents Android from counting failures and disabling the background task
+       const netState = await NetInfo.fetch();
+       if (!netState.isConnected || !netState.isInternetReachable) {
+         return BackgroundFetch.BackgroundFetchResult.NoData;
+       }
+
        const pk = await getSecureItem('pairingKey');
        if (!pk) return BackgroundFetch.BackgroundFetchResult.NoData;
 
@@ -67,12 +78,13 @@ if (Platform.OS !== 'web') {
 
            if (latestTs > lastNotified) {
                await AsyncStorage.setItem('lastNotifiedTimestamp', latestTs.toString());
+               // C-3: Use immediate trigger (trigger:null was removed in Expo SDK 54)
                await Notifications.scheduleNotificationAsync({
                   content: {
                      title: "FlyShelf Mesh Updated",
                      body: `New payload from ${latestItem.SourceDeviceName || 'PC'}. Tap to sync!`,
                   },
-                  trigger: null,
+                  trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1 },
                });
                return BackgroundFetch.BackgroundFetchResult.NewData;
            }
@@ -83,6 +95,32 @@ if (Platform.OS !== 'web') {
     }
   });
 }
+
+// Custom light navigation theme — matches our warm gray base (NOT pure white)
+const FlyShelfLightTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: '#F5F6FA',
+    card: '#F5F6FA',
+    border: 'rgba(0,0,0,0.07)',
+    text: '#1A1D26',
+    primary: '#5570E8',
+  },
+};
+
+// Custom dark navigation theme — matches our deep navy base
+const FlyShelfDarkTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: '#0B0D12',
+    card: '#0B0D12',
+    border: 'rgba(255,255,255,0.06)',
+    text: '#F0F2F5',
+    primary: '#6384FF',
+  },
+};
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -103,10 +141,14 @@ export default function RootLayout() {
 
   useEffect(() => {
      if (Platform.OS !== 'web') {
-         BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
-            minimumInterval: 15 * 60,
-            stopOnTerminate: false,
-            startOnBoot: true,
+         TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK).then(isRegistered => {
+           if (!isRegistered) {
+             BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
+               minimumInterval: 15 * 60,
+               stopOnTerminate: false,
+               startOnBoot: true,
+             }).catch(console.warn);
+           }
          }).catch(console.warn);
      }
   }, []);
@@ -125,7 +167,7 @@ export default function RootLayout() {
       if (status !== 'granted') {
         await Notifications.requestPermissionsAsync();
       }
-    })();
+    })().catch(console.warn);
   }, []);
 
   if (!fontsLoaded) return null;
@@ -133,13 +175,13 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <ThemeProvider value={colorScheme === 'light' ? FlyShelfLightTheme : FlyShelfDarkTheme}>
           <SettingsProvider>
             <Stack>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="pdf-tools" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
             </Stack>
-            <StatusBar style="auto" />
+            <StatusBar style={colorScheme === 'light' ? 'dark' : 'light'} translucent backgroundColor="transparent" />
           </SettingsProvider>
         </ThemeProvider>
       </GestureHandlerRootView>

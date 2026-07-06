@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -144,13 +145,13 @@ namespace FlyShelf.Classes
                 using var sha = System.Security.Cryptography.SHA256.Create();
                 var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));
                 // Take first 12 hex chars for a compact but unique ID
-                string hexHash = BitConverter.ToString(hash).Replace("-", "").Substring(0, 12);
+                string hexHash = BitConverter.ToString(hash).Replace("-", "", StringComparison.Ordinal).Substring(0, 12);
                 return $"PC_{hexHash}";
             }
             catch
             {
                 // Ultimate fallback — random GUID (should never reach here)
-                return $"PC_{Guid.NewGuid().ToString("N").Substring(0, 12)}";
+                return $"PC_{Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture).Substring(0, 12)}";
             }
         }
 
@@ -445,7 +446,7 @@ namespace FlyShelf.Classes
                         // Backup corrupt file
                         try 
                         { 
-                            string corruptBackup = path + ".corrupt_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                            string corruptBackup = path + ".corrupt_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
                             RunWithRetry(() => File.Copy(path, corruptBackup, true));
                             Logger.LogAction("SETTINGS_LOAD_WARN", $"Backed up corrupt settings to {corruptBackup}");
                         } 
@@ -620,7 +621,26 @@ namespace FlyShelf.Classes
             }
             catch { }
 
-            // 4. Shut down the application
+            // 4. Delete temp update directory if it exists
+            try
+            {
+                string tempUpdateDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FlyShelf_Update");
+                if (System.IO.Directory.Exists(tempUpdateDir))
+                    System.IO.Directory.Delete(tempUpdateDir, true);
+            }
+            catch { }
+
+            // 5. Clean stale zip files in temp
+            try
+            {
+                foreach (var zipFile in System.IO.Directory.GetFiles(System.IO.Path.GetTempPath(), "FlyShelf_*.zip"))
+                {
+                    try { System.IO.File.Delete(zipFile); } catch { }
+                }
+            }
+            catch { }
+
+            // 6. Shut down the application
             try
             {
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>

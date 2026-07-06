@@ -282,7 +282,7 @@ namespace FlyShelf.Classes
                     };
                 }
             }
-            catch (Exception ex) when (provider == "auto" || provider != "offline")
+            catch (Exception ex)
             {
                 // Fallback chain on error
                 Logger.LogAction("AI", $"Provider '{provider}' failed: {ex.Message}, falling back...");
@@ -677,9 +677,9 @@ namespace FlyShelf.Classes
                 _ => "Gemini"
             };
 
-            // Auto-detect from key format
-            if (key.StartsWith("sk-", StringComparison.Ordinal)) return "OpenAI";
+            // Auto-detect from key format (sk-ant- must be checked before sk- to avoid misdetection)
             if (key.StartsWith("sk-ant-", StringComparison.Ordinal)) return "Claude";
+            if (key.StartsWith("sk-", StringComparison.Ordinal)) return "OpenAI";
             if (key.StartsWith("AIza", StringComparison.Ordinal)) return "Gemini";
 
             // Default to Gemini (most generous free tier)

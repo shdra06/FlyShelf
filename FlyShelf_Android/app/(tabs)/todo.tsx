@@ -354,7 +354,7 @@ export default function TodoScreen() {
         if (Platform.OS === 'android') ToastAndroid.show('Todo sync offline — PC may be unreachable', ToastAndroid.SHORT);
       }
     }
-  }, [pairingKey, deviceName, mergeDays, saveLocal, resolvePcUrl]);
+  }, [pairingKey, deviceName, mergeDays, saveLocal, resolvePcUrl, getSyncPrefsForDevice]);
 
   // ─── Push changed days to PC ───────────────────────────
   const pushChangedDays = useCallback(async () => {
@@ -399,10 +399,11 @@ export default function TodoScreen() {
     debounceRef.current = setTimeout(pushChangedDays, DEBOUNCE_POST_MS);
   }, [pushChangedDays]);
 
-  // ─── Mark day modified & trigger sync ──────────────────
-  const markModified = useCallback((dayKey: string, updatedDays: TodoDay[]) => {
-    const idx = updatedDays.findIndex(d => d.Date === dayKey);
-    if (idx >= 0) updatedDays[idx] = { ...updatedDays[idx], LastModified: NetworkClock.now() };
+  // ─── Mark day modified & trigger sync (M-8 fix: immutable copy) ──
+  const markModified = useCallback((dayKey: string, inputDays: TodoDay[]) => {
+    const updatedDays = inputDays.map(d =>
+      d.Date === dayKey ? { ...d, LastModified: NetworkClock.now() } : d
+    );
     setDays(updatedDays);
     saveLocal(updatedDays);
     schedulePush(dayKey);
@@ -587,6 +588,8 @@ export default function TodoScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const item = createTodoItem(text);
+    item.CreatedByDevice = deviceName || 'Android';
+    item.LastEditedByDevice = deviceName || 'Android';
     const [day, withDay] = getOrCreateDay(selectedDayKey, daysRef.current);
     const updatedDay = { ...day, Items: [...day.Items, item] };
     const updated = withDay.map(d => d.Date === selectedDayKey ? updatedDay : d);
@@ -596,7 +599,7 @@ export default function TodoScreen() {
     }
     markModified(selectedDayKey, updated);
     setNewTodoText('');
-  }, [newTodoText, selectedDayKey, getOrCreateDay, markModified]);
+  }, [newTodoText, selectedDayKey, getOrCreateDay, markModified, deviceName]);
 
   const handleToggleDone = useCallback((itemId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

@@ -335,8 +335,10 @@ namespace FlyShelf.ViewModels
                 .Where(p => p.IsAlive)
                 .ToList() ?? new List<PeerConnection>();
 
-            // Only update if changed
-            if (peers.Count != ConnectedPeers.Count || !peers.All(p => ConnectedPeers.Any(cp => cp.DeviceId == p.DeviceId)))
+            // Only update if changed (check both directions: new peers added AND old peers removed)
+            if (peers.Count != ConnectedPeers.Count
+                || !peers.All(p => ConnectedPeers.Any(cp => cp.DeviceId == p.DeviceId))
+                || !ConnectedPeers.All(cp => peers.Any(p => p.DeviceId == cp.DeviceId)))
             {
                 ConnectedPeers.Clear();
                 foreach (var p in peers)

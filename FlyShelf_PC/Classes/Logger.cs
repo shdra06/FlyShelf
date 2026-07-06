@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -10,10 +11,10 @@ namespace FlyShelf.Classes
     {
 #if DEBUG
         /// <summary>Logging is active in Debug builds for development diagnostics.</summary>
-        public static bool IsEnabled = true;
+        internal static bool IsEnabled = true;
 #else
         /// <summary>Logging is disabled in Release/Store builds — no disk I/O on user machines.</summary>
-        public static bool IsEnabled = false;
+        internal static bool IsEnabled = false;
 #endif
 
         private static readonly string LogDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
@@ -91,14 +92,14 @@ namespace FlyShelf.Classes
             {
                 // Use NTP-corrected time if available, otherwise fall back to system time
                 string timestamp = (NetworkClock.IsSynced ? NetworkClock.Now.DateTime : DateTime.Now)
-                    .ToString("yyyy-MM-dd HH:mm:ss.fff");
-                string logEntry = $"[{timestamp}] [{actionType.ToUpper()}] {details}";
+                    .ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+                string logEntry = $"[{timestamp}] [{actionType.ToUpper(CultureInfo.InvariantCulture)}] {details}";
                 
                 // Enqueue to main log — zero-allocation on the hot path, never blocks
                 _buffer.Enqueue(logEntry);
 
                 // Also enqueue to network diagnostics log if it's a network-related category
-                string upperAction = actionType.ToUpper();
+                string upperAction = actionType.ToUpper(CultureInfo.InvariantCulture);
                 foreach (var cat in NET_CATEGORIES)
                 {
                     if (upperAction.Contains(cat))
@@ -206,18 +207,18 @@ namespace FlyShelf.Classes
                 var sb = new System.Text.StringBuilder();
                 sb.AppendLine("╔══════════════════════════════════════════════════════════════╗");
                 sb.AppendLine("║              FLYSHELF NETWORK DIAGNOSTICS SNAPSHOT           ║");
-                sb.AppendLine($"║  Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}                            ║");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"║  Time: {DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}                            ║");
                 sb.AppendLine("╚══════════════════════════════════════════════════════════════╝");
                 sb.AppendLine();
 
                 // Device Identity
                 sb.AppendLine("── DEVICE IDENTITY ──");
-                sb.AppendLine($"  DeviceName:   {SettingsManager.Current.DeviceName ?? "(not set)"}");
-                sb.AppendLine($"  DeviceId:     {SettingsManager.Current.DeviceId ?? "(not set)"}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  DeviceName:   {SettingsManager.Current.DeviceName ?? "(not set)"}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  DeviceId:     {SettingsManager.Current.DeviceId ?? "(not set)"}");
 // [SECURITY FIX v2.1.0]: Hash PII in diagnostics to prevent exposure (M-09)
-                sb.AppendLine($"  MachineName:  {Environment.MachineName[..Math.Min(2, Environment.MachineName.Length)]}***");
-                sb.AppendLine($"  UserName:     {Environment.UserName[..Math.Min(2, Environment.UserName.Length)]}***");
-                sb.AppendLine($"  OS:           {Environment.OSVersion}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  MachineName:  {Environment.MachineName[..Math.Min(2, Environment.MachineName.Length)]}***");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  UserName:     {Environment.UserName[..Math.Min(2, Environment.UserName.Length)]}***");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  OS:           {Environment.OSVersion}");
                 sb.AppendLine();
 
                 // Network Interfaces
@@ -227,35 +228,40 @@ namespace FlyShelf.Classes
                     foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
                     {
                         if (nic.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
-                        if (nic.Description.ToLower().Contains("virtualbox") || nic.Description.ToLower().Contains("vmware") ||
-                            nic.Description.ToLower().Contains("hyper-v") || nic.Description.ToLower().Contains("wsl")) continue;
+                        if (nic.Description.Contains("virtualbox", StringComparison.OrdinalIgnoreCase) || nic.Description.Contains("vmware", StringComparison.OrdinalIgnoreCase) ||
+                            nic.Description.Contains("hyper-v", StringComparison.OrdinalIgnoreCase) || nic.Description.Contains("wsl", StringComparison.OrdinalIgnoreCase)) continue;
                         
                         var ipProps = nic.GetIPProperties();
                         foreach (var addr in ipProps.UnicastAddresses)
                         {
                             if (addr.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
                             {
-                                sb.AppendLine($"  [{nic.NetworkInterfaceType}] {nic.Name}: {addr.Address} (Mask: {addr.IPv4Mask})");
+                                // [SECURITY FIX v2.1.0]: Truncate IP addresses in diagnostics to prevent PII exposure (M-11)
+                                string ip = addr.Address.ToString();
+                                string safeIp = ip.Length > 4 ? ip[..4] + "***" : "***";
+                                string mask = addr.IPv4Mask.ToString();
+                                string safeMask = mask.Length > 4 ? mask[..4] + "***" : "***";
+                                sb.AppendLine(CultureInfo.InvariantCulture, $"  [{nic.NetworkInterfaceType}] {nic.Name}: {safeIp} (Mask: {safeMask})");
                             }
                         }
                     }
                 }
-                catch (Exception ex) { sb.AppendLine($"  Error enumerating NICs: {ex.Message}"); }
+                catch (Exception ex) { sb.AppendLine(CultureInfo.InvariantCulture, $"  Error enumerating NICs: {ex.Message}"); }
                 sb.AppendLine();
 
                 // Sync Settings
                 sb.AppendLine("── SYNC SETTINGS ──");
-                sb.AppendLine($"  CloudDiscovery:        {SettingsManager.Current.EnableCloudDiscovery}");
-                sb.AppendLine($"  GlobalCloudflare:      {SettingsManager.Current.EnableGlobalCloudflare}");
-                sb.AppendLine($"  LocalLAN:              {SettingsManager.Current.EnableLocalLAN}");
-                sb.AppendLine($"  LocalNetworkSync:      {SettingsManager.Current.EnableLocalNetworkSync}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  CloudDiscovery:        {SettingsManager.Current.EnableCloudDiscovery}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  GlobalCloudflare:      {SettingsManager.Current.EnableGlobalCloudflare}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  LocalLAN:              {SettingsManager.Current.EnableLocalLAN}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  LocalNetworkSync:      {SettingsManager.Current.EnableLocalNetworkSync}");
                 sb.AppendLine();
 
                 // Cloudflare State
                 sb.AppendLine("── CLOUDFLARE STATE ──");
-                sb.AppendLine($"  CachedGlobalUrl:  {CloudDiscoveryManager.CachedGlobalUrl ?? "(empty)"}");
-                sb.AppendLine($"  CachedLocalUrl:   {CloudDiscoveryManager.CachedLocalUrl ?? "(empty)"}");
-                sb.AppendLine($"  IsTunnelActive:   {(!string.IsNullOrEmpty(CloudDiscoveryManager.CachedGlobalUrl) && CloudDiscoveryManager.CachedGlobalUrl.Contains("trycloudflare.com"))}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  CachedGlobalUrl:  {CloudDiscoveryManager.CachedGlobalUrl ?? "(empty)"}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  CachedLocalUrl:   {CloudDiscoveryManager.CachedLocalUrl ?? "(empty)"}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  IsTunnelActive:   {(!string.IsNullOrEmpty(CloudDiscoveryManager.CachedGlobalUrl) && CloudDiscoveryManager.CachedGlobalUrl.Contains("trycloudflare.com", StringComparison.OrdinalIgnoreCase))}");
                 sb.AppendLine();
 
                 // Cloudflared process check
@@ -263,31 +269,39 @@ namespace FlyShelf.Classes
                 try
                 {
                     var cfProcesses = System.Diagnostics.Process.GetProcessesByName("cloudflared");
-                    sb.AppendLine($"  Running instances: {cfProcesses.Length}");
-                    foreach (var p in cfProcesses)
+                    try
                     {
-                        try { sb.AppendLine($"    PID {p.Id}: {p.ProcessName} (Started: {p.StartTime:HH:mm:ss}, Memory: {p.WorkingSet64 / 1048576.0:F1}MB)"); }
-                        catch { sb.AppendLine($"    PID {p.Id}: (access denied for details)"); }
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"  Running instances: {cfProcesses.Length}");
+                        foreach (var p in cfProcesses)
+                        {
+                            try { sb.AppendLine(CultureInfo.InvariantCulture, $"    PID {p.Id}: {p.ProcessName} (Started: {p.StartTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}, Memory: {(p.WorkingSet64 / 1048576.0).ToString("F1", CultureInfo.InvariantCulture)}MB)"); }
+                            catch { sb.AppendLine(CultureInfo.InvariantCulture, $"    PID {p.Id}: (access denied for details)"); }
+                        }
+                    }
+                    finally
+                    {
+                        // M-23 FIX: Dispose all Process objects to release native handles
+                        foreach (var p in cfProcesses) p.Dispose();
                     }
                 }
-                catch (Exception ex) { sb.AppendLine($"  Error checking processes: {ex.Message}"); }
+                catch (Exception ex) { sb.AppendLine(CultureInfo.InvariantCulture, $"  Error checking processes: {ex.Message}"); }
                 sb.AppendLine();
 
                 // cloudflared.exe binary check
                 sb.AppendLine("── CLOUDFLARED BINARY ──");
                 string exePath = CloudflareDaemon.GetCloudflaredExePath();
-                bool isBundled = exePath.StartsWith(AppContext.BaseDirectory, StringComparison.OrdinalIgnoreCase);
+                bool isBundled = exePath.StartsWith(AppContext.BaseDirectory, StringComparison.OrdinalIgnoreCase); // CA1310 already OK
                 if (File.Exists(exePath))
                 {
                     var fi = new FileInfo(exePath);
-                    sb.AppendLine($"  Path:     {exePath}{(isBundled ? " (Bundled)" : " (AppData)")}");
-                    sb.AppendLine($"  Size:     {fi.Length / 1048576.0:F1} MB");
-                    sb.AppendLine($"  Modified: {fi.LastWriteTime:yyyy-MM-dd HH:mm:ss}");
-                    sb.AppendLine($"  Valid:    {fi.Length > 10_000_000}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  Path:     {exePath}{(isBundled ? " (Bundled)" : " (AppData)")}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  Size:     {(fi.Length / 1048576.0).ToString("F1", CultureInfo.InvariantCulture)} MB");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  Modified: {fi.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  Valid:    {fi.Length > 10_000_000}");
                 }
                 else
                 {
-                    sb.AppendLine($"  NOT FOUND at {exePath}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  NOT FOUND at {exePath}");
                 }
                 sb.AppendLine();
 
@@ -302,9 +316,9 @@ namespace FlyShelf.Classes
                     {
                         if (ep.Port == port) { portListening = true; break; }
                     }
-                    sb.AppendLine($"  Port {port}: {(portListening ? "LISTENING ✓" : "NOT LISTENING ✗")}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  Port {port}: {(portListening ? "LISTENING ✓" : "NOT LISTENING ✗")}");
                 }
-                catch (Exception ex) { sb.AppendLine($"  Port check error: {ex.Message}"); }
+                catch (Exception ex) { sb.AppendLine(CultureInfo.InvariantCulture, $"  Port check error: {ex.Message}"); }
                 sb.AppendLine();
 
                 // Internet Connectivity
@@ -323,17 +337,17 @@ namespace FlyShelf.Classes
                     if (firebaseTask.Wait(TimeSpan.FromSeconds(10)))
                     {
                         var t = firebaseTask.Result;
-                        sb.AppendLine($"  Firebase RTDB:     HTTP {(int)t.StatusCode} {(t.IsSuccessStatusCode ? "✓" : "✗")}");
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"  Firebase RTDB:     HTTP {(int)t.StatusCode} {(t.IsSuccessStatusCode ? "✓" : "✗")}");
                     }
                     else
                     {
-                        sb.AppendLine($"  Firebase RTDB:     TIMEOUT (>10s)");
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"  Firebase RTDB:     TIMEOUT (>10s)");
                     }
                 }
-                catch (Exception ex) { sb.AppendLine($"  Firebase RTDB:     FAILED — {ex.InnerException?.Message ?? ex.Message}"); }
+                catch (Exception ex) { sb.AppendLine(CultureInfo.InvariantCulture, $"  Firebase RTDB:     FAILED — {ex.InnerException?.Message ?? ex.Message}"); }
 
                 // Test Cloudflare tunnel reachability
-                if (!string.IsNullOrEmpty(CloudDiscoveryManager.CachedGlobalUrl) && CloudDiscoveryManager.CachedGlobalUrl.Contains("trycloudflare.com"))
+                if (!string.IsNullOrEmpty(CloudDiscoveryManager.CachedGlobalUrl) && CloudDiscoveryManager.CachedGlobalUrl.Contains("trycloudflare.com", StringComparison.OrdinalIgnoreCase))
                 {
                     try
                     {
@@ -342,18 +356,18 @@ namespace FlyShelf.Classes
                         if (cfTask.Wait(TimeSpan.FromSeconds(10)))
                         {
                             var t = cfTask.Result;
-                            sb.AppendLine($"  Cloudflare Tunnel: HTTP {(int)t.StatusCode} {(t.IsSuccessStatusCode ? "✓" : "✗")}");
+                            sb.AppendLine(CultureInfo.InvariantCulture, $"  Cloudflare Tunnel: HTTP {(int)t.StatusCode} {(t.IsSuccessStatusCode ? "✓" : "✗")}");
                         }
                         else
                         {
-                            sb.AppendLine($"  Cloudflare Tunnel: TIMEOUT (>10s)");
+                            sb.AppendLine(CultureInfo.InvariantCulture, $"  Cloudflare Tunnel: TIMEOUT (>10s)");
                         }
                     }
-                    catch (Exception ex) { sb.AppendLine($"  Cloudflare Tunnel: FAILED — {ex.InnerException?.Message ?? ex.Message}"); }
+                    catch (Exception ex) { sb.AppendLine(CultureInfo.InvariantCulture, $"  Cloudflare Tunnel: FAILED — {ex.InnerException?.Message ?? ex.Message}"); }
                 }
                 else
                 {
-                    sb.AppendLine($"  Cloudflare Tunnel: NOT CONFIGURED");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  Cloudflare Tunnel: NOT CONFIGURED");
                 }
                 sb.AppendLine();
 
@@ -362,21 +376,21 @@ namespace FlyShelf.Classes
                 try
                 {
                     var addrs = System.Net.Dns.GetHostAddresses("region1.v2.argotunnel.com");
-                    sb.AppendLine($"  argotunnel.com:    {string.Join(", ", addrs.Select(a => a.ToString()))} ✓");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  argotunnel.com:    {string.Join(", ", addrs.Select(a => a.ToString()))} ✓");
                 }
-                catch (Exception ex) { sb.AppendLine($"  argotunnel.com:    FAILED — {ex.Message} (Cloudflare tunnel WILL fail!)"); }
+                catch (Exception ex) { sb.AppendLine(CultureInfo.InvariantCulture, $"  argotunnel.com:    FAILED — {ex.Message} (Cloudflare tunnel WILL fail!)"); }
                 try
                 {
                     var addrs = System.Net.Dns.GetHostAddresses("api.trycloudflare.com");
-                    sb.AppendLine($"  trycloudflare.com: {string.Join(", ", addrs.Select(a => a.ToString()))} ✓");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  trycloudflare.com: {string.Join(", ", addrs.Select(a => a.ToString()))} ✓");
                 }
-                catch (Exception ex) { sb.AppendLine($"  trycloudflare.com: FAILED — {ex.Message}"); }
+                catch (Exception ex) { sb.AppendLine(CultureInfo.InvariantCulture, $"  trycloudflare.com: FAILED — {ex.Message}"); }
                 sb.AppendLine();
                 
                 sb.AppendLine("══════════════════════════════════════════════════════════════");
 
                 // Write to network log file
-                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
                 foreach (var line in sb.ToString().Split('\n'))
                 {
                     _netBuffer.Enqueue($"[{timestamp}] [DIAGNOSTICS] {line.TrimEnd('\r')}");

@@ -20,7 +20,7 @@ namespace FlyShelf.ViewModels
     public partial class ClipboardItem
     {
 
-        public async void ExtractText()
+        public async Task ExtractText()
         {
             try
             {
@@ -91,8 +91,14 @@ namespace FlyShelf.ViewModels
             {
                 FlyShelf.Windows.ToastWindow.ShowToast("🧠 AI OCR in progress... ⏳");
 
-                byte[] imageBytes = await Task.Run(() => File.ReadAllBytes(FilePath));
-                string ext = Path.GetExtension(FilePath).ToLower();
+                byte[] imageBytes = await Task.Run(() =>
+                {
+                    var fi = new System.IO.FileInfo(FilePath!);
+                    if (fi.Length > 100_000_000)
+                        throw new InvalidOperationException($"File too large for OCR ({fi.Length} bytes): {FilePath}");
+                    return File.ReadAllBytes(FilePath);
+                });
+                string ext = Path.GetExtension(FilePath).ToLowerInvariant();
                 string mimeType = ext switch
                 {
                     ".jpg" or ".jpeg" => "image/jpeg",
@@ -111,7 +117,7 @@ namespace FlyShelf.ViewModels
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
-                        try { System.Windows.Clipboard.SetText(result); } catch { }
+                        try { FlyShelf.Classes.ClipboardHelper.SafeSetText(result); } catch { }
                         FlyShelf.Windows.ToastWindow.ShowToast("✅ AI OCR text copied to clipboard!");
                     });
                 }
@@ -244,10 +250,12 @@ namespace FlyShelf.ViewModels
                         if (softwareBitmap.BitmapPixelFormat != global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8 ||
                             softwareBitmap.BitmapAlphaMode != global::Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied)
                         {
+                            var original = softwareBitmap;
                             softwareBitmap = global::Windows.Graphics.Imaging.SoftwareBitmap.Convert(
-                                softwareBitmap,
+                                original,
                                 global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
                                 global::Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
+                            original.Dispose();
                         }
 
                         // ── 2x upscale for small/medium images ──
@@ -263,7 +271,7 @@ namespace FlyShelf.ViewModels
                                 if (newW > 3800) { newW = 3800; newH = (uint)(imgH * (3800.0 / imgW)); }
                                 if (newH > 3800) { newH = 3800; newW = (uint)(imgW * (3800.0 / imgH)); }
 
-                                var inMemStream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream();
+                                using var inMemStream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream();
                                 var encoder = await global::Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
                                     global::Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId, inMemStream);
                                 encoder.SetSoftwareBitmap(softwareBitmap);
@@ -274,9 +282,11 @@ namespace FlyShelf.ViewModels
 
                                 inMemStream.Seek(0);
                                 var dec2 = await global::Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(inMemStream);
-                                softwareBitmap = await dec2.GetSoftwareBitmapAsync(
+                                var upscaledBitmap = await dec2.GetSoftwareBitmapAsync(
                                     global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
                                     global::Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
+                                softwareBitmap.Dispose();
+                                softwareBitmap = upscaledBitmap;
                             }
                             catch (Exception upscaleEx)
                             {
@@ -291,7 +301,7 @@ namespace FlyShelf.ViewModels
                                 uint newW = (uint)(imgW * scale);
                                 uint newH = (uint)(imgH * scale);
 
-                                var inMemStream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream();
+                                using var inMemStream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream();
                                 var encoder = await global::Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
                                     global::Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId, inMemStream);
                                 encoder.SetSoftwareBitmap(softwareBitmap);
@@ -302,9 +312,11 @@ namespace FlyShelf.ViewModels
 
                                 inMemStream.Seek(0);
                                 var dec2 = await global::Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(inMemStream);
-                                softwareBitmap = await dec2.GetSoftwareBitmapAsync(
+                                var downscaledBitmap = await dec2.GetSoftwareBitmapAsync(
                                     global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
                                     global::Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
+                                softwareBitmap.Dispose();
+                                softwareBitmap = downscaledBitmap;
                             }
                             catch (Exception downscaleEx)
                             {
@@ -332,7 +344,9 @@ namespace FlyShelf.ViewModels
                         try
                         {
                             var enhanced = FlyShelf.Classes.OcrPreprocessor.SmartEnhance(softwareBitmap);
+                            var preEnhance = softwareBitmap;
                             softwareBitmap = enhanced;
+                            if (!ReferenceEquals(preEnhance, enhanced)) preEnhance.Dispose();
                         }
                         catch (Exception enhanceEx)
                         {

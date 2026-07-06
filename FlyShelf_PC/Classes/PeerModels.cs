@@ -88,7 +88,10 @@ namespace FlyShelf.Classes
         public readonly object StateLock = new(); // Protects atomic IsAlive + Transport updates
 
         // Exponential backoff for WebSocket reconnection (prevents tight reconnect loops)
-        public int WsReconnectAttempts;
+        private int _wsReconnectAttempts;
+        public int WsReconnectAttempts => Interlocked.CompareExchange(ref _wsReconnectAttempts, 0, 0);
+        public int IncrementWsReconnectAttempts() => Interlocked.Increment(ref _wsReconnectAttempts);
+        public void ResetWsReconnectAttempts() => Interlocked.Exchange(ref _wsReconnectAttempts, 0);
 
         // Active file transfer tracking (prevents marking peer dead mid-transfer)
         public int ActiveTransfers;

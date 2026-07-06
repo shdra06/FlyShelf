@@ -67,7 +67,7 @@ namespace FlyShelf.Windows
                 ToastWindow.ShowToast("Trigger must be at least 2 characters (e.g. /adh)");
                 return;
             }
-            if (!trigger.StartsWith("/"))
+            if (!trigger.StartsWith('/'))
                 trigger = "/" + trigger;
 
             // Validate label
@@ -175,7 +175,7 @@ namespace FlyShelf.Windows
                 }
 
                 // Ensure trigger starts with /
-                if (!shortcut.Trigger.StartsWith("/"))
+                if (!shortcut.Trigger.StartsWith('/'))
                     shortcut.Trigger = "/" + shortcut.Trigger;
 
                 shortcut.IsEditing = false;

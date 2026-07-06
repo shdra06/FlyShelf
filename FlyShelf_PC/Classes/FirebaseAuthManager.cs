@@ -131,7 +131,7 @@ namespace FlyShelf.Classes
             if (string.IsNullOrEmpty(token)) return firebaseUrl;
             
             // Append auth parameter
-            char separator = firebaseUrl.Contains("?") ? '&' : '?';
+            char separator = firebaseUrl.Contains('?') ? '&' : '?';
             return $"{firebaseUrl}{separator}auth={token}";
         }
 

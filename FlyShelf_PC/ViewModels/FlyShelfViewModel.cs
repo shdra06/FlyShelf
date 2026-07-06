@@ -11,6 +11,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Text.Json;
+using FlyShelf.Classes;
 
 namespace FlyShelf.ViewModels
 {
@@ -116,7 +117,7 @@ namespace FlyShelf.ViewModels
                             continue;
 
                         if (string.IsNullOrWhiteSpace(item.FileName) && !string.IsNullOrWhiteSpace(item.RawContent))
-                            item.FileName = item.RawContent.Length > 5000 ? item.RawContent.Substring(0, 5000) + "..." : item.RawContent;
+                            item.FileName = item.RawContent.Length > 5000 ? string.Concat(item.RawContent.AsSpan(0, 5000), "...") : item.RawContent;
 
                         item.EvaluateSmartActions();
 
@@ -179,14 +180,7 @@ namespace FlyShelf.ViewModels
 
                 OnPropertyChanged(nameof(ShelfVisibility));
 
-                // Auto-save on collection changes (throttled — max once every 2s)
-                DroppedItems.CollectionChanged += (s, e) =>
-                {
-                    if (!_isDatabaseWriteSuspended && !_isPaginating)
-                    {
-                        SchedulePersistHistory();
-                    }
-                };
+
 
                 // Start the auto-cleanup timer
                 StartAutoCleanupTimer();
@@ -261,6 +255,9 @@ namespace FlyShelf.ViewModels
                     });
                 }
 
+                // _isPaginating is intentionally reset before the fire-and-forget icon-loading Task completes.
+                // This is acceptable because SchedulePersistHistory checks _isPaginating to gate persistence,
+                // and icon loading is purely cosmetic — it does not affect data integrity.
                 _isPaginating = false;
             }
             finally
@@ -291,11 +288,11 @@ namespace FlyShelf.ViewModels
         /// </summary>
         private void SchedulePersistHistory()
         {
-            if (_persistScheduled) return; // Already scheduled — skip
-            _persistScheduled = true;
-
             lock (_persistLock)
             {
+                if (_persistScheduled) return; // Already scheduled — skip
+                _persistScheduled = true;
+
                 _persistThrottleTimer?.Dispose();
                 _persistThrottleTimer = new System.Threading.Timer(_ =>
                 {
@@ -303,11 +300,12 @@ namespace FlyShelf.ViewModels
                     try
                     {
                         // Take snapshot on dispatcher, then save off-thread
+                        // PERF: Use Background priority so this runs during idle time, not during active rendering
                         Application.Current?.Dispatcher?.InvokeAsync(() =>
                         {
                             if (_isDatabaseWriteSuspended || _isPaginating) return;
                             PersistHistory();
-                        });
+                        }, System.Windows.Threading.DispatcherPriority.Background);
                     }
                     catch { } // Best-effort: failure is acceptable
                 }, null, 2000, System.Threading.Timeout.Infinite);
@@ -459,8 +457,8 @@ namespace FlyShelf.ViewModels
             ConvertPdfToWordCommand = new RelayCommand<ClipboardItem>(item => item?.ConvertPdfToWordTask());
             ManualScanQRCodeCommand = new RelayCommand<ClipboardItem>(item => item?.ManualScanQRCode());
 
-            ExtractTextCommand = new RelayCommand<ClipboardItem>(item => item?.ExtractText());
-            ExtractTableCommand = new RelayCommand<ClipboardItem>(item => item?.ExtractTable());
+            ExtractTextCommand = new RelayCommand<ClipboardItem>(item => { if (item != null) _ = item.ExtractText(); });
+            ExtractTableCommand = new RelayCommand<ClipboardItem>(item => { if (item != null) _ = item.ExtractTable(); });
             SaveSettingsCommand = new RelayCommand(SaveGlobalSettings);
             ToggleCloudDiscoveryCommand = new RelayCommand(() => {
                 FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery = !FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery;
@@ -485,18 +483,13 @@ namespace FlyShelf.ViewModels
                     return;
                 }
                 var win = new FlyShelf.Windows.PdfMergeWindow(pdfs, this);
-                win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
-                win.Topmost = true;
-                win.Show();
-                win.Activate();
-                win.Focus();
-                win.Topmost = false;
+                WindowHelper.ShowInForeground(win);
             });
             OpenFileLocationCommand = new RelayCommand<ClipboardItem>(item => {
                 if (item == null) return;
                 if (item.ItemType == ClipboardItemType.Group)
                 {
-                    string[] paths = item.RawContent.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                    string[] paths = item.RawContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
                     FlyShelf.Classes.ShellExplorerHelper.OpenFilesAndSelect(paths);
                     return;
                 }
@@ -550,6 +543,7 @@ namespace FlyShelf.ViewModels
             
 
             
+            // M-05: Anonymous handler is acceptable — ViewModel is singleton-lifespan and outlives SettingsManager
             FlyShelf.Classes.SettingsManager.Current.PropertyChanged += (s, e) =>
             {
                 if (e.PropertyName == nameof(FlyShelf.Classes.AdvanceSettings.EnableLocalNetworkSync))
@@ -630,6 +624,7 @@ namespace FlyShelf.ViewModels
 
             DroppedItems.CollectionChanged += (s, e) =>
             {
+                InvalidateUnpinnedCount();
                 UpdateFirstTenFlags();
             };
         }
@@ -658,9 +653,9 @@ namespace FlyShelf.ViewModels
         /// <summary>Moves an item to the top of the list without triggering clipboard copy or sync.</summary>
         public void MoveItemToTop(ClipboardItem item)
         {
-            if (item == null || !DroppedItems.Contains(item)) return;
-            
+            if (item == null) return;
             int oldIndex = DroppedItems.IndexOf(item);
+            if (oldIndex < 0) return;
             if (oldIndex == 0) return; // Already at top
             
             var oldDate = item.DateCopied;
@@ -694,7 +689,7 @@ namespace FlyShelf.ViewModels
                 SourceDeviceType = sourceDeviceType,
                 TransferMethod = transferMethod
             };
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
                 DroppedItems.Insert(0, placeholder);
                 OnPropertyChanged(nameof(ShelfVisibility));
@@ -708,7 +703,7 @@ namespace FlyShelf.ViewModels
         /// </summary>
         public void SwapPlaceholderWithCompleted(ClipboardItem placeholder, ClipboardItem completed)
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
                 int idx = DroppedItems.IndexOf(placeholder);
                 if (idx >= 0)
@@ -821,6 +816,26 @@ namespace FlyShelf.ViewModels
                 OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
                 OnCollectionChanged(new System.Collections.Specialized.NotifyCollectionChangedEventArgs(System.Collections.Specialized.NotifyCollectionChangedAction.Reset));
             }
+        }
+
+        /// <summary>
+        /// Suppresses CollectionChanged and PropertyChanged notifications.
+        /// Call ResumeNotifications() when done to fire a single Reset.
+        /// </summary>
+        public void SuppressNotifications()
+        {
+            _suppressNotification = true;
+        }
+
+        /// <summary>
+        /// Resumes notifications after SuppressNotifications() and fires a single Reset event.
+        /// </summary>
+        public void ResumeNotifications()
+        {
+            _suppressNotification = false;
+            OnPropertyChanged(new PropertyChangedEventArgs("Count"));
+            OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+            OnCollectionChanged(new System.Collections.Specialized.NotifyCollectionChangedEventArgs(System.Collections.Specialized.NotifyCollectionChangedAction.Reset));
         }
     }
 }

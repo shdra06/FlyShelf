@@ -7,6 +7,7 @@
         xmlns:settings="clr-namespace:FlyShelf.Classes"
         xmlns:gif="https://github.com/XamlAnimatedGif/XamlAnimatedGif"
         xmlns:styles="clr-namespace:FlyShelf.Styles"
+        xmlns:emoji="clr-namespace:Emoji.Wpf;assembly=Emoji.Wpf"
         Title="FlyShelf Ecosystem" 
         Height="650" 
         Width="900"
@@ -209,22 +210,22 @@
                                Margin="4,2,4,0">
                 <ui:NavigationView.MenuItems>
                     <ui:NavigationViewItem Content="Clipboard" Tag="History" IsActive="True" PreviewMouseLeftButtonDown="Nav_Click" AutomationProperties.Name="Clipboard tab">
-                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Clipboard24"/></ui:NavigationViewItem.Icon>
+                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Clipboard24" Foreground="#3B82F6"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
                     <ui:NavigationViewItem Content="Dashboard" Tag="Dashboard" PreviewMouseLeftButtonDown="Nav_Click" AutomationProperties.Name="Dashboard tab">
-                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="ChartMultiple24"/></ui:NavigationViewItem.Icon>
+                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="ChartMultiple24" Foreground="#10B981"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
                     <ui:NavigationViewItem Content="Network" Tag="Network" PreviewMouseLeftButtonDown="Nav_Click" AutomationProperties.Name="Network tab">
-                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Globe24"/></ui:NavigationViewItem.Icon>
+                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Globe24" Foreground="#06B6D4"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
                     <ui:NavigationViewItem Content="Settings" Tag="Settings" PreviewMouseLeftButtonDown="Nav_Click" AutomationProperties.Name="Settings tab">
-                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Settings24"/></ui:NavigationViewItem.Icon>
+                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Settings24" Foreground="#64748B"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
                     <ui:NavigationViewItem Content="AI" Tag="AI" PreviewMouseLeftButtonDown="Nav_Click" AutomationProperties.Name="AI settings tab">
-                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Sparkle24"/></ui:NavigationViewItem.Icon>
+                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Sparkle24" Foreground="#8B5CF6"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
                     <ui:NavigationViewItem x:Name="LogsNavItem" Content="Logs" Tag="Logs" PreviewMouseLeftButtonDown="Nav_Click" AutomationProperties.Name="Logs tab">
-                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Document24"/></ui:NavigationViewItem.Icon>
+                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Document24" Foreground="#F59E0B"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
                     <ui:NavigationViewItem Content="Tutorial" Tag="Tutorial" PreviewMouseLeftButtonDown="Nav_Click" AutomationProperties.Name="Tutorial tab">
                         <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="BookOpen24"/></ui:NavigationViewItem.Icon>
@@ -795,132 +796,116 @@
                 <Grid x:Name="NetworkGrid" Visibility="Collapsed">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
                     <!-- ═══════════════════════════════════════════════════════════════════ -->
-                    <!-- TOP SECTION: Network Status Dashboard (always visible)              -->
+                    <!-- UNIFIED HEADER: Tab Navigation + Action Buttons in single row     -->
                     <!-- ═══════════════════════════════════════════════════════════════════ -->
                     <Border Grid.Row="0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                             BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" 
-                            CornerRadius="12" Padding="12,8" Margin="0,0,0,8">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
+                            CornerRadius="12" Padding="6,4" Margin="0,0,0,8">
+                        <DockPanel>
+                            <!-- Action buttons — right-aligned, clean pill style -->
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                                <!-- Peer count badge — subtle status indicator -->
+                                <Border Background="#1510B981" CornerRadius="8" Padding="8,4" Margin="0,0,6,0" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border x:Name="NetStatusLanDot" Width="6" Height="6" CornerRadius="3" Background="#10B981" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="NetStatusPeerCount" Text="0 peers" FontSize="10" FontWeight="SemiBold" Foreground="#10B981" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
 
-                            <!-- Status indicators row -->
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                <!-- LAN status -->
-                                <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
-                                    <Border x:Name="NetStatusLanDot" Width="8" Height="8" CornerRadius="4" Background="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="LAN" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="NetStatusLanIp" Text="—" FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center"/>
-                                </StackPanel>
-
-                                <!-- Separator -->
-                                <Border Width="1" Height="16" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,0,18,0"/>
-
-                                <!-- Cloudflare status -->
-                                <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
-                                    <Border x:Name="NetStatusCfDot" Width="8" Height="8" CornerRadius="4" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="Cloudflare" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="NetStatusCfUrl" Text="Off" FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" MaxWidth="180" TextTrimming="CharacterEllipsis"/>
-                                </StackPanel>
-
-                                <!-- Separator -->
-                                <Border Width="1" Height="16" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,0,18,0"/>
-
-                                <!-- Transfer engine -->
-                                <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
-                                    <Border x:Name="NetStatusEngineDot" Width="8" Height="8" CornerRadius="4" Background="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="Port 8998" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
-                                </StackPanel>
-
-                                <!-- Separator -->
-                                <Border Width="1" Height="16" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,0,18,0"/>
-
-                                <!-- Peer count -->
-                                <StackPanel Orientation="Horizontal">
-                                    <Border Background="#1510B981" CornerRadius="4" Padding="8,3">
-                                        <TextBlock x:Name="NetStatusPeerCount" Text="0 peers" FontSize="11" FontWeight="Bold" Foreground="#10B981"/>
-                                    </Border>
-                                </StackPanel>
+                                <ui:Button x:Name="NetActionTransferMgr" Padding="10,5" FontSize="10.5" 
+                                           Margin="0,0,4,0" ToolTip="Open file transfer manager" Click="NetworkOpenTransferManager_Click" AutomationProperties.Name="Open transfer manager">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="FolderArrowUp24" FontSize="12" Margin="0,0,5,0"/>
+                                        <TextBlock Text="Transfers" FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                </ui:Button>
+                                <ui:Button x:Name="NetActionLiveLogs" Padding="10,5" FontSize="10.5" 
+                                           Click="OpenNetworkLogs_Click" ToolTip="View live network logs" AutomationProperties.Name="View live network logs">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="SlideText24" FontSize="12" Margin="0,0,5,0"/>
+                                        <TextBlock Text="Logs" FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                </ui:Button>
                             </StackPanel>
 
-                            <!-- Action buttons row -->
-                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,6,0,0">
-                                <ui:Button x:Name="NetActionForceSync" Content="📡 Force Sync" Padding="10,5" FontSize="11" 
-                                           Click="ForcePeerSync_Click" Margin="0,0,8,0"
-                                           ToolTip="Re-fetch all peer URLs from Firebase and reconnect" AutomationProperties.Name="Force sync peers"/>
-                                <ui:Button x:Name="NetActionTransferMgr" Content="📂 Transfer Manager" Padding="10,5" FontSize="11" 
-                                           Margin="0,0,8,0" ToolTip="Open file transfer manager" Click="NetworkOpenTransferManager_Click" AutomationProperties.Name="Open transfer manager"/>
-                                <ui:Button x:Name="NetActionLiveLogs" Content="📋 Live Logs" Padding="10,5" FontSize="11" 
-                                           Click="OpenNetworkLogs_Click" ToolTip="View live network logs" AutomationProperties.Name="View live network logs"/>
+                            <!-- Inner tab pills — left-aligned -->
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <StackPanel.Resources>
+                                    <Style x:Key="NetworkInnerTabStyle" TargetType="RadioButton">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="RadioButton">
+                                                    <Border x:Name="TabBorder" CornerRadius="8" Padding="14,6" Cursor="Hand" Background="Transparent">
+                                                        <ContentPresenter x:Name="TabContent" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsChecked" Value="True">
+                                                            <Setter TargetName="TabBorder" Property="Background">
+                                                                <Setter.Value>
+                                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                                        <GradientStop Color="#6366F1" Offset="0"/>
+                                                                        <GradientStop Color="#8B5CF6" Offset="1"/>
+                                                                    </LinearGradientBrush>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                            <Setter Property="Foreground" Value="White"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsChecked" Value="False">
+                                                            <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                                        </Trigger>
+                                                        <MultiTrigger>
+                                                            <MultiTrigger.Conditions>
+                                                                <Condition Property="IsMouseOver" Value="True"/>
+                                                                <Condition Property="IsChecked" Value="False"/>
+                                                            </MultiTrigger.Conditions>
+                                                            <Setter TargetName="TabBorder" Property="Background" Value="#186366F1"/>
+                                                        </MultiTrigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="FontSize" Value="12"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                        <Setter Property="GroupName" Value="NetworkInnerTabs"/>
+                                    </Style>
+                                </StackPanel.Resources>
+
+                                <RadioButton x:Name="NetworkTabDevices" Style="{StaticResource NetworkInnerTabStyle}" IsChecked="True" Checked="NetworkInnerTab_Checked" AutomationProperties.Name="Devices tab">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="Desktop24" FontSize="14" Margin="0,0,5,0"/>
+                                        <TextBlock Text="Devices"/>
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton x:Name="NetworkTabFileQueue" Style="{StaticResource NetworkInnerTabStyle}" Checked="NetworkInnerTab_Checked" AutomationProperties.Name="File queue tab">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="FolderOpen24" FontSize="14" Margin="0,0,5,0"/>
+                                        <TextBlock Text="File Queue"/>
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton x:Name="NetworkTabHistory" Style="{StaticResource NetworkInnerTabStyle}" Checked="NetworkInnerTab_Checked" AutomationProperties.Name="History tab">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="History24" FontSize="14" Margin="0,0,5,0"/>
+                                        <TextBlock Text="History"/>
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton x:Name="NetworkTabNearby" Style="{StaticResource NetworkInnerTabStyle}" Checked="NetworkInnerTab_Checked" AutomationProperties.Name="Nearby devices tab">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="Wifi124" FontSize="14" Margin="0,0,5,0"/>
+                                        <TextBlock Text="Nearby"/>
+                                    </StackPanel>
+                                </RadioButton>
                             </StackPanel>
-                        </Grid>
-                    </Border>
-
-                    <!-- ═══════════════════════════════════════════════════════════════════ -->
-                    <!-- INNER TAB NAVIGATION (pill-style RadioButtons)                     -->
-                    <!-- ═══════════════════════════════════════════════════════════════════ -->
-                    <Border Grid.Row="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
-                            BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" 
-                            CornerRadius="10" Padding="4" Margin="0,0,0,6" HorizontalAlignment="Left">
-                        <StackPanel Orientation="Horizontal">
-                            <StackPanel.Resources>
-                                <Style x:Key="NetworkInnerTabStyle" TargetType="RadioButton">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="TabBorder" CornerRadius="8" Padding="14,7" Cursor="Hand" Background="Transparent">
-                                                    <ContentPresenter x:Name="TabContent" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="TabBorder" Property="Background">
-                                                            <Setter.Value>
-                                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                                                    <GradientStop Color="#6366F1" Offset="0"/>
-                                                                    <GradientStop Color="#8B5CF6" Offset="1"/>
-                                                                </LinearGradientBrush>
-                                                            </Setter.Value>
-                                                        </Setter>
-                                                        <Setter Property="Foreground" Value="White"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsChecked" Value="False">
-                                                        <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
-                                                    </Trigger>
-                                                    <MultiTrigger>
-                                                        <MultiTrigger.Conditions>
-                                                            <Condition Property="IsMouseOver" Value="True"/>
-                                                            <Condition Property="IsChecked" Value="False"/>
-                                                        </MultiTrigger.Conditions>
-                                                        <Setter TargetName="TabBorder" Property="Background" Value="#186366F1"/>
-                                                    </MultiTrigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                    <Setter Property="FontSize" Value="12"/>
-                                    <Setter Property="FontWeight" Value="SemiBold"/>
-                                    <Setter Property="GroupName" Value="NetworkInnerTabs"/>
-                                </Style>
-                            </StackPanel.Resources>
-
-                            <RadioButton x:Name="NetworkTabDevices" Style="{StaticResource NetworkInnerTabStyle}" Content="📡 Devices" IsChecked="True" Checked="NetworkInnerTab_Checked" AutomationProperties.Name="Devices tab"/>
-                            <RadioButton x:Name="NetworkTabFileQueue" Style="{StaticResource NetworkInnerTabStyle}" Content="📂 File Queue" Checked="NetworkInnerTab_Checked" AutomationProperties.Name="File queue tab"/>
-                            <RadioButton x:Name="NetworkTabHistory" Style="{StaticResource NetworkInnerTabStyle}" Content="📜 History" Checked="NetworkInnerTab_Checked" AutomationProperties.Name="History tab"/>
-                            <RadioButton x:Name="NetworkTabNearby" Style="{StaticResource NetworkInnerTabStyle}" Content="📶 Nearby" Checked="NetworkInnerTab_Checked" AutomationProperties.Name="Nearby devices tab"/>
-                        </StackPanel>
+                        </DockPanel>
                     </Border>
 
                     <!-- ═══════════════════════════════════════════════════════════════════ -->
                     <!-- INNER TAB CONTENT PANELS                                           -->
                     <!-- ═══════════════════════════════════════════════════════════════════ -->
-                    <Grid Grid.Row="2">
+                    <Grid Grid.Row="1">
 
                         <!-- ═══════════════════════════════════════════════════════════════ -->
                         <!-- TAB 1: DEVICES (default visible — all existing Network content) -->
@@ -928,14 +913,13 @@
                         <Grid x:Name="NetworkDevicesTab" Visibility="Visible">
                             <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
                                 <StackPanel>
-                                    <StackPanel Margin="0,0,0,10">
-                                        <TextBlock Text="Wi-Fi Sync Server" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
-                                        <TextBlock Text="Seamlessly connect your phone to your PC's clipboard." FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,2,0,0" TextWrapping="Wrap" />
-                                    </StackPanel>
-
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                        <ui:SymbolIcon Symbol="Wifi124" FontSize="18" Foreground="#10B981" Margin="0,0,8,0"/>
-                                        <TextBlock Text="Local Network Broadcasting" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" />
+                                    <!-- Connection Settings -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                        <ui:SymbolIcon Symbol="Wifi124" FontSize="18" Foreground="#10B981" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Connection Settings" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
+                                            <TextBlock Text="Configure how your devices sync clipboard data." FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,1,0,0"/>
+                                        </StackPanel>
                                     </StackPanel>
                                     <Border Style="{StaticResource PremiumSettingStyle}">
                                         <StackPanel>
@@ -1107,16 +1091,27 @@
                                             <!-- ═ ═ ═ LIVE P2P PEER STATUS ═ ═ ═ -->
                                             <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,4,0,14" />
 
-                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                                <Border Width="8" Height="8" CornerRadius="4" Background="#10B981" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                <TextBlock Text="Paired Devices" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
-                                                <Border Background="#1510B981" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
-                                                    <TextBlock x:Name="PeerCountBadge" Text="0 online" FontSize="10" FontWeight="Bold" Foreground="#10B981"/>
-                                                </Border>
-                                                <ui:Button x:Name="NetworkLiveLogsBtn" Content="📡 Live Logs" Padding="8,3"
-                                                           Click="OpenNetworkLogs_Click" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                           ToolTip="View live logs from this device and all paired devices" AutomationProperties.Name="View live network logs"/>
-                                            </StackPanel>
+                                            <Grid Margin="0,0,0,10">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Border Width="8" Height="8" CornerRadius="4" Background="#10B981" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Paired Devices" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
+                                                    <Border Background="#1510B981" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
+                                                        <TextBlock x:Name="PeerCountBadge" Text="0 online" FontSize="10" FontWeight="Bold" Foreground="#10B981"/>
+                                                    </Border>
+                                                </StackPanel>
+                                                <ui:Button Grid.Column="1" x:Name="NetActionForceSync" Padding="10,5" FontSize="10.5" 
+                                                           Click="ForcePeerSync_Click"
+                                                           ToolTip="Re-fetch all peer URLs from Firebase and reconnect" AutomationProperties.Name="Force sync peers">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <ui:SymbolIcon Symbol="ArrowSync16" FontSize="12" Margin="0,0,5,0"/>
+                                                        <TextBlock Text="Sync" FontWeight="SemiBold"/>
+                                                    </StackPanel>
+                                                </ui:Button>
+                                            </Grid>
 
                                             <!-- Live P2P status from PeerManager (5s heartbeat) -->
                                             <ItemsControl x:Name="PeerStatusPanel">
@@ -1643,9 +1638,24 @@
                                                     </Style>
                                                 </StackPanel.Resources>
                                                 <RadioButton x:Name="HistoryFilterAll" Style="{StaticResource HistoryFilterStyle}" Content="All" IsChecked="True"/>
-                                                <RadioButton x:Name="HistoryFilterSent" Style="{StaticResource HistoryFilterStyle}" Content="📤 Sent"/>
-                                                <RadioButton x:Name="HistoryFilterReceived" Style="{StaticResource HistoryFilterStyle}" Content="📥 Received"/>
-                                                <RadioButton x:Name="HistoryFilterFailed" Style="{StaticResource HistoryFilterStyle}" Content="❌ Failed"/>
+                                                <RadioButton x:Name="HistoryFilterSent" Style="{StaticResource HistoryFilterStyle}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <emoji:TextBlock Text="📤" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="Sent" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </RadioButton>
+                                                <RadioButton x:Name="HistoryFilterReceived" Style="{StaticResource HistoryFilterStyle}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <emoji:TextBlock Text="📥" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="Received" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </RadioButton>
+                                                <RadioButton x:Name="HistoryFilterFailed" Style="{StaticResource HistoryFilterStyle}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <emoji:TextBlock Text="❌" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="Failed" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </RadioButton>
                                             </StackPanel>
 
                                             <!-- Search -->
@@ -1654,7 +1664,7 @@
                                             <!-- Export CSV -->
                                             <ui:Button x:Name="HistoryExportCsvBtn" Grid.Column="2" Padding="10,6" FontSize="11" Margin="0,0,6,0">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="📊" FontSize="11" Margin="0,0,4,0"/>
+                                                    <emoji:TextBlock Text="📊" FontSize="11" Margin="0,0,4,0"/>
                                                     <TextBlock Text="Export CSV" FontSize="11" FontWeight="SemiBold"/>
                                                 </StackPanel>
                                             </ui:Button>
@@ -1662,7 +1672,7 @@
                                             <!-- Clear -->
                                             <ui:Button x:Name="HistoryClearBtn" Grid.Column="3" Padding="10,6" FontSize="11">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="🗑️" FontSize="11" Margin="0,0,4,0"/>
+                                                    <emoji:TextBlock Text="🗑️" FontSize="11" Margin="0,0,4,0"/>
                                                     <TextBlock Text="Clear" FontSize="11" FontWeight="SemiBold"/>
                                                 </StackPanel>
                                             </ui:Button>
@@ -1729,8 +1739,8 @@
 
                                     <!-- Empty state -->
                                     <StackPanel x:Name="HistoryEmptyState" HorizontalAlignment="Center" Margin="0,30,0,30">
-                                        <ui:SymbolIcon Symbol="History24" FontSize="40" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,0,0,12"/>
-                                        <TextBlock Text="📜 No transfer history yet" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
+                                        <ui:SymbolIcon Symbol="History24" FontSize="40" Foreground="#8B5CF6" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                                        <emoji:TextBlock Text="📜 No transfer history yet" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </StackPanel>
                             </ScrollViewer>
@@ -3668,7 +3678,7 @@
                             </Border>
 
                             <!-- Footer -->
-                            <TextBlock Text="© 2026 FlyShelf. Built with 💜 by Shivendra. All rights reserved." FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,10,0,24" Opacity="0.7"/>
+                            <emoji:TextBlock Text="© 2026 FlyShelf. Built with 💜 by Shivendra. All rights reserved." FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,10,0,24" Opacity="0.7"/>
                             
                         </StackPanel>
                     </ScrollViewer>

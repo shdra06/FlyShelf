@@ -1,7 +1,9 @@
 import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 
-import { initializeAuth, getAuth, signInAnonymously, onAuthStateChanged, getReactNativePersistence } from "firebase/auth";
+import { initializeAuth, getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+// @ts-ignore — getReactNativePersistence location varies by Firebase version
+import { getReactNativePersistence } from "firebase/auth";
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 // ═══ XOR Obfuscation Key (matching PC) ═══
@@ -35,8 +37,8 @@ function deobfuscate(bytes: number[], key: string): string {
 
 const firebaseConfig = {
   apiKey: deobfuscate(API_KEY_BYTES, XOR_KEY),
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "advance-sync.firebaseapp.com",
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "advance-sync",
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "advance-sync-default.firebaseapp.com",
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "advance-sync-default",
   storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "advance-sync.firebasestorage.app",
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "49241495533",
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "1:49241495533:web:a774fec697271c1b81f9e4",
@@ -60,6 +62,7 @@ try {
   _auth = getAuth(app);
 }
 export const auth = _auth;
+let _restIdToken: string | null = null;
 
 /**
  * Sign in anonymously to Firebase Auth.
@@ -77,12 +80,26 @@ export async function ensureFirebaseAuth(): Promise<void> {
         // Already authenticated
         resolve();
       } else {
+        // Need to sign in
         try {
           await signInAnonymously(auth);
           resolve();
-        } catch (error) {
-          console.error('[FirebaseAuth] Anonymous sign-in failed:', error);
-          reject(error);
+        } catch (error: any) {
+          console.error('[FirebaseAuth] SDK Anonymous sign-in failed:', error);
+          
+          // ─── FALLBACK: Try REST API if SDK fails (Robustness for Android) ───
+          if (error.code === 'auth/network-request-failed' || error.message?.toLowerCase().includes('network')) {
+            console.log('[FirebaseAuth] Attempting REST API fallback...');
+            try {
+              await signInAnonymouslyRest();
+              resolve();
+            } catch (restError) {
+              console.error('[FirebaseAuth] REST fallback also failed:', restError);
+              reject(restError);
+            }
+          } else {
+            reject(error);
+          }
         }
       }
     });
@@ -99,9 +116,15 @@ export async function getFirebaseIdToken(): Promise<string> {
     // Try to re-authenticate if no current user
     try {
       await ensureFirebaseAuth();
-      const refreshedUser = auth.currentUser;
-      if (refreshedUser) return await refreshedUser.getIdToken();
-    } catch {}
+      // After ensureFirebaseAuth, auth.currentUser might be set if SDK succeeded
+      if (auth.currentUser) {
+        return await auth.currentUser.getIdToken(true);
+      }
+      // If still null, check if we have a REST token
+      if (_restIdToken) {
+        return _restIdToken;
+      }
+    } catch (error) {}
     return "";
   }
   try {
@@ -118,3 +141,34 @@ export async function getFirebaseIdToken(): Promise<string> {
 }
 
 export default app;
+/**
+ * Fallback: Sign in anonymously via Firebase REST API.
+ * Bypasses JS SDK internal request handling which can fail on some Android environments.
+ */
+async function signInAnonymouslyRest(): Promise<void> {
+  const apiKey = firebaseConfig.apiKey;
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`;
+  
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ returnSecureToken: true })
+    });
+    
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error?.message || 'REST Auth Failed');
+    }
+    
+    if (data.idToken) {
+      _restIdToken = data.idToken;
+      console.log('[FirebaseAuth] REST sign-in successful, token cached');
+      
+      // Auto-clear token after 50 minutes (Firebase tokens last 1 hour)
+      setTimeout(() => { _restIdToken = null; }, 50 * 60 * 1000);
+    }
+  } catch (error) {
+    throw error;
+  }
+}

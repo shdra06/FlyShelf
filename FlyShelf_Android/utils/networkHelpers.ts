@@ -1,6 +1,7 @@
 // Network utility helpers for FlyShelf Android
 // Optimized for large file handling (50MB+) and direct LAN discovery
 import { decrypt as aesDecrypt } from './syncCrypto';
+// @ts-ignore — export names differ between type definitions and runtime API
 import { decode as quickDecode, encode as quickEncode } from 'react-native-quick-base64';
 
 /** Validate if a pairing key is exactly 32-character hex string */
@@ -14,11 +15,15 @@ export const isValidPairingKey = (key: string | null | undefined): boolean => {
  * 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
  */
 const isPrivateIp = (host: string): boolean => {
+  const parts = host.split('.');
+  if (parts.length !== 4) return host === 'localhost' || host === '127.0.0.1';
+  const nums = parts.map(Number);
+  if (nums.some(n => isNaN(n) || n < 0 || n > 255)) return false;
   return (
-    /^(192\.168\.\d{1,3}\.\d{1,3})$/.test(host) ||
-    /^(10\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.test(host) ||
-    /^(172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})$/.test(host) ||
-    host === 'localhost' || host === '127.0.0.1'
+    nums[0] === 10 ||
+    (nums[0] === 172 && nums[1] >= 16 && nums[1] <= 31) ||
+    (nums[0] === 192 && nums[1] === 168) ||
+    (nums[0] === 127 && nums[1] === 0 && nums[2] === 0 && nums[3] === 1)
   );
 };
 
@@ -26,15 +31,17 @@ const isPrivateIp = (host: string): boolean => {
 export const isValidDeviceUrl = (urlStr: string | null | undefined): boolean => {
   if (!urlStr) return false;
   try {
-    let host = urlStr.trim().replace(/^https?:\/\//i, '').split('/')[0].split(':')[0];
-    host = host.toLowerCase();
+    // Ensure we have a protocol for URL parsing
+    const withProto = urlStr.trim().startsWith('http') ? urlStr.trim() : `http://${urlStr.trim()}`;
+    const parsed = new URL(withProto);
+    const host = parsed.hostname.toLowerCase();
     
     if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
-      return __DEV__;
+      return typeof __DEV__ !== 'undefined' && __DEV__;
     }
     
     if (host.startsWith('169.254.')) return false; // Link-local usually useless for us
-    if (host.endsWith('trycloudflare.com')) return true;
+    if (host.endsWith('.trycloudflare.com') || host === 'trycloudflare.com') return true;
     
     return isPrivateIp(host);
   } catch {
@@ -65,7 +72,12 @@ export const decryptDevice = async (device: any): Promise<any> => {
         if (dec) decrypted.TlsUrl = dec;
       }
       decrypted.UrlsEncrypted = false;
-    } catch {}
+    } catch (err) {
+      // Decryption failed — return the ORIGINAL device with UrlsEncrypted unchanged
+      // so downstream code doesn't try to use half-decrypted / garbled URLs.
+      console.warn('[decryptDevice] Decryption failed, preserving original encrypted device:', err);
+      return device;
+    }
     return decrypted;
   }
   return device;
@@ -85,8 +97,18 @@ export const decryptDeviceList = async (devices: any[]): Promise<any[]> => {
 export const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 2500) => {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
+  // Merge caller's signal with the timeout signal so external aborts are honoured
+  const signal = options?.signal
+    ? (typeof AbortSignal.any === 'function'
+      ? AbortSignal.any([options.signal, controller.signal])
+      : (() => {
+          // Fallback: listen for caller abort and forward to our controller
+          options.signal!.addEventListener('abort', () => controller.abort(), { once: true });
+          return controller.signal;
+        })())
+    : controller.signal;
   try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, { ...options, signal });
     clearTimeout(id);
     return response;
   } catch (error) {
@@ -107,18 +129,19 @@ export const getSubnet = (ip: string): string => {
 };
 
 /** Determine connection type for a device relative to this phone */
-export const getConnectionType = (device: any, myLocalIp: string): 'Local' | 'Cloud' | 'Offline' => {
+export const getConnectionType = (device: any, myLocalIp: string): 'LAN' | 'Cloud' | 'Offline' => {
   if (device._isOffline) return 'Offline';
   const deviceIp = device.LocalIp || device.Url || '';
   const mySubnet = getSubnet(myLocalIp);
   const deviceSubnet = getSubnet(deviceIp);
-  if (mySubnet && deviceSubnet && mySubnet === deviceSubnet) return 'Local';
+  if (mySubnet && deviceSubnet && mySubnet === deviceSubnet) return 'LAN';
   return 'Cloud';
 };
 
 /** Color map for connection types */
 export const connectionColors: Record<string, string> = {
-  Local: '#34D399',   // accent.success
+  LAN: '#34D399',     // accent.success (returned by getConnectionType)
+  Local: '#34D399',   // accent.success (backward compat alias)
   Cloud: '#FBBF24',   // accent.warning
   Offline: '#F87171', // accent.error
 };
@@ -130,7 +153,12 @@ export const connectionColors: Record<string, string> = {
 export const normalizeUrl = (raw: string, defaultPort = 3000): string => {
   let url = raw.trim();
   if (!url) return '';
-  if (url.includes('trycloudflare.com')) return url.replace(/\/$/, '');
+  // Check if this is a Cloudflare tunnel URL by parsing the hostname properly
+  try {
+    const withProto = url.startsWith('http') ? url : `https://${url}`;
+    const parsed = new URL(withProto);
+    if (parsed.hostname.endsWith('.trycloudflare.com')) return withProto.replace(/\/$/, '');
+  } catch { /* not a valid URL yet, continue with normalization */ }
   if (!url.startsWith('http')) url = `http://${url}`;
   
   const hostPart = url.replace(/^https?:\/\//, '');
@@ -184,6 +212,39 @@ export const getDeviceUrls = (device: any): string[] => {
 };
 
 /**
+ * Centrally resolve the best PC URL from the global pairedDevices state.
+ * This ensures consistency across all app tabs (Sync, Todo, Notes).
+ */
+export const resolveBestPcUrl = (pairedDevices: any[], manualIp?: string): string | null => {
+  // 1. Look for a PC in the paired list that is currently online
+  const pc = pairedDevices.find(d => d.deviceType === 'PC' && d.isOnline);
+  if (pc) {
+    // Prioritize LAN/Local URL if available and verified
+    if (pc.localUrl) return pc.localUrl.replace(/\/$/, '');
+    // Fallback to Cloudflare
+    if (pc.globalUrl) return pc.globalUrl.replace(/\/$/, '');
+  }
+
+  // 2. If no online PC found, look for any PC to get its last known URLs
+  const lastPc = pairedDevices.find(d => d.deviceType === 'PC');
+  if (lastPc) {
+    if (lastPc.localUrl) return lastPc.localUrl.replace(/\/$/, '');
+    if (lastPc.globalUrl) return lastPc.globalUrl.replace(/\/$/, '');
+  }
+
+  // 3. Last resort: use the manual IP from settings
+  if (manualIp) {
+    const trimmed = manualIp.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith('http')) return trimmed.replace(/\/$/, '');
+    const withPort = trimmed.includes(':') ? trimmed : `${trimmed}:3000`;
+    return `http://${withPort}`;
+  }
+
+  return null;
+};
+
+/**
  * Resolve the best reachable URL using parallel races.
  * LAN is prioritized by staggering Cloudflare.
  */
@@ -201,9 +262,9 @@ export const resolveOptimalUrl = async (
   try {
     return await Promise.any(
       urls.map(async (url) => {
-        // Stagger Cloudflare by 400ms to prefer LAN response even if it's slightly slower
+        // Stagger Cloudflare by 800ms to prefer LAN response even if it's slightly slower
         if (url.includes('trycloudflare.com')) {
-          await new Promise(r => setTimeout(r, 400));
+          await new Promise(r => setTimeout(r, 800));
         }
         const headers: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
         if (pairingKey) headers['X-Pairing-Key'] = pairingKey;
@@ -218,35 +279,57 @@ export const resolveOptimalUrl = async (
   }
 };
 
+/** Last discovered PC IP for fast re-probe */
+let _lastDiscoveredPcIp: string | null = null;
+
 /**
  * Parallel Subnet Scanner — Discovery without Firebase.
  * Scans the current /24 subnet on common FlyShelf ports.
+ * Optimized: caches last discovered IP for fast re-probe.
  */
 export const scanSubnetForPc = async (myIp: string): Promise<string[]> => {
   const subnet = getSubnet(myIp);
   if (!subnet) return [];
   
   const ports = [3000, 8080, 8999];
-  const candidates: string[] = [];
-  const baseIp = subnet;
+  const PROBE_TIMEOUT = 200; // LAN latency is <5ms, 200ms is generous
   
-  // We scan in parallel chunks to avoid hitting OS limits
+  // Fast path: probe last known IP first
+  if (_lastDiscoveredPcIp && _lastDiscoveredPcIp.startsWith(subnet)) {
+    for (const port of ports) {
+      try {
+        const url = `http://${_lastDiscoveredPcIp}:${port}`;
+        const res = await fetchWithTimeout(`${url}/api/health`, { method: 'GET' }, PROBE_TIMEOUT);
+        if (res.ok) return [url];
+      } catch {}
+    }
+    _lastDiscoveredPcIp = null; // Stale — clear and do full scan
+  }
+  
   const CHUNK_SIZE = 50;
   const discovered: string[] = [];
   
   for (let i = 1; i <= 254; i += CHUNK_SIZE) {
     const chunk = Array.from({ length: Math.min(CHUNK_SIZE, 255 - i) }, (_, j) => i + j);
-    await Promise.allSettled(chunk.flatMap(nodeId => {
-      const targetIp = `${baseIp}${nodeId}`;
-      return ports.map(async port => {
-        try {
+    try {
+      // Use Promise.any to return as soon as first PC found in this chunk
+      const found = await Promise.any(chunk.flatMap(nodeId => {
+        const targetIp = `${subnet}${nodeId}`;
+        return ports.map(async port => {
           const url = `http://${targetIp}:${port}`;
-          const res = await fetchWithTimeout(`${url}/api/health`, { method: 'GET' }, 400);
-          if (res.ok) discovered.push(url);
-        } catch {}
-      });
-    }));
-    if (discovered.length > 0) break; // Found at least one, stop scanning
+          const res = await fetchWithTimeout(`${url}/api/health`, { method: 'GET' }, PROBE_TIMEOUT);
+          if (res.ok) {
+            _lastDiscoveredPcIp = targetIp; // Cache for next time
+            return url;
+          }
+          throw new Error();
+        });
+      }));
+      discovered.push(found);
+      break; // Found one, stop scanning
+    } catch {
+      // No PC in this chunk, continue to next
+    }
   }
   
   return discovered;
@@ -276,4 +359,43 @@ export const getMediaUrl = (item: any, activeDevices: any[], pcLocalIp: string):
   }
 
   return relUrl;
+};
+
+/**
+ * Unified URL resolution with fallback chain.
+ * Consolidates duplicate resolution logic from index.tsx.
+ */
+export const resolveUrlWithFallbacks = async (
+  device: any,
+  lastWorkingUrl: string | null,
+  manualIp: string | undefined,
+  getCachedUrl?: () => Promise<string>,
+): Promise<string | null> => {
+  // 1. Try optimal URL resolution
+  if (device && device !== 'Global') {
+    const resolved = await resolveOptimalUrl(device);
+    if (resolved) return resolved;
+  }
+  
+  // 2. Try cached PC URL resolver
+  if (getCachedUrl) {
+    try {
+      const cached = await getCachedUrl();
+      if (cached) return cached;
+    } catch {}
+  }
+  
+  // 3. Try last working URL
+  if (lastWorkingUrl) return lastWorkingUrl;
+  
+  // 4. Try manual IP from settings
+  if (manualIp?.trim()) {
+    const rawParts = manualIp.split(',').map(s => s.trim()).filter(Boolean);
+    if (rawParts.length > 0) {
+      const raw = rawParts[0];
+      return raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':3000'}`;
+    }
+  }
+  
+  return null;
 };

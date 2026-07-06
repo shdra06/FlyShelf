@@ -4,6 +4,7 @@
 // Split from NetworkSyncServer.Handlers.cs for modularity
 // ---------------------------------------------------------------
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -84,11 +85,11 @@ namespace FlyShelf.Classes
                 if (host == "localhost" || host == "127.0.0.1" || host == "[::1]") return origin;
 
                 // Allow LAN IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
-                if (host.StartsWith("192.168.") || host.StartsWith("10.") || host.StartsWith("172."))
+                if (host.StartsWith("192.168.", StringComparison.Ordinal) || host.StartsWith("10.", StringComparison.Ordinal) || host.StartsWith("172.", StringComparison.Ordinal))
                     return origin;
 
                 // Allow Cloudflare tunnel origins
-                if (host.EndsWith(".trycloudflare.com")) return origin;
+                if (host.EndsWith(".trycloudflare.com", StringComparison.Ordinal)) return origin;
 
                 // Allow FlyShelf's own global URL if set
                 if (!string.IsNullOrEmpty(CloudDiscoveryManager.CachedGlobalUrl))
@@ -96,7 +97,7 @@ namespace FlyShelf.Classes
                     try
                     {
                         var globalUri = new Uri(CloudDiscoveryManager.CachedGlobalUrl);
-                        if (host == globalUri.Host.ToLowerInvariant()) return origin;
+                        if (string.Equals(host, globalUri.Host, StringComparison.OrdinalIgnoreCase)) return origin;
                     }
                     catch { } // Best-effort: failure is acceptable
                 }
@@ -113,7 +114,7 @@ namespace FlyShelf.Classes
 
             try
             {
-                string path = req.Url.LocalPath.ToLower();
+                string path = req.Url.LocalPath.ToLower(CultureInfo.InvariantCulture);
                 string remoteAddr = req.RemoteEndPoint?.ToString() ?? "unknown";
                 Logger.LogAction("HTTP", $"[{remoteAddr}] {req.HttpMethod} {path}");
                 
@@ -531,7 +532,7 @@ namespace FlyShelf.Classes
                             continue;
                         }
 
-                        if (text.TrimStart().StartsWith("{"))
+                        if (text.TrimStart().StartsWith('{'))
                         {
                             try
                             {
@@ -722,7 +723,7 @@ namespace FlyShelf.Classes
                                         continue;
                                     }
 
-                                    string dateString = DateTime.Now.ToString("dd-MM-yyyy");
+                                    string dateString = DateTime.Now.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture);
                                     string uploadDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 
                                         "FlyShelf", "SyncedFiles", "Clipboard", sourceDeviceName, dateString);
                                     Directory.CreateDirectory(uploadDir);
@@ -791,7 +792,7 @@ namespace FlyShelf.Classes
 
                                         if (itemType == "Group")
                                         {
-                                            string extractDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Extracted", $"{Guid.NewGuid().ToString().Substring(0, 8)}");
+                                            string extractDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Extracted", Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture).Substring(0, 8));
                                             Directory.CreateDirectory(extractDir);
                                             SafeExtractZip(finalPath, extractDir);
                                             string[] extractedPaths = Directory.GetFileSystemEntries(extractDir);
@@ -844,7 +845,7 @@ namespace FlyShelf.Classes
             const int MaxFileCount = 1000;
 
             string destinationRoot = Path.GetFullPath(extractDir);
-            string destinationRootWithSeparator = destinationRoot.EndsWith(Path.DirectorySeparatorChar.ToString())
+            string destinationRootWithSeparator = destinationRoot.EndsWith(Path.DirectorySeparatorChar)
                 ? destinationRoot
                 : destinationRoot + Path.DirectorySeparatorChar;
 

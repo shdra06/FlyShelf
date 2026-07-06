@@ -2340,8 +2340,8 @@
                 </Border.Triggers>
                 <ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="28" Foreground="{DynamicResource ThemeEmptyIcon}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
-            <TextBlock Text="Your shelf is empty" Opacity="0.45" FontWeight="SemiBold" FontSize="14" TextAlignment="Center"/>
-            <TextBlock Opacity="0.28" FontSize="11.5" Margin="0,10,0,0" TextAlignment="Center" LineHeight="20">
+            <emoji:TextBlock Text="Your shelf is empty" Opacity="0.45" FontWeight="SemiBold" FontSize="14" TextAlignment="Center"/>
+            <emoji:TextBlock Opacity="0.28" FontSize="11.5" Margin="0,10,0,0" TextAlignment="Center" LineHeight="20">
                 <Run Text="⌨️ Press"/><Run Text=" Alt+C " FontWeight="SemiBold"/><Run Text="anywhere to open"/>
                 <LineBreak/>
                 <Run Text="🖱️ Shake mouse to summon"/>
@@ -2349,7 +2349,7 @@
                 <Run Text="📁 Drag files here to shelve"/>
                 <LineBreak/>
                 <Run Text="🔍 "/><Run Text="Ctrl+F" FontWeight="SemiBold"/><Run Text=" to search your clips"/>
-            </TextBlock>
+            </emoji:TextBlock>
         </StackPanel>
 
         <!-- Alt+C Watermark Hint — visible until clipboard view is filled (controlled from code-behind) -->
@@ -2359,9 +2359,9 @@
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" 
                         CornerRadius="8" Padding="12,6,12,6">
-                    <TextBlock FontSize="11.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center">
+                    <emoji:TextBlock FontSize="11.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center">
                         <Run Text="⌨️" FontSize="10"/><Run Text=" Press "/><Run Text="Alt+C" FontWeight="SemiBold"/><Run Text=" anywhere to summon clipboard"/>
-                    </TextBlock>
+                    </emoji:TextBlock>
                 </Border>
             </StackPanel>
         </Border>
@@ -3281,8 +3281,15 @@
                                                     <ColumnDefinition Width="Auto"/> <!-- More menu -->
                                                     <ColumnDefinition Width="Auto"/> <!-- Right panel: Collapse + Pin + Reminder -->
                                                 </Grid.ColumnDefinitions>
-                                                <!-- Bullet dot -->
-                                                <Ellipse Grid.Column="0" Width="7" Height="7" Fill="#8B5CF6" Margin="2,0,6,0" VerticalAlignment="Center"/>
+                                                <!-- Device origin dot (color = deterministic hash of device name) -->
+                                                <Ellipse Grid.Column="0" Width="8" Height="8" Margin="2,0,6,0" VerticalAlignment="Center">
+                                                    <Ellipse.Fill>
+                                                        <SolidColorBrush Color="{Binding DeviceDotColor}"/>
+                                                    </Ellipse.Fill>
+                                                    <Ellipse.ToolTip>
+                                                        <TextBlock Text="{Binding DeviceTooltip}"/>
+                                                    </Ellipse.ToolTip>
+                                                </Ellipse>
                                                 
                                                 <!-- Bullet Header (Topic) -->
                                                 <Grid Grid.Column="1" Margin="4,0,8,0">

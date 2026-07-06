@@ -2,6 +2,7 @@ import tkinter as tk
 import math
 import time
 import re
+import ast
 import sys
 
 # Windows High-DPI Awareness
@@ -29,6 +30,35 @@ mouse_in_canvas = False
 history_target = []
 history_current = []
 MAX_HISTORY = 70
+
+def _safe_math_eval(expr: str):
+    """Safely evaluate a mathematical expression using AST parsing.
+    Only supports: numbers, +, -, *, /, //, %, ** (no function calls or names)."""
+    node = ast.parse(expr, mode='eval').body
+    def _eval(n):
+        if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)):
+            return n.value
+        elif isinstance(n, ast.UnaryOp):
+            if isinstance(n.op, ast.UAdd):
+                return +_eval(n.operand)
+            elif isinstance(n.op, ast.USub):
+                return -_eval(n.operand)
+        elif isinstance(n, ast.BinOp):
+            left, right = _eval(n.left), _eval(n.right)
+            ops = {
+                ast.Add: lambda a, b: a + b,
+                ast.Sub: lambda a, b: a - b,
+                ast.Mult: lambda a, b: a * b,
+                ast.Div: lambda a, b: a / b,
+                ast.FloorDiv: lambda a, b: a // b,
+                ast.Mod: lambda a, b: a % b,
+                ast.Pow: lambda a, b: a ** b,
+            }
+            op_func = ops.get(type(n.op))
+            if op_func:
+                return op_func(left, right)
+        raise ValueError(f'Unsupported expression: {ast.dump(n)}')
+    return _eval(node)
 
 def get_clipboard_item():
     """Live fetches the system clipboard text and categorizes it like FlyShelf."""
@@ -74,7 +104,7 @@ def get_clipboard_item():
     if math_pattern.match(clip_text_clean) and any(op in clip_text_clean for op in '+-*/^'):
         try:
             safe_expr = clip_text_clean.replace('^', '**')
-            result = eval(safe_expr, {"__builtins__": None}, {})
+            result = _safe_math_eval(safe_expr)
             result_str = f"= {result:.4f}".rstrip('0').rstrip('.')
             return {
                 'type': 'math',

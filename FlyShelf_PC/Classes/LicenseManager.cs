@@ -6,6 +6,7 @@
 // Persists to %AppData%/FlyShelf/license.json
 // ═══════════════════════════════════════════════════════════════════
 using System;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
@@ -36,7 +37,7 @@ namespace FlyShelf.Classes
 
     public class DailyUsageData
     {
-        public string Date { get; set; } = DateTime.Today.ToString("yyyy-MM-dd");
+        public string Date { get; set; } = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         public int PdfMerges { get; set; }
         public int PdfSaves { get; set; }
         public int DocConversions { get; set; }
@@ -84,16 +85,16 @@ namespace FlyShelf.Classes
         // ═══ DAILY LIMITS (Free tier) ═══
         // All these features are 100% offline — generous limits cost us nothing
         // and build goodwill. Only power users hit these.
-        public const int FREE_HISTORY_CAP = 500;
-        public const int PRO_HISTORY_CAP = 2500;
-        public const int FREE_PDF_MERGE_DAILY = 10;
-        public const int FREE_PDF_SAVE_DAILY = 10;
-        public const int FREE_DOC_CONVERT_DAILY = 10;
-        public const int FREE_IMAGE_TO_PDF_DAILY = 10;
-        public const int FREE_QR_SCAN_DAILY = 2;
-        public const int FREE_OCR_DAILY = 15;
+        public const int FREE_HISTORY_CAP = 1000;
+        public const int PRO_HISTORY_CAP = 5000;
+        public const int FREE_PDF_MERGE_DAILY = 20;
+        public const int FREE_PDF_SAVE_DAILY = 20;
+        public const int FREE_DOC_CONVERT_DAILY = 20;
+        public const int FREE_IMAGE_TO_PDF_DAILY = 20;
+        public const int FREE_QR_SCAN_DAILY = 5;
+        public const int FREE_OCR_DAILY = 20;
         public const int FREE_TABLE_EXTRACT_DAILY = 5;
-        public const int FREE_PIN_LIMIT = 20;
+        public const int FREE_PIN_LIMIT = 25;
         public const int FREE_TODO_DAILY = 10;
         public const int FREE_NOTE_DAYS = 60;
         public const int FREE_NOTE_IMAGES_PER_CARD = 1;
@@ -104,9 +105,10 @@ namespace FlyShelf.Classes
         private static readonly byte[] _secretXorKey = Encoding.UTF8.GetBytes("FS_Desktop_Key");
         private static readonly byte[] _secretData = new byte[]
         {
-            0x00, 0x00, 0x00, 0x14, 0x17, 0x1C, 0x34, 0x3F, 0x17, 0x49,
-            0x32, 0x7F, 0x37, 0x4E, 0x30, 0x02, 0x6D, 0x2A, 0x20, 0x4B,
-            0x1C, 0x38, 0x1F, 0x2F, 0x6D, 0x7B, 0x57, 0x4F
+            0x04, 0x3A, 0x1D, 0x71, 0x11, 0x4A, 0x0F, 0x0E, 0x28, 0x04,
+            0x0B, 0x0F, 0x0B, 0x41, 0x7F, 0x3F, 0x36, 0x12, 0x12, 0x3D,
+            0x26, 0x41, 0x27, 0x07, 0x3D, 0x24, 0x52, 0x34, 0x0F, 0x37,
+            0x05, 0x0B
         };
         private static string GetKeySecret()
         {
@@ -161,7 +163,7 @@ namespace FlyShelf.Classes
             {
                 if (string.IsNullOrEmpty(_data.LicenseKey)) return "";
                 if (_data.LicenseKey.Length < 8) return "****";
-                return _data.LicenseKey.Substring(0, 7) + "..." + _data.LicenseKey.Substring(_data.LicenseKey.Length - 4);
+                return string.Concat(_data.LicenseKey.AsSpan(0, 7), "...", _data.LicenseKey.AsSpan(_data.LicenseKey.Length - 4));
             }
         }
 
@@ -177,7 +179,7 @@ namespace FlyShelf.Classes
                 if (string.IsNullOrEmpty(_data.ActivatedAt)) return "";
                 // Parse ISO date and format as a readable date
                 if (DateTimeOffset.TryParse(_data.ActivatedAt, out var dt))
-                    return dt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt");
+                    return dt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt", CultureInfo.InvariantCulture);
                 return _data.ActivatedAt;
             }
         }
@@ -304,9 +306,13 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>Returns retention day options for current tier.</summary>
+        /// <remarks>
+        /// Free: 30-day cleanup + Forever (no auto-delete).
+        /// Pro: adds 7-day and 14-day aggressive cleanup options.
+        /// </remarks>
         public static int[] GetRetentionOptions()
         {
-            return IsPro ? new[] { 7, 14, 30, 0 } : new[] { 7 };
+            return IsPro ? new[] { 7, 14, 30, 0 } : new[] { 30, 0 };
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -455,7 +461,7 @@ namespace FlyShelf.Classes
             key = key.Trim().ToUpperInvariant();
 
             // Validate format
-            if (!key.StartsWith("FS-PRO-")) return false;
+            if (!key.StartsWith("FS-PRO-", StringComparison.Ordinal)) return false;
 
             // Strip prefix and dashes
             string payload = key.Replace("FS-PRO-", "").Replace("-", "");
@@ -468,11 +474,33 @@ namespace FlyShelf.Classes
             if (!checksum.Equals(expectedChecksum, StringComparison.OrdinalIgnoreCase))
                 return false;
 
+            // ═══ v3.6.0: Clear stale license cache before activation ═══
+            // Wipes any previous license.json and in-memory state so that
+            // HMAC rotations, stale JWTs, or prior keys don't interfere.
+            try
+            {
+                lock (_lock)
+                {
+                    _data = new LicenseData();
+                    _tierSentinel = 0;
+                    _loaded = true;
+                    if (File.Exists(_licensePath))
+                    {
+                        File.Delete(_licensePath);
+                        Logger.LogAction("LICENSE", "Cleared stale license cache before activation");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("LICENSE", $"Cache clear warning (non-fatal): {ex.Message}");
+            }
+
             // Valid format — attempt server-side activation
             string deviceId = SettingsManager.Current?.DeviceId ?? "";
             string activationTime = NetworkClock.IsSynced
-                ? NetworkClock.UtcNow.ToString("o")
-                : DateTime.UtcNow.ToString("o");
+                ? NetworkClock.UtcNow.ToString("o", CultureInfo.InvariantCulture)
+                : DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
 
             // [SECURITY FIX v2.3.0]: Server activation is MANDATORY.
             // No offline fallback — prevents forged-key activation without purchase verification.
@@ -528,6 +556,18 @@ namespace FlyShelf.Classes
             UpdateTierSentinel(); // v2.4.0: Set sentinel so IsPro integrity check passes
             Logger.LogAction("LICENSE", $"Pro license activated with server JWT: {MaskedKey}");
             Save();
+
+            // Save backup key for DPAPI recovery
+            try
+            {
+                string backupKeyPath = Path.Combine(_appDataDir, "license_key.bak");
+                byte[] keyBytes = Encoding.UTF8.GetBytes(_data.LicenseKey);
+                byte[] encrypted = ProtectedData.Protect(
+                    keyBytes, Encoding.UTF8.GetBytes("FlyShelfKeyBackup"),
+                    DataProtectionScope.CurrentUser);
+                File.WriteAllBytes(backupKeyPath, encrypted);
+            }
+            catch { /* non-critical */ }
 
             // Push updated licensing properties to active_devices
             if (NetworkSyncServer.Instance != null && NetworkSyncServer.Instance.ServerUrl != "Not Running" && NetworkSyncServer.Instance.ServerUrl != "Offline")
@@ -676,6 +716,30 @@ namespace FlyShelf.Classes
                 catch (Exception ex)
                 {
                     Logger.LogAction("LICENSE", $"Failed to load license: {ex.Message}");
+                    // Try to recover from backup key
+                    string backupKeyPath = Path.Combine(_appDataDir, "license_key.bak");
+                    if (File.Exists(backupKeyPath))
+                    {
+                        try
+                        {
+                            byte[] encBytes = File.ReadAllBytes(backupKeyPath);
+                            byte[] decrypted = ProtectedData.Unprotect(
+                                encBytes, Encoding.UTF8.GetBytes("FlyShelfKeyBackup"),
+                                DataProtectionScope.CurrentUser);
+                            string backupKey = Encoding.UTF8.GetString(decrypted).Trim();
+                            if (!string.IsNullOrEmpty(backupKey))
+                            {
+                                Logger.LogAction("LICENSE", "Attempting recovery from backup key...");
+                                _data = new LicenseData { LicenseKey = backupKey, Tier = "pro" };
+                                Save();
+                                return;
+                            }
+                        }
+                        catch (Exception bex)
+                        {
+                            Logger.LogAction("LICENSE", $"Backup key recovery failed: {bex.Message}");
+                        }
+                    }
                     _data = new LicenseData();
                 }
                 _loaded = true;
@@ -692,7 +756,7 @@ namespace FlyShelf.Classes
             {
                 if (string.IsNullOrWhiteSpace(key)) return false;
                 key = key.Trim().ToUpperInvariant();
-                if (!key.StartsWith("FS-PRO-")) return false;
+                if (!key.StartsWith("FS-PRO-", StringComparison.Ordinal)) return false;
                 string payload = key.Replace("FS-PRO-", "").Replace("-", "");
                 if (payload.Length != 16) return false;
                 string randomPart = payload.Substring(0, 12);
@@ -746,7 +810,7 @@ namespace FlyShelf.Classes
                 // Prevents daily limit reset bypass via system clock manipulation
                 var (trustedNow, _) = NetworkClock.GetTrustedUtcNow();
                 DateTime correctedNow = trustedNow.ToLocalTime().DateTime;
-                string today = correctedNow.Date.ToString("yyyy-MM-dd");
+                string today = correctedNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
                 if (_data.DailyUsage.Date != today)
                 {
@@ -764,7 +828,7 @@ namespace FlyShelf.Classes
             using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
             byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(input));
             // Take first 4 chars of hex digest, uppercase
-            return BitConverter.ToString(hash).Replace("-", "").Substring(0, 4).ToUpperInvariant();
+            return BitConverter.ToString(hash).Replace("-", "", StringComparison.Ordinal).Substring(0, 4).ToUpperInvariant();
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -797,7 +861,7 @@ namespace FlyShelf.Classes
                 string AuthUrl(string url)
                 {
                     if (string.IsNullOrEmpty(firebaseAuth)) return url;
-                    return url.Contains("?") ? $"{url}&auth={firebaseAuth}" : $"{url}?auth={firebaseAuth}";
+                    return url.Contains('?') ? $"{url}&auth={firebaseAuth}" : $"{url}?auth={firebaseAuth}";
                 }
 
                 string safeKey = key.Replace("-", "_");
@@ -808,9 +872,9 @@ namespace FlyShelf.Classes
                 if (revokeResponse.IsSuccessStatusCode)
                 {
                     string revokeJson = await revokeResponse.Content.ReadAsStringAsync();
-                    if (revokeJson != "null" && revokeJson.Contains("true", StringComparison.OrdinalIgnoreCase))
+                    if (!string.Equals(revokeJson, "null", StringComparison.Ordinal) && revokeJson.Contains("true", StringComparison.OrdinalIgnoreCase))
                     {
-                        Logger.LogAction("LICENSE_SERVER", $"⚠️ Key {key} has been REVOKED on the server!");
+                        Logger.LogAction("LICENSE_SERVER", $"⚠️ Key {(key.Length > 8 ? key[..8] : key)}... has been REVOKED on the server!");
                         DeactivateLicense();
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                             Windows.ToastWindow.ShowToast("⚠️ Your license key has been revoked. Contact support."));
@@ -820,8 +884,8 @@ namespace FlyShelf.Classes
 
                 // 2. Register this activation (authenticated)
                 string activationTime = NetworkClock.IsSynced
-                    ? NetworkClock.UtcNow.ToString("o")
-                    : DateTime.UtcNow.ToString("o");
+                    ? NetworkClock.UtcNow.ToString("o", CultureInfo.InvariantCulture)
+                    : DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
 
                 string activationUrl = AuthUrl($"{dbUrl}/licenses/activations/{safeKey}/{deviceId}.json");
                 // Get Firebase UID for rule compliance: .validate requires uid === auth.uid
@@ -832,7 +896,7 @@ namespace FlyShelf.Classes
                     deviceId,
                     activatedAt = activationTime,
                     uid = firebaseUid,
-                    appVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown"
+                    appVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown" // Version.ToString(int) doesn't need culture
                 });
 
                 var content = new StringContent(activationPayload, Encoding.UTF8, "application/json");
@@ -872,7 +936,7 @@ namespace FlyShelf.Classes
                         if (!string.IsNullOrEmpty(token))
                         {
                             _data.ActivationToken = token;
-                            _data.LastValidated = NetworkClock.GetTrustedUtcNow().time.ToString("o");
+                            _data.LastValidated = NetworkClock.GetTrustedUtcNow().time.ToString("o", CultureInfo.InvariantCulture);
                             Save();
                             Logger.LogAction("LICENSE_SERVER", "✅ Silent JWT migration successful");
                         }
@@ -940,7 +1004,7 @@ namespace FlyShelf.Classes
                         // Success — update token and timestamp
                         string newToken = root.GetProperty("token").GetString() ?? _data.ActivationToken;
                         _data.ActivationToken = newToken;
-                        _data.LastValidated = NetworkClock.GetTrustedUtcNow().time.ToString("o");
+                        _data.LastValidated = NetworkClock.GetTrustedUtcNow().time.ToString("o", CultureInfo.InvariantCulture);
                         Save();
                         Logger.LogAction("LICENSE_SERVER", "✅ JWT revalidation successful — token refreshed");
                         return;
@@ -969,14 +1033,14 @@ namespace FlyShelf.Classes
                             if (!string.IsNullOrEmpty(newToken))
                             {
                                 _data.ActivationToken = newToken;
-                                _data.LastValidated = NetworkClock.GetTrustedUtcNow().time.ToString("o");
+                                _data.LastValidated = NetworkClock.GetTrustedUtcNow().time.ToString("o", CultureInfo.InvariantCulture);
                                 Save();
                                 Logger.LogAction("LICENSE_SERVER", "✅ Re-activation successful after invalid JWT");
                             }
                             else if (!string.IsNullOrEmpty(activateError))
                             {
-                                Logger.LogAction("LICENSE_SERVER", $"Re-activation rejected: {activateError} — deactivating");
-                                DeactivateLicense();
+                                Logger.LogAction("LICENSE_SERVER", $"Re-activation failed: {activateError} — keeping cached license, will retry next cycle");
+                                // Don't deactivate on transient errors — only revoked/device_limit should deactivate
                             }
                             return;
                         }
@@ -992,11 +1056,11 @@ namespace FlyShelf.Classes
                         double daysOffline = (now - lastCheck).TotalDays;
                         if (daysOffline >= OFFLINE_GRACE_PERIOD_DAYS)
                         {
-                            // [SECURITY FIX v2.3.0]: DEACTIVATE after grace period — not just warn
-                            Logger.LogAction("LICENSE_SERVER", $"Offline for {daysOffline:F0}d (grace: {OFFLINE_GRACE_PERIOD_DAYS}d, trusted: {isTrusted}) — DEACTIVATING");
-                            DeactivateLicense();
+                            Logger.LogAction("LICENSE_SERVER", $"Offline for {daysOffline:F0}d — continuing with cached license (weekly retry)");
+                            // Don't deactivate — valid license persists offline indefinitely
+                            // Just show a non-destructive warning
                             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                                Windows.ToastWindow.ShowToast("⚠️ License expired — please connect to internet and re-activate your license key."));
+                                Windows.ToastWindow.ShowToast("⚠️ License revalidation pending — please connect to internet when possible."));
                         }
                         else
                         {

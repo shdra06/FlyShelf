@@ -24,6 +24,12 @@ namespace FlyShelf
         private bool _isTodoSidebarCollapsed = false;
         private ContextMenu? _activeTodoDropdownMenu = null; // Track open menu for toggle behavior
 
+        // CA1861: Static readonly arrays for todo templates (avoid repeated heap allocations)
+        private static readonly string[] s_groceryTemplate = { "Buy milk", "Buy eggs", "Buy veggies", "Buy bread", "Buy fruits" };
+        private static readonly string[] s_choresTemplate = { "Clean room", "Do laundry", "Throw trash", "Vacuum floor" };
+        private static readonly string[] s_workStandupTemplate = { "Check emails & Slack", "Update Jira tickets", "Team standup meeting", "Plan daily tasks" };
+        private static readonly string[] s_travelPackingTemplate = { "Pack passport & documents", "Pack chargers & electronics", "Pack clothes & shoes", "Pack toiletries" };
+
 
 
 
@@ -635,7 +641,7 @@ namespace FlyShelf
         {
             try { _activeTimerWindow?.Close(); } catch { } // Best-effort: failure is acceptable
             var tw = new FlyShelf.Windows.TimerWindow(null);
-            tw.Show();
+            WindowHelper.ShowInForeground(tw);
             _activeTimerWindow = tw;
         }
 
@@ -662,8 +668,7 @@ namespace FlyShelf
                                 reminderTitle, "", DateTime.UtcNow, "Timer", Classes.RepeatMode.None);
                             // Also fire an alert window immediately
                             var alertWindow = new FlyShelf.Windows.ReminderAlertWindow(reminder);
-                            alertWindow.Show();
-                            alertWindow.Activate();
+                            WindowHelper.ShowInForeground(alertWindow);
                         }
                         catch (Exception ex)
                         {
@@ -671,7 +676,7 @@ namespace FlyShelf
                         }
                     });
                 };
-                tw.Show();
+                WindowHelper.ShowInForeground(tw);
                 _activeTimerWindow = tw;
                 }));
             }
@@ -689,8 +694,7 @@ namespace FlyShelf
 
                 try { _activeTodoReminderWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                 var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow(title, defaultDue);
-                reminderWindow.Show();
-                reminderWindow.Activate();
+                WindowHelper.ShowInForeground(reminderWindow);
                 _activeTodoReminderWindow = reminderWindow;
                 }));
             }
@@ -731,11 +735,11 @@ namespace FlyShelf
             string trimmed = input.Trim();
 
             // Support mm:ss format (e.g. "3:30")
-            if (trimmed.Contains(":"))
+            if (trimmed.Contains(':'))
             {
                 try { _activeTimerWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                 var tw = new FlyShelf.Windows.TimerWindow(trimmed);
-                tw.Show();
+                WindowHelper.ShowInForeground(tw);
                 _activeTimerWindow = tw;
                 return;
             }
@@ -745,7 +749,7 @@ namespace FlyShelf
             {
                 try { _activeTimerWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                 var tw = new FlyShelf.Windows.TimerWindow($"{mins}m");
-                tw.Show();
+                WindowHelper.ShowInForeground(tw);
                 _activeTimerWindow = tw;
             }
             else
@@ -753,7 +757,7 @@ namespace FlyShelf
                 // Fallback: pass as-is and let TimerWindow.ParseContext handle it
                 try { _activeTimerWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                 var tw = new FlyShelf.Windows.TimerWindow(trimmed);
-                tw.Show();
+                WindowHelper.ShowInForeground(tw);
                 _activeTimerWindow = tw;
             }
         }
@@ -766,16 +770,16 @@ namespace FlyShelf
                 var menu = new ContextMenu();
                 
                 var item1 = new MenuItem { Header = "🛒 Grocery Shopping" };
-                item1.Click += (s, ev) => ApplyTodoTemplate(new[] { "Buy milk", "Buy eggs", "Buy veggies", "Buy bread", "Buy fruits" });
+                item1.Click += (s, ev) => ApplyTodoTemplate(s_groceryTemplate);
                 
                 var item2 = new MenuItem { Header = "🧹 Weekly Chores" };
-                item2.Click += (s, ev) => ApplyTodoTemplate(new[] { "Clean room", "Do laundry", "Throw trash", "Vacuum floor" });
+                item2.Click += (s, ev) => ApplyTodoTemplate(s_choresTemplate);
                 
                 var item3 = new MenuItem { Header = "💼 Work Standup Routine" };
-                item3.Click += (s, ev) => ApplyTodoTemplate(new[] { "Check emails & Slack", "Update Jira tickets", "Team standup meeting", "Plan daily tasks" });
+                item3.Click += (s, ev) => ApplyTodoTemplate(s_workStandupTemplate);
                 
                 var item4 = new MenuItem { Header = "✈️ Travel Packing" };
-                item4.Click += (s, ev) => ApplyTodoTemplate(new[] { "Pack passport & documents", "Pack chargers & electronics", "Pack clothes & shoes", "Pack toiletries" });
+                item4.Click += (s, ev) => ApplyTodoTemplate(s_travelPackingTemplate);
 
                 menu.Items.Add(item1);
                 menu.Items.Add(item2);
@@ -984,9 +988,7 @@ namespace FlyShelf
                     string capturedTag = tag;
                     mi.Click += (s, ev) =>
                     {
-                        if (item.Tags.Contains(capturedTag))
-                            item.Tags.Remove(capturedTag);
-                        else
+                        if (!item.Tags.Remove(capturedTag))
                             item.Tags.Add(capturedTag);
                         // Force property change notification
                         item.Tags = new List<string>(item.Tags);
@@ -1026,9 +1028,7 @@ namespace FlyShelf
                         {
                             te.Handled = true;
                             string newTag = textBox.Text.Trim();
-                            if (item.Tags.Contains(newTag))
-                                item.Tags.Remove(newTag);
-                            else
+                            if (!item.Tags.Remove(newTag))
                                 item.Tags.Add(newTag);
                             item.Tags = new List<string>(item.Tags);
                             item.LastEdited = DateTime.Now;
@@ -1761,8 +1761,7 @@ namespace FlyShelf
                 mi.Click += (s, ev) =>
                 {
                     var tags = item.Tags != null ? new System.Collections.Generic.List<string>(item.Tags) : new System.Collections.Generic.List<string>();
-                    if (tags.Contains(capturedTag)) tags.Remove(capturedTag);
-                    else tags.Add(capturedTag);
+                    if (!tags.Remove(capturedTag)) tags.Add(capturedTag);
                     item.Tags = tags;
                     item.LastEdited = DateTime.Now;
                     TodoManager.MarkDirty();

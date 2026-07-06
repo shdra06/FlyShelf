@@ -30,6 +30,11 @@ export const NetworkClock = {
   /**
    * One-shot time sync using ultra-lightweight HTTP HEAD request.
    * Measures network RTT to correct latency and determines absolute time difference.
+   * 
+   * ACCURACY LIMITATION: HTTP Date headers have ±1 second resolution (RFC 7231).
+   * Combined with variable network RTT (especially on mobile), the effective accuracy
+   * is approximately ±1-2 seconds. This is sufficient for FlyShelf's pairing clock
+   * drift detection but should NOT be used for sub-second time-critical operations.
    */
   async sync(): Promise<number> {
     const timeServers = [
@@ -80,5 +85,16 @@ export const NetworkClock = {
     
     syncLog('CLOCK', 'All HEAD sync servers failed — falling back to system clock');
     return clockOffsetMs;
+  },
+
+  /**
+   * Force a re-sync of the clock offset.
+   * Resets the synced state and performs a fresh sync.
+   * Useful when network conditions change or sync seems stale.
+   */
+  async resync(): Promise<number> {
+    isClockSynced = false;
+    clockOffsetMs = 0;
+    return this.sync();
   }
 };

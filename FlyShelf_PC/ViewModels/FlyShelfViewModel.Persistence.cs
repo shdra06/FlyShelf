@@ -22,6 +22,20 @@ namespace FlyShelf.ViewModels
         // PERF: Debounce ShelfVisibility notification during rapid deletes
         private System.Windows.Threading.DispatcherTimer? _shelfVisibilityDebounce;
 
+        // PERF: Cached unpinned item count — avoids O(n) LINQ scans in PruneOldItems
+        private int _cachedUnpinnedCount = -1;
+
+        private int CachedUnpinnedCount
+        {
+            get
+            {
+                if (_cachedUnpinnedCount < 0)
+                    _cachedUnpinnedCount = DroppedItems.Count(i => !i.IsPinned);
+                return _cachedUnpinnedCount;
+            }
+        }
+        private void InvalidateUnpinnedCount() => _cachedUnpinnedCount = -1;
+
         public void RemoveItem(ClipboardItem item)
         {
             if (item != null && DroppedItems.Contains(item))
@@ -36,6 +50,8 @@ namespace FlyShelf.ViewModels
                 }
 
                 DroppedItems.Remove(item);
+                InvalidateUnpinnedCount();
+                item.Dispose();
 
                 // PERF: Only notify ShelfVisibility when the list actually becomes empty
                 // (that's the only time the computed property changes). Skipping this for
@@ -94,6 +110,8 @@ namespace FlyShelf.ViewModels
 
             // Perform bulk removal in memory
             DroppedItems.RemoveRange(itemList);
+            InvalidateUnpinnedCount();
+            foreach (var item in itemList) item.Dispose();
 
             if (DroppedItems.Count == 0)
             {
@@ -160,6 +178,7 @@ namespace FlyShelf.ViewModels
                 }
 
                 item.IsPinned = !item.IsPinned;
+                InvalidateUnpinnedCount();
                 
                 SavePinnedItems();
                 PersistHistory();
@@ -183,6 +202,7 @@ namespace FlyShelf.ViewModels
             if (volatileItems.Count > 0)
             {
                 DroppedItems.RemoveRange(volatileItems);
+                InvalidateUnpinnedCount();
                 OnPropertyChanged(nameof(ShelfVisibility));
                 SavePinnedItems();
                 
@@ -229,19 +249,28 @@ namespace FlyShelf.ViewModels
                 // This eliminates the 1.5s visual freeze spike on large payload buffers!
                 // PERF: Suspend DB writes during the Move loop to prevent N CollectionChanged → N PersistHistory calls
                 _isDatabaseWriteSuspended = true;
+                DroppedItems.SuppressNotifications();
                 try
                 {
+                    // Build O(1) index map to avoid O(n) IndexOf per iteration
+                    var currentIndexMap = new Dictionary<ClipboardItem, int>(DroppedItems.Count);
+                    for (int idx = 0; idx < DroppedItems.Count; idx++)
+                        currentIndexMap[DroppedItems[idx]] = idx;
+
                     for (int i = 0; i < sorted.Count; i++)
                     {
-                        var actualIndex = DroppedItems.IndexOf(sorted[i]);
-                        if (actualIndex != -1 && actualIndex != i)
+                        if (currentIndexMap.TryGetValue(sorted[i], out int actualIndex) && actualIndex != i)
                         {
                             DroppedItems.Move(actualIndex, i);
+                            // Update index map after move: items between i and actualIndex shift
+                            for (int j = i; j <= actualIndex && j < DroppedItems.Count; j++)
+                                currentIndexMap[DroppedItems[j]] = j;
                         }
                     }
                 }
                 finally
                 {
+                    DroppedItems.ResumeNotifications();
                     _isDatabaseWriteSuspended = false;
                     // Single persist after all moves complete
                     PersistHistory();
@@ -402,16 +431,17 @@ namespace FlyShelf.ViewModels
         /// <summary>
         /// Searches the history database using FTS5 and populates DroppedItems with results, loading icons asynchronously.
         /// </summary>
+        [Obsolete("Search results are handled by MainWindow.Search.cs filter — this method is a no-op.")]
         public async Task SearchHistoryAsync(string query)
         {
             // DB persistence disabled — search in-memory
             IsSearchActive = true;
             try
             {
-                string q = (query ?? "").ToLowerInvariant();
+                string q = (query ?? "");
                 var results = DroppedItems.Where(i =>
-                    (!string.IsNullOrEmpty(i.RawContent) && i.RawContent.ToLowerInvariant().Contains(q)) ||
-                    (!string.IsNullOrEmpty(i.FileName) && i.FileName.ToLowerInvariant().Contains(q))
+                    (!string.IsNullOrEmpty(i.RawContent) && i.RawContent.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(i.FileName) && i.FileName.Contains(q, StringComparison.OrdinalIgnoreCase))
                 ).ToList();
                 // Re-populate with matches (no DB query)
                 // Note: search results shown from in-memory items only
@@ -483,8 +513,9 @@ namespace FlyShelf.ViewModels
             // Hard cap — remove oldest if still too large
             while (_recentCloudContent.Count > 100)
             {
-                var oldest = _recentCloudContent.OrderBy(kv => kv.Value).First().Key;
-                _recentCloudContent.Remove(oldest);
+                var oldest = _recentCloudContent.MinBy(kv => kv.Value);
+                if (oldest.Key != null) _recentCloudContent.Remove(oldest.Key);
+                else break;
             }
         }
 
@@ -562,7 +593,7 @@ namespace FlyShelf.ViewModels
                 }
 
                 // PRIORITY 2: Fallback to Cloudflare P2P push if local LAN is not available/failed
-                if (srv != null && !string.IsNullOrEmpty(srv.GlobalUrl) && srv.GlobalUrl.Contains("trycloudflare.com") && tunnelOk)
+                if (srv != null && !string.IsNullOrEmpty(srv.GlobalUrl) && srv.GlobalUrl.Contains("trycloudflare.com", StringComparison.OrdinalIgnoreCase) && tunnelOk)
                 {
                     string downloadUrl = $"{srv.GlobalUrl}/download?path={Uri.EscapeDataString(filePath)}";
                     FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"Sending '{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) via Cloudflare P2P");
@@ -596,7 +627,7 @@ namespace FlyShelf.ViewModels
             // Show warning starting at warningThreshold items (but don't prune yet)
             if (totalCount >= warningThreshold && totalCount <= maxUnpinnedItems)
             {
-                int unpinnedCount = DroppedItems.Count(i => !i.IsPinned);
+                int unpinnedCount = CachedUnpinnedCount;
                 if (unpinnedCount >= warningThreshold && unpinnedCount < maxUnpinnedItems)
                 {
                     // Warn every 50 items for Free (or 100 for Pro) to give frequent heads-up
@@ -609,13 +640,14 @@ namespace FlyShelf.ViewModels
                 }
             }
 
-            if (totalCount <= maxUnpinnedItems) return;
+            int unpinnedTotal = CachedUnpinnedCount;
+            if (unpinnedTotal <= maxUnpinnedItems) return;
 
             // Collect unpinned items to remove (from end of the list, oldest first)
             var itemsToRemove = new List<ClipboardItem>();
             
             var itemsToRemoveFromDropped = new List<ClipboardItem>();
-            for (int i = DroppedItems.Count - 1; i >= 0 && DroppedItems.Count - itemsToRemove.Count > maxUnpinnedItems; i--)
+            for (int i = DroppedItems.Count - 1; i >= 0 && unpinnedTotal - itemsToRemove.Count > maxUnpinnedItems; i--)
             {
                 if (!DroppedItems[i].IsPinned)
                 {
@@ -626,6 +658,7 @@ namespace FlyShelf.ViewModels
             if (itemsToRemoveFromDropped.Count > 0)
             {
                 DroppedItems.RemoveRange(itemsToRemoveFromDropped);
+                foreach (var item in itemsToRemoveFromDropped) item.Dispose();
             }
             
             if (itemsToRemove.Count > 0)
@@ -687,6 +720,7 @@ namespace FlyShelf.ViewModels
             DeduplicateItem(newItem);
 
             DroppedItems.Insert(0, newItem);
+            InvalidateUnpinnedCount();
 
             // ═══ NETWORKING AUTO-STAGE HOOK ═══
             // When a file is copied, auto-stage it for network sending
@@ -806,6 +840,7 @@ namespace FlyShelf.ViewModels
             if (newItem == null) return;
             DeduplicateItem(newItem);
             DroppedItems.Insert(0, newItem);
+            InvalidateUnpinnedCount();
             PruneOldItems();
             OnPropertyChanged(nameof(ShelfVisibility));
         }
@@ -840,12 +875,9 @@ namespace FlyShelf.ViewModels
                     Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
                         var toRemove = DroppedItems.Where(i => !i.IsPinned && i.DateCopied < cutoff).ToList();
-                        foreach (var item in toRemove)
-                        {
-                            DroppedItems.Remove(item);
-                        }
                         if (toRemove.Count > 0)
                         {
+                            BulkRemoveItems(toRemove);
                             PersistHistory();
                             OnPropertyChanged(nameof(ShelfVisibility));
                             Classes.Logger.LogAction("AUTO_CLEANUP", $"Removed {toRemove.Count} expired items (retention: {retentionDays} days).");

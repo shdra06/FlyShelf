@@ -6,7 +6,7 @@
         Title="AI Notes Assistant" Height="420" Width="480"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None" 
-        SystemBackdropType="Mica" Topmost="True"
+        SystemBackdropType="Mica"
         Background="Transparent" ResizeMode="NoResize"
         AllowsTransparency="False"
         Icon="/Resources/FlyShelfLogo.ico"

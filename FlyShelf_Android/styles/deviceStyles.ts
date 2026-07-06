@@ -1,16 +1,17 @@
 /**
- * DeviceHub Styles — Premium Dark Theme
+ * DeviceHub Styles — Theme-aware factory
  *
  * Styles for the device management modal component.
  * Uses all tokens from the FlyShelf design system.
  */
 
 import { StyleSheet, Platform } from 'react-native';
-import { colors, font, radius, space, shadows, typography } from './theme';
+import { colors as defaultColors, font, radius, space, shadows as defaultShadows, typography } from './theme';
 
+type ThemeColors = Record<string, any>;
+type ThemeShadows = Record<string, any>;
 
-
-export const deviceStyles = StyleSheet.create({
+export const createDeviceStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.create({
   // ═══════════════════════════════════════════
   // LAYOUT
   // ═══════════════════════════════════════════
@@ -623,3 +624,6 @@ export const deviceStyles = StyleSheet.create({
     marginTop: space.sm,
   },
 });
+
+/** @deprecated Use createDeviceStyles(colors, shadows) for theme support */
+export const deviceStyles = createDeviceStyles(defaultColors, defaultShadows);

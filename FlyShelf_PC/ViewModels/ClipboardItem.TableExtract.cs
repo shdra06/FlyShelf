@@ -8,13 +8,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using FlyShelf.Classes;
 
 namespace FlyShelf.ViewModels
 {
 
     public partial class ClipboardItem
     {
-        public async void ExtractTable()
+        public async Task ExtractTable()
         {
             try
             {
@@ -31,7 +32,7 @@ namespace FlyShelf.ViewModels
                 // "local" → always use local engine, skip popup
                 if (method == "local")
                 {
-                    ExtractTableLocal();
+                    await ExtractTableLocal();
                     return;
                 }
 
@@ -59,7 +60,7 @@ namespace FlyShelf.ViewModels
                 }
 
                 // Local fallback — run existing local extraction
-                ExtractTableLocal();
+                await ExtractTableLocal();
             }
             catch (Exception ex)
             {
@@ -67,7 +68,7 @@ namespace FlyShelf.ViewModels
             }
         }
 
-        private async void ExtractTableLocal()
+        private async Task ExtractTableLocal()
         {
             try
             {
@@ -446,6 +447,9 @@ namespace FlyShelf.ViewModels
 
                                 Classes.Logger.LogAction("TABLE_EXTRACT", $"Smart OCR: {rows.Count}x{numCols} table ({separators.Count} separators)");
                             }
+
+                            // [FIX]: Dispose SoftwareBitmap after use
+                            softwareBitmap.Dispose();
                         }
                     }
                     catch (Exception ocrEx)
@@ -454,7 +458,7 @@ namespace FlyShelf.ViewModels
                     }
                 });
 
-                if (!string.IsNullOrWhiteSpace(finalJsonPayload) && finalJsonPayload.StartsWith("{"))
+                if (!string.IsNullOrWhiteSpace(finalJsonPayload) && finalJsonPayload.StartsWith('{'))
                 {
                     string imgPath = FilePath;
                     string method = extractionMethod;
@@ -464,11 +468,7 @@ namespace FlyShelf.ViewModels
                         {
                             FlyShelf.Classes.LicenseManager.RecordTableExtraction();
                             var editor = new FlyShelf.Windows.TableEditorWindow(finalJsonPayload, imgPath, method);
-                            editor.Show();
-                            editor.Activate();
-                            // Briefly set topmost to punch through a topmost parent, then release
-                            editor.Topmost = true;
-                            editor.Topmost = false;
+                            WindowHelper.ShowInForeground(editor);
                         }
                         catch (Exception uiEx)
                         {
@@ -497,8 +497,14 @@ namespace FlyShelf.ViewModels
             {
                 FlyShelf.Windows.ToastWindow.ShowToast("🧠 AI Table Extraction... ⏳");
 
-                byte[] imageBytes = await Task.Run(() => File.ReadAllBytes(FilePath));
-                string ext = Path.GetExtension(FilePath).ToLower();
+                byte[] imageBytes = await Task.Run(() =>
+                {
+                    var fi = new System.IO.FileInfo(FilePath!);
+                    if (fi.Length > 100_000_000)
+                        throw new InvalidOperationException($"File too large for table extraction ({fi.Length} bytes): {FilePath}");
+                    return File.ReadAllBytes(FilePath);
+                });
+                string ext = Path.GetExtension(FilePath).ToLowerInvariant();
                 string mimeType = ext switch
                 {
                     ".jpg" or ".jpeg" => "image/jpeg",
@@ -516,11 +522,11 @@ namespace FlyShelf.ViewModels
                 {
                     // Clean up the response — remove markdown code fences if present
                     result = result.Trim();
-                    if (result.StartsWith("```"))
+                    if (result.StartsWith("```", StringComparison.Ordinal))
                     {
                         int firstNewline = result.IndexOf('\n');
                         if (firstNewline > 0) result = result.Substring(firstNewline + 1);
-                        if (result.EndsWith("```")) result = result.Substring(0, result.Length - 3).Trim();
+                        if (result.EndsWith("```", StringComparison.Ordinal)) result = result.Substring(0, result.Length - 3).Trim();
                     }
 
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
@@ -529,7 +535,7 @@ namespace FlyShelf.ViewModels
                         {
                             // Try to open in TableEditorWindow
                             var tableWindow = new FlyShelf.Windows.TableEditorWindow(result);
-                            tableWindow.Show();
+                            WindowHelper.ShowInForeground(tableWindow);
                         }
                         catch
                         {

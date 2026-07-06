@@ -1,7 +1,10 @@
 import { StyleSheet, Platform } from 'react-native';
-import { colors, font, radius, space, shadows } from './theme';
+import { colors as defaultColors, font, radius, space, shadows as defaultShadows } from './theme';
 
-export const styles = StyleSheet.create({
+type ThemeColors = Record<string, any>;
+type ThemeShadows = Record<string, any>;
+
+export const createNotesStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.create({
   // ═══ Layout ═══
   container: {
     flex: 1,
@@ -506,3 +509,6 @@ export const styles = StyleSheet.create({
     borderColor: colors.text.primary,
   },
 });
+
+/** @deprecated Use createNotesStyles(colors, shadows) for theme support */
+export const styles = createNotesStyles(defaultColors, defaultShadows);

@@ -18,7 +18,7 @@ namespace FlyShelf.Classes
             Directory.CreateDirectory(outputDir);
 
             string pdfPath = Path.Combine(outputDir,
-                Path.GetFileNameWithoutExtension(imagePath) + "_" + Guid.NewGuid().ToString().Substring(0, 4) + ".pdf");
+                Path.GetFileNameWithoutExtension(imagePath) + "_" + Guid.NewGuid().ToString()[..4] + ".pdf");
 
             using (var doc = new PdfDocument())
             {

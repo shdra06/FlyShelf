@@ -22,6 +22,7 @@ interface State {
 
 export default class ErrorBoundary extends Component<Props, State> {
   private originalHandler: any = null;
+  private _mounted: boolean = false;
 
   constructor(props: Props) {
     super(props);
@@ -49,6 +50,8 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidMount() {
+    this._mounted = true;
+
     // Intercept async / unhandled errors
     if (Platform.OS !== 'web') {
       try {
@@ -56,6 +59,9 @@ export default class ErrorBoundary extends Component<Props, State> {
         this.originalHandler = globalHandler;
         
         ErrorUtils.setGlobalHandler(async (error: any, isFatal?: boolean) => {
+          // Guard against setState on unmounted component
+          if (!this._mounted) return;
+
           const crashDetails = `[Fatal Async Crash]\nFatal: ${isFatal}\nMessage: ${error?.message || error}\nStack: ${error?.stack}`;
           syncLog('CRASH', crashDetails);
           
@@ -67,9 +73,9 @@ export default class ErrorBoundary extends Component<Props, State> {
             error: error instanceof Error ? error : new Error(String(error)),
           });
 
-          // Call original handler to let RN log it appropriately (won't crash since hasError is true)
+          // Defer original handler so setState can render the Safe Mode UI first
           if (globalHandler) {
-            globalHandler(error, isFatal);
+            setTimeout(() => globalHandler(error, isFatal), 50);
           }
         });
       } catch (err) {
@@ -82,6 +88,8 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentWillUnmount() {
+    this._mounted = false;
+
     // Restore original handler
     if (Platform.OS !== 'web' && this.originalHandler) {
       ErrorUtils.setGlobalHandler(this.originalHandler);

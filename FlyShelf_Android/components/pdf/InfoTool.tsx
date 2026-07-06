@@ -50,12 +50,12 @@ export default function InfoTool({ onBack, onPickFile, saveRecent }: InfoToolPro
   return (
     <View style={s.modalOverlay}>
       <View style={s.modalHeader}>
-        <Pressable style={s.backBtn} onPress={onBack}><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
+        <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
         <Text style={s.modalTitle}>PDF Information</Text>
       </View>
       <ScrollView style={s.modalScroll}>
         {!file ? (
-          <Pressable style={s.btnPrimary} onPress={handlePick}>
+          <Pressable style={s.btnPrimary} onPress={handlePick} accessibilityRole="button" accessibilityLabel="Pick PDF file">
             <Text style={s.btnPrimaryText}>Pick PDF</Text>
           </Pressable>
         ) : loading ? (
@@ -77,7 +77,7 @@ export default function InfoTool({ onBack, onPickFile, saveRecent }: InfoToolPro
       </ScrollView>
       {file && (
         <View style={s.modalActions}>
-          <Pressable style={s.btnSecondary} onPress={() => setFile(null)}>
+          <Pressable style={s.btnSecondary} onPress={() => setFile(null)} accessibilityRole="button" accessibilityLabel="Pick another file">
             <Text style={s.btnSecondaryText}>Pick Another</Text>
           </Pressable>
         </View>

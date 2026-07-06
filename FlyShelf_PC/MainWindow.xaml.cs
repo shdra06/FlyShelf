@@ -10,6 +10,7 @@ using System.Windows.Media.Imaging;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using System.Windows.Media;
+using FlyShelf.Classes;
 
 namespace FlyShelf
 {
@@ -46,8 +47,12 @@ namespace FlyShelf
         private System.Windows.Threading.DispatcherTimer? _clipboardDebounceTimer;
         private System.Windows.Threading.DispatcherTimer? _scrollDecayTimer;
         private System.Windows.Threading.DispatcherTimer? _scrollHighQualityTimer;
+        private System.Windows.Threading.DispatcherTimer? _scrollLiveLoadTimer; // PERF: Live thumbnail loading during active scroll
         private DateTime _lastScrollRenderTime = DateTime.MinValue;
         private System.Windows.Threading.DispatcherTimer? _evictionBackgroundTimer;
+        // Fix 5: Anchor for cheap per-pass visibility math (one TransformToAncestor per pass)
+        private double _anchorY;
+        private bool _anchorValid;
         private DateTime _lastMergeToggleTime = DateTime.MinValue;
         private IntPtr _lastActiveExternalWindow = IntPtr.Zero;
         private DateTime _lastScrollTime = DateTime.MinValue;
@@ -312,15 +317,6 @@ namespace FlyShelf
                 }
             }
 
-            // Live-update the summon hotkey when user changes it in settings
-            Classes.SettingsManager.Current.PropertyChanged += (s, e) =>
-            {
-                if (e.PropertyName == nameof(Classes.SettingsManager.Current.HotkeyModifier) ||
-                    e.PropertyName == nameof(Classes.SettingsManager.Current.HotkeyKey))
-                {
-                    ReRegisterSummonHotkey();
-                }
-            };
 
             this.SizeChanged += (s, e) =>
             {
@@ -417,7 +413,7 @@ namespace FlyShelf
                     {
                         this.Height = _viewModel.CurrentFlyShelfMaxHeight;
                     }
-                    this.UpdateLayout();
+                    Dispatcher.InvokeAsync(() => UpdateLayout(), System.Windows.Threading.DispatcherPriority.Render);
                     
                     if (_isEdgeLocked && this.ActualHeight > 0)
                     {
@@ -443,7 +439,13 @@ namespace FlyShelf
             // Live-refresh wallpaper when user changes it in settings
             _settingsChangedHandler = (s, e) =>
             {
-                if (e.PropertyName == nameof(Classes.AdvanceSettings.ClipboardWallpaperPath))
+                // Live-update the summon hotkey when user changes it in settings
+                if (e.PropertyName == nameof(Classes.AdvanceSettings.HotkeyModifier) ||
+                    e.PropertyName == nameof(Classes.AdvanceSettings.HotkeyKey))
+                {
+                    ReRegisterSummonHotkey();
+                }
+                else if (e.PropertyName == nameof(Classes.AdvanceSettings.ClipboardWallpaperPath))
                     Dispatcher.InvokeAsync(() => ApplyWallpaper());
                 else if (e.PropertyName == nameof(Classes.AdvanceSettings.ColorThemeName))
                 {
@@ -478,7 +480,10 @@ namespace FlyShelf
                     // CRITICAL: On Reset events (from AddRange/InsertRange), WPF's ListCollectionView
                     // internally rebuilds and DROPS the Filter delegate. Reapply SYNCHRONOUSLY here
                     // to prevent even a single frame of unfiltered items appearing.
-                    if (e.Action == NotifyCollectionChangedAction.Reset &&
+                    // PERF: Skip if we're already applying a filter (e.g., FilterCategory_Click
+                    // is setting view.Filter — the Reset from that is expected and handled).
+                    if (!_isApplyingFilter &&
+                        e.Action == NotifyCollectionChangedAction.Reset &&
                         (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox?.Text))))
                     {
                         ReapplyActiveFilters();
@@ -491,8 +496,8 @@ namespace FlyShelf
                             DismissMergeState();
                         }
 
-                        // Safety net: reapply filters deferred as well
-                        ReapplyActiveFilters();
+                        // Safety net: reapply filters deferred as well (skip if guard is active)
+                        if (!_isApplyingFilter) ReapplyActiveFilters();
 
                         // Hide Alt+C watermark once clipboard has enough items to fill the view
                         UpdateAltCWatermarkVisibility();
@@ -580,17 +585,13 @@ namespace FlyShelf
         }
 
         // ═══ CONTEXT MENU: Auto-close after 5 seconds + close on window deactivate ═══
-        private System.Windows.Threading.DispatcherTimer _contextMenuAutoCloseTimer;
+        private System.Windows.Threading.DispatcherTimer? _contextMenuAutoCloseTimer;
         private ContextMenu _activeCardContextMenu;
 
-        private void CardContextMenu_Opened(object sender, RoutedEventArgs e)
+        private System.Windows.Threading.DispatcherTimer EnsureContextMenuTimer()
         {
-            if (sender is ContextMenu cm)
+            if (_contextMenuAutoCloseTimer == null)
             {
-                _activeCardContextMenu = cm;
-
-                // Start 5-second auto-close timer
-                _contextMenuAutoCloseTimer?.Stop();
                 _contextMenuAutoCloseTimer = new System.Windows.Threading.DispatcherTimer
                 {
                     Interval = TimeSpan.FromSeconds(5)
@@ -602,7 +603,20 @@ namespace FlyShelf
                         _activeCardContextMenu.IsOpen = false;
                     _activeCardContextMenu = null;
                 };
-                _contextMenuAutoCloseTimer.Start();
+            }
+            return _contextMenuAutoCloseTimer;
+        }
+
+        private void CardContextMenu_Opened(object sender, RoutedEventArgs e)
+        {
+            if (sender is ContextMenu cm)
+            {
+                _activeCardContextMenu = cm;
+
+                // Start 5-second auto-close timer (reuse single instance)
+                var timer = EnsureContextMenuTimer();
+                timer.Stop();
+                timer.Start();
 
                 // When context menu closes (by any means), clean up timer
                 cm.Closed += CardContextMenu_Closed;
@@ -612,7 +626,6 @@ namespace FlyShelf
         private void CardContextMenu_Closed(object sender, RoutedEventArgs e)
         {
             _contextMenuAutoCloseTimer?.Stop();
-            _contextMenuAutoCloseTimer = null;
             if (sender is ContextMenu cm)
                 cm.Closed -= CardContextMenu_Closed; // Unsubscribe to avoid leak
             _activeCardContextMenu = null;
@@ -752,7 +765,7 @@ namespace FlyShelf
 
                 var aiWindow = new FlyShelf.Windows.NotesAIWindow(text, actionType);
                 aiWindow.Owner = this;
-                if (aiWindow.ShowDialog() == true && aiWindow.IsApplied)
+                if (WindowHelper.ShowDialogInForeground(aiWindow, this) == true && aiWindow.IsApplied)
                 {
                     try { Clipboard.SetText(aiWindow.ResultText); } catch { }
                     FlyShelf.Windows.ToastWindow.ShowToast("✅ AI result copied to clipboard!");
@@ -1638,6 +1651,8 @@ namespace FlyShelf
                 _altScrollTimer?.Stop();
                 _altThumbnailTimer?.Stop();
                 _incognitoRefreshTimer?.Stop();
+                _aiModelSaveTimer?.Stop();
+                _transferRefreshTimer?.Stop();
 
                 // Dispose wallpaper file watchers
                 try { StopWallpaperFileWatcher(); } catch { } // Best-effort: failure is acceptable

@@ -924,7 +924,7 @@ namespace FlyShelf.Classes
                 }
 
                 // ROLLBACK: Restore the previous stable version
-                string targetPath = backupPath.EndsWith(".bak") ? backupPath[..^4] : "";
+                string targetPath = backupPath.EndsWith(".bak", StringComparison.Ordinal) ? backupPath[..^4] : "";
                 if (string.IsNullOrEmpty(targetPath))
                 {
                     Logger.LogAction("UPDATE", "⚠️ Cannot determine target path from backup — skipping rollback.");

@@ -5,6 +5,7 @@
 // Split from HubWindow.xaml.cs for modularity
 // ---------------------------------------------------------------
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -24,7 +25,7 @@ namespace FlyShelf.Windows
     public partial class HubWindow : MicaWindow
     {
 #if !MSIX_STORE
-        private void RefreshLogs_Click(object? sender, RoutedEventArgs? e)
+        private async void RefreshLogs_Click(object? sender, RoutedEventArgs? e)
         {
             // Unified log viewer was removed — logs are accessed via Send All Logs / Copy Logs buttons.
             // This method is kept as a refresh entry point that re-populates the server diagnostics panel.
@@ -32,114 +33,119 @@ namespace FlyShelf.Windows
             {
                 if (ServerDiagnosticsLog != null)
                 {
-                    ServerDiagnosticsLog.Text = GetServerDiagnostics();
+                    ServerDiagnosticsLog.Text = await System.Threading.Tasks.Task.Run(() => GetServerDiagnostics());
                 }
             }
             catch { } // Best-effort: failure is acceptable
         }
 
-        private void SendAllLogs_Click(object sender, RoutedEventArgs e)
+        private async void SendAllLogs_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                // Build a comprehensive diagnostic report from all log sources,
-                // filtering out redundant GET /api/health noise
-                var report = new System.Text.StringBuilder();
-                string logsDir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
-
-                // Helper: filter out standalone GET /api/health lines (noise from 60s health monitor)
-                // Keep lines that mention health in an ERROR context
-                Func<string, bool> isUsefulLine = (line) =>
+                var report = await System.Threading.Tasks.Task.Run(() =>
                 {
-                    if (string.IsNullOrWhiteSpace(line)) return false;
-                    // Skip pure health-check spam: "[...] [HTTP] [...] GET /api/health"
-                    if (line.Contains("[HTTP]") && line.Contains("GET /api/health")) return false;
-                    return true;
-                };
+                    // Build a comprehensive diagnostic report from all log sources,
+                    // filtering out redundant GET /api/health noise
+                    var rpt = new System.Text.StringBuilder();
+                    string logsDir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
 
-                // 1. Activity Log
-                string logFile = System.IO.Path.Combine(logsDir, "activity_log.txt");
-                if (System.IO.File.Exists(logFile))
-                {
-                    var rawLines = System.IO.File.ReadAllLines(logFile).Where(isUsefulLine).ToList();
-                    
-                    // Deduplicate consecutive repeated messages (e.g., "Iqoo unreachable" every 30s)
-                    var dedupedLines = new List<string>();
-                    string lastPattern = "";
-                    int repeatCount = 0;
-                    string firstRepeatLine = "";
-
-                    foreach (var line in rawLines)
+                    // Helper: filter out standalone GET /api/health lines (noise from 60s health monitor)
+                    // Keep lines that mention health in an ERROR context
+                    Func<string, bool> isUsefulLine = (line) =>
                     {
-                        // Extract the message portion (after timestamp) for pattern matching
-                        string pattern = line.Length > 28 ? line.Substring(28).Trim() : line;
+                        if (string.IsNullOrWhiteSpace(line)) return false;
+                        // Skip pure health-check spam: "[...] [HTTP] [...] GET /api/health"
+                        if (line.Contains("[HTTP]", StringComparison.Ordinal) && line.Contains("GET /api/health", StringComparison.Ordinal)) return false;
+                        return true;
+                    };
+
+                    // 1. Activity Log
+                    string logFile = System.IO.Path.Combine(logsDir, "activity_log.txt");
+                    if (System.IO.File.Exists(logFile))
+                    {
+                        var rawLines = System.IO.File.ReadAllLines(logFile).Where(isUsefulLine).ToList();
                         
-                        if (pattern == lastPattern)
+                        // Deduplicate consecutive repeated messages (e.g., "Iqoo unreachable" every 30s)
+                        var dedupedLines = new List<string>();
+                        string lastPattern = "";
+                        int repeatCount = 0;
+                        string firstRepeatLine = "";
+
+                        foreach (var line in rawLines)
                         {
-                            repeatCount++;
-                        }
-                        else
-                        {
-                            // Flush previous repeat group
-                            if (repeatCount > 2)
-                            {
-                                dedupedLines.Add($"    ↑↑↑ repeated {repeatCount}× (collapsed)");
-                            }
-                            else if (repeatCount == 2)
-                            {
-                                dedupedLines.Add(firstRepeatLine); // just show the 2nd one
-                            }
+                            // Extract the message portion (after timestamp) for pattern matching
+                            string pattern = line.Length > 28 ? line[28..].Trim() : line;
                             
-                            dedupedLines.Add(line);
-                            lastPattern = pattern;
-                            repeatCount = 1;
-                            firstRepeatLine = line;
+                            if (pattern == lastPattern)
+                            {
+                                repeatCount++;
+                            }
+                            else
+                            {
+                                // Flush previous repeat group
+                                if (repeatCount > 2)
+                                {
+                                    dedupedLines.Add(string.Create(CultureInfo.InvariantCulture, $"    ↑↑↑ repeated {repeatCount}× (collapsed)"));
+                                }
+                                else if (repeatCount == 2)
+                                {
+                                    dedupedLines.Add(firstRepeatLine); // just show the 2nd one
+                                }
+                                
+                                dedupedLines.Add(line);
+                                lastPattern = pattern;
+                                repeatCount = 1;
+                                firstRepeatLine = line;
+                            }
+                        }
+                        // Flush final group
+                        if (repeatCount > 2)
+                        {
+                            dedupedLines.Add(string.Create(CultureInfo.InvariantCulture, $"    ↑↑↑ repeated {repeatCount}× (collapsed)"));
+                        }
+
+                        if (dedupedLines.Any())
+                        {
+                            rpt.AppendLine("════════════════════════════════════════════════════════════");
+                            rpt.AppendLine("  ACTIVITY LOG");
+                            rpt.AppendLine("════════════════════════════════════════════════════════════");
+                            foreach (var line in dedupedLines) rpt.AppendLine(line);
                         }
                     }
-                    // Flush final group
-                    if (repeatCount > 2)
+
+                    // 2. Network Diagnostics Log
+                    string netLogFile = Logger.GetNetworkLogPath();
+                    if (System.IO.File.Exists(netLogFile))
                     {
-                        dedupedLines.Add($"    ↑↑↑ repeated {repeatCount}× (collapsed)");
+                        var lines = System.IO.File.ReadAllLines(netLogFile).Where(isUsefulLine);
+                        if (lines.Any())
+                        {
+                            rpt.AppendLine();
+                            rpt.AppendLine("════════════════════════════════════════════════════════════");
+                            rpt.AppendLine("  NETWORK DIAGNOSTICS");
+                            rpt.AppendLine("════════════════════════════════════════════════════════════");
+                            foreach (var line in lines) rpt.AppendLine(line);
+                        }
                     }
 
-                    if (dedupedLines.Any())
+                    // 3. Server Troubleshooting (already filtered by GetServerDiagnostics, but also strip health)
+                    string serverDiag = GetServerDiagnostics();
+                    if (!string.IsNullOrWhiteSpace(serverDiag) && !serverDiag.StartsWith("No", StringComparison.Ordinal))
                     {
-                        report.AppendLine("════════════════════════════════════════════════════════════");
-                        report.AppendLine("  ACTIVITY LOG");
-                        report.AppendLine("════════════════════════════════════════════════════════════");
-                        foreach (var line in dedupedLines) report.AppendLine(line);
+                        var lines = serverDiag.Split('\n').Where(l => isUsefulLine(l));
+                        if (lines.Any())
+                        {
+                            rpt.AppendLine();
+                            rpt.AppendLine("════════════════════════════════════════════════════════════");
+                            rpt.AppendLine("  SERVER TROUBLESHOOTING");
+                            rpt.AppendLine("════════════════════════════════════════════════════════════");
+                            foreach (var line in lines) rpt.AppendLine(line.TrimEnd('\r'));
+                        }
                     }
-                }
 
-                // 2. Network Diagnostics Log
-                string netLogFile = Logger.GetNetworkLogPath();
-                if (System.IO.File.Exists(netLogFile))
-                {
-                    var lines = System.IO.File.ReadAllLines(netLogFile).Where(isUsefulLine);
-                    if (lines.Any())
-                    {
-                        report.AppendLine();
-                        report.AppendLine("════════════════════════════════════════════════════════════");
-                        report.AppendLine("  NETWORK DIAGNOSTICS");
-                        report.AppendLine("════════════════════════════════════════════════════════════");
-                        foreach (var line in lines) report.AppendLine(line);
-                    }
-                }
-
-                // 3. Server Troubleshooting (already filtered by GetServerDiagnostics, but also strip health)
-                string serverDiag = GetServerDiagnostics();
-                if (!string.IsNullOrWhiteSpace(serverDiag) && !serverDiag.StartsWith("No"))
-                {
-                    var lines = serverDiag.Split('\n').Where(l => isUsefulLine(l));
-                    if (lines.Any())
-                    {
-                        report.AppendLine();
-                        report.AppendLine("════════════════════════════════════════════════════════════");
-                        report.AppendLine("  SERVER TROUBLESHOOTING");
-                        report.AppendLine("════════════════════════════════════════════════════════════");
-                        foreach (var line in lines) report.AppendLine(line.TrimEnd('\r'));
-                    }
-                }
+                    return rpt;
+                });
 
                 if (report.Length == 0)
                 {
@@ -150,11 +156,11 @@ namespace FlyShelf.Windows
                 // Prepend system info header
                 var header = new System.Text.StringBuilder();
                 header.AppendLine("═════════════════════════════════════════════════════════════");
-                header.AppendLine($"  FlyShelf Full Diagnostic Report");
-                header.AppendLine($"  PC: {Environment.MachineName}");
-                header.AppendLine($"  OS: {Environment.OSVersion}");
-                header.AppendLine($"  Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                header.AppendLine($"  Version: {UpdateManager.CurrentVersion}");
+                header.AppendLine("  FlyShelf Full Diagnostic Report");
+                header.AppendLine(CultureInfo.InvariantCulture, $"  PC: {Environment.MachineName}");
+                header.AppendLine(CultureInfo.InvariantCulture, $"  OS: {Environment.OSVersion}");
+                header.AppendLine(CultureInfo.InvariantCulture, $"  Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                header.AppendLine(CultureInfo.InvariantCulture, $"  Version: {UpdateManager.CurrentVersion}");
                 header.AppendLine("═════════════════════════════════════════════════════════════");
                 header.AppendLine();
                 header.Append(report);
@@ -208,17 +214,17 @@ namespace FlyShelf.Windows
                 System.IO.Directory.CreateDirectory(logsDir);
                 string deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
                 string deviceTag = deviceName.Replace(" ", "_").Replace("/", "_");
-                string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+                string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture);
                 string fileName = $"diagnostic_{deviceTag}_{timestamp}.log";
                 string filePath = System.IO.Path.Combine(logsDir, fileName);
 
                 var sb = new System.Text.StringBuilder();
                 sb.AppendLine("════════════════════════════════════════════════════════════════════════════════");
-                sb.AppendLine($"  FlyShelf Diagnostic Log — {deviceName}");
-                sb.AppendLine($"  Captured: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                sb.AppendLine($"  PC Host:  {Environment.MachineName}");
-                sb.AppendLine($"  OS:       {Environment.OSVersion}");
-                sb.AppendLine($"  Entries:  {logLines.Count}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  FlyShelf Diagnostic Log — {deviceName}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  Captured: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  PC Host:  {Environment.MachineName}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  OS:       {Environment.OSVersion}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  Entries:  {logLines.Count}");
                 sb.AppendLine("════════════════════════════════════════════════════════════════════════════════");
                 sb.AppendLine();
                 foreach (var line in logLines)
@@ -232,7 +238,7 @@ namespace FlyShelf.Windows
                 {
                     try
                     {
-                        string serverUrl = vm.LocalServer.ServerUrl?.TrimEnd('/') ?? "http://localhost:8999";
+                        string serverUrl = vm.LocalServer.ServerUrl?.TrimEnd('/') ?? "http://localhost:8999";  // CA1866: char overload already used
                         using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(5) };
                         var json = System.Text.Json.JsonSerializer.Serialize(logLines);
                         var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
@@ -244,7 +250,7 @@ namespace FlyShelf.Windows
                     catch { /* Server POST failed — file is still saved */ }
                 }
 
-                string msg = $"✅ {logLines.Count} entries saved → {fileName}";
+                string msg = string.Create(CultureInfo.InvariantCulture, $"✅ {logLines.Count} entries saved → {fileName}");
                 if (dashboardSuccess) msg += "\n📊 Also pushed to web dashboard";
                 msg += $"\n📁  {logsDir}";
                 ToastWindow.ShowToast(msg);

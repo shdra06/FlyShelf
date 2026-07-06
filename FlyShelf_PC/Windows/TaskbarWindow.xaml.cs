@@ -1,6 +1,7 @@
 using FlyShelf.Classes;
 using FlyShelf.Classes.Utils;
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -694,7 +695,7 @@ namespace FlyShelf.Windows
                         if (key != null)
                         {
                             var valAl = key.GetValue("TaskbarAl");
-                            if (valAl != null && Convert.ToInt32(valAl) == 0)
+                            if (valAl != null && Convert.ToInt32(valAl, CultureInfo.InvariantCulture) == 0)
                                 isTaskbarCentered = false;
                         }
                     }

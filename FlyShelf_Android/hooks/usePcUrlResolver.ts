@@ -4,10 +4,9 @@
 // Priority: LAN IPs → Subnet Scan → TLS LAN → Cloudflare → Firebase
 // ═══════════════════════════════════════════════════════════════
 import { useRef, useCallback } from 'react';
-import { ref, get } from 'firebase/database';
-import { database } from '../firebaseConfig';
+
 import { getSecureItem, removeSecureItem } from '../utils/secureStorage';
-import { fetchWithTimeout, resolveOptimalUrl, getDeviceUrls, isValidPairingKey, scanSubnetForPc } from '../utils/networkHelpers';
+import { fetchWithTimeout, resolveOptimalUrl, scanSubnetForPc } from '../utils/networkHelpers';
 import { NetworkClock } from '../utils/networkClock';
 import { syncLog } from '../utils/debugLog';
 
@@ -24,8 +23,9 @@ export interface ActiveDeviceInfo {
   [key: string]: any;
 }
 
-/** URL cache TTL in ms (30 seconds for stable connections) */
-const URL_CACHE_TTL = 30_000;
+/** URL cache TTL in ms — adaptive based on connection type */
+const LAN_CACHE_TTL = 60_000;  // 60s for stable LAN
+const CLOUD_CACHE_TTL = 30_000; // 30s for Cloudflare (tunnels rotate)
 
 /**
  * Hook for resolving the optimal PC URL with multi-priority fallback chain.
@@ -38,6 +38,7 @@ export function usePcUrlResolver(
   const cachedPcUrlRef = useRef<string | null>(null);
   const cachedPcUrlTimestampRef = useRef<number>(0);
   const activeUrlResolutionPromiseRef = useRef<Promise<string> | null>(null);
+  const discoveryMethodRef = useRef<'stored-lan' | 'subnet-scan' | 'firebase' | 'cloudflare' | null>(null);
 
   /** Cloudflare consecutive failure counter */
   const cloudflareFailCountRef = useRef<number>(0);
@@ -68,7 +69,8 @@ export function usePcUrlResolver(
    */
   const getCachedPcUrl = useCallback(async (): Promise<string> => {
     const now = NetworkClock.now();
-    if (cachedPcUrlRef.current && (now - cachedPcUrlTimestampRef.current) < URL_CACHE_TTL) {
+    const cacheTtl = (cachedPcUrlRef.current?.includes('trycloudflare.com')) ? CLOUD_CACHE_TTL : LAN_CACHE_TTL;
+    if (cachedPcUrlRef.current && (now - cachedPcUrlTimestampRef.current) < cacheTtl) {
       return cachedPcUrlRef.current;
     }
 
@@ -110,6 +112,7 @@ export function usePcUrlResolver(
       if (resolvedLan) {
         cachedPcUrlRef.current = resolvedLan;
         cachedPcUrlTimestampRef.current = startNow;
+        discoveryMethodRef.current = 'stored-lan';
         return resolvedLan;
       }
 
@@ -120,6 +123,7 @@ export function usePcUrlResolver(
         if (discovered.length > 0) {
           cachedPcUrlRef.current = discovered[0];
           cachedPcUrlTimestampRef.current = startNow;
+          discoveryMethodRef.current = 'subnet-scan';
           return discovered[0];
         }
       }
@@ -131,6 +135,7 @@ export function usePcUrlResolver(
         if (resolved) {
           cachedPcUrlRef.current = resolved;
           cachedPcUrlTimestampRef.current = startNow;
+          discoveryMethodRef.current = 'firebase';
           return resolved;
         }
       }
@@ -141,6 +146,7 @@ export function usePcUrlResolver(
         if (resolvedGlobal) {
           cachedPcUrlRef.current = resolvedGlobal;
           cachedPcUrlTimestampRef.current = startNow;
+          discoveryMethodRef.current = 'cloudflare';
           return resolvedGlobal;
         }
       }
@@ -163,5 +169,6 @@ export function usePcUrlResolver(
     resetCloudflareFailCount,
     cachedPcUrlRef,
     cachedPcUrlTimestampRef,
+    discoveryMethodRef,
   };
 }

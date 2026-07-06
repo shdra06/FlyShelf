@@ -5,6 +5,7 @@
 // ---------------------------------------------------------------
 using System;
 using System.Buffers;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -240,7 +241,7 @@ namespace FlyShelf.Classes
                                 while ((hashRead = await hashStream.ReadAsync(hashBuf, ct)) > 0)
                                     hasher.Append(hashBuf.AsSpan(0, hashRead));
                                 string computed = Convert.ToHexString(hasher.GetCurrentHash()).ToLowerInvariant();
-                                if (computed != session.XxHash64.ToLowerInvariant())
+                                if (!string.Equals(computed, session.XxHash64, StringComparison.OrdinalIgnoreCase))
                                 {
                                     session.MarkFailed($"Integrity check failed: expected {session.XxHash64}, got {computed}");
                                     Logger.LogAction("TCP_ENGINE", $"❌ Hash mismatch for chunked {session.FileName} — deleting");
@@ -703,7 +704,7 @@ namespace FlyShelf.Classes
                         while ((hashRead = await hashStream.ReadAsync(hashBuf, linkedCts.Token)) > 0)
                             hasher.Append(hashBuf.AsSpan(0, hashRead));
                         string computed = Convert.ToHexString(hasher.GetCurrentHash()).ToLowerInvariant();
-                        if (computed != session.XxHash64.ToLowerInvariant())
+                        if (!string.Equals(computed, session.XxHash64, StringComparison.OrdinalIgnoreCase))
                         {
                             session.MarkFailed($"Integrity check failed: expected {session.XxHash64}, got {computed}");
                             Logger.LogAction("TCP_ENGINE", $"❌ Hash mismatch for {session.FileName} — deleting corrupted file");

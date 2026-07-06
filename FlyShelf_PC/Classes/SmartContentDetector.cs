@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -21,8 +22,8 @@ namespace FlyShelf.Classes
         {
             if (string.IsNullOrWhiteSpace(text)) return false;
             text = text.Trim();
-            if ((!text.StartsWith("{") || !text.EndsWith("}")) &&
-                (!text.StartsWith("[") || !text.EndsWith("]")))
+            if ((!text.StartsWith('{') || !text.EndsWith('}')) &&
+                (!text.StartsWith('[') || !text.EndsWith(']')))
                 return false;
             try
             {
@@ -113,11 +114,11 @@ namespace FlyShelf.Classes
         {
             try
             {
-                long val = long.Parse(text.Trim());
+                long val = long.Parse(text.Trim(), CultureInfo.InvariantCulture);
                 DateTimeOffset dto = text.Trim().Length >= 13
                     ? DateTimeOffset.FromUnixTimeMilliseconds(val)
                     : DateTimeOffset.FromUnixTimeSeconds(val);
-                return dto.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss (ddd)");
+                return dto.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss (ddd)", CultureInfo.InvariantCulture);
             }
             catch { return "[Invalid timestamp]"; }
         }

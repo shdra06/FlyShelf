@@ -21,6 +21,7 @@ namespace FlyShelf
         public bool IsSearchActive => _isSearchActive;
         private bool _isFilterBarActive = false;
         private bool _isClosingSearch = false;   // re-entrancy guard for CloseSearch
+        private bool _isApplyingFilter = false;  // PERF: guard to prevent triple filter reapplication during category switch
         private DateTime _overflowPopupLastClosed = DateTime.MinValue;
 
         private void SearchToggle_Click(object sender, RoutedEventArgs e)
@@ -97,13 +98,45 @@ namespace FlyShelf
 
             if (_isNotesActive)
             {
-                ApplyNotesSearch(query);
+                if (_notesSearchDebounce == null)
+                {
+                    _notesSearchDebounce = new System.Windows.Threading.DispatcherTimer
+                    {
+                        Interval = TimeSpan.FromMilliseconds(150)
+                    };
+                    _notesSearchDebounce.Tick += (s, args) =>
+                    {
+                        _notesSearchDebounce.Stop();
+                        ApplyNotesSearch(SearchTextBox.Text);
+                    };
+                }
+                else
+                {
+                    _notesSearchDebounce.Stop();
+                }
+                _notesSearchDebounce.Start();
                 return;
             }
 
             if (_isTodoActive)
             {
-                ApplyTodoSearch(query);
+                if (_todoSearchDebounce == null)
+                {
+                    _todoSearchDebounce = new System.Windows.Threading.DispatcherTimer
+                    {
+                        Interval = TimeSpan.FromMilliseconds(150)
+                    };
+                    _todoSearchDebounce.Tick += (s, args) =>
+                    {
+                        _todoSearchDebounce.Stop();
+                        ApplyTodoSearch(SearchTextBox.Text);
+                    };
+                }
+                else
+                {
+                    _todoSearchDebounce.Stop();
+                }
+                _todoSearchDebounce.Start();
                 return;
             }
 
@@ -304,6 +337,7 @@ namespace FlyShelf
             else
             {
                 string q = queryClean;
+
                 _viewModel.IsSearchActive = true;
                 
                 // Filter logic: Fuzzy match name, content, extension, or type name
@@ -316,15 +350,14 @@ namespace FlyShelf
                             return true;
 
                         // 2. Check exact extension match (direct property or via FilePath)
-                        string qLower = q.ToLowerInvariant();
-                        if (!string.IsNullOrEmpty(item.Extension) && item.Extension.Replace(".", "").Trim().ToLowerInvariant() == qLower)
+                        if (!string.IsNullOrEmpty(item.Extension) && item.Extension.Replace(".", "").Trim().Equals(q, StringComparison.OrdinalIgnoreCase))
                             return true;
                         if (!string.IsNullOrEmpty(item.FilePath))
                         {
                             try
                             {
-                                string ext = System.IO.Path.GetExtension(item.FilePath).Replace(".", "").Trim().ToLowerInvariant();
-                                if (ext == qLower) return true;
+                                string ext = System.IO.Path.GetExtension(item.FilePath).Replace(".", "").Trim();
+                                if (ext.Equals(q, StringComparison.OrdinalIgnoreCase)) return true;
                             }
                             catch { } // Best-effort: failure is acceptable
                         }
@@ -501,22 +534,33 @@ namespace FlyShelf
                 var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
                 if (view == null) return;
 
-                view.Filter = obj =>
+                // PERF: Set guard flag to prevent CollectionChanged handler from
+                // re-firing ReapplyActiveFilters during this filter assignment.
+                // Without this, every category click caused 5-6 redundant filter passes.
+                _isApplyingFilter = true;
+                try
                 {
-                    if (obj is FlyShelf.ViewModels.ClipboardItem item)
+                    view.Filter = obj =>
                     {
-                        return category switch
+                        if (obj is FlyShelf.ViewModels.ClipboardItem item)
                         {
-                            "Images" => item.IsImagePreview,
-                            "Pinned" => item.IsPinned,
-                            "PDF" => item.IsPdfPreview,
-                            "Docs" => item.IsDocPreview,
-                            "Password" => item.IsPassword,
-                            _ => true
-                        };
-                    }
-                    return false;
-                };
+                            return category switch
+                            {
+                                "Images" => item.IsImagePreview,
+                                "Pinned" => item.IsPinned,
+                                "PDF" => item.IsPdfPreview,
+                                "Docs" => item.IsDocPreview,
+                                "Password" => item.IsPassword,
+                                _ => true
+                            };
+                        }
+                        return false;
+                    };
+                }
+                finally
+                {
+                    _isApplyingFilter = false;
+                }
 
                 _viewModel.IsSearchActive = true;
 
@@ -535,8 +579,12 @@ namespace FlyShelf
                 UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs");
                 UpdateFilterButtonHighlight(FilterBtn_Password, "Password");
 
-                // Render newly visible thumbnails immediately
-                RenderVisibleThumbnails();
+                // PERF: Render thumbnails at Background priority so layout pass
+                // from the filter change completes first. At Normal priority, this
+                // ran before WPF finished re-virtualizing containers, wasting time
+                // iterating containers that don't exist yet.
+                Dispatcher.InvokeAsync(() => RenderVisibleThumbnails(),
+                    System.Windows.Threading.DispatcherPriority.Background);
             }
         }
 
@@ -550,15 +598,24 @@ namespace FlyShelf
         {
             _activeCategoryFilter = null;
 
-            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
-            if (view != null) view.Filter = null;
-            if (ShelfListView != null && ShelfListView.Items.CanFilter)
+            // PERF: Set guard flag to prevent CollectionChanged re-firing during clear
+            _isApplyingFilter = true;
+            try
             {
-                ShelfListView.Items.Filter = null;
+                var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
+                if (view != null) view.Filter = null;
+                if (ShelfListView != null && ShelfListView.Items.CanFilter)
+                {
+                    ShelfListView.Items.Filter = null;
+                }
+                if (AltShelfListView != null && AltShelfListView.Items.CanFilter)
+                {
+                    AltShelfListView.Items.Filter = null;
+                }
             }
-            if (AltShelfListView != null && AltShelfListView.Items.CanFilter)
+            finally
             {
-                AltShelfListView.Items.Filter = null;
+                _isApplyingFilter = false;
             }
             _viewModel.IsSearchActive = false;
 
@@ -574,9 +631,11 @@ namespace FlyShelf
             UpdateFilterButtonHighlight(FilterBtn_Pinned, "Pinned");
             UpdateFilterButtonHighlight(FilterBtn_Pdf, "PDF");
             UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs");
+            UpdateFilterButtonHighlight(FilterBtn_Password, "Password");
 
-            // Render newly visible thumbnails immediately
-            RenderVisibleThumbnails();
+            // PERF: Render thumbnails at Background priority after clear
+            Dispatcher.InvokeAsync(() => RenderVisibleThumbnails(),
+                System.Windows.Threading.DispatcherPriority.Background);
         }
 
         internal void ReapplyActiveFilters()
@@ -607,9 +666,12 @@ namespace FlyShelf
                         return false;
                     };
                 }
-                else if (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text))
+                else if (_isSearchActive)
                 {
-                    string q = SearchTextBox.Text.Trim();
+                    // Use the correct search box based on active UI mode
+                    string searchText = _isAltUIActive ? AltSearchTextBox?.Text : SearchTextBox?.Text;
+                    string q = searchText?.Trim() ?? "";
+                    if (!string.IsNullOrWhiteSpace(q))
                     filterPredicate = obj =>
                     {
                         if (obj is FlyShelf.ViewModels.ClipboardItem item)
@@ -620,18 +682,16 @@ namespace FlyShelf
                     };
                 }
 
-                // PERF: Only set Filter on the actual ListView ItemCollections.
-                // Removed redundant CollectionViewSource.GetDefaultView() assignment —
-                // it returns the same ICollectionView that ListView.Items wraps,
-                // so setting both caused a double UI refresh on every filter change.
-                if (listView != null && listView.CanFilter)
+                // PERF: Only set Filter on the currently ACTIVE ListView.
+                // The hidden ListView doesn't need filtering — it wastes an entire
+                // pass over all items. Filter it lazily when the UI mode switches.
+                var activeListView = _isAltUIActive ? altListView : listView;
+                if (activeListView != null && activeListView.CanFilter)
                 {
-                    listView.Filter = filterPredicate;
-                }
-
-                if (altListView != null && altListView.CanFilter)
-                {
-                    altListView.Filter = filterPredicate;
+                    using (activeListView.DeferRefresh())
+                    {
+                        activeListView.Filter = filterPredicate;
+                    }
                 }
             }
             catch { } // Best-effort: failure is acceptable
@@ -704,11 +764,7 @@ namespace FlyShelf
             }
 
             var win = new Windows.ShortcutsWindow();
-            win.Topmost = true;
-            win.Show();
-            win.Activate();
-            win.Focus();
-            win.Topmost = false;
+            WindowHelper.ShowInForeground(win);
         }
 
         private void ClearAllToolbar_Click(object sender, RoutedEventArgs e)

@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -14,6 +15,7 @@ namespace FlyShelf.ViewModels
 {
     public partial class ClipboardItem
     {
+        private static readonly string[] s_byteSuffixes = { "B", "KB", "MB", "GB", "TB" };
         private static readonly System.Text.RegularExpressions.Regex _rxCppCheck = new System.Text.RegularExpressions.Regex(
             @"#include\s*<[a-z.]+>|int\s+main\s*\(", System.Text.RegularExpressions.RegexOptions.Compiled);
         
@@ -53,10 +55,9 @@ namespace FlyShelf.ViewModels
                     HasSmartAction = true;
                 }
             }
-            else if (ItemType == ClipboardItemType.Url || (!string.IsNullOrEmpty(RawContent) && RawContent.StartsWith("http")))
+            else if (ItemType == ClipboardItemType.Url || (!string.IsNullOrEmpty(RawContent) && RawContent.StartsWith("http", StringComparison.OrdinalIgnoreCase)))
             {
-                string r = RawContent.ToLower();
-                if (r.Contains("zoom.us/j/") || r.Contains("meet.google.com/"))
+                if (RawContent.Contains("zoom.us/j/", StringComparison.OrdinalIgnoreCase) || RawContent.Contains("meet.google.com/", StringComparison.OrdinalIgnoreCase))
                 {
                     SmartActionName = "Join Meeting";
                     SmartActionIcon = "Video24";
@@ -72,7 +73,7 @@ namespace FlyShelf.ViewModels
             }
             else if (ItemType == ClipboardItemType.QRCode)
             {
-                if (!string.IsNullOrEmpty(RawContent) && RawContent.ToLower().StartsWith("http"))
+                if (!string.IsNullOrEmpty(RawContent) && RawContent.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                 {
                     SmartActionName = "Open QR Link";
                     SmartActionIcon = "Globe24";
@@ -89,7 +90,7 @@ namespace FlyShelf.ViewModels
             else if ((ItemType == ClipboardItemType.Text || ItemType == ClipboardItemType.Code) && !string.IsNullOrEmpty(RawContent))
             {
                 string smartActionSample = RawContent.Length > 10000 
-                    ? RawContent.Substring(0, 10000) 
+                    ? RawContent[..10000] 
                     : RawContent;
 
                 if (_rxCppCheck.IsMatch(smartActionSample))
@@ -254,7 +255,7 @@ namespace FlyShelf.ViewModels
             {
                 ItemType = ClipboardItemType.Audio;
             }
-            else if (path != null && (path.EndsWith("\\") || path.EndsWith("/") || Directory.Exists(path)))
+            else if (path != null && (path.EndsWith('\\') || path.EndsWith('/') || Directory.Exists(path)))
             {
                 ItemType = ClipboardItemType.Folder;
                 Extension = "FOLDER";
@@ -310,17 +311,18 @@ namespace FlyShelf.ViewModels
                                     .Take(50)
                                     .ToList();
                                 var listing = new System.Text.StringBuilder();
-                                listing.AppendLine($"📦 {entries.Count} file(s) in archive:");
+                                listing.AppendLine(CultureInfo.InvariantCulture, $"📦 {entries.Count} file(s) in archive:");
                                 long totalSize = 0;
                                 foreach (var entry in entries)
                                 {
                                     string entrySize = entry.Length > 0 ? $" ({FormatBytes(entry.Length)})" : "";
-                                    listing.AppendLine($"  • {entry.FullName}{entrySize}");
+                                    listing.AppendLine(CultureInfo.InvariantCulture, $"  • {entry.FullName}{entrySize}");
                                     totalSize += entry.Length;
                                 }
-                                if (archive.Entries.Count(e => !string.IsNullOrEmpty(e.Name)) > 50)
-                                    listing.AppendLine($"  ... and {archive.Entries.Count(e => !string.IsNullOrEmpty(e.Name)) - 50} more");
-                                listing.AppendLine($"\nTotal uncompressed: {FormatBytes(totalSize)}");
+                                int totalEntryCount = archive.Entries.Count(e => !string.IsNullOrEmpty(e.Name));
+                                if (totalEntryCount > 50)
+                                    listing.AppendLine(CultureInfo.InvariantCulture, $"  ... and {totalEntryCount - 50} more");
+                                listing.AppendLine(CultureInfo.InvariantCulture, $"\nTotal uncompressed: {FormatBytes(totalSize)}");
                                 RawContent = listing.ToString();
                             }
                             catch { } // Best-effort: failure is acceptable
@@ -352,12 +354,12 @@ namespace FlyShelf.ViewModels
                             var allFiles = Directory.GetFiles(capturedPath, "*", SearchOption.AllDirectories);
                             var allDirs = Directory.GetDirectories(capturedPath, "*", SearchOption.AllDirectories);
                             long folderSize = allFiles.Sum(f => { try { return new FileInfo(f).Length; } catch { return 0L; } });
-                            FormattedSize = $"{FormatBytes(folderSize)} • {allFiles.Length} files";
+                            FormattedSize = string.Create(CultureInfo.InvariantCulture, $"{FormatBytes(folderSize)} • {allFiles.Length} files");
                             
                             // Build contents listing
                             var listing = new System.Text.StringBuilder();
-                            listing.AppendLine($"📁 {FileName}/");
-                            listing.AppendLine($"   {allFiles.Length} file(s), {allDirs.Length} subfolder(s)");
+                            listing.AppendLine(CultureInfo.InvariantCulture, $"📁 {FileName}/");
+                            listing.AppendLine(CultureInfo.InvariantCulture, $"   {allFiles.Length} file(s), {allDirs.Length} subfolder(s)");
                             listing.AppendLine();
                             
                             var topItems = Directory.GetFileSystemEntries(capturedPath).Take(30).ToArray();
@@ -369,17 +371,17 @@ namespace FlyShelf.ViewModels
                                 {
                                     int subCount = 0;
                                     try { subCount = Directory.GetFileSystemEntries(entry).Length; } catch { } // Best-effort: failure is acceptable
-                                    listing.AppendLine($"  📂 {name}/ ({subCount} items)");
+                                    listing.AppendLine(CultureInfo.InvariantCulture, $"  📂 {name}/ ({subCount} items)");
                                 }
                                 else
                                 {
                                     long fSize = 0;
                                     try { fSize = new FileInfo(entry).Length; } catch { } // Best-effort: failure is acceptable
-                                    listing.AppendLine($"  📄 {name} ({FormatBytes(fSize)})");
+                                    listing.AppendLine(CultureInfo.InvariantCulture, $"  📄 {name} ({FormatBytes(fSize)})");
                                 }
                             }
                             if (Directory.GetFileSystemEntries(capturedPath).Length > 30)
-                                listing.AppendLine($"  ... and more");
+                                listing.AppendLine("  ... and more");
                             
                             RawContent = listing.ToString();
                             
@@ -428,7 +430,7 @@ namespace FlyShelf.ViewModels
             {
                 if (ItemType == ClipboardItemType.Group)
                 {
-                    string[] paths = RawContent.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                    string[] paths = RawContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
                     FlyShelf.Classes.ShellExplorerHelper.OpenFilesAndSelect(paths);
                     return;
                 }
@@ -448,7 +450,7 @@ namespace FlyShelf.ViewModels
                 else if (ItemType == ClipboardItemType.Text || ItemType == ClipboardItemType.Code)
                 {
                     // Create a scratch temp file to open Text in notepad
-                    string tempFile = Path.Combine(Path.GetTempPath(), $"FlyShelf_TextDrop_{Guid.NewGuid().ToString().Substring(0, 4)}.txt");
+                    string tempFile = Path.Combine(Path.GetTempPath(), $"FlyShelf_TextDrop_{Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture).AsSpan(0, 4)}.txt");
                     File.WriteAllText(tempFile, RawContent);
                     target = tempFile;
                 }
@@ -484,14 +486,14 @@ namespace FlyShelf.ViewModels
 
         private static string FormatBytes(long bytes)
         {
-            string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
+            string[] suffixes = s_byteSuffixes;
             int i;
             double dblSByte = bytes;
             for (i = 0; i < suffixes.Length && bytes >= 1024; i++, bytes /= 1024)
             {
                 dblSByte = bytes / 1024.0;
             }
-            return $"{dblSByte:0.##} {suffixes[i]}";
+            return string.Create(CultureInfo.InvariantCulture, $"{dblSByte:0.##} {suffixes[i]}");
         }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]

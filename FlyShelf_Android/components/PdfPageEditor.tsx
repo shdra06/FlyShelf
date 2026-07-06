@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { getPdfPageInfo, extractPages, mergePdfs } from '../utils/pdfUtils';
+import { getPdfPageInfo, extractPages } from '../utils/pdfUtils';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 interface PdfPageEditorProps {
@@ -277,7 +277,7 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => {
-                      const half = Math.ceil(pageCount / 2) + 1;
+                      const half = Math.floor(pageCount / 2) + 1;
                       selectRange(half, pageCount);
                     }}
                     style={s.quickBtn}
@@ -385,6 +385,8 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
                   const [rs, re] = pageInputValue.split('-').map(Number);
                   if (rs && re && rs <= re && rs >= 1 && re <= pageCount) {
                     selectRange(rs, re);
+                  } else {
+                    Alert.alert('Invalid Range', 'Please enter a valid range in the format "start-end" (e.g. 1-5). Values must be within the page count.');
                   }
                   setPageInputVisible(false);
                 }}

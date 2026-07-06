@@ -123,6 +123,7 @@ namespace FlyShelf.Classes
                         Logger.LogAction("PAIR", $"⚠️ Config key ({configKey}) mismatched with paired devices. Aligning to: {firstDevice.PairingKey}");
                         SettingsManager.Current.PairingKey = firstDevice.PairingKey;
                         SettingsManager.Save();
+                        SyncCrypto.ClearKeyCache();
                         return firstDevice.PairingKey;
                     }
                 }
@@ -147,6 +148,7 @@ namespace FlyShelf.Classes
             {
                 SettingsManager.Current.PairingKey = Guid.NewGuid().ToString("N"); // 32-char hex
                 SettingsManager.Save();
+                SyncCrypto.ClearKeyCache();
                 Logger.LogAction("PAIRING", $"Generated new pairing key: {SettingsManager.Current.PairingKey.Substring(0, 8)}...");
             }
             return SettingsManager.Current.PairingKey;
@@ -219,6 +221,7 @@ namespace FlyShelf.Classes
             {
                 SettingsManager.Current.PairingKey = sharedSecret;
                 SettingsManager.Save();
+                SyncCrypto.ClearKeyCache();
             }
         }
 
@@ -230,6 +233,7 @@ namespace FlyShelf.Classes
             string oldKey = SettingsManager.Current.PairingKey;
             SettingsManager.Current.PairingKey = Guid.NewGuid().ToString("N");
             SettingsManager.Save();
+            SyncCrypto.ClearKeyCache();
 
             // SECURITY: Clean up all entries under the old pairing key to prevent data leakage.
             // Without this, old active_devices, clipboard, and members entries are orphaned forever.
@@ -644,10 +648,19 @@ namespace FlyShelf.Classes
             {
                 string upperCode = code.Trim().ToUpperInvariant();
                 var response = await _httpClient.GetAsync((await AuthUrl($"pairing_codes/{upperCode}.json")));
-                if (!response.IsSuccessStatusCode) return null;
+                if (!response.IsSuccessStatusCode)
+                {
+                    Logger.LogAction("PAIR CODE", $"Firebase lookup for {upperCode} returned HTTP {(int)response.StatusCode}");
+                    return null;
+                }
 
                 string json = await response.Content.ReadAsStringAsync();
-                if (string.IsNullOrWhiteSpace(json) || json == "null") return null;
+                Logger.LogAction("PAIR CODE", $"Firebase response for {upperCode}: {(json?.Length > 200 ? json.Substring(0, 200) + "..." : json)}");
+                if (string.IsNullOrWhiteSpace(json) || json == "null")
+                {
+                    Logger.LogAction("PAIR CODE", $"Code {upperCode} not found in Firebase (response was null/empty)");
+                    return null;
+                }
 
                 var info = JsonSerializer.Deserialize<PairingCodeInfo>(json);
                 

@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -28,12 +29,12 @@ namespace FlyShelf.Windows
             FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _item = item;
             HeaderText.Text = $"Select Pages \u2014 {item.FileName}";
-            LoadThumbnailsAsync();
+            _ = LoadThumbnailsAsync();
             BuildPageGrid();
             UpdateSelectionInfo();
         }
 
-        private async void LoadThumbnailsAsync()
+        private async Task LoadThumbnailsAsync()
         {
             try
             {
@@ -200,7 +201,7 @@ namespace FlyShelf.Windows
                     };
                     var numText = new TextBlock
                     {
-                        Text = pn.ToString(),
+                        Text = pn.ToString(CultureInfo.InvariantCulture),
                         FontSize = 14,
                         FontWeight = FontWeights.SemiBold,
                         HorizontalAlignment = HorizontalAlignment.Center

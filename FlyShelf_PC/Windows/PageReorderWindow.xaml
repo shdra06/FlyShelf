@@ -95,12 +95,21 @@
         <!-- Footer buttons -->
         <Grid Grid.Row="4" Margin="0,12,0,0">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                <ui:Button Appearance="Transparent" FontSize="12" Padding="8,4" Margin="0,0,8,0" Click="ResetDefault_Click" ToolTip="Restore original page order (1, 2, 3...)">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="ArrowReset24" FontSize="14" Margin="0,0,4,0"/>
+                        <TextBlock Text="Reset Default" FontSize="12"/>
+                    </StackPanel>
+                </ui:Button>
                 <TextBlock x:Name="SelectedCountText" Text="0 selected" FontSize="12" Opacity="0.5" VerticalAlignment="Center"
                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <ui:Button Content="Cancel" Appearance="Secondary" Margin="0,0,12,0" Padding="20,8" Click="Cancel_Click" />
-                <ui:Button x:Name="ConfirmBtn" Content="Apply Order" Appearance="Primary" Padding="20,8" Click="Confirm_Click">
+                <ui:Button x:Name="OverwriteBtn" Content="Save &amp; Overwrite" Appearance="Secondary" Margin="0,0,12,0" Padding="20,8" Click="Overwrite_Click" ToolTip="Overwrite the original PDF file with these changes">
+                    <ui:Button.Icon><ui:SymbolIcon Symbol="Save24" /></ui:Button.Icon>
+                </ui:Button>
+                <ui:Button x:Name="ConfirmBtn" Content="Apply Order" Appearance="Primary" Padding="20,8" Click="Confirm_Click" ToolTip="Apply these changes to the merge list (does not save to disk yet)">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="Checkmark24" /></ui:Button.Icon>
                 </ui:Button>
             </StackPanel>

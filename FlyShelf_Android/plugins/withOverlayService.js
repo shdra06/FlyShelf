@@ -1,4 +1,4 @@
-const { withDangerousMod, withMainApplication, withAndroidManifest } = require('expo/config-plugins');
+const { withDangerousMod, withMainApplication, withAndroidManifest, withAppBuildGradle } = require('expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
@@ -494,6 +494,8 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.Promise
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 
 class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -554,6 +556,7 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
             obj.put("Title", rawText.take(60))
             obj.put("Source", source)
             arr.put(0, obj)
+            while (arr.length() > 50) arr.remove(arr.length() - 1)
             OverlayService.clipboardItems = arr.toString()
         } catch(e: Exception) {}
     }
@@ -597,7 +600,16 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
 
     @ReactMethod
     fun setPairingKey(key: String) {
-        val prefs = reactApplicationContext.getSharedPreferences("flyshelf_prefs", Context.MODE_PRIVATE)
+        val masterKey = MasterKey.Builder(reactApplicationContext)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        val prefs = EncryptedSharedPreferences.create(
+            reactApplicationContext,
+            "flyshelf_secure_prefs",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
         prefs.edit().putString("flyshelf_pairing_key", key).apply()
     }
 
@@ -643,6 +655,8 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 
 class ScreenshotObserver(private val context: Context) : ContentObserver(Handler(Looper.getMainLooper())) {
 
@@ -728,7 +742,16 @@ class ScreenshotObserver(private val context: Context) : ContentObserver(Handler
         conn.setRequestProperty("X-FlyShelf-Client", "MobileCompanion")
         // Read pairing key from SharedPreferences and attach as auth header
         try {
-            val prefs = context.getSharedPreferences("flyshelf_prefs", Context.MODE_PRIVATE)
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            val prefs = EncryptedSharedPreferences.create(
+                context,
+                "flyshelf_secure_prefs",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
             val pairingKey = prefs.getString("flyshelf_pairing_key", "") ?: ""
             if (pairingKey.isNotEmpty()) {
                 conn.setRequestProperty("X-Pairing-Key", pairingKey)
@@ -845,9 +868,25 @@ function withOverlayPackageRegistration(config) {
   });
 }
 
+function withSecurityCryptoDependency(config) {
+  return withAppBuildGradle(config, (config) => {
+    let contents = config.modResults.contents;
+    if (!contents.includes('security-crypto')) {
+      contents = contents.replace(
+        /dependencies\s*\{/,
+        'dependencies {\n    implementation "androidx.security:security-crypto:1.1.0-alpha06"'
+      );
+    }
+    config.modResults.contents = contents;
+    console.log('[FlyShelf] ✅ security-crypto dependency added to build.gradle');
+    return config;
+  });
+}
+
 module.exports = function withOverlayService(config) {
   config = withOverlayServiceFiles(config);
   config = withOverlayManifest(config);
   config = withOverlayPackageRegistration(config);
+  config = withSecurityCryptoDependency(config);
   return config;
 };

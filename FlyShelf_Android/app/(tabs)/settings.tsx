@@ -1,50 +1,39 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import * as Haptics from 'expo-haptics';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, Alert, Switch, NativeModules, ScrollView, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Switch, NativeModules, ScrollView, ActivityIndicator, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
-import { useSettings } from '../../context/SettingsContext';
-import * as FileSystem from 'expo-file-system/legacy';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSettings, DeviceSyncPrefs } from '../../context/SettingsContext';
+
 import { getSecureItem } from '../../utils/secureStorage';
-import * as IntentLauncher from 'expo-intent-launcher';
+
 import Constants from 'expo-constants';
-import { colors, font, radius, shadows, space, component } from '../../styles/theme';
-import AnimatedPressable from '../../components/AnimatedPressable';
+import { font, radius, shadows, space, component } from '../../styles/theme';
+import { useAppTheme } from '../../hooks/useAppTheme';
+
 import DeviceHub from '../../components/DeviceHub';
 import ScreenHeader from '../../components/ScreenHeader';
-import { getDebugLogs, clearDebugLogs, getNetworkLogs, getNetworkLogsText, clearNetworkLogs, onNetworkLogChange, getNetworkLogCount } from '../../utils/debugLog';
+import StepSlider from '../../components/StepSlider';
+
 import * as Clipboard from 'expo-clipboard';
 
 const APP_VERSION = Constants.expoConfig?.version || '1.0.0';
 const VERSION_URL = 'https://raw.githubusercontent.com/shdra06/FlyShelf/main/version.json';
 
-// Custom pure-JS slider row — themed
-const StepSlider = ({ value, min, max, step, onValueChange, trackColor, thumbColor, label }: { value: number; min: number; max: number; step: number; onValueChange: (v: number) => void; trackColor: string; thumbColor: string; label: string }) => {
-  const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
-  return (
-    <View style={{marginTop: 8}}>
-      <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
-        <TouchableOpacity onPress={() => { if (value - step >= min) onValueChange(value - step); }} style={{width: 36, height: 36, borderRadius: 12, backgroundColor: colors.bg.cardHover, alignItems: 'center', justifyContent: 'center'}} accessibilityLabel={`Decrease ${label}`} accessibilityRole="button">
-          <Text style={{color: colors.text.primary, fontSize: 18, fontFamily: font.extrabold}}>−</Text>
-        </TouchableOpacity>
-        <View style={{flex: 1, height: 6, backgroundColor: colors.bg.cardHover, borderRadius: 3, overflow: 'hidden'}}>
-          <View style={{width: `${pct}%`, height: '100%', backgroundColor: trackColor, borderRadius: 3}} />
-        </View>
-        <TouchableOpacity onPress={() => { if (value + step <= max) onValueChange(value + step); }} style={{width: 36, height: 36, borderRadius: 12, backgroundColor: colors.bg.cardHover, alignItems: 'center', justifyContent: 'center'}} accessibilityLabel={`Increase ${label}`} accessibilityRole="button">
-          <Text style={{color: colors.text.primary, fontSize: 18, fontFamily: font.extrabold}}>+</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
+// StepSlider extracted to components/StepSlider.tsx
 
 export default function SettingsScreen() {
-  const { pcLocalIp, setPcLocalIp, isGlobalSyncEnabled, setGlobalSyncEnabled, deviceName, setDeviceName, isFloatingBallEnabled, setFloatingBallEnabled, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, removePairedDevice, pairingKey, regeneratePairingKey } = useSettings();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { pcLocalIp, setPcLocalIp, isGlobalSyncEnabled, setGlobalSyncEnabled, deviceName, setDeviceName, isFloatingBallEnabled, setFloatingBallEnabled, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, syncPreferences, setSyncPreference, getSyncPrefsForDevice } = useSettings();
   const [localIpInput, setLocalIpInput] = useState(pcLocalIp);
-  const [globalSyncInput, setGlobalSyncInput] = useState(isGlobalSyncEnabled);
   const [deviceNameInput, setDeviceNameInput] = useState(deviceName);
-  const [floatingBallInput, setFloatingBallInput] = useState(isFloatingBallEnabled);
+
+  // Sync local state when context values change (e.g. loaded from storage)
+  useEffect(() => { setLocalIpInput(pcLocalIp || ''); }, [pcLocalIp]);
+  useEffect(() => { setDeviceNameInput(deviceName || ''); }, [deviceName]);
   const [showDeviceHub, setShowDeviceHub] = useState(false);
 
   // ═══ Update System State ═══
@@ -55,54 +44,39 @@ export default function SettingsScreen() {
 
   const { AdvanceOverlay } = NativeModules;
 
-  // ═══ Network Log Viewer State ═══
-  const [showNetLogs, setShowNetLogs] = useState(false);
-  const [netLogEntries, setNetLogEntries] = useState<string[]>([]);
-  const [netLogCount, setNetLogCount] = useState(0);
-
-  useEffect(() => {
-    // Subscribe to network log changes for real-time updates
-    const unsub = onNetworkLogChange(() => {
-      if (showNetLogs) {
-        setNetLogEntries(getNetworkLogs().slice(0, 100));
-      }
-      setNetLogCount(getNetworkLogCount());
-    });
-    setNetLogCount(getNetworkLogCount());
-    return unsub;
-  }, [showNetLogs]);
-
-  useEffect(() => {
-    if (showNetLogs) {
-      setNetLogEntries(getNetworkLogs().slice(0, 100));
-    }
-  }, [showNetLogs]);
 
 
 
   const handleSave = async () => {
     try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      // Validate IP format if provided
+      if (localIpInput.trim() && !/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(localIpInput.trim())) {
+        Alert.alert('Invalid IP', 'Enter a valid IP (e.g., 192.168.1.5:8999)');
+        return;
+      }
+
       await setPcLocalIp(localIpInput);
-      await setGlobalSyncEnabled(globalSyncInput);
       await setDeviceName(deviceNameInput);
 
       if (Platform.OS === 'android' && AdvanceOverlay) {
-        if (floatingBallInput) {
-          const hasPerm = await AdvanceOverlay.checkOverlayPermission();
-          if (!hasPerm) {
-             await AdvanceOverlay.requestOverlayPermission();
-             Alert.alert('Permission Required', 'Please enable Draw Over Other Apps in settings, switch back, and press save again.');
-             return;
-          } else {
-             AdvanceOverlay.startOverlay();
-             AdvanceOverlay.setOverlayConfig(floatingBallSize, floatingBallAutoHide);
-          }
+        if (isFloatingBallEnabled) {
+          try {
+            const hasPerm = await AdvanceOverlay.checkOverlayPermission();
+            if (!hasPerm) {
+              try { await AdvanceOverlay.requestOverlayPermission(); } catch (e) { console.warn('Overlay module error:', e); }
+              Alert.alert('Permission Required', 'Please enable Draw Over Other Apps in settings, switch back, and press save again.');
+              return;
+            } else {
+              try { AdvanceOverlay.startOverlay(); } catch (e) { console.warn('Overlay module error:', e); }
+              try { AdvanceOverlay.setOverlayConfig(floatingBallSize, floatingBallAutoHide); } catch (e) { console.warn('Overlay module error:', e); }
+            }
+          } catch (e) { console.warn('Overlay module error:', e); }
         } else {
-          AdvanceOverlay.stopOverlay();
+          try { AdvanceOverlay.stopOverlay(); } catch (e) { console.warn('Overlay module error:', e); }
         }
       }
 
-      await setFloatingBallEnabled(floatingBallInput);
       Alert.alert('Saved', 'Configuration preserved.');
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to save settings.');
@@ -113,7 +87,9 @@ export default function SettingsScreen() {
   const checkForUpdate = useCallback(async () => {
     try {
       setUpdateStatus('checking');
-      const res = await fetch(`${VERSION_URL}?t=${Date.now()}`, { signal: AbortSignal.timeout(10000) });
+      const _ctrl = new AbortController(); setTimeout(() => _ctrl.abort(), 10000);
+      const res = await fetch(`${VERSION_URL}?t=${Date.now()}`, { signal: _ctrl.signal });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       const latest = data.android_version || '1.0.0';
       const dl = data.android_download || '';
@@ -144,7 +120,6 @@ export default function SettingsScreen() {
               style: 'default',
               onPress: async () => {
                 try {
-                  const { Linking } = require('react-native');
                   await Linking.openURL(dl);
                 } catch {
                   Alert.alert('Error', 'Could not open update link.');
@@ -168,16 +143,16 @@ export default function SettingsScreen() {
       case 'checking':
         return (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <ActivityIndicator size="small" color="#FFF" />
-            <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 13 }}>Checking...</Text>
+            <ActivityIndicator size="small" color={colors.text.primary} />
+            <Text style={{ color: colors.text.primary, fontFamily: font.bold, fontSize: 13 }}>Checking...</Text>
           </View>
         );
       case 'available':
-        return <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 13 }}>Download v{latestVersion}</Text>;
+        return <Text style={{ color: colors.text.primary, fontFamily: font.bold, fontSize: 13 }}>Download v{latestVersion}</Text>;
       case 'error':
-        return <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 13 }}>Retry Check</Text>;
+        return <Text style={{ color: colors.text.primary, fontFamily: font.bold, fontSize: 13 }}>Retry Check</Text>;
       default:
-        return <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 13 }}>Check Updates</Text>;
+        return <Text style={{ color: colors.text.primary, fontFamily: font.bold, fontSize: 13 }}>Check Updates</Text>;
     }
   };
 
@@ -189,7 +164,6 @@ export default function SettingsScreen() {
         break;
       case 'available':
         if (downloadUrl) {
-          const { Linking } = require('react-native');
           Linking.openURL(downloadUrl).catch(() => Alert.alert('Error', 'Could not open update link.'));
         }
         break;
@@ -218,6 +192,7 @@ export default function SettingsScreen() {
           <TouchableOpacity style={styles.saveButton} onPress={handleSave} accessibilityLabel="Save configuration" accessibilityRole="button">
             <Text style={styles.saveButtonText}>Save Configuration</Text>
           </TouchableOpacity>
+          <Text style={{ color: colors.text.tertiary, fontSize: 11, fontFamily: font.regular, textAlign: 'center', marginBottom: space.md, marginTop: -space.md }}>Saves IP address and device name. Toggles auto-save instantly.</Text>
 
           {/* Networking Card */}
           <View style={styles.card}>
@@ -267,11 +242,11 @@ export default function SettingsScreen() {
                     <Text style={styles.inputLabel}>Cloud Discovery</Text>
                   </View>
                   <Switch 
-                    value={globalSyncInput} 
-                    onValueChange={setGlobalSyncInput} 
+                    value={isGlobalSyncEnabled} 
+                    onValueChange={(val) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setGlobalSyncEnabled(val); }} 
                     trackColor={{ false: colors.text.disabled, true: "rgba(99,132,255,0.4)" }} 
                     thumbColor="#FFF"
-                    accessibilityLabel={globalSyncInput ? 'Cloud discovery enabled' : 'Cloud discovery disabled'}
+                    accessibilityLabel={isGlobalSyncEnabled ? 'Cloud discovery enabled' : 'Cloud discovery disabled'}
                     accessibilityRole="switch"
                   />
               </View>
@@ -347,6 +322,88 @@ export default function SettingsScreen() {
           {/* DeviceHub Modal */}
           <DeviceHub visible={showDeviceHub} onClose={() => setShowDeviceHub(false)} />
 
+          {/* ═══════════════════════════════════════════ */}
+          {/* Sync Preferences Card — Per-Device Toggles */}
+          {/* ═══════════════════════════════════════════ */}
+          {pairedDevices.length > 0 && (
+            <View style={[styles.card, { marginTop: 16 }]}>
+              <Text style={styles.sectionHeader}>Sync Preferences</Text>
+              <Text style={styles.helperText}>Control what syncs with each paired device. Disabled categories will not send or receive data.</Text>
+
+              {pairedDevices.map((device) => {
+                const prefs = getSyncPrefsForDevice(device.deviceId);
+                const SYNC_CATEGORIES: { key: keyof DeviceSyncPrefs; label: string; icon: string; color: string }[] = [
+                  { key: 'clipboard', label: 'Clipboard', icon: 'clipboard-outline', color: colors.accent.primary },
+                  { key: 'images', label: 'Images', icon: 'image-outline', color: '#F472B6' },
+                  { key: 'files', label: 'Files', icon: 'document-outline', color: '#F59E0B' },
+                  { key: 'notes', label: 'Notes', icon: 'reader-outline', color: '#34D399' },
+                  { key: 'todos', label: 'To-Do', icon: 'checkbox-outline', color: '#8B5CF6' },
+                ];
+                const enabledCount = SYNC_CATEGORIES.filter(c => prefs[c.key]).length;
+
+                return (
+                  <View key={device.deviceId} style={{
+                    backgroundColor: colors.bg.input,
+                    borderRadius: radius.lg,
+                    padding: space.md,
+                    marginTop: space.md,
+                    borderWidth: 1,
+                    borderColor: colors.border.subtle,
+                  }}>
+                    {/* Device header */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: space.sm }}>
+                      <View style={{
+                        width: 34, height: 34, borderRadius: 10,
+                        backgroundColor: device.deviceType === 'PC' ? colors.accent.infoDim : colors.accent.successDim,
+                        justifyContent: 'center', alignItems: 'center', marginRight: space.sm,
+                      }}>
+                        <Ionicons
+                          name={device.deviceType === 'PC' ? 'laptop-outline' : 'phone-portrait-outline'}
+                          size={18}
+                          color={device.deviceType === 'PC' ? colors.accent.info : colors.accent.success}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.text.primary, fontSize: 14, fontFamily: font.semibold }}>
+                          {device.deviceName || device.deviceId.slice(0, 8)}
+                        </Text>
+                        <Text style={{ color: colors.text.tertiary, fontSize: 11, fontFamily: font.regular }}>
+                          {enabledCount}/{SYNC_CATEGORIES.length} categories enabled
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Category toggles */}
+                    {SYNC_CATEGORIES.map((cat) => (
+                      <View key={cat.key} style={{
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                        paddingVertical: 8, paddingHorizontal: 4,
+                        borderTopWidth: 1, borderTopColor: colors.border.subtle,
+                      }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Ionicons name={cat.icon as any} size={18} color={prefs[cat.key] ? cat.color : colors.text.disabled} style={{ marginRight: 10 }} />
+                          <Text style={{
+                            color: prefs[cat.key] ? colors.text.primary : colors.text.disabled,
+                            fontSize: 13, fontFamily: font.medium,
+                          }}>{cat.label}</Text>
+                        </View>
+                        <Switch
+                          value={prefs[cat.key]}
+                          onValueChange={(val) => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setSyncPreference(device.deviceId, cat.key, val);
+                          }}
+                          trackColor={{ false: colors.text.disabled, true: `${cat.color}66` }}
+                          thumbColor="#FFF"
+                        />
+                      </View>
+                    ))}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
           {/* Floating Clipboard Card */}
           <View style={[styles.card, { marginTop: 16 }]}>
             <Text style={styles.sectionHeader}>Floating Clipboard</Text>
@@ -358,11 +415,11 @@ export default function SettingsScreen() {
                     <Text style={styles.inputLabel}>Enable Floating Ball</Text>
                   </View>
                   <Switch 
-                    value={floatingBallInput} 
-                    onValueChange={setFloatingBallInput} 
+                    value={isFloatingBallEnabled} 
+                    onValueChange={(val) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFloatingBallEnabled(val); }} 
                     trackColor={{ false: colors.text.disabled, true: "rgba(167,139,250,0.4)" }} 
                     thumbColor="#FFF"
-                    accessibilityLabel={floatingBallInput ? 'Floating ball enabled' : 'Floating ball disabled'}
+                    accessibilityLabel={isFloatingBallEnabled ? 'Floating ball enabled' : 'Floating ball disabled'}
                     accessibilityRole="switch"
                   />
               </View>
@@ -381,7 +438,6 @@ export default function SettingsScreen() {
                 step={4}
                 onValueChange={(val) => setFloatingBallSize(val)}
                 trackColor="#10B981"
-                thumbColor="#10B981"
                 label="size"
               />
               <Text style={styles.helperText}>Controls how large the floating ball appears on screen. Default: 48dp.</Text>
@@ -399,14 +455,13 @@ export default function SettingsScreen() {
                 step={500}
                 onValueChange={(val) => setFloatingBallAutoHide(val)}
                 trackColor="#F59E0B"
-                thumbColor="#F59E0B"
                 label="delay"
               />
               <Text style={styles.helperText}>Time before the ball auto-hides to the edge. Default: 3 seconds.</Text>
             </View>
 
             <View style={[styles.inputContainer, { marginTop: 16 }]}>
-              <Text style={[styles.helperText, { color: '#6366F1', fontWeight: '500' }]}>
+              <Text style={[styles.helperText, { color: colors.accent.primary, fontWeight: '500' }]}>
                 • Tap a clip item to copy it instantly{'\n'}
                 • Long-press to drag & drop into any text field{'\n'}
                 • Tap the floating ball to toggle the clipboard panel{'\n'}
@@ -435,11 +490,11 @@ export default function SettingsScreen() {
                     backgroundColor: getUpdateButtonColor(),
                     paddingHorizontal: 16,
                     paddingVertical: 10,
-                    borderRadius: 12,
+                    borderRadius: radius.md,
                     minWidth: 130,
                     alignItems: 'center',
                   }}
-                  onPress={handleUpdatePress}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleUpdatePress(); }}
                   disabled={updateStatus === 'checking'}
                   accessibilityLabel={updateStatus === 'available' ? `Download version ${latestVersion}` : updateStatus === 'checking' ? 'Checking for updates' : 'Check for updates'}
                   accessibilityRole="button"
@@ -452,16 +507,16 @@ export default function SettingsScreen() {
               {updateStatus === 'available' && (
                 <View style={{
                   marginTop: 12,
-                  backgroundColor: '#1A1D24',
+                  backgroundColor: colors.bg.card,
                   borderRadius: 12,
                   padding: 14,
                   borderWidth: 1,
-                  borderColor: '#F59E0B33',
+                  borderColor: colors.accent.warning + '33',
                 }}>
-                  <Text style={{ color: '#F59E0B', fontWeight: '700', fontSize: 14, marginBottom: 4 }}>
+                  <Text style={{ color: colors.accent.warning, fontWeight: '700', fontSize: 14, marginBottom: 4 }}>
                     🎉 Update v{latestVersion} Available
                   </Text>
-                  <Text style={{ color: '#8A8F98', fontSize: 12, lineHeight: 18 }}>
+                  <Text style={{ color: colors.text.secondary, fontSize: 12, lineHeight: 18 }}>
                     {changelog}
                   </Text>
                 </View>
@@ -473,189 +528,94 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {/* Network Log Viewer */}
-          <View style={{ backgroundColor: '#141824', borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' }}>
-            {/* Header row with toggle */}
-            <TouchableOpacity
-              onPress={() => setShowNetLogs(!showNetLogs)}
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-              accessibilityLabel={`Network logs, ${netLogCount} entries, ${showNetLogs ? 'collapse' : 'expand'}`}
-              accessibilityRole="button"
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Text style={{ fontSize: 18 }}>🌐</Text>
-                <Text style={{ color: '#F0F2F5', fontSize: 16, fontWeight: '700' }}>Network Logs</Text>
-                {netLogCount > 0 && (
-                  <View style={{ backgroundColor: '#6366F133', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
-                    <Text style={{ color: '#6366F1', fontSize: 11, fontWeight: '700' }}>{netLogCount}</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={{ color: '#6B7280', fontSize: 18 }}>{showNetLogs ? '▲' : '▼'}</Text>
-            </TouchableOpacity>
 
-            {/* Action buttons — row 1 */}
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-              <TouchableOpacity
-                style={{ flex: 1, backgroundColor: '#1E2330', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#2A2F3A' }}
-                onPress={async () => {
-                  const logs = getNetworkLogsText();
-                  if (!logs) { Alert.alert('No Logs', 'No network activity logged yet.'); return; }
-                  await Clipboard.setStringAsync(logs);
-                  Alert.alert('Copied!', `${logs.split('\n').length} network log entries copied.`);
-                }}
-                accessibilityLabel="Copy network logs"
-                accessibilityRole="button"
-              >
-                <Text style={{ color: '#60A5FA', fontWeight: '700', fontSize: 12 }}>📋 Copy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{ flex: 1, backgroundColor: '#1E2330', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#2A2F3A' }}
-                onPress={async () => {
-                  const allLogs = getDebugLogs();
-                  if (!allLogs) { Alert.alert('No Logs', 'No activity logged yet.'); return; }
-                  await Clipboard.setStringAsync(allLogs);
-                  Alert.alert('Copied!', `${allLogs.split('\n').length} total log entries copied.`);
-                }}
-                accessibilityLabel="Copy all debug logs"
-                accessibilityRole="button"
-              >
-                <Text style={{ color: '#8B5CF6', fontWeight: '700', fontSize: 12 }}>📋 All Logs</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{ backgroundColor: '#1E2330', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#2A2F3A', paddingHorizontal: 16 }}
-                onPress={() => {
-                  clearNetworkLogs();
-                  clearDebugLogs();
-                  setNetLogEntries([]);
-                  setNetLogCount(0);
-                  Alert.alert('Cleared', 'All logs cleared.');
-                }}
-                accessibilityLabel="Clear all logs"
-                accessibilityRole="button"
-              >
-                <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 12 }}>🗑️</Text>
-              </TouchableOpacity>
+
+          {/* About Section */}
+          <View style={[styles.card, { marginTop: 16 }]}>
+            <Text style={styles.sectionHeader}>About</Text>
+
+            <View style={styles.inputContainer}>
+              <View style={styles.inputHeaderRow}>
+                <Ionicons name="information-circle-outline" size={20} color={colors.accent.primary} />
+                <Text style={styles.inputLabel}>FlyShelf Mobile</Text>
+              </View>
+              <Text style={[styles.helperText, { marginTop: 0 }]}>
+                Version: <Text style={{ color: colors.type.image, fontWeight: '700' }}>v{APP_VERSION}</Text>
+              </Text>
             </View>
 
-            {/* Send to PC Dashboard button */}
             <TouchableOpacity
-              style={{ backgroundColor: '#1A2744', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#1E3A5F', marginTop: 8 }}
-              onPress={async () => {
-                try {
-                  const logs = getNetworkLogs();
-                  if (logs.length === 0) { Alert.alert('No Logs', 'No network logs to send.'); return; }
-                  const [localUrl, globalUrl, pk] = await Promise.all([
-                    getSecureItem('pairedLocalUrl'),
-                    getSecureItem('pairedGlobalUrl'),
-                    getSecureItem('pairingKey'),
-                  ]);
-                  const candidates = [localUrl, globalUrl].filter(u => u && u.startsWith('http')) as string[];
-                  if (candidates.length === 0) { Alert.alert('No PC', 'No paired PC URL found. Pair with a PC first.'); return; }
-                  let sent = false;
-                  for (const url of candidates) {
-                    try {
-                      const headers: any = { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion', 'X-Device-Name': deviceName || 'Mobile' };
-                      if (pk) headers['X-Pairing-Key'] = pk;
-                      const ctrl = new AbortController();
-                      const timer = setTimeout(() => ctrl.abort(), 6000);
-                      const res = await fetch(`${url}/api/logs`, { method: 'POST', headers, body: JSON.stringify(logs), signal: ctrl.signal });
-                      clearTimeout(timer);
-                      if (res.ok) { sent = true; break; }
-                    } catch {}
-                  }
-                  if (sent) {
-                    Alert.alert('Sent! ✅', `${logs.length} log entries sent to PC dashboard.\n\nView at: your-pc/logs?pin=YOUR_PIN`);
-                  } else {
-                    Alert.alert('Failed', 'Could not reach PC. Make sure FlyShelf is running on PC.');
-                  }
-                } catch (e: any) { Alert.alert('Error', e?.message || 'Unknown error'); }
+              style={{
+                backgroundColor: colors.bg.input,
+                borderRadius: radius.md,
+                padding: space.lg,
+                marginTop: space.md,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.sm,
+                borderWidth: 1,
+                borderColor: colors.border.subtle,
               }}
-              accessibilityLabel="Send logs to PC dashboard"
-              accessibilityRole="button"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); Linking.openURL('https://flyshelf.app/privacy.html').catch(() => Alert.alert('Error', 'Could not open privacy policy.')); }}
+              accessibilityLabel="Open privacy policy"
+              accessibilityRole="link"
             >
-              <Text style={{ color: '#3B82F6', fontWeight: '700', fontSize: 13 }}>📤 Send Logs to PC Dashboard</Text>
+              <Ionicons name="shield-checkmark-outline" size={18} color={colors.accent.info} />
+              <Text style={{ color: colors.accent.info, fontSize: 14, fontFamily: font.semibold, flex: 1 }}>Privacy Policy</Text>
+              <Ionicons name="open-outline" size={14} color={colors.text.tertiary} />
             </TouchableOpacity>
 
-            {/* Inline log viewer */}
-            {showNetLogs && (
-              <View style={{
-                marginTop: 14,
-                backgroundColor: '#0B0E14',
-                borderRadius: 14,
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.accent.errorDim,
+                borderRadius: radius.md,
+                padding: space.lg,
+                marginTop: space.sm,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.sm,
                 borderWidth: 1,
-                borderColor: '#1A1F2E',
-                maxHeight: 350,
-                overflow: 'hidden',
-              }}>
-                {/* Log header bar */}
-                <View style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
-                  backgroundColor: '#10131A',
-                  borderBottomWidth: 1,
-                  borderBottomColor: '#1A1F2E',
-                }}>
-                  <Text style={{ color: '#4B5563', fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: '600' }}>
-                    LIVE NETWORK FEED — {netLogEntries.length} entries
-                  </Text>
-                  <TouchableOpacity onPress={() => setNetLogEntries(getNetworkLogs().slice(0, 100))} accessibilityLabel="Refresh network logs" accessibilityRole="button" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={{ color: '#6366F1', fontSize: 10, fontWeight: '700' }}>↻ Refresh</Text>
-                  </TouchableOpacity>
-                </View>
+                borderColor: colors.border.subtle,
+              }}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                Alert.alert(
+                  'Clear Cache',
+                  'This will clear cached clipboard items, notes, and todos. Your settings and paired devices will not be affected.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Clear',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          const allKeys = await AsyncStorage.getAllKeys();
+                          const cacheKeys = allKeys.filter(k => k.startsWith('@flyshelf_'));
+                          if (cacheKeys.length > 0) {
+                            await AsyncStorage.multiRemove(cacheKeys);
+                          }
+                          Alert.alert('Done', `Cleared ${cacheKeys.length} cached item${cacheKeys.length !== 1 ? 's' : ''}.`);
+                        } catch (e: any) {
+                          Alert.alert('Error', e?.message || 'Failed to clear cache.');
+                        }
+                      },
+                    },
+                  ]
+                );
+              }}
+              accessibilityLabel="Clear cache"
+              accessibilityRole="button"
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.accent.error} />
+              <Text style={{ color: colors.accent.error, fontSize: 14, fontFamily: font.semibold }}>Clear Cache</Text>
+            </TouchableOpacity>
 
-                <ScrollView
-                  style={{ maxHeight: 300, paddingHorizontal: 12, paddingVertical: 8 }}
-                  showsVerticalScrollIndicator={true}
-                  nestedScrollEnabled={true}
-                >
-                  {netLogEntries.length === 0 ? (
-                    <Text style={{ color: '#374151', fontSize: 12, fontStyle: 'italic', textAlign: 'center', paddingVertical: 20, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                      No network activity yet.{'\n'}Sync events will appear here in real-time.
-                    </Text>
-                  ) : (
-                    netLogEntries.map((entry, idx) => {
-                      // Color-code by content
-                      let textColor = '#6B7280';
-                      const upper = entry.toUpperCase();
-                      if (upper.includes('ERROR') || upper.includes('FAIL') || upper.includes('✗')) textColor = '#EF4444';
-                      else if (upper.includes('FIREBASE') || upper.includes('CLOUDFLARE') || upper.includes('CF_')) textColor = '#F59E0B';
-                      else if (upper.includes('DOWNLOAD') || upper.includes('DL-QUEUE') || upper.includes('✓') || upper.includes('✅')) textColor = '#10B981';
-                      else if (upper.includes('HTTP') || upper.includes('PC-POLL') || upper.includes('CONNECT')) textColor = '#60A5FA';
-                      else if (upper.includes('PAIR') || upper.includes('AUTH')) textColor = '#A78BFA';
-                      else if (upper.includes('SCREENSHOT') || upper.includes('MEDIA')) textColor = '#EC4899';
-
-                      return (
-                        <Text
-                          key={idx}
-                          style={{
-                            color: textColor,
-                            fontSize: 10,
-                            fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-                            lineHeight: 16,
-                            marginBottom: 2,
-                          }}
-                          selectable={true}
-                        >
-                          {entry}
-                        </Text>
-                      );
-                    })
-                  )}
-                </Animated.ScrollView>
-              </View>
-            )}
-
-            <Text style={styles.helperText}>
-              Network-only logs: Firebase sync, HTTP requests, Cloudflare, downloads, pairing. Tap header to {showNetLogs ? 'collapse' : 'expand'} the live viewer.
+            <Text style={[styles.helperText, { marginTop: space.md }]}>
+              Clears locally cached clipboard items, notes, and todos. Does not affect your settings, paired devices, or cloud data.
             </Text>
           </View>
 
-          {/* Bottom padding so scroll doesn't cut off behind tab bar */}
-          <View style={{ height: 100 }} />
+          {/* Bottom padding handled by scrollContent paddingBottom */}
 
         </Animated.ScrollView>
       </KeyboardAvoidingView>
@@ -664,7 +624,7 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (c: Record<string, any>) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'transparent',
@@ -672,33 +632,15 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 110,
   },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: space['2xl'],
-    marginBottom: space.xl,
-  },
-  title: {
-    fontSize: 30,
-    fontFamily: font.extrabold,
-    color: colors.text.primary,
-    letterSpacing: -0.8,
-  },
-  subtitle: {
-    fontSize: 13,
-    fontFamily: font.medium,
-    color: colors.text.tertiary,
-    marginTop: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-  },
+
   saveButton: {
-    backgroundColor: colors.accent.primary,
+    backgroundColor: c.accent.primary,
     paddingVertical: 16,
     borderRadius: radius.lg,
     alignItems: 'center',
     marginHorizontal: space.xl,
     marginBottom: space.xl,
-    ...shadows.glow(colors.accent.primary),
+    ...shadows.glow(c.accent.primary),
   },
   saveButtonText: {
     color: '#FFFFFF',
@@ -707,17 +649,17 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   card: {
-    backgroundColor: colors.bg.card,
+    backgroundColor: c.bg.card,
     marginHorizontal: space.xl,
     borderRadius: radius.xl,
     padding: space['2xl'],
     borderWidth: 1,
-    borderColor: colors.border.subtle,
-    borderTopColor: colors.innerHighlight,
+    borderColor: c.border.subtle,
+    borderTopColor: c.innerHighlight,
     ...shadows.card,
   },
   sectionHeader: {
-    color: colors.text.primary,
+    color: c.text.primary,
     fontSize: 17,
     fontFamily: font.semibold,
     marginBottom: space.xl,
@@ -732,24 +674,24 @@ const styles = StyleSheet.create({
     marginBottom: space.md,
   },
   inputLabel: {
-    color: colors.text.primary,
+    color: c.text.primary,
     fontSize: 14,
     fontFamily: font.semibold,
     marginLeft: space.sm,
   },
   input: {
-    backgroundColor: colors.bg.input,
-    color: colors.text.primary,
+    backgroundColor: c.bg.input,
+    color: c.text.primary,
     fontSize: 16,
     fontFamily: font.medium,
     borderRadius: radius.md,
     paddingHorizontal: space.lg,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: colors.border.subtle,
+    borderColor: c.border.subtle,
   },
   helperText: {
-    color: colors.text.tertiary,
+    color: c.text.tertiary,
     fontSize: 12,
     fontFamily: font.regular,
     marginTop: 10,

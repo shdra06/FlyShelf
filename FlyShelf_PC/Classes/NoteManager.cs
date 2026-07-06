@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -22,7 +23,7 @@ namespace FlyShelf.Classes
 
     public class NoteBullet : INotifyPropertyChanged
     {
-        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+        public string Id { get; set; } = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..8];
         
         private string _header = "";
         public string Header
@@ -140,7 +141,7 @@ namespace FlyShelf.Classes
         }
 
         [JsonIgnore]
-        public string LastEditedDisplay => LastEdited.ToString("h:mm tt");
+        public string LastEditedDisplay => LastEdited.ToString("h:mm tt", CultureInfo.InvariantCulture);
 
         // ── Tags ────────────────────────────────────────────────
         private List<string> _tags = new();
@@ -181,6 +182,37 @@ namespace FlyShelf.Classes
             set { if (_sortOrder != value) { _sortOrder = value; OnPropertyChanged(nameof(SortOrder)); } }
         }
 
+        // ── Device Origin (tracks which device created/edited this bullet) ──
+        public string? CreatedByDevice { get; set; }
+        public string? LastEditedByDevice { get; set; }
+
+        private static readonly string[] DeviceColors = { "#4A62EB", "#E94560", "#34D399", "#F59E0B", "#8B5CF6", "#06B6D4", "#EC4899", "#10B981" };
+        public static string GetDeviceColor(string? deviceName)
+        {
+            if (string.IsNullOrEmpty(deviceName)) return "#666680";
+            int hash = Math.Abs(deviceName.GetHashCode());
+            return DeviceColors[hash % DeviceColors.Length];
+        }
+
+        [JsonIgnore]
+        public string DeviceDotColor => GetDeviceColor(CreatedByDevice);
+
+        [JsonIgnore]
+        public string DeviceTooltip
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(CreatedByDevice) && string.IsNullOrEmpty(LastEditedByDevice))
+                    return "Local";
+                var parts = new List<string>();
+                if (!string.IsNullOrEmpty(CreatedByDevice))
+                    parts.Add($"Created by: {CreatedByDevice}");
+                if (!string.IsNullOrEmpty(LastEditedByDevice))
+                    parts.Add($"Last edited by: {LastEditedByDevice}");
+                return string.Join("\n", parts);
+            }
+        }
+
         // ── Sub-bullets (nested items inside this bullet card) ──
         private ObservableCollection<SubBulletItem> _subBullets = new();
         public ObservableCollection<SubBulletItem> SubBullets
@@ -204,7 +236,7 @@ namespace FlyShelf.Classes
     /// </summary>
     public class SubBulletItem : INotifyPropertyChanged
     {
-        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+        public string Id { get; set; } = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..8];
 
         private string _text = "";
         public string Text
@@ -227,7 +259,7 @@ namespace FlyShelf.Classes
 
     public class FreeformImage : INotifyPropertyChanged
     {
-        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+        public string Id { get; set; } = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..8];
 
         private string _imagePath = "";
         public string ImagePath
@@ -264,7 +296,7 @@ namespace FlyShelf.Classes
     /// visually separate different notes under one day.</summary>
     public class FreeformSection : INotifyPropertyChanged
     {
-        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+        public string Id { get; set; } = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..8];
 
         private string _title = "";
         public string Title
@@ -307,15 +339,15 @@ namespace FlyShelf.Classes
 
         /// <summary>Pre-formatted display: "27, May" — no year.</summary>
         [JsonIgnore]
-        public string DisplayDate => Date.ToString("dd, MMM");
+        public string DisplayDate => Date.ToString("dd, MMM", CultureInfo.InvariantCulture);
 
         /// <summary>Just the day number for the collapsed sidebar.</summary>
         [JsonIgnore]
-        public string DayNumber => Date.Day.ToString();
+        public string DayNumber => Date.Day.ToString(CultureInfo.InvariantCulture);
 
         /// <summary>Abbreviated month for hover tooltip.</summary>
         [JsonIgnore]
-        public string MonthName => Date.ToString("MMM");
+        public string MonthName => Date.ToString("MMM", CultureInfo.InvariantCulture);
 
         /// <summary>Full display for hover: "27, May"</summary>
         [JsonIgnore]
@@ -530,6 +562,7 @@ namespace FlyShelf.Classes
         private static void FilterVisibleDays()
         {
             int maxDays = LicenseManager.GetNoteHistoryDays();
+            ObservableCollection<NoteDay> newDays;
             if (maxDays < int.MaxValue)
             {
                 DateTime cutoff = DateTime.Today.AddDays(-maxDays);
@@ -539,11 +572,19 @@ namespace FlyShelf.Classes
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                         UpgradePrompt.ShowNoteHistoryLimit());
                 }
-                _days = new ObservableCollection<NoteDay>(visible);
+                newDays = new ObservableCollection<NoteDay>(visible);
             }
             else
             {
-                _days = new ObservableCollection<NoteDay>(_allDays);
+                newDays = new ObservableCollection<NoteDay>(_allDays);
+            }
+            if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == true)
+            {
+                _days = newDays;
+            }
+            else
+            {
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => _days = newDays);
             }
         }
 
@@ -653,7 +694,7 @@ namespace FlyShelf.Classes
             if (!image.IsFrozen) image.Freeze();
 
             var dir = GetImagesDirectory();
-            string filename = $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}.png";
+            string filename = $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..6]}.png";
             string path = Path.Combine(dir, filename);
 
             // Offload PNG encode + file I/O to background thread to avoid UI lag
@@ -816,7 +857,11 @@ namespace FlyShelf.Classes
                 }
             }
 
-            _fileLock.Wait();
+            if (!_fileLock.Wait(TimeSpan.FromSeconds(30)))
+            {
+                Logger.LogAction("NOTES", "Failed to acquire file lock within 30s — skipping save");
+                return;
+            }
             try
             {
                 if (!Directory.Exists(_appDataDir))
@@ -888,8 +933,8 @@ namespace FlyShelf.Classes
                 {
                     var virtualBullet = new NoteBullet
                     {
-                        Id = "freeform_" + day.Date.Ticks,
-                        Content = day.FreeformContent.Length > 200 ? day.FreeformContent[..200] + "..." : day.FreeformContent,
+                        Id = "freeform_" + day.Date.Ticks.ToString(CultureInfo.InvariantCulture),
+                        Content = day.FreeformContent.Length > 200 ? string.Concat(day.FreeformContent.AsSpan(0, 200), "...") : day.FreeformContent,
                         CreatedAt = day.Date
                     };
                     results.Add((day, virtualBullet));
@@ -908,7 +953,7 @@ namespace FlyShelf.Classes
         {
             if (day == null) return "";
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"# Notes — {day.Date:MMMM d, yyyy}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"# Notes — {day.Date:MMMM d, yyyy}");
             sb.AppendLine();
 
             if (day.IsFreeformMode || day.FreeformSections.Any(s => !string.IsNullOrEmpty(s.Content)))
@@ -928,11 +973,11 @@ namespace FlyShelf.Classes
             foreach (var bullet in day.Bullets)
             {
                 if (!string.IsNullOrEmpty(bullet.Header))
-                    sb.AppendLine($"## {bullet.Header}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"## {bullet.Header}");
                 if (!string.IsNullOrEmpty(bullet.Content))
                     sb.AppendLine(bullet.Content);
                 if (bullet.HasTags)
-                    sb.AppendLine($"*Tags: {bullet.TagsDisplay}*");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"*Tags: {bullet.TagsDisplay}*");
                 sb.AppendLine();
             }
 
@@ -944,7 +989,7 @@ namespace FlyShelf.Classes
         {
             if (day == null) return "";
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"Notes — {day.Date:MMMM d, yyyy}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Notes — {day.Date:MMMM d, yyyy}");
             sb.AppendLine(new string('─', 40));
             sb.AppendLine();
 
@@ -963,9 +1008,9 @@ namespace FlyShelf.Classes
             foreach (var bullet in day.Bullets)
             {
                 if (!string.IsNullOrEmpty(bullet.Header))
-                    sb.AppendLine($"• {bullet.Header}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"• {bullet.Header}");
                 if (!string.IsNullOrEmpty(bullet.Content))
-                    sb.AppendLine($"  {bullet.Content}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"  {bullet.Content}");
                 sb.AppendLine();
             }
 
@@ -1008,18 +1053,19 @@ namespace FlyShelf.Classes
                 if (lastMod == 0) lastMod = new DateTimeOffset(day.Date).ToUnixTimeMilliseconds();
 
                 return new {
-                    Date = day.Date.ToString("o"),
+                    Date = day.Date.ToString("o", CultureInfo.InvariantCulture),
                     IsFreeformMode = day.IsFreeformMode,
                     Bullets = day.Bullets.Select(b => new {
                         b.Id, b.Header, b.Content, b.IsCollapsed,
                         b.ImageDisplayWidth, b.ImageDisplayWidth2,
-                        CreatedAt = b.CreatedAt.ToString("o"),
-                        LastEdited = b.LastEdited.ToString("o"),
+                        CreatedAt = b.CreatedAt.ToString("o", CultureInfo.InvariantCulture),
+                        LastEdited = b.LastEdited.ToString("o", CultureInfo.InvariantCulture),
                         b.Tags, b.Color, b.IsPinned, b.SortOrder,
+                        b.CreatedByDevice, b.LastEditedByDevice,
                         SubBullets = b.SubBullets.Select(sb => new { sb.Id, sb.Text, sb.IsDone }).ToList()
                     }).ToList(),
                     FreeformSections = day.FreeformSections.Select(s => new {
-                        s.Id, s.Title, s.Content, CreatedAt = s.CreatedAt.ToString("o"),
+                        s.Id, s.Title, s.Content, CreatedAt = s.CreatedAt.ToString("o", CultureInfo.InvariantCulture),
                         ImageCount = s.Images?.Count ?? 0
                     }).ToList(),
                     LastModified = lastMod
@@ -1029,7 +1075,7 @@ namespace FlyShelf.Classes
             return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = false });
         }
 
-        public static void MergeFromMobile(string json)
+        public static void MergeFromMobile(string json, string? deviceName = null)
         {
             if (string.IsNullOrWhiteSpace(json)) return;
             try
@@ -1057,6 +1103,16 @@ namespace FlyShelf.Classes
                         {
                             // New day from mobile — add it
                             _allDays.Add(remoteDay);
+                            // Tag new day's bullets with device origin
+                            if (!string.IsNullOrEmpty(deviceName))
+                            {
+                                foreach (var b in remoteDay.Bullets)
+                                {
+                                    b.LastEditedByDevice = deviceName;
+                                    if (string.IsNullOrEmpty(b.CreatedByDevice))
+                                        b.CreatedByDevice = deviceName;
+                                }
+                            }
                             changed = true;
                         }
                         else
@@ -1076,9 +1132,25 @@ namespace FlyShelf.Classes
 
                             if (remoteMod > localMod)
                             {
-                                localDay.Bullets = new System.Collections.ObjectModel.ObservableCollection<NoteBullet>(remoteDay.Bullets);
-                                localDay.FreeformSections = new System.Collections.ObjectModel.ObservableCollection<FreeformSection>(remoteDay.FreeformSections);
-                                localDay.IsFreeformMode = remoteDay.IsFreeformMode;
+                                var mergedBullets = new System.Collections.ObjectModel.ObservableCollection<NoteBullet>(remoteDay.Bullets);
+                                // Tag merged bullets with device origin
+                                if (!string.IsNullOrEmpty(deviceName))
+                                {
+                                    foreach (var b in mergedBullets)
+                                    {
+                                        b.LastEditedByDevice = deviceName;
+                                        if (string.IsNullOrEmpty(b.CreatedByDevice))
+                                            b.CreatedByDevice = deviceName;
+                                    }
+                                }
+                                var mergedSections = new System.Collections.ObjectModel.ObservableCollection<FreeformSection>(remoteDay.FreeformSections);
+                                bool mergedFreeform = remoteDay.IsFreeformMode;
+                                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                {
+                                    localDay.Bullets = mergedBullets;
+                                    localDay.FreeformSections = mergedSections;
+                                    localDay.IsFreeformMode = mergedFreeform;
+                                });
                                 changed = true;
                             }
                         }

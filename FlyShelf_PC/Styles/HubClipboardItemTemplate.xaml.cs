@@ -105,5 +105,6 @@ namespace FlyShelf.Styles
         private void SanitizeUrlSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.SanitizeUrlSpecific_Click(sender, e);
         private void MakePasswordSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.MakePasswordSpecific_Click(sender, e);
         private void RenamePasswordSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.RenamePasswordSpecific_Click(sender, e);
+        private void QuickLookSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.QuickLookSpecific_Click(sender, e);
     }
 }

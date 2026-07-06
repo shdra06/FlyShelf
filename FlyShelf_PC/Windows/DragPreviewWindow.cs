@@ -6,6 +6,7 @@
 // Uses a borderless, click-through, topmost WPF Window.
 // ---------------------------------------------------------------
 using System;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -24,7 +25,7 @@ namespace FlyShelf.Windows
     /// thumbnail preview of the dragged item(s). Fully click-through
     /// via WS_EX_TRANSPARENT so it never interferes with drop targets.
     /// </summary>
-    public class DragPreviewWindow : Window
+    public sealed class DragPreviewWindow : Window
     {
         // ═══ Win32 Constants ═══
         private const int GWL_EXSTYLE = -20;
@@ -512,11 +513,11 @@ namespace FlyShelf.Windows
 
             if (!string.IsNullOrEmpty(item.RawContent))
             {
-                var preview = item.RawContent.Replace("\r", "").Replace("\n", " ").Trim();
-                return preview.Length > 40 ? preview[..40] + "…" : preview;
+                var preview = item.RawContent.Replace("\r", "", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal).Trim();
+                return preview.Length > 40 ? string.Concat(preview.AsSpan(0, 40), "…") : preview;
             }
 
-            return item.ItemType.ToString();
+            return item.ItemType.ToString("G");
         }
 
         /// <summary>
@@ -644,7 +645,7 @@ namespace FlyShelf.Windows
                 Margin = new Thickness(0, -2, -2, 0),
                 Child = new TextBlock
                 {
-                    Text = count.ToString(),
+                    Text = count.ToString(CultureInfo.InvariantCulture),
                     FontSize = 10,
                     FontWeight = FontWeights.Bold,
                     Foreground = Brushes.White,

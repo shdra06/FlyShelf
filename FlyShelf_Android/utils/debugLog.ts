@@ -37,7 +37,7 @@ export const syncLog = (tag: string, message?: string) => {
     networkEntries.unshift(entry);
     if (networkEntries.length > MAX_NET_ENTRIES) networkEntries.length = MAX_NET_ENTRIES;
     // Notify listeners (settings screen)
-    _networkLogListeners.forEach(fn => { try { fn(); } catch {} });
+    _networkLogListeners.forEach(fn => { try { fn(); } catch (e) { if (typeof __DEV__ !== 'undefined' && __DEV__) console.warn('[debugLog] Listener error:', e); } });
   }
 
   // Also console.log for adb logcat
@@ -64,7 +64,7 @@ export const getNetworkLogsText = (): string => {
 
 export const clearNetworkLogs = () => {
   networkEntries.length = 0;
-  _networkLogListeners.forEach(fn => { try { fn(); } catch {} });
+  _networkLogListeners.forEach(fn => { try { fn(); } catch (e) { if (typeof __DEV__ !== 'undefined' && __DEV__) console.warn('[debugLog] Listener error:', e); } });
 };
 
 export const getNetworkLogCount = (): number => networkEntries.length;

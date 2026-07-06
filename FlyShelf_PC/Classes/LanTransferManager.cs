@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -482,7 +483,7 @@ namespace FlyShelf.Classes
                         RawContent = session.FilePath,
                         FileName = session.FileName,
                         FilePath = session.FilePath,
-                        Extension = Path.GetExtension(session.FilePath).TrimStart('.').ToUpper(),
+                        Extension = Path.GetExtension(session.FilePath).TrimStart('.').ToUpperInvariant(),
                         ItemType = ClipboardItemType.File,
                         SourceDeviceName = session.PeerDeviceName,
                         SourceDeviceType = "PC",
@@ -651,7 +652,7 @@ namespace FlyShelf.Classes
             foreach (char c in Path.GetInvalidFileNameChars())
                 fileName = fileName.Replace(c, '_');
 
-            string dateString = DateTime.Now.ToString("dd-MM-yyyy");
+            string dateString = DateTime.Now.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture);
             string dir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "FlyShelf", "SyncedFiles", "LAN_Transfer", sourceName, dateString);
@@ -687,20 +688,33 @@ namespace FlyShelf.Classes
                     .Select(SessionToCheckpoint)
                     .ToList();
 
-                // H4 fix: Snapshot CompletedTransfers on dispatcher to avoid cross-thread crash
+                // H-10 fix: Fire-and-forget InvokeAsync — no blocking Wait() that could deadlock on shutdown
                 List<LanTransferSession>? failedSnapshot = null;
                 var app = System.Windows.Application.Current;
                 if (app != null)
                 {
                     try
                     {
-                        var op = app.Dispatcher.InvokeAsync(() =>
+                        app.Dispatcher.InvokeAsync(() =>
                         {
-                            failedSnapshot = CompletedTransfers
-                                .Where(s => s.IsFailed && s.BytesTransferred > 0)
-                                .ToList();
+                            try
+                            {
+                                var snapshot = CompletedTransfers
+                                    .Where(s => s.IsFailed && s.BytesTransferred > 0)
+                                    .ToList();
+                                // Persist on the dispatcher thread directly since we can't block
+                                var cps = checkpoints.ToList();
+                                cps.AddRange(snapshot.Select(SessionToCheckpoint));
+                                string json2 = JsonSerializer.Serialize(cps, new JsonSerializerOptions { WriteIndented = true });
+                                string dir2 = Path.GetDirectoryName(_checkpointFile)!;
+                                Directory.CreateDirectory(dir2);
+                                string tmp2 = _checkpointFile + ".tmp";
+                                File.WriteAllText(tmp2, json2, Encoding.UTF8);
+                                File.Move(tmp2, _checkpointFile, true);
+                            }
+                            catch (Exception ex2) { Logger.LogAction("TRANSFER", $"Checkpoint persist (dispatcher) failed: {ex2.Message}"); }
                         });
-                        op.Wait(TimeSpan.FromSeconds(2));
+                        return; // Dispatcher will handle full persistence
                     }
                     catch { /* App shutting down */ }
                 }
@@ -825,7 +839,7 @@ namespace FlyShelf.Classes
                 PeerDeviceId = s.PeerDeviceId,
                 PeerDeviceName = s.PeerDeviceName,
                 XxHash64 = s.XxHash64,
-                Timestamp = DateTime.UtcNow.ToString("o")
+                Timestamp = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)
             };
         }
 

@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using FlyShelf.Classes;
 
 namespace FlyShelf
 {
@@ -238,9 +239,7 @@ namespace FlyShelf
 
                 var shortcutsWindow = new Windows.ShortcutsWindow();
                 shortcutsWindow.Topmost = true;
-                shortcutsWindow.Show();
-                shortcutsWindow.Activate();
-                shortcutsWindow.Focus();
+                WindowHelper.ShowInForeground(shortcutsWindow);
                 shortcutsWindow.Topmost = false;
             }
             catch (Exception ex)
@@ -303,6 +302,7 @@ namespace FlyShelf
 
         private System.Windows.Threading.DispatcherTimer _altScrollTimer;
         private System.Windows.Threading.DispatcherTimer _altThumbnailTimer;
+
         private ScrollViewer _altScrollViewer;
         private bool _isAltScrolling;
 
@@ -386,24 +386,54 @@ namespace FlyShelf
 
                     // Prefetch 800px above and below viewport
                     System.Windows.Rect viewportRect = new System.Windows.Rect(0, -800, viewportWidth, viewportHeight + 1600);
+                    // ═══ FULL-COLLECTION SCAN (mirrors MainWindow.Positioning.cs) ═══
                     int count = AltShelfListView.Items.Count;
-                    int imageCount = 0;
 
+                    // Pass 1: First 5 images always loaded
+                    {
+                        int imgCount = 0;
+                        int topLimit = Math.Min(count, 50);
+                        for (int i = 0; i < topLimit && imgCount < 5; i++)
+                        {
+                            var item = AltShelfListView.Items[i] as ViewModels.ClipboardItem;
+                            if (item == null) continue;
+                            if (item.ItemType != ViewModels.ClipboardItemType.Image && item.ItemType != ViewModels.ClipboardItemType.QRCode) continue;
+                            imgCount++;
+                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality)
+                            {
+                                item.IsLoadingHighQuality = true;
+                                string fp = item.FilePath;
+                                var ci = item;
+                                _ = System.Threading.Tasks.Task.Run(() =>
+                                {
+                                    try
+                                    {
+                                        var bmp = ViewModels.FlyShelfViewModel.LoadImageThumbnail(fp, 300);
+                                        if (bmp != null)
+                                            Dispatcher.InvokeAsync(() => { ci.Icon = bmp; ci.IsLoadedHighQuality = true; ci.IsLoadingHighQuality = false; });
+                                        else
+                                            Dispatcher.InvokeAsync(() => ci.IsLoadingHighQuality = false);
+                                    }
+                                    catch { Dispatcher.InvokeAsync(() => ci.IsLoadingHighQuality = false); }
+                                });
+                            }
+                            item.LeftViewportTime = null;
+                        }
+                    }
+
+                    // Pass 2: Full scan for loading + eviction
                     for (int i = 0; i < count; i++)
                     {
                         var item = AltShelfListView.Items[i] as ViewModels.ClipboardItem;
                         if (item == null) continue;
                         if (item.ItemType != ViewModels.ClipboardItemType.Image && item.ItemType != ViewModels.ClipboardItemType.QRCode) continue;
 
-                        imageCount++;
-                        bool isFirst5 = imageCount <= 5;
-
                         var container = AltShelfListView.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
                         bool isVisible = false;
 
-                        if (isFirst5)
+                        if (item.IsLoadedHighQuality && item.Icon != null)
                         {
-                            isVisible = true;
+                            // Already loaded — only process during eviction check below
                         }
                         else if (container != null && container.IsLoaded)
                         {
@@ -413,7 +443,48 @@ namespace FlyShelf
                                 System.Windows.Rect bounds = transform.TransformBounds(new System.Windows.Rect(0, 0, container.ActualWidth, container.ActualHeight));
                                 isVisible = viewportRect.IntersectsWith(bounds);
                             }
-                            catch { } // Best-effort: failure is acceptable
+                            catch { }
+                        }
+                        // container == null means not realized (offscreen). Skip.
+
+                        // Check actual visibility for eviction of loaded items
+                        if (item.IsLoadedHighQuality && item.Icon != null)
+                        {
+                            bool actuallyVisible = false;
+                            if (container != null && container.IsLoaded)
+                            {
+                                try
+                                {
+                                    GeneralTransform transform = container.TransformToAncestor(sv);
+                                    System.Windows.Rect bounds = transform.TransformBounds(new System.Windows.Rect(0, 0, container.ActualWidth, container.ActualHeight));
+                                    actuallyVisible = viewportRect.IntersectsWith(bounds);
+                                }
+                                catch { }
+                            }
+                            else if (container == null)
+                            {
+                                // Can't determine visibility — keep as-is, retry will handle
+                                actuallyVisible = true; // Don't evict if we can't check
+                            }
+
+                            if (actuallyVisible)
+                            {
+                                item.LeftViewportTime = null;
+                            }
+                            else if (!item.IsPinned)
+                            {
+                                // Evict after 5 seconds off-screen to free memory
+                                if (item.LeftViewportTime == null)
+                                    item.LeftViewportTime = DateTime.Now;
+                                else if ((DateTime.Now - item.LeftViewportTime.Value).TotalSeconds >= 5)
+                                {
+                                    item.Icon = null;
+                                    item.IsLoadedHighQuality = false;
+                                    item.IsLoadingHighQuality = false;
+                                    item.LeftViewportTime = null;
+                                }
+                            }
+                            continue;
                         }
 
                         if (isVisible)
@@ -421,9 +492,21 @@ namespace FlyShelf
                             item.LeftViewportTime = null;
                             if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality)
                             {
+                                // Safety cap: max 8 concurrent thumbnail decodes
+                                int currentlyLoading = 0;
+                                int capStart = Math.Max(0, i - 30);
+                                int capEnd = Math.Min(count - 1, i + 30);
+                                for (int j = capStart; j <= capEnd && currentlyLoading < 9; j++)
+                                {
+                                    var check = AltShelfListView.Items[j] as ViewModels.ClipboardItem;
+                                    if (check?.IsLoadingHighQuality == true) currentlyLoading++;
+                                }
+                                if (currentlyLoading >= 8) continue;
+
                                 item.IsLoadingHighQuality = true;
                                 string filePath = item.FilePath;
                                 var capturedItem = item;
+                                int capturedIdx = i;
 
                                 _ = System.Threading.Tasks.Task.Run(() =>
                                 {
@@ -459,17 +542,18 @@ namespace FlyShelf
                                         }
                                         else
                                         {
-                                            Dispatcher.InvokeAsync(() => { item.IsLoadingHighQuality = false; });
+                                            Dispatcher.InvokeAsync(() => { capturedItem.IsLoadingHighQuality = false; });
                                         }
                                     }
                                     catch
                                     {
-                                        Dispatcher.InvokeAsync(() => { item.IsLoadingHighQuality = false; });
+                                        Dispatcher.InvokeAsync(() => { capturedItem.IsLoadingHighQuality = false; });
                                     }
                                 });
                             }
                         }
                     }
+
                 }
                 catch (Exception ex)
                 {

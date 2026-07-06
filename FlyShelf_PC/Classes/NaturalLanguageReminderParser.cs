@@ -5,6 +5,7 @@
 // Recognizers.Text library. Zero-RAM, sub-millisecond, deterministic.
 // ---------------------------------------------------------------
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -116,7 +117,7 @@ namespace FlyShelf.Classes
 
             // Capitalize first letter
             if (title.Length > 0)
-                title = char.ToUpper(title[0]) + title[1..];
+                title = char.ToUpper(title[0], CultureInfo.InvariantCulture) + title[1..];
 
             // If nothing remains after stripping, use the original text
             if (string.IsNullOrWhiteSpace(title))

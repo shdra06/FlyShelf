@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -191,7 +192,7 @@ namespace FlyShelf.Classes
             {
                 string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SpawnDiag");
                 Directory.CreateDirectory(dir);
-                string ts = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss-fff");
+                string ts = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss-fff", CultureInfo.InvariantCulture);
 
                 // ═══ PER-ELEMENT CSV ═══
                 string csvPath = Path.Combine(dir, $"element_pos_{ts}.csv");
@@ -200,18 +201,18 @@ namespace FlyShelf.Classes
                 var elementNames = _trackedElements.Select(t => t.name).ToList();
                 foreach (var name in elementNames)
                 {
-                    csv.Append($",{name}_X,{name}_Y,{name}_W,{name}_H,{name}_Op,{name}_Vis,{name}_RTY");
+                    csv.Append(CultureInfo.InvariantCulture, $",{name}_X,{name}_Y,{name}_W,{name}_H,{name}_Op,{name}_Vis,{name}_RTY");
                 }
                 csv.AppendLine();
 
                 foreach (var f in _frames)
                 {
-                    csv.Append($"{f.FrameIndex},{f.TimeSinceStartMs:F3},{f.DeltaMs:F3},{f.Phase},{f.WindowTop:F1},{f.WindowOpacity:F4},{f.SlideTransformY:F3}");
+                    csv.Append(CultureInfo.InvariantCulture, $"{f.FrameIndex},{f.TimeSinceStartMs:F3},{f.DeltaMs:F3},{f.Phase},{f.WindowTop:F1},{f.WindowOpacity:F4},{f.SlideTransformY:F3}");
                     foreach (var name in elementNames)
                     {
                         var el = f.Elements.FirstOrDefault(e => e.Name == name);
                         if (el != null)
-                            csv.Append($",{el.X:F2},{el.Y:F2},{el.Width:F1},{el.Height:F1},{el.Opacity:F3},{el.Visibility},{el.RenderTransformY:F3}");
+                            csv.Append(CultureInfo.InvariantCulture, $",{el.X:F2},{el.Y:F2},{el.Width:F1},{el.Height:F1},{el.Opacity:F3},{el.Visibility},{el.RenderTransformY:F3}");
                         else
                             csv.Append(",,,,,,,");
                     }
@@ -224,7 +225,7 @@ namespace FlyShelf.Classes
                 var report = new StringBuilder();
                 report.AppendLine("╔══════════════════════════════════════════════════════════════════════╗");
                 report.AppendLine("║       ELEMENT POSITION TRACKER — PER-ELEMENT SPAWN ANALYSIS         ║");
-                report.AppendLine($"║  {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}  |  {_frames.Count} frames  |  {_trackedElements.Count} elements    ║");
+                report.AppendLine(CultureInfo.InvariantCulture, $"║  {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}  |  {_frames.Count} frames  |  {_trackedElements.Count} elements    ║");
                 report.AppendLine("╚══════════════════════════════════════════════════════════════════════╝");
                 report.AppendLine();
 
@@ -259,7 +260,7 @@ namespace FlyShelf.Classes
                         if (unexplainedY > 1.5 && _frames[i].WindowOpacity > 0.01)
                         {
                             totalAnomalies++;
-                            report.AppendLine($"  ⚠ {name} Y-JUMP at frame {i} ({_frames[i].TimeSinceStartMs:F1}ms): " +
+                            report.AppendLine(CultureInfo.InvariantCulture, $"  ⚠ {name} Y-JUMP at frame {i} ({_frames[i].TimeSinceStartMs:F1}ms): " +
                                 $"Y {prev.Y:F2}→{curr.Y:F2} (Δ{dY:F2}px, unexplained={unexplainedY:F2}px) " +
                                 $"opacity={_frames[i].WindowOpacity:F3}");
                         }
@@ -267,7 +268,7 @@ namespace FlyShelf.Classes
                         if (dX > 1.5 && _frames[i].WindowOpacity > 0.01)
                         {
                             totalAnomalies++;
-                            report.AppendLine($"  ⚠ {name} X-JUMP at frame {i} ({_frames[i].TimeSinceStartMs:F1}ms): " +
+                            report.AppendLine(CultureInfo.InvariantCulture, $"  ⚠ {name} X-JUMP at frame {i} ({_frames[i].TimeSinceStartMs:F1}ms): " +
                                 $"X {prev.X:F2}→{curr.X:F2} (Δ{dX:F2}px) opacity={_frames[i].WindowOpacity:F3}");
                         }
 
@@ -277,7 +278,7 @@ namespace FlyShelf.Classes
                         if ((dW > 2 || dH > 2) && _frames[i].Phase == "PLAY_SHOW_ANIM")
                         {
                             totalAnomalies++;
-                            report.AppendLine($"  ⚠ {name} SIZE-CHANGE during anim at frame {i} ({_frames[i].TimeSinceStartMs:F1}ms): " +
+                            report.AppendLine(CultureInfo.InvariantCulture, $"  ⚠ {name} SIZE-CHANGE during anim at frame {i} ({_frames[i].TimeSinceStartMs:F1}ms): " +
                                 $"({prev.Width:F0}x{prev.Height:F0})→({curr.Width:F0}x{curr.Height:F0})");
                         }
 
@@ -285,7 +286,7 @@ namespace FlyShelf.Classes
                         if (curr.Visibility != prev.Visibility && _frames[i].WindowOpacity > 0.01)
                         {
                             totalAnomalies++;
-                            report.AppendLine($"  ⚠ {name} VISIBILITY-FLIP at frame {i} ({_frames[i].TimeSinceStartMs:F1}ms): " +
+                            report.AppendLine(CultureInfo.InvariantCulture, $"  ⚠ {name} VISIBILITY-FLIP at frame {i} ({_frames[i].TimeSinceStartMs:F1}ms): " +
                                 $"{prev.Visibility}→{curr.Visibility}");
                         }
 
@@ -294,7 +295,7 @@ namespace FlyShelf.Classes
                         if (dOp > 0.1 && _frames[i].WindowOpacity > 0.1)
                         {
                             totalAnomalies++;
-                            report.AppendLine($"  ⚠ {name} OPACITY-FLIP at frame {i} ({_frames[i].TimeSinceStartMs:F1}ms): " +
+                            report.AppendLine(CultureInfo.InvariantCulture, $"  ⚠ {name} OPACITY-FLIP at frame {i} ({_frames[i].TimeSinceStartMs:F1}ms): " +
                                 $"{prev.Opacity:F3}→{curr.Opacity:F3}");
                         }
                     }
@@ -303,14 +304,14 @@ namespace FlyShelf.Classes
                 if (totalAnomalies == 0)
                     report.AppendLine("  ✓ No element-level anomalies detected.");
                 else
-                    report.AppendLine($"\n  Total element anomalies: {totalAnomalies}");
+                    report.AppendLine(CultureInfo.InvariantCulture, $"\n  Total element anomalies: {totalAnomalies}");
 
                 // ═══ ELEMENT TIMELINE ═══
                 report.AppendLine();
                 report.AppendLine("═══ ELEMENT Y-POSITIONS (relative to window) ═══");
                 report.Append("Frame | Time(ms) | Δms   | WinOp   | SlideY ");
                 foreach (var name in elementNames)
-                    report.Append($" | {name,12}");
+                    report.Append(CultureInfo.InvariantCulture, $" | {name,12}");
                 report.AppendLine();
                 report.Append("------+----------+-------+---------+--------");
                 foreach (var _ in elementNames)
@@ -321,20 +322,20 @@ namespace FlyShelf.Classes
                 {
                     if (f.WindowTop < -1000) continue; // Skip offscreen
 
-                    report.Append($"{f.FrameIndex,5} | {f.TimeSinceStartMs,8:F2} | {f.DeltaMs,5:F1} | {f.WindowOpacity,7:F4} | {f.SlideTransformY,6:F3}");
+                    report.Append(CultureInfo.InvariantCulture, $"{f.FrameIndex,5} | {f.TimeSinceStartMs,8:F2} | {f.DeltaMs,5:F1} | {f.WindowOpacity,7:F4} | {f.SlideTransformY,6:F3}");
                     foreach (var name in elementNames)
                     {
                         var el = f.Elements.FirstOrDefault(e => e.Name == name);
                         if (el != null && el.Visibility == "Visible")
-                            report.Append($" | {el.Y,12:F2}");
+                            report.Append(CultureInfo.InvariantCulture, $" | {el.Y,12:F2}");
                         else
-                            report.Append($" | {"---",12}");
+                            report.Append(CultureInfo.InvariantCulture, $" | {"---",12}");
                     }
                     report.AppendLine();
                 }
 
                 File.WriteAllText(reportPath, report.ToString());
-                Logger.LogAction("ELEM_TRACKER", $"Report: {reportPath} ({_frames.Count} frames, {totalAnomalies} anomalies)");
+                Logger.LogAction("ELEM_TRACKER", string.Create(CultureInfo.InvariantCulture, $"Report: {reportPath} ({_frames.Count} frames, {totalAnomalies} anomalies)"));
             }
             catch (Exception ex)
             {

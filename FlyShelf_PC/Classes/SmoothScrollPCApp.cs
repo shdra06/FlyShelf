@@ -42,11 +42,18 @@ namespace FlyShelf.Classes
 
         private static readonly Dictionary<ScrollViewer, ScrollState> _states = new();
         private static readonly Dictionary<DependencyObject, ScrollViewer> _ancestorCache = new();
+        private static List<ScrollViewer> _scrollKeysBuffer = new();
+        private static List<ScrollViewer> _completedBuffer = new();
 
         private static bool _renderingAttached;
+        private static bool _timerResolutionElevated;
+        private static int _timerResolutionRefCount;  // Bug 5 fix: balanced timeBeginPeriod/timeEndPeriod
 
         [System.Runtime.InteropServices.DllImport("winmm.dll", EntryPoint = "timeBeginPeriod", SetLastError = true)]
         private static extern uint TimeBeginPeriod(uint uMilliseconds);
+
+        [System.Runtime.InteropServices.DllImport("winmm.dll", EntryPoint = "timeEndPeriod", SetLastError = true)]
+        private static extern uint TimeEndPeriod(uint uMilliseconds);
 
         [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool SetProcessInformation(
@@ -70,9 +77,6 @@ namespace FlyShelf.Classes
 
         static SmoothScrollPCApp()
         {
-            // Elevate Windows scheduler timer resolution to 1ms
-            try { TimeBeginPeriod(1); } catch { }
-
             // Disable Windows 11 EcoQoS power throttling for unthrottled rendering
             try
             {
@@ -205,6 +209,13 @@ namespace FlyShelf.Classes
 
         private static void ApplyImpulse(ScrollViewer sv, int delta)
         {
+            // Elevate Windows scheduler timer resolution to 1ms for smooth rendering
+            // Bug 5 fix: Use reference counting to prevent unmatched Begin/End pairs
+            if (!_timerResolutionElevated)
+            {
+                try { TimeBeginPeriod(1); _timerResolutionRefCount++; } catch { }
+                _timerResolutionElevated = true;
+            }
             bool isTouchpad = (delta % 120 != 0) || (Math.Abs(delta) < 120);
 
             if (!_states.TryGetValue(sv, out var state))
@@ -292,10 +303,11 @@ namespace FlyShelf.Classes
             bool anyAnimating = false;
             long now = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
 
-            var scrollKeys = _states.Keys.ToList();
-            var completed = new List<ScrollViewer>();
+            _scrollKeysBuffer.Clear();
+            _scrollKeysBuffer.AddRange(_states.Keys);
+            _completedBuffer.Clear();
 
-            foreach (var sv in scrollKeys)
+            foreach (var sv in _scrollKeysBuffer)
             {
                 if (!_states.TryGetValue(sv, out var state)) continue;
 
@@ -305,7 +317,7 @@ namespace FlyShelf.Classes
                     if (!state.IsAnimating)
                     {
                         state.IsMouseVelocityMode = false;
-                        completed.Add(sv);
+                        _completedBuffer.Add(sv);
                         continue;
                     }
 
@@ -370,7 +382,7 @@ namespace FlyShelf.Classes
                         state.LastSetOffset = state.TrueOffset;
                         state.IsAnimating = false;
                         state.IsMouseVelocityMode = false;
-                        completed.Add(sv);
+                        _completedBuffer.Add(sv);
                         continue;
                     }
 
@@ -380,8 +392,14 @@ namespace FlyShelf.Classes
                     state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
 
                     double mouseNextOffset = Math.Round(state.TrueOffset);
-                    sv.ScrollToVerticalOffset(mouseNextOffset);
-                    state.LastSetOffset = state.TrueOffset;
+                    // Bug 1 fix: Only write to ScrollViewer if delta >= 0.5px
+                    if (Math.Abs(mouseNextOffset - sv.VerticalOffset) >= 0.5)
+                    {
+                        sv.ScrollToVerticalOffset(mouseNextOffset);
+                    }
+                    // Bug 4 fix: Store the ROUNDED offset so WPF sync check doesn't
+                    // produce false deltas every frame from rounding mismatch
+                    state.LastSetOffset = mouseNextOffset;
 
                     // Apply exponential friction
                     state.MouseVelocity *= Math.Pow(MouseVelocityFriction, mouseTimeScale);
@@ -395,7 +413,7 @@ namespace FlyShelf.Classes
                         state.LastSetOffset = state.TrueOffset;
                         state.IsAnimating = false;
                         state.IsMouseVelocityMode = false;
-                        completed.Add(sv);
+                        _completedBuffer.Add(sv);
                     }
                     else
                     {
@@ -409,7 +427,7 @@ namespace FlyShelf.Classes
                         double mouseVelPxSec = Math.Abs(mouseDiff / (mouseElapsedMs / 1000.0));
                         state.LastOffset = mouseNextOffset;
                         double mouseFps = 1000.0 / mouseElapsedMs;
-                        string mouseCardsData = ScrollTelemetryClient.GetVisibleItemsTelemetry(sv);
+                        string mouseCardsData = Logger.IsEnabled ? ScrollTelemetryClient.GetVisibleItemsTelemetry(sv) : string.Empty;
                         ScrollTelemetryClient.SendTelemetry(mouseNextOffset, state.TrueOffset, mouseVelPxSec, mouseFps, mouseElapsedMs, sv.ViewportHeight, sv.ScrollableHeight, mouseCardsData);
                     }
                     catch { } // Best-effort: failure is acceptable
@@ -453,7 +471,7 @@ namespace FlyShelf.Classes
 
                 if (!state.IsAnimating)
                 {
-                    completed.Add(sv);
+                    _completedBuffer.Add(sv);
                     continue;
                 }
 
@@ -472,10 +490,12 @@ namespace FlyShelf.Classes
                     // Snap exactly to final target
                     double finalTarget = Math.Clamp(state.ToOffset, 0.0, sv.ScrollableHeight);
                     nextOffset = Math.Round(finalTarget);
-                    sv.ScrollToVerticalOffset(nextOffset);
+                    // Bug 1 fix: Only write if delta >= 0.5px
+                    if (Math.Abs(nextOffset - sv.VerticalOffset) >= 0.5)
+                        sv.ScrollToVerticalOffset(nextOffset);
                     
                     state.IsAnimating = false;
-                    completed.Add(sv);
+                    _completedBuffer.Add(sv);
                 }
                 else
                 {
@@ -483,8 +503,9 @@ namespace FlyShelf.Classes
                     nextOffset = Math.Clamp(nextPos, 0.0, sv.ScrollableHeight);
                     nextOffset = Math.Round(nextOffset);
                     
-                    // Snap to integer pixels to match VS Code (eliminates sub-pixel text shimmering)
-                    sv.ScrollToVerticalOffset(nextOffset);
+                    // Bug 1 fix: Only write if delta >= 0.5px
+                    if (Math.Abs(nextOffset - sv.VerticalOffset) >= 0.5)
+                        sv.ScrollToVerticalOffset(nextOffset);
                     anyAnimating = true;
                 }
 
@@ -496,13 +517,13 @@ namespace FlyShelf.Classes
                     state.LastOffset = nextOffset;
 
                     double fps = 1000.0 / elapsedMs;
-                    string cardsData = ScrollTelemetryClient.GetVisibleItemsTelemetry(sv);
+                    string cardsData = Logger.IsEnabled ? ScrollTelemetryClient.GetVisibleItemsTelemetry(sv) : string.Empty;
                     ScrollTelemetryClient.SendTelemetry(nextOffset, state.ToOffset, velocityInPixelsSec, fps, elapsedMs, sv.ViewportHeight, sv.ScrollableHeight, cardsData);
                 }
                 catch { } // Best-effort: failure is acceptable
             }
 
-            foreach (var sv in completed)
+            foreach (var sv in _completedBuffer)
             {
                 _states.Remove(sv);
                 DisableStaticCanvas(sv);
@@ -513,6 +534,14 @@ namespace FlyShelf.Classes
                 CompositionTarget.Rendering -= OnRendering;
                 _renderingAttached = false;
                 RestoreUIThreadPriority();
+
+                // Restore system timer resolution when scrolling stops
+                // Bug 5 fix: Balanced timer resolution restore
+                if (_timerResolutionElevated && _timerResolutionRefCount > 0)
+                {
+                    try { TimeEndPeriod(1); _timerResolutionRefCount--; } catch { }
+                    _timerResolutionElevated = false;
+                }
             }
         }
 

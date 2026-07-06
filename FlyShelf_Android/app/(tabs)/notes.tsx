@@ -1,17 +1,18 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Alert,
   Animated, Keyboard, Platform, ToastAndroid, Share, Modal,
+  ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+// SafeAreaView import removed — unused
 import { FlashList } from '@shopify/flash-list';
-const FlashListCast = FlashList as any;
+const FlashListCast = FlashList as React.ComponentType<any>;
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useSettings } from '../../context/SettingsContext';
-import { fetchWithTimeout } from '../../utils/networkHelpers';
+import { fetchWithTimeout, resolveBestPcUrl } from '../../utils/networkHelpers';
 import { NetworkClock } from '../../utils/networkClock';
 import { getSecureItem } from '../../utils/secureStorage';
 import {
@@ -19,10 +20,11 @@ import {
   createNoteDay, createNoteBullet, createFreeformSection,
   generateId, formatDisplayDate, isToday, parseDate,
 } from '../../utils/noteTypes';
-import { styles } from '../../styles/notesStyles';
-import { colors, font, component } from '../../styles/theme';
+import { createNotesStyles } from '../../styles/notesStyles';
+import { font, component } from '../../styles/theme';
+import { useAppTheme } from '../../hooks/useAppTheme';
 import { Ionicons } from '@expo/vector-icons';
-import RAnimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import ScreenHeader from '../../components/ScreenHeader';
 
 // ═══════════════════════════════════════════════════════════
@@ -30,9 +32,11 @@ import ScreenHeader from '../../components/ScreenHeader';
 // ═══════════════════════════════════════════════════════════
 
 const NOTES_STORAGE_KEY = '@flyshelf_notes';
+const PENDING_NOTES_SYNC_KEY = '@flyshelf_pending_notes_sync';
 const POLL_INTERVAL = 10_000;
 const DEBOUNCE_POST_MS = 2_000;
 const RECENT_DAYS_COUNT = 30;
+// First element '' means 'no color' / default (transparent strip)
 const BULLET_COLORS = ['', '#6384FF', '#34D399', '#F87171', '#FBBF24', '#A78BFA', '#F472B6', '#60A5FA'];
 
 const NOTE_TEMPLATES = [
@@ -50,26 +54,11 @@ const NOTE_TEMPLATES = [
 // HELPERS
 // ═══════════════════════════════════════════════════════════
 
-/** Resolve the best PC URL from cached pairing data */
-const getCachedPcUrl = async (): Promise<string | null> => {
-  try {
-    // Try Cloudflare tunnel first (works from anywhere)
-    const globalUrl = await getSecureItem('pairedGlobalUrl');
-    if (globalUrl && globalUrl !== 'offline') {
-      const url = globalUrl.trim().replace(/\/$/, '');
-      if (url) return url;
-    }
-    // Fallback to local IP
-    const localIp = await AsyncStorage.getItem('@pcLocalIp');
-    if (localIp) {
-      let url = localIp.trim();
-      if (!url.startsWith('http')) url = `http://${url}`;
-      const hostPart = url.replace(/^https?:\/\//, '');
-      if (!hostPart.includes(':')) url = `${url}:8999`;
-      return url.replace(/\/$/, '');
-    }
-  } catch {}
-  return null;
+// Helper functions moved to utils or replaced by centralized discovery
+
+/** Safe haptic feedback — silently swallows errors on unsupported devices */
+const safeHaptic = (style = Haptics.ImpactFeedbackStyle.Light) => {
+  try { Haptics.impactAsync(style); } catch {}
 };
 
 /** Format time as "h:mm a" */
@@ -106,6 +95,8 @@ const ensureDay = (days: NoteDay[], dateKey: string): { days: NoteDay[]; day: No
   return { days: updated, day: newDay, idx: updated.length - 1 };
 };
 
+// NOTE: showToast only works on Android. On iOS, ToastAndroid is unavailable
+// and this is a silent no-op. Consider a cross-platform toast library for iOS.
 const showToast = (msg: string) => {
   if (Platform.OS === 'android') {
     ToastAndroid.show(msg, ToastAndroid.SHORT);
@@ -116,7 +107,9 @@ const showToast = (msg: string) => {
 // MAIN SCREEN
 // ═══════════════════════════════════════════════════════════
 export default function NotesScreen() {
-  const { pairingKey, deviceName } = useSettings();
+  const { colors, shadows } = useAppTheme();
+  const styles = useMemo(() => createNotesStyles(colors, shadows), [colors, shadows]);
+  const { pcLocalIp, pairingKey, pairedDevices, deviceName, syncPreferences, getSyncPrefsForDevice } = useSettings();
 
   // ─── State ───
   const [days, setDays] = useState<NoteDay[]>([]);
@@ -129,6 +122,7 @@ export default function NotesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // ─── Refs ───
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -137,20 +131,39 @@ export default function NotesScreen() {
   const daysRef = useRef<NoteDay[]>([]);
   const modifiedDatesRef = useRef<Set<string>>(new Set());
   const fabScale = useRef(new Animated.Value(1)).current;
-  const pollCountRef = useRef(0);
+
   const syncFailCountRef = useRef(0);
   const mountedRef = useRef(true);
+  const schedulePostRef = useRef<(() => void) | null>(null);
+
+  // Refs to avoid stale closures in fetchRemoteNotes (fix #3)
+  const pairedDevicesRef = useRef(pairedDevices);
+  useEffect(() => { pairedDevicesRef.current = pairedDevices; }, [pairedDevices]);
+  const pcLocalIpRef = useRef(pcLocalIp);
+  useEffect(() => { pcLocalIpRef.current = pcLocalIp; }, [pcLocalIp]);
 
   // Keep ref in sync
   useEffect(() => { daysRef.current = days; }, [days]);
 
-  // Unmount guard
+  // Unmount guard + cleanup debounce timer
   useEffect(() => {
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
   }, []);
 
-  // ─── Generated date chips ───
-  const recentDates = useRef(generateRecentDates(RECENT_DAYS_COUNT)).current;
+  // ─── Generated date chips (refreshes after midnight) ───
+  const [todayKey, setTodayKey] = useState(new Date().toISOString().split('T')[0]);
+  useEffect(() => {
+    const check = () => {
+      const now = new Date().toISOString().split('T')[0];
+      if (now !== todayKey) setTodayKey(now);
+    };
+    const interval = setInterval(check, 60000);
+    return () => clearInterval(interval);
+  }, [todayKey]);
+  const recentDates = useMemo(() => generateRecentDates(RECENT_DAYS_COUNT), [todayKey]);
   const selectedDateKey = recentDates[selectedDateIdx];
 
   // ─── Current day data ───
@@ -171,10 +184,9 @@ export default function NotesScreen() {
             setDays(parsed);
           }
         }
-      } catch {}
+      } catch (e) { console.warn('[Notes] Failed to load cached notes:', e); }
 
-      // Resolve PC URL
-      pcUrlRef.current = await getCachedPcUrl();
+      setIsLoading(false);
     })();
   }, []);
 
@@ -182,13 +194,19 @@ export default function NotesScreen() {
   // SYNC: Poll for remote notes
   // ═══════════════════════════════════════════════════════════
   const fetchRemoteNotes = useCallback(async () => {
-    // Re-resolve PC URL every 5th poll
-    pollCountRef.current++;
-    if (pollCountRef.current % 5 === 0) {
-      pcUrlRef.current = await getCachedPcUrl();
-    }
+    // Resolve PC URL from global context (discovered by main tab)
+    // Uses refs to avoid stale closure — pairedDevicesRef/pcLocalIpRef stay current
+    const pcUrl = resolveBestPcUrl(pairedDevicesRef.current, pcLocalIpRef.current);
+    if (pcUrl) pcUrlRef.current = pcUrl;
 
     if (!pcUrlRef.current || !pairingKey) {
+      setSyncStatus('offline');
+      return;
+    }
+
+    // Gate: skip sync if no paired device has notes sync enabled
+    const anyDeviceWantsNotes = pairedDevicesRef.current.length === 0 || pairedDevicesRef.current.some(d => getSyncPrefsForDevice(d.deviceId).notes);
+    if (!anyDeviceWantsNotes) {
       setSyncStatus('offline');
       return;
     }
@@ -222,23 +240,56 @@ export default function NotesScreen() {
         return;
       }
 
-      // Merge: remote wins if LastModified is newer
+      // Per-bullet merge: iterate each remote day, merge individual bullets by Id
+      // Each bullet's LastEdited timestamp is compared independently — the most recent edit wins.
+      // New bullets from either side are preserved. This prevents data loss on concurrent edits.
       setDays(prev => {
         const merged = [...prev];
         for (const remote of remoteDays) {
           const localIdx = merged.findIndex(d => d.Date === remote.Date);
           if (localIdx >= 0) {
-            const localMod = merged[localIdx].LastModified || 0;
-            const remoteMod = remote.LastModified || 0;
-            if (remoteMod > localMod) {
-              merged[localIdx] = remote;
+            const localDay = merged[localIdx];
+            // Merge bullets by Id: most-recently-edited wins per bullet
+            const bulletMap = new Map<string, NoteBullet>();
+            for (const lb of localDay.Bullets) bulletMap.set(lb.Id, lb);
+            for (const rb of remote.Bullets) {
+              const existing = bulletMap.get(rb.Id);
+              if (!existing) {
+                // New from remote — add it
+                bulletMap.set(rb.Id, rb);
+              } else {
+                // Both have it — compare LastEdited timestamps
+                const localTs = new Date(existing.LastEdited || existing.CreatedAt).getTime();
+                const remoteTs = new Date(rb.LastEdited || rb.CreatedAt).getTime();
+                if (remoteTs > localTs) {
+                  bulletMap.set(rb.Id, rb); // Remote wins
+                }
+                // else: local wins, keep existing
+              }
             }
+            // Preserve order: remote order for remote bullets, append local-only bullets at end
+            const remoteIds = new Set(remote.Bullets.map(b => b.Id));
+            const orderedBullets: NoteBullet[] = [];
+            // First: follow remote ordering for all bullets that exist in remote
+            for (const rb of remote.Bullets) {
+              const resolved = bulletMap.get(rb.Id);
+              if (resolved) orderedBullets.push(resolved);
+            }
+            // Then: append local-only bullets (not in remote)
+            for (const lb of localDay.Bullets) {
+              if (!remoteIds.has(lb.Id)) orderedBullets.push(lb);
+            }
+            // Use the later LastModified for the day
+            const dayTs = Math.max(localDay.LastModified || 0, remote.LastModified || 0);
+            merged[localIdx] = { ...localDay, Bullets: orderedBullets, LastModified: dayTs };
           } else {
             merged.push(remote);
           }
         }
         // Persist after merge
-        AsyncStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(merged)).catch(() => {});
+        queueMicrotask(() => {
+          AsyncStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(merged)).catch(() => {});
+        });
         return merged;
       });
 
@@ -249,6 +300,22 @@ export default function NotesScreen() {
       for (const remote of remoteDays) {
         modifiedDatesRef.current.delete(remote.Date);
       }
+
+      // Flush offline queue: re-add pending dates and trigger POST
+      try {
+        const pendingRaw = await AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY);
+        if (pendingRaw) {
+          const pendingDates: string[] = JSON.parse(pendingRaw);
+          if (pendingDates.length > 0) {
+            for (const dateKey of pendingDates) {
+              modifiedDatesRef.current.add(dateKey);
+            }
+            await AsyncStorage.removeItem(PENDING_NOTES_SYNC_KEY);
+            // Use queueMicrotask to defer — schedulePost may be defined after fetchRemoteNotes
+            queueMicrotask(() => { if (schedulePostRef.current) schedulePostRef.current(); });
+          }
+        }
+      } catch { /* ignore queue flush errors */ }
     } catch {
       setSyncStatus('offline');
       syncFailCountRef.current++;
@@ -292,17 +359,28 @@ export default function NotesScreen() {
             'Content-Type': 'application/json',
             'X-FlyShelf-Client': 'MobileCompanion',
             'X-Pairing-Key': pairingKey,
+            'X-Device-Name': deviceName || 'Android',
           },
           body: JSON.stringify(toPost),
         }, 5000);
 
         if (res.ok) {
-          modifiedDatesRef.current = new Set();
+          // M-7 Fix: Only remove the dates we successfully posted, not all modified dates
+          for (const d of toPost) modifiedDatesRef.current.delete(d.Date);
           setSyncStatus('synced');
           syncFailCountRef.current = 0;
+          // Clear pending offline queue on success
+          AsyncStorage.removeItem(PENDING_NOTES_SYNC_KEY).catch(() => {});
         } else {
           setSyncStatus('offline');
           syncFailCountRef.current++;
+          // Persist failed dates to offline queue for retry
+          const failedDates = toPost.map(d => d.Date);
+          AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY).then(stored => {
+            const existing: string[] = stored ? JSON.parse(stored) : [];
+            const merged = [...new Set([...existing, ...failedDates])];
+            AsyncStorage.setItem(PENDING_NOTES_SYNC_KEY, JSON.stringify(merged)).catch(() => {});
+          }).catch(() => {});
           if (syncFailCountRef.current === 2) {
             showToast('Notes sync offline — PC may be unreachable');
           }
@@ -310,12 +388,21 @@ export default function NotesScreen() {
       } catch {
         setSyncStatus('offline');
         syncFailCountRef.current++;
+        // Persist failed dates to offline queue for retry
+        const failedDates = toPost.map(d => d.Date);
+        AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY).then(stored => {
+          const existing: string[] = stored ? JSON.parse(stored) : [];
+          const merged = [...new Set([...existing, ...failedDates])];
+          AsyncStorage.setItem(PENDING_NOTES_SYNC_KEY, JSON.stringify(merged)).catch(() => {});
+        }).catch(() => {});
         if (syncFailCountRef.current === 2) {
           showToast('Notes sync offline — PC may be unreachable');
         }
       }
     }, DEBOUNCE_POST_MS);
   }, [pairingKey]);
+  // Keep ref in sync for offline queue flush in fetchRemoteNotes
+  useEffect(() => { schedulePostRef.current = schedulePost; }, [schedulePost]);
 
   // ═══════════════════════════════════════════════════════════
   // EDIT HELPERS
@@ -325,7 +412,11 @@ export default function NotesScreen() {
   const updateDays = useCallback((updater: (prev: NoteDay[]) => NoteDay[], dateKey?: string) => {
     setDays(prev => {
       const updated = updater(prev);
-      AsyncStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
+      // Persist outside setState would be ideal, but we need the computed value.
+      // Using a microtask to avoid calling async side-effects inside the updater.
+      queueMicrotask(() => {
+        AsyncStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
+      });
       return updated;
     });
     if (dateKey) {
@@ -342,11 +433,11 @@ export default function NotesScreen() {
         return {
           ...day,
           LastModified: NetworkClock.now(),
-          Bullets: day.Bullets.map(b => b.Id === bulletId ? updater({ ...b, LastEdited: new Date().toISOString() }) : b),
+          Bullets: day.Bullets.map(b => b.Id === bulletId ? updater({ ...b, LastEdited: new Date().toISOString(), LastEditedByDevice: deviceName || 'Android' }) : b),
         };
       });
     }, selectedDateKey);
-  }, [selectedDateKey, updateDays]);
+  }, [selectedDateKey, updateDays, deviceName]);
 
   /** Update a specific freeform section in the current day */
   const updateFreeformSection = useCallback((sectionId: string, content: string) => {
@@ -369,18 +460,20 @@ export default function NotesScreen() {
   // ═══════════════════════════════════════════════════════════
 
   const handleAddBullet = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptic(Haptics.ImpactFeedbackStyle.Medium);
     const newBullet = createNoteBullet();
+    newBullet.CreatedByDevice = deviceName || 'Android';
+    newBullet.LastEditedByDevice = deviceName || 'Android';
     updateDays(prev => {
       const { days: updated, day, idx } = ensureDay(prev, selectedDateKey);
       const sorted = [...day.Bullets, { ...newBullet, SortOrder: day.Bullets.length }];
       updated[idx] = { ...day, Bullets: sorted, LastModified: NetworkClock.now() };
       return updated;
     }, selectedDateKey);
-  }, [selectedDateKey, updateDays]);
+  }, [selectedDateKey, updateDays, deviceName]);
 
   const handleAddFreeformSection = useCallback((afterIdx?: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptic();
     const section = createFreeformSection();
     updateDays(prev => {
       const { days: updated, day, idx } = ensureDay(prev, selectedDateKey);
@@ -396,7 +489,7 @@ export default function NotesScreen() {
   }, [selectedDateKey, updateDays]);
 
   const handleDeleteBullet = useCallback((bulletId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    safeHaptic(Haptics.ImpactFeedbackStyle.Heavy);
     updateDays(prev => {
       return prev.map(day => {
         if (day.Date !== selectedDateKey) return day;
@@ -412,7 +505,7 @@ export default function NotesScreen() {
   }, [selectedDateKey, updateDays]);
 
   const handleTogglePin = useCallback((bulletId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptic();
     updateBullet(bulletId, b => ({ ...b, IsPinned: !b.IsPinned }));
   }, [updateBullet]);
 
@@ -427,7 +520,7 @@ export default function NotesScreen() {
   }, [updateBullet]);
 
   const handleRemoveTag = useCallback((bulletId: string, tagIdx: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptic();
     updateBullet(bulletId, b => ({
       ...b,
       Tags: b.Tags.filter((_, i) => i !== tagIdx),
@@ -435,7 +528,7 @@ export default function NotesScreen() {
   }, [updateBullet]);
 
   const handleToggleSubBullet = useCallback((bulletId: string, subId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptic();
     updateBullet(bulletId, b => ({
       ...b,
       SubBullets: b.SubBullets.map(s =>
@@ -445,7 +538,7 @@ export default function NotesScreen() {
   }, [updateBullet]);
 
   const handleAddSubBullet = useCallback((bulletId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptic();
     const sub: SubBulletItem = { Id: generateId(), Text: '', IsDone: false };
     updateBullet(bulletId, b => ({
       ...b,
@@ -463,13 +556,13 @@ export default function NotesScreen() {
   }, [updateBullet]);
 
   const handleSetColor = useCallback((bulletId: string, color: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptic();
     updateBullet(bulletId, b => ({ ...b, Color: color }));
     setShowColorPicker(null);
   }, [updateBullet]);
 
   const handleToggleMode = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptic(Haptics.ImpactFeedbackStyle.Medium);
     updateDays(prev => {
       const { days: updated, day, idx } = ensureDay(prev, selectedDateKey);
       updated[idx] = { ...day, IsFreeformMode: !day.IsFreeformMode, LastModified: NetworkClock.now() };
@@ -478,7 +571,7 @@ export default function NotesScreen() {
   }, [selectedDateKey, updateDays]);
 
   const handleSelectDay = useCallback((idx: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptic();
     setSelectedDateIdx(idx);
     setDeletingBulletId(null);
     setEditingTagBulletId(null);
@@ -517,7 +610,7 @@ export default function NotesScreen() {
 
   // ─── Apply template ───
   const handleApplyTemplate = useCallback((template: typeof NOTE_TEMPLATES[0]) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptic(Haptics.ImpactFeedbackStyle.Medium);
     updateDays(prev => {
       const { days: updated, day, idx } = ensureDay(prev, selectedDateKey);
       const existingCount = day.Bullets.length;
@@ -607,7 +700,7 @@ export default function NotesScreen() {
       <TouchableOpacity
         activeOpacity={0.95}
         onLongPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          safeHaptic(Haptics.ImpactFeedbackStyle.Heavy);
           setDeletingBulletId(item.Id);
         }}
         delayLongPress={400}
@@ -810,7 +903,7 @@ export default function NotesScreen() {
       </TouchableOpacity>
     );
   }, [
-    deletingBulletId, editingTagBulletId, newTagText, showColorPicker,
+    colors, deletingBulletId, editingTagBulletId, newTagText, showColorPicker,
     updateBullet, handleTogglePin, handleAddTag, handleRemoveTag,
     handleToggleSubBullet, handleAddSubBullet, handleUpdateSubBulletText,
     handleDeleteBullet, handleSetColor,
@@ -820,13 +913,17 @@ export default function NotesScreen() {
   // RENDER: Freeform Section Card
   // ═══════════════════════════════════════════════════════════
 
+  // Derive freeformData early so renderFreeformCard can reference it (fix #2)
+  const freeformData = currentDay?.FreeformSections || [];
+
   const handleDeleteFreeformSection = useCallback((sectionId: string) => {
-    const currentDay = days.find(d => d.Date === selectedDateKey);
-    if (!currentDay || (currentDay.FreeformSections?.length || 0) <= 1) {
+    // Use daysRef to avoid stale closure over `days` (fix #5)
+    const curDay = daysRef.current.find(d => d.Date === selectedDateKey);
+    if (!curDay || (curDay.FreeformSections?.length || 0) <= 1) {
       showToast('Cannot remove the last section');
       return;
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptic();
     updateDays(prev => prev.map(day => {
       if (day.Date !== selectedDateKey) return day;
       return {
@@ -835,7 +932,7 @@ export default function NotesScreen() {
         LastModified: NetworkClock.now(),
       };
     }), selectedDateKey);
-  }, [days, selectedDateKey, updateDays]);
+  }, [selectedDateKey, updateDays]);
 
   const renderFreeformCard = useCallback(({ item, index }: { item: FreeformSection; index: number }) => (
     <View>
@@ -876,7 +973,7 @@ export default function NotesScreen() {
         <Text style={styles.addSectionText}>section</Text>
       </TouchableOpacity>
     </View>
-  ), [updateFreeformSection, handleAddFreeformSection, handleDeleteFreeformSection, freeformData.length]);
+  ), [colors, updateFreeformSection, handleAddFreeformSection, handleDeleteFreeformSection, freeformData.length]);
 
   // ═══════════════════════════════════════════════════════════
   // RENDER: Empty State
@@ -954,14 +1051,14 @@ export default function NotesScreen() {
   // ═══════════════════════════════════════════════════════════
 
   const bulletData = currentDay?.Bullets || [];
-  // Sort pinned first, then by SortOrder
-  const sortedBullets = [...bulletData].sort((a, b) => {
+  // Sort pinned first, then by SortOrder (M-10: memoized to avoid re-sort every render)
+  const sortedBullets = useMemo(() => [...bulletData].sort((a, b) => {
     if (a.IsPinned && !b.IsPinned) return -1;
     if (!a.IsPinned && b.IsPinned) return 1;
     return (a.SortOrder || 0) - (b.SortOrder || 0);
-  });
+  }), [bulletData]);
 
-  const freeformData = currentDay?.FreeformSections || [];
+  // freeformData is declared earlier (near line ~828) so renderFreeformCard can use it
 
   const syncColor = syncStatus === 'synced'
     ? colors.accent.success
@@ -991,7 +1088,7 @@ export default function NotesScreen() {
         }}>
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border.subtle }}>
             <Text style={{ color: colors.text.primary, fontSize: 18, fontWeight: '700' }}>📋  Note Templates</Text>
-            <Text style={{ color: colors.text.tertiary, fontSize: 12, marginTop: 4 }}>Tap to add bullets to today's note</Text>
+            <Text style={{ color: colors.text.tertiary, fontSize: 12, marginTop: 4 }}>Tap to add bullets to the selected day's note</Text>
           </View>
           <ScrollView style={{ paddingHorizontal: 8, paddingVertical: 8 }}>
             {NOTE_TEMPLATES.map((tpl, i) => (
@@ -1216,7 +1313,11 @@ export default function NotesScreen() {
 
           {/* ─── Content ─── */}
           <View style={styles.contentArea}>
-            {isSearching && searchQuery.trim() ? (
+            {isLoading ? (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={colors.accent.primary} />
+              </View>
+            ) : isSearching && searchQuery.trim() ? (
               renderSearchResults()
             ) : isFreeformMode ? (
               // Freeform mode
@@ -1230,6 +1331,7 @@ export default function NotesScreen() {
                   estimatedItemSize={160}
                   contentContainerStyle={styles.listContent}
                   showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
                 />
               )
             ) : (
@@ -1245,6 +1347,8 @@ export default function NotesScreen() {
                   extraData={`${deletingBulletId}-${editingTagBulletId}-${showColorPicker}`}
                   contentContainerStyle={styles.listContent}
                   showsVerticalScrollIndicator={false}
+                  onScroll={scrollHandler}
+                  keyboardShouldPersistTaps="handled"
                 />
               )
             )}

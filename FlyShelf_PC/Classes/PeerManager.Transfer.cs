@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -110,7 +111,7 @@ namespace FlyShelf.Classes
                 if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                var resp = await _sharedClient.SendAsync(req, cts.Token);
+                using var resp = await _sharedClient.SendAsync(req, cts.Token);
 
                 if (resp.IsSuccessStatusCode)
                 {
@@ -382,13 +383,13 @@ namespace FlyShelf.Classes
                     if (string.IsNullOrEmpty(tryUrl)) continue;
                     
                     // Handle comma-separated URLs (multiple LAN IPs)
-                    var splitUrls = tryUrl.Contains(",")
-                        ? tryUrl.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(u => u.Trim()).ToArray()
+                    var splitUrls = tryUrl.Contains(',')
+                        ? tryUrl.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(u => u.Trim()).ToArray()
                         : new[] { tryUrl.Trim() };
 
                     foreach (var singleUrl in splitUrls)
                     {
-                        if (string.IsNullOrEmpty(singleUrl) || !singleUrl.StartsWith("http")) continue;
+                        if (string.IsNullOrEmpty(singleUrl) || !singleUrl.StartsWith("http", StringComparison.Ordinal)) continue;
                         try
                         {
                             bool isCf = tryTransport == "Cloudflare";
@@ -458,7 +459,7 @@ namespace FlyShelf.Classes
                             }
 
                             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                            var resp = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                            using var resp = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
                             if (resp.IsSuccessStatusCode)
                             {
                                 peer.LastSeen = DateTime.UtcNow;
@@ -538,7 +539,7 @@ namespace FlyShelf.Classes
                                 using var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/upload_chunk");
                                 if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
                                 req.Headers.TryAddWithoutValidation("X-Upload-Session", sessionId);
-                                req.Headers.TryAddWithoutValidation("X-Chunk-Index", chunkIndex.ToString());
+                                req.Headers.TryAddWithoutValidation("X-Chunk-Index", chunkIndex.ToString(CultureInfo.InvariantCulture));
 
                                 // Read exactly 'length' bytes from the file using pooled buffer (avoids LOH pressure)
                                 var chunkData = System.Buffers.ArrayPool<byte>.Shared.Rent(length);
@@ -562,7 +563,7 @@ namespace FlyShelf.Classes
                                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(batchCts.Token);
                                 linkedCts.CancelAfter(TimeSpan.FromSeconds(60));
 
-                                var resp = await _sharedClient.SendAsync(req, linkedCts.Token);
+                                using var resp = await _sharedClient.SendAsync(req, linkedCts.Token);
                                 if (resp.IsSuccessStatusCode) return true;
 
                                 Logger.LogAction("PEER_CHUNK", $"Chunk {chunkIndex} attempt {attempt + 1} HTTP {(int)resp.StatusCode}");
@@ -606,7 +607,7 @@ namespace FlyShelf.Classes
             if (!string.IsNullOrEmpty(pk)) finReq.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
             finReq.Headers.TryAddWithoutValidation("X-Upload-Session", sessionId);
             finReq.Headers.TryAddWithoutValidation("X-File-Name", Uri.EscapeDataString(fileName));
-            finReq.Headers.TryAddWithoutValidation("X-Total-Chunks", totalChunks.ToString());
+            finReq.Headers.TryAddWithoutValidation("X-Total-Chunks", totalChunks.ToString(CultureInfo.InvariantCulture));
             finReq.Headers.TryAddWithoutValidation("X-Source-Device", SettingsManager.Current.DeviceName ?? "");
             finReq.Headers.TryAddWithoutValidation("X-Source-DeviceId", _myDeviceId);
             finReq.Headers.TryAddWithoutValidation("X-Item-Type", itemType);

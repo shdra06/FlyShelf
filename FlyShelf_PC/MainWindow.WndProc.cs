@@ -264,7 +264,7 @@ namespace FlyShelf
                         string processExePath = null;
                         try
                         {
-                            var proc = System.Diagnostics.Process.GetProcessById((int)processId);
+                            using var proc = System.Diagnostics.Process.GetProcessById((int)processId);
                             processName = proc.ProcessName;
                             try { processExePath = proc.MainModule?.FileName; } catch { } // Access denied for elevated processes
                         }
@@ -279,7 +279,7 @@ namespace FlyShelf
                         if (!string.IsNullOrEmpty(windowTitle) && windowTitle != "FlyShelf")
                         {
                             // Clean up common process names to friendly names
-                            string friendlyName = processName?.ToLower() switch
+                            string friendlyName = processName?.ToLower(System.Globalization.CultureInfo.InvariantCulture) switch
                             {
                                 "code" => "VS Code",
                                 "devenv" => "Visual Studio",
@@ -304,7 +304,7 @@ namespace FlyShelf
                             // If window title contains the friendly name or process name, use full title
                             // e.g. "README.md - Visual Studio Code" → show as-is but trimmed
                             if (windowTitle.Length > 60)
-                                windowTitle = windowTitle.Substring(0, 57) + "...";
+                                windowTitle = string.Concat(windowTitle.AsSpan(0, 57), "...");
                             
                             // Check if title is meaningful (not just the app name repeated)
                             if (windowTitle.Equals(friendlyName, StringComparison.OrdinalIgnoreCase) ||
@@ -314,14 +314,15 @@ namespace FlyShelf
                             }
                             else
                             {
-                                sourceAppName = friendlyName;
+                                // Include window title for richer context (e.g. "README.md — VS Code")
+                                sourceAppName = $"{friendlyName} — {windowTitle}";
                             }
                         }
 
                         // ═══ SOURCE APP ICON: Extract from process exe (cached) ═══
                         if (!string.IsNullOrEmpty(processName))
                         {
-                            string cacheKey = processName.ToLower();
+                            string cacheKey = processName.ToLower(System.Globalization.CultureInfo.InvariantCulture);
                             if (_sourceAppIconCache.TryGetValue(cacheKey, out var cachedIcon))
                             {
                                 sourceAppIcon = cachedIcon;
@@ -373,7 +374,7 @@ namespace FlyShelf
                     }
                     if (bitmap == null && data.GetDataPresent(DataFormats.Dib))
                     {
-                        bitmap = data.GetData(DataFormats.Bitmap) as System.Windows.Media.Imaging.BitmapSource;
+                        bitmap = data.GetData(DataFormats.Dib) as System.Windows.Media.Imaging.BitmapSource;
                     }
                     if (bitmap != null && bitmap.CanFreeze) bitmap.Freeze(); // Make thread-safe
                 }
@@ -433,7 +434,7 @@ namespace FlyShelf
                 }
 
                 // ═══ SHORTCUT EXPANSION: Intercept /trigger text before normal processing ═══
-                if (!string.IsNullOrWhiteSpace(text) && text.Trim().StartsWith("/"))
+                if (!string.IsNullOrWhiteSpace(text) && text.Trim().StartsWith('/'))
                 {
                     var matchedShortcut = Classes.ShortcutManager.TryExpand(text);
                     if (matchedShortcut != null)
@@ -498,7 +499,7 @@ namespace FlyShelf
                     }
                     else
                     {
-                        string ext = System.IO.Path.GetExtension(files[0]).ToLower();
+                        string ext = System.IO.Path.GetExtension(files[0]).ToLower(System.Globalization.CultureInfo.InvariantCulture);
                         if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".gif" || ext == ".webp")
                         {
                             files = null; // Image file — prefer bitmap for richer preview
@@ -538,7 +539,7 @@ namespace FlyShelf
                     if (text.Trim().StartsWith(ACTIVATION_PREFIX, StringComparison.OrdinalIgnoreCase))
                     {
                         string keyCandidate = text.Trim().Substring(ACTIVATION_PREFIX.Length).Trim();
-                        Classes.Logger.LogAction("LICENSE", $"Clipboard activation trigger detected: ****-{keyCandidate.Substring(Math.Max(0, keyCandidate.Length - 4))}");
+                        Classes.Logger.LogAction("LICENSE", $"Clipboard activation trigger detected: ****-{keyCandidate[Math.Max(0, keyCandidate.Length - 4)..]}");
                         
                         // Clear the trigger from clipboard so it doesn't re-fire
                         _lastClipboardCaptureTime = DateTime.UtcNow;

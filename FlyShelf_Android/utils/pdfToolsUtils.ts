@@ -12,6 +12,9 @@ import { base64ToUint8Array, uint8ArrayToBase64 } from './networkHelpers';
 
 const OUTPUT_DIR = `${FileSystem.documentDirectory}FlyShelf/PDFTools/`;
 
+/** Max age in ms for PDF output files before cleanup (7 days) */
+const CLEANUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 async function ensureOutputDir() {
   await FileSystem.makeDirectoryAsync(OUTPUT_DIR, { intermediates: true }).catch(() => {});
 }
@@ -20,13 +23,63 @@ function getOutputPath(prefix: string): string {
   return `${OUTPUT_DIR}${prefix}_${Date.now()}.pdf`;
 }
 
+/**
+ * Removes PDF output files older than 7 days from the OUTPUT_DIR.
+ * Call on app startup to prevent disk bloat from processed PDFs.
+ */
+export async function cleanupOldPdfFiles(): Promise<number> {
+  try {
+    await ensureOutputDir();
+    const files = await FileSystem.readDirectoryAsync(OUTPUT_DIR);
+    const now = Date.now();
+    let removedCount = 0;
+    for (const file of files) {
+      try {
+        const filePath = `${OUTPUT_DIR}${file}`;
+        const info = await FileSystem.getInfoAsync(filePath);
+        if (info.exists && !info.isDirectory && info.modificationTime) {
+          const ageMs = now - info.modificationTime * 1000;
+          if (ageMs > CLEANUP_MAX_AGE_MS) {
+            await FileSystem.deleteAsync(filePath, { idempotent: true });
+            removedCount++;
+          }
+        }
+      } catch { /* skip individual file errors */ }
+    }
+    if (removedCount > 0) {
+      console.log(`[PDFTools] Cleaned up ${removedCount} files older than 7 days.`);
+    }
+    return removedCount;
+  } catch (e) {
+    console.warn('[PDFTools] Cleanup failed:', e);
+    return 0;
+  }
+}
+
 async function readPdfBytes(uri: string): Promise<Uint8Array> {
+  // content:// URIs are handled directly by expo-file-system
+  if (uri.startsWith('content://')) {
+    const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+    return base64ToUint8Array(b64);
+  }
   const fileUri = uri.startsWith('file://') ? uri : `file://${uri}`;
+  // Warn for very large files that may cause memory pressure
+  try {
+    const info = await FileSystem.getInfoAsync(fileUri);
+    if (info.exists && 'size' in info && typeof info.size === 'number' && info.size > 50 * 1024 * 1024) {
+      console.warn(`[PDFTools] Large file detected (${(info.size / 1024 / 1024).toFixed(1)}MB). Processing may be slow or fail on low-memory devices.`);
+    }
+  } catch { /* size check is best-effort */ }
   const b64 = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
   return base64ToUint8Array(b64);
 }
 
 async function readImageBytes(uri: string): Promise<Uint8Array> {
+  // content:// URIs are handled directly by expo-file-system
+  if (uri.startsWith('content://')) {
+    const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+    return base64ToUint8Array(b64);
+  }
   const fileUri = uri.startsWith('file://') ? uri : (uri.startsWith('/') ? `file://${uri}` : uri);
   const b64 = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
   return base64ToUint8Array(b64);
@@ -70,9 +123,14 @@ export async function splitPdf(
     outputPaths.push(path);
   }
 
+  if (outputPaths.length === 0) {
+    throw new Error('Split produced no output files — all page ranges were invalid or out of bounds.');
+  }
+
   return outputPaths;
 }
 
+/** @internal Not currently used by any tool — kept for future use */
 /** Remove specific pages from a PDF (1-indexed page numbers) */
 export async function removePages(pdfPath: string, pageNumbers: number[]): Promise<string> {
   const bytes = await readPdfBytes(pdfPath);
@@ -122,18 +180,23 @@ export async function rotatePages(
 export async function imagesToPdf(imagePaths: string[]): Promise<string> {
   const doc = await PDFDocument.create();
   for (const imgPath of imagePaths) {
-    const imgBytes = await readImageBytes(imgPath);
-    const lower = imgPath.toLowerCase();
-    let img;
-    if (lower.endsWith('.png')) {
-      img = await doc.embedPng(imgBytes);
-    } else {
-      try { img = await doc.embedJpg(imgBytes); }
-      catch { img = await doc.embedPng(imgBytes); }
+    try {
+      const imgBytes = await readImageBytes(imgPath);
+      const lower = imgPath.toLowerCase();
+      let img;
+      if (lower.endsWith('.png')) {
+        img = await doc.embedPng(imgBytes);
+      } else {
+        try { img = await doc.embedJpg(imgBytes); }
+        catch { img = await doc.embedPng(imgBytes); }
+      }
+      const { width, height } = img.scale(1.0);
+      const page = doc.addPage([width, height]);
+      page.drawImage(img, { x: 0, y: 0, width, height });
+    } catch (e: any) {
+      const filename = imgPath.split('/').pop() || imgPath;
+      throw new Error(`Failed to embed image "${filename}": unsupported format or corrupted file. Only PNG and JPEG are supported.`);
     }
-    const { width, height } = img.scale(1.0);
-    const page = doc.addPage([width, height]);
-    page.drawImage(img, { x: 0, y: 0, width, height });
   }
   return savePdf(doc, 'images_to_pdf');
 }
@@ -169,12 +232,21 @@ export async function addWatermark(
   return savePdf(doc, 'watermarked');
 }
 
-/** Copy PDF (pdf-lib doesn't support native encryption) */
+/**
+ * Copy PDF — pdf-lib does NOT support native encryption.
+ * WARNING: The password parameter is accepted for API compatibility but is NOT applied.
+ * A native module (e.g. react-native-pdf-lib with encryption support) or server-side
+ * tool would be needed for real password protection.
+ */
 export async function protectPdf(pdfPath: string, _password: string): Promise<string> {
+  if (_password) {
+    throw new Error(
+      'PDF password protection requires a native module not yet installed. ' +
+      'The PDF was saved without protection. Use a server-side tool for encryption.'
+    );
+  }
   const bytes = await readPdfBytes(pdfPath);
   const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-  // pdf-lib does not support PDF encryption natively.
-  // We save a copy — a server-side tool or native module would be needed for real password protection.
   return savePdf(doc, 'protected_copy');
 }
 
@@ -185,6 +257,10 @@ export async function getPdfInfo(pdfPath: string): Promise<{
   author?: string;
   subject?: string;
   creator?: string;
+  producer?: string;
+  creationDate?: string;
+  modificationDate?: string;
+  isEncrypted: boolean;
   pages: { width: number; height: number; rotation: number }[];
 }> {
   const bytes = await readPdfBytes(pdfPath);
@@ -195,6 +271,10 @@ export async function getPdfInfo(pdfPath: string): Promise<{
     author: doc.getAuthor() ?? undefined,
     subject: doc.getSubject() ?? undefined,
     creator: doc.getCreator() ?? undefined,
+    producer: doc.getProducer() || '',
+    creationDate: doc.getCreationDate()?.toISOString() || '',
+    modificationDate: doc.getModificationDate()?.toISOString() || '',
+    isEncrypted: false, // pdf-lib can't open encrypted PDFs, so if we got here it's not encrypted
     pages: doc.getPages().map(p => {
       const { width, height } = p.getSize();
       return { width, height, rotation: p.getRotation().angle };
@@ -264,6 +344,7 @@ export async function addImagePages(
   return savePdf(result, 'pages_added');
 }
 
+/** @internal Not currently used by any tool — kept for future use */
 /** Insert pages from another PDF into target at a specific position */
 export async function addPdfPages(
   targetPath: string,

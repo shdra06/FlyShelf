@@ -8,8 +8,8 @@
  *  - Spring open/close animation
  *  - Configurable max height
  */
-import React, { useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Dimensions, Modal } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions, Modal } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -20,7 +20,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { colors, radius, space, surface, spring as springConfig } from '../styles/theme';
 
-const { height: SCREEN_H } = Dimensions.get('window');
+
 
 interface BottomSheetProps {
   visible: boolean;
@@ -39,9 +39,21 @@ export default function BottomSheet({
   title,
   maxHeight = 0.85,
 }: BottomSheetProps) {
-  const sheetHeight = SCREEN_H * maxHeight;
+  const { height: screenH } = useWindowDimensions();
+  const sheetHeight = screenH * maxHeight;
   const translateY = useSharedValue(sheetHeight);
   const backdropOpacity = useSharedValue(0);
+
+  // Keep component mounted briefly after visible→false so close animation plays
+  const [isRendered, setIsRendered] = useState(visible);
+  useEffect(() => {
+    if (visible) {
+      setIsRendered(true);
+    } else {
+      const timer = setTimeout(() => setIsRendered(false), 350);
+      return () => clearTimeout(timer);
+    }
+  }, [visible]);
 
   useEffect(() => {
     if (visible) {
@@ -81,7 +93,7 @@ export default function BottomSheet({
     opacity: backdropOpacity.value,
   }));
 
-  if (!visible) return null;
+  if (!isRendered) return null;
 
   return (
     <Modal transparent visible={visible} onRequestClose={handleClose} statusBarTranslucent>

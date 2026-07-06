@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Globalization;
 using System.Windows.Threading;
 using MicaWPF.Controls;
 
@@ -84,16 +85,16 @@ namespace FlyShelf.Windows
             }
 
             try {
-                ctx = ctx.ToLower();
+                ctx = ctx.ToLowerInvariant();
                 int minutes = 5;
                 
                 var match = System.Text.RegularExpressions.Regex.Match(ctx, @"(\d+)\s*(min|minute|m|hour|hr|h)");
                 if (match.Success) 
                 {
-                    if (ctx.Contains("hour") || ctx.Contains("hr") || ctx.Contains(" h")) {
-                        minutes = int.Parse(match.Groups[1].Value) * 60;
+                    if (ctx.Contains("hour", StringComparison.Ordinal) || ctx.Contains("hr", StringComparison.Ordinal) || ctx.Contains(" h", StringComparison.Ordinal)) {
+                        minutes = int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) * 60;
                     } else {
-                        minutes = int.Parse(match.Groups[1].Value);
+                        minutes = int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
                     }
                     _remaining = TimeSpan.FromMinutes(minutes);
                 } 
@@ -101,11 +102,11 @@ namespace FlyShelf.Windows
                 {
                     match = System.Text.RegularExpressions.Regex.Match(ctx, @"(\d+)\s*(sec|second|s)");
                     if (match.Success) {
-                        _remaining = TimeSpan.FromSeconds(int.Parse(match.Groups[1].Value));
+                        _remaining = TimeSpan.FromSeconds(int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture));
                     } else {
                         var quickMatch = System.Text.RegularExpressions.Regex.Match(ctx.Trim(), @"^\/(\d+)$");
                         if (quickMatch.Success) {
-                            _remaining = TimeSpan.FromMinutes(int.Parse(quickMatch.Groups[1].Value));
+                            _remaining = TimeSpan.FromMinutes(int.Parse(quickMatch.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture));
                         } else {
                             _remaining = TimeSpan.FromMinutes(5);
                         }
@@ -115,7 +116,7 @@ namespace FlyShelf.Windows
                 if (System.Text.RegularExpressions.Regex.IsMatch(ctx, @"(?:[01]?\d|2[0-3]):[0-5]\d"))
                 {
                     match = System.Text.RegularExpressions.Regex.Match(ctx, @"(?<min>[01]?\d|2[0-3]):(?<sec>[0-5]\d)");
-                    if (match.Success) _remaining = new TimeSpan(0, int.Parse(match.Groups["min"].Value), int.Parse(match.Groups["sec"].Value));
+                    if (match.Success) _remaining = new TimeSpan(0, int.Parse(match.Groups["min"].Value, System.Globalization.CultureInfo.InvariantCulture), int.Parse(match.Groups["sec"].Value, System.Globalization.CultureInfo.InvariantCulture));
                 }
 
                 UpdateTimeDisplay();
@@ -185,9 +186,9 @@ namespace FlyShelf.Windows
         private void UpdateTimeDisplay()
         {
             if (_remaining.TotalHours >= 1) {
-                TimeDisplay.Text = _remaining.ToString(@"hh\:mm\:ss");
+                TimeDisplay.Text = _remaining.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture);
             } else {
-                TimeDisplay.Text = _remaining.ToString(@"mm\:ss");
+                TimeDisplay.Text = _remaining.ToString(@"mm\:ss", CultureInfo.InvariantCulture);
             }
         }
 
@@ -339,7 +340,7 @@ namespace FlyShelf.Windows
             
             if (_totalDuration.TotalSeconds > 0)
             {
-                CustomTimeInput.Text = ((int)_totalDuration.TotalMinutes).ToString();
+                CustomTimeInput.Text = ((int)_totalDuration.TotalMinutes).ToString(CultureInfo.InvariantCulture);
             }
             
             // Re-focus text box
@@ -392,7 +393,7 @@ namespace FlyShelf.Windows
             {
                 StartTimer(TimeSpan.FromMinutes(mins));
             }
-            else if (trimmed.Contains(":"))
+            else if (trimmed.Contains(':'))
             {
                 try
                 {

@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Globalization;
 using System.Threading;
 
 namespace FlyShelf.Classes
@@ -83,10 +84,10 @@ namespace FlyShelf.Classes
         public DateTime? LastFiredAt { get; set; }
 
         [JsonIgnore]
-        public string DueAtDisplay => DueAt.ToLocalTime().ToString("MMM dd, yyyy • h:mm tt");
+        public string DueAtDisplay => DueAt.ToLocalTime().ToString("MMM dd, yyyy • h:mm tt", CultureInfo.InvariantCulture);
 
         [JsonIgnore]
-        public string TimeDisplay => DueAt.ToLocalTime().ToString("h:mm tt");
+        public string TimeDisplay => DueAt.ToLocalTime().ToString("h:mm tt", CultureInfo.InvariantCulture);
 
         [JsonIgnore]
         public bool IsOverdue => !IsDone && DueAt <= DateTime.UtcNow && (!IsSnoozed || SnoozedUntil <= DateTime.UtcNow);

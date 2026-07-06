@@ -31,9 +31,13 @@
     },
     "pairing_codes": {
       "$code": {
-        ".read": "auth != null && data.child('uid').val() === auth.uid",
+        ".read": "auth != null",
         ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)",
-        ".validate": "newData.hasChildren(['deviceId', 'pairingKey', 'uid'])"
+        ".validate": "newData.hasChildren(['deviceId', 'pairingKey', 'uid'])",
+        "response": {
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['deviceId', 'deviceName', 'pairingKey'])"
+        }
       },
       ".read": false,
       ".write": false

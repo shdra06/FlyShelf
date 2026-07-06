@@ -40,8 +40,12 @@ namespace FlyShelf.Classes
 
         private static readonly Dictionary<ScrollViewer, ScrollState> _states = new();
         private static readonly Dictionary<DependencyObject, ScrollViewer> _ancestorCache = new();
+        private static List<ScrollViewer> _scrollKeysBuffer = new();
+        private static List<ScrollViewer> _completedBuffer = new();
         
         private static bool _renderingAttached;
+        private static bool _timerResolutionElevated;
+        private static int _timerResolutionRefCount;  // Bug 5 fix: balanced timeBeginPeriod/timeEndPeriod
 
         [System.Runtime.InteropServices.DllImport("winmm.dll", EntryPoint = "timeBeginPeriod", SetLastError = true)]
         private static extern uint TimeBeginPeriod(uint uMilliseconds);
@@ -71,14 +75,7 @@ namespace FlyShelf.Classes
 
         static SmoothScroll()
         {
-            // 1. Elevate Windows scheduler timer resolution to 1ms to prevent rendering timer stutters
-            try
-            {
-                TimeBeginPeriod(1);
-            }
-            catch { }
-
-            // 2. Disable Windows 11 EcoQoS (Power Throttling) for this process to force unthrottled thread execution
+            // Disable Windows 11 EcoQoS (Power Throttling) for this process to force unthrottled thread execution
             try
             {
                 var hProcess = System.Diagnostics.Process.GetCurrentProcess().Handle;
@@ -171,10 +168,11 @@ namespace FlyShelf.Classes
                 _renderingAttached = false;
             }
 
-            // Restore system timer resolution when all scroll states are detached
-            if (_states.Count == 0)
+            // Bug 5 fix: Balanced timer resolution restore on detach
+            if (_states.Count == 0 && _timerResolutionElevated && _timerResolutionRefCount > 0)
             {
-                try { TimeEndPeriod(1); } catch { } // Best-effort: failure is acceptable
+                try { TimeEndPeriod(1); _timerResolutionRefCount--; } catch { }
+                _timerResolutionElevated = false;
             }
         }
 
@@ -225,6 +223,13 @@ namespace FlyShelf.Classes
 
         private static void ApplyImpulse(ScrollViewer sv, int delta)
         {
+            // Elevate Windows scheduler timer resolution to 1ms for smooth rendering
+            // Bug 5 fix: Use reference counting to prevent unmatched Begin/End pairs
+            if (!_timerResolutionElevated)
+            {
+                try { TimeBeginPeriod(1); _timerResolutionRefCount++; } catch { }
+                _timerResolutionElevated = true;
+            }
             // Distinguish Precision Touchpad (high frequency, small deltas) vs Mouse Wheel (discrete 120s)
             bool isTouchpad = (delta % 120 != 0) || (Math.Abs(delta) < 120);
 
@@ -266,7 +271,7 @@ namespace FlyShelf.Classes
                 state.IsAnimating = true;
                 state.LastFrameTick = System.Diagnostics.Stopwatch.GetTimestamp();
                 state.TrueOffset = sv.VerticalOffset;  // Seed from current real position
-                state.LastSetOffset = sv.VerticalOffset;
+                state.LastSetOffset = Math.Round(sv.VerticalOffset);
                 EnableStaticCanvas(sv);
             }
 
@@ -290,16 +295,17 @@ namespace FlyShelf.Classes
             bool anyAnimating = false;
             long now = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
 
-            var scrollKeys = _states.Keys.ToList();
-            var completed = new List<ScrollViewer>();
+            _scrollKeysBuffer.Clear();
+            _scrollKeysBuffer.AddRange(_states.Keys);
+            _completedBuffer.Clear();
 
-            foreach (var sv in scrollKeys)
+            foreach (var sv in _scrollKeysBuffer)
             {
                 if (!_states.TryGetValue(sv, out var state)) continue;
 
                 if (!state.IsAnimating)
                 {
-                    completed.Add(sv);
+                    _completedBuffer.Add(sv);
                     continue;
                 }
 
@@ -310,11 +316,13 @@ namespace FlyShelf.Classes
                 // with WPF's actual position. Without this, the engine fights WPF's shifts
                 // and produces visible jitter on small upward scrolls.
                 double actualOffset = sv.VerticalOffset;
-                double wpfDelta = actualOffset - state.LastSetOffset;
-                if (Math.Abs(wpfDelta) > 0.001)
+                double actualRounded = Math.Round(actualOffset);
+                double wpfDelta = actualRounded - state.LastSetOffset;
+                if (Math.Abs(wpfDelta) > 0.5)
                 {
+                    // Virtualizer shifted the offset — absorb into TrueOffset
                     state.TrueOffset += wpfDelta;
-                    state.LastSetOffset = actualOffset;
+                    state.LastSetOffset = actualRounded;
                 }
 
                 // ═══ SMOOTH VELOCITY BLENDING (Two-Phase Reversal) ═══
@@ -376,7 +384,7 @@ namespace FlyShelf.Classes
                     sv.ScrollToVerticalOffset(state.TrueOffset);
                     state.LastSetOffset = state.TrueOffset;
                     state.IsAnimating = false;
-                    completed.Add(sv);
+                    _completedBuffer.Add(sv);
                     continue;
                 }
 
@@ -412,8 +420,13 @@ namespace FlyShelf.Classes
                         double directDisplacement = -state.PendingImpulse * (TargetFrameMs / 1.0);
                         state.TrueOffset += directDisplacement;
                         state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
-                        sv.ScrollToVerticalOffset(state.TrueOffset);
-                        state.LastSetOffset = state.TrueOffset;
+                        // Pixel-crossing guard: write only when the rounded pixel changes.
+                        // This ensures 1px steps land at even intervals, fixing slow-scroll stutter
+                        // (the old 0.5px guard fired at arbitrary sub-pixel phases).
+                        double rounded = Math.Round(state.TrueOffset);
+                        if (rounded != state.LastSetOffset)
+                            sv.ScrollToVerticalOffset(rounded);
+                        state.LastSetOffset = rounded;
                         // Let velocity build naturally from micro-scrolls
                         state.Velocity = 0;
                         anyAnimating = true;
@@ -425,8 +438,11 @@ namespace FlyShelf.Classes
                         state.TrueOffset += displacement;
                         state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
 
-                        sv.ScrollToVerticalOffset(state.TrueOffset);
-                        state.LastSetOffset = state.TrueOffset;
+                        // Pixel-crossing guard: write only when rounded pixel changes
+                        double rounded = Math.Round(state.TrueOffset);
+                        if (rounded != state.LastSetOffset)
+                            sv.ScrollToVerticalOffset(rounded);
+                        state.LastSetOffset = rounded;
 
                         // Velocity-adaptive friction during active input
                         double friction;
@@ -466,7 +482,7 @@ namespace FlyShelf.Classes
                             sv.ScrollToVerticalOffset(state.TrueOffset);
                             state.LastSetOffset = state.TrueOffset;
                             state.IsAnimating = false;
-                            completed.Add(sv);
+                            _completedBuffer.Add(sv);
                             continue;
                         }
                         state.InCoastPhase = true;
@@ -516,8 +532,11 @@ namespace FlyShelf.Classes
                     analyticalOffset = Math.Clamp(analyticalOffset, 0, sv.ScrollableHeight);
                     state.TrueOffset = analyticalOffset;
 
-                    sv.ScrollToVerticalOffset(state.TrueOffset);
-                    state.LastSetOffset = state.TrueOffset;
+                    // Pixel-crossing guard: write only when rounded pixel changes
+                    double coastRounded = Math.Round(state.TrueOffset);
+                    if (coastRounded != state.LastSetOffset)
+                        sv.ScrollToVerticalOffset(coastRounded);
+                    state.LastSetOffset = coastRounded;
 
                     // Stop condition: velocity is imperceptible (< 0.5 px/frame = 30px/sec)
                     // No Math.Round — rounding snaps position by up to 0.5px which causes
@@ -528,12 +547,13 @@ namespace FlyShelf.Classes
                     {
                         state.Velocity = 0.0;
                         state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
-                        sv.ScrollToVerticalOffset(state.TrueOffset);
-                        state.LastSetOffset = state.TrueOffset;
+                        double stopRounded = Math.Round(state.TrueOffset);
+                        sv.ScrollToVerticalOffset(stopRounded);
+                        state.LastSetOffset = stopRounded;
                         state.IsAnimating = false;
                         state.InCoastPhase = false;
                         DisableStaticCanvas(sv); // Restore ClearType only at full stop
-                        completed.Add(sv);
+                        _completedBuffer.Add(sv);
                     }
                     else
                     {
@@ -551,16 +571,30 @@ namespace FlyShelf.Classes
                 }
             }
 
-            foreach (var sv in completed)
+            foreach (var sv in _completedBuffer)
             {
                 _states.Remove(sv);
                 DisableStaticCanvas(sv);
+            }
+
+            // Release visual tree references when no scrolling is active
+            if (_states.Count == 0)
+            {
+                _ancestorCache.Clear();
             }
 
             if (!anyAnimating)
             {
                 CompositionTarget.Rendering -= OnRendering;
                 _renderingAttached = false;
+
+                // Restore system timer resolution when scrolling stops
+                // Bug 5 fix: Balanced timer resolution restore
+                if (_timerResolutionElevated && _timerResolutionRefCount > 0)
+                {
+                    try { TimeEndPeriod(1); _timerResolutionRefCount--; } catch { }
+                    _timerResolutionElevated = false;
+                }
 
                 // Resume theme animations now that scrolling has stopped
                 try

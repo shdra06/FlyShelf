@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -220,7 +221,7 @@ namespace FlyShelf.Windows
         private bool IsJsonMatrix(string input)
         {
             var trimmed = input.TrimStart();
-            return trimmed.StartsWith("{") && trimmed.Contains("\"text\"");
+            return trimmed.StartsWith('{') && trimmed.Contains("\"text\"", StringComparison.Ordinal);
         }
 
         private void ParseJsonMatrix(string jsonPayload)
@@ -422,7 +423,7 @@ namespace FlyShelf.Windows
                     Padding = new Thickness(8, 7, 8, 7),
                     Cursor = Cursors.Hand
                 };
-                string colName = j < 26 ? ((char)('A' + j)).ToString() : $"C{j + 1}";
+                string colName = j < 26 ? ((char)('A' + j)).ToString(CultureInfo.InvariantCulture) : $"C{j + 1}";
                 header.Child = new TextBlock
                 {
                     Text = colName,
@@ -470,7 +471,7 @@ namespace FlyShelf.Windows
                 };
                 rowNumBorder.Child = new TextBlock
                 {
-                    Text = (i + 1).ToString(),
+                    Text = (i + 1).ToString(CultureInfo.InvariantCulture),
                     FontSize = 11,
                     FontWeight = FontWeights.SemiBold,
                     Foreground = rowHeaderFg,
@@ -577,7 +578,7 @@ namespace FlyShelf.Windows
                     insertColRight.Click += (s, e) => InsertColumnAt(ci + 1);
                     var delRow = new MenuItem { Header = $"Delete Row {ri + 1}", Foreground = dangerBrush };
                     delRow.Click += (s, e) => DeleteRowAt(ri);
-                    var delCol = new MenuItem { Header = $"Delete Column {(ci < 26 ? ((char)('A' + ci)).ToString() : $"C{ci + 1}")}", Foreground = dangerBrush };
+                    var delCol = new MenuItem { Header = $"Delete Column {(ci < 26 ? ((char)('A' + ci)).ToString(CultureInfo.InvariantCulture) : $"C{ci + 1}")}", Foreground = dangerBrush };
                     delCol.Click += (s, e) => DeleteColumnAt(ci);
 
                     cellMenu.Items.Add(copyItem);
@@ -607,7 +608,7 @@ namespace FlyShelf.Windows
         {
             if (_selectedRow >= 0 && _selectedCol >= 0)
             {
-                string colName = _selectedCol < 26 ? ((char)('A' + _selectedCol)).ToString() : $"C{_selectedCol + 1}";
+                string colName = _selectedCol < 26 ? ((char)('A' + _selectedCol)).ToString(CultureInfo.InvariantCulture) : $"C{_selectedCol + 1}";
                 SelectionInfo.Text = $"Cell {colName}{_selectedRow + 1}  ·  Tab ↹ navigate  ·  Ctrl+Z undo";
             }
         }
@@ -617,12 +618,12 @@ namespace FlyShelf.Windows
             if (sender is not TextBox tb) return;
             var tag = tb.Tag?.ToString()?.Split(',');
             if (tag == null || tag.Length != 2) return;
-            int row = int.Parse(tag[0]), col = int.Parse(tag[1]);
+            int row = int.Parse(tag[0], System.Globalization.CultureInfo.InvariantCulture), col = int.Parse(tag[1], System.Globalization.CultureInfo.InvariantCulture);
 
             if (e.Key == Key.Tab)
             {
                 e.Handled = true;
-                PushUndoState();
+                // M-32 FIX: Removed PushUndoState() — Tab only navigates, no text change occurs
                 if (Keyboard.Modifiers == ModifierKeys.Shift)
                 {
                     // Move left/up

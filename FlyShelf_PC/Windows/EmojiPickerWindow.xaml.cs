@@ -217,7 +217,7 @@ namespace FlyShelf.Windows
 
             IEnumerable<EmojiItem> filtered;
             if (!string.IsNullOrEmpty(search))
-                filtered = _allEmojis.Where(e => e.Emoji.Contains(search) || e.Name.ToLowerInvariant().Contains(search) || e.Category.ToLowerInvariant().Contains(search));
+                filtered = _allEmojis.Where(e => e.Emoji.Contains(search, StringComparison.OrdinalIgnoreCase) || e.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || e.Category.Contains(search, StringComparison.OrdinalIgnoreCase));
             else
                 filtered = _allEmojis.Where(e => e.Category == _currentCategory);
 

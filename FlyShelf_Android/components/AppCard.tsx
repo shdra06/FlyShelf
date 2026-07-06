@@ -6,8 +6,9 @@
  *  - Press scale animation (0.98) with elevation reduction
  *  - Optional entrance animation (staggered fade-in-up)
  *  - Variants: default, elevated, outlined, ghost
+ *  - Dynamic light/dark theming via useAppTheme
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ViewStyle, StyleProp, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -17,7 +18,8 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { colors, radius, space, shadows, spring as springConfig } from '../styles/theme';
+import { useAppTheme } from '../hooks/useAppTheme';
+import { radius, space, spring as springConfig } from '../styles/theme';
 
 type CardVariant = 'default' | 'elevated' | 'outlined' | 'ghost';
 
@@ -39,6 +41,7 @@ export default function AppCard({
   style,
   static: isStatic = false,
 }: AppCardProps) {
+  const { colors, shadows } = useAppTheme();
   const pressed = useSharedValue(0);
 
   const tapGesture = Gesture.Tap()
@@ -65,6 +68,42 @@ export default function AppCard({
     return { transform: [{ scale }], elevation };
   });
 
+  const baseCard: ViewStyle = useMemo(() => ({
+    backgroundColor: colors.bg.card,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    marginBottom: space.md,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    borderTopWidth: 1,
+    borderTopColor: colors.innerHighlight,
+    ...shadows.card,
+  }), [colors, shadows]);
+
+  const variantStyles: Record<CardVariant, ViewStyle> = useMemo(() => ({
+    default: { ...baseCard },
+    elevated: {
+      ...baseCard,
+      backgroundColor: colors.bg.elevated,
+      ...shadows.elevated,
+    },
+    outlined: {
+      ...baseCard,
+      backgroundColor: 'transparent',
+      borderColor: colors.border.medium,
+      elevation: 0,
+      shadowOpacity: 0,
+    },
+    ghost: {
+      ...baseCard,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+      borderTopWidth: 0,
+      elevation: 0,
+      shadowOpacity: 0,
+    },
+  }), [baseCard, colors, shadows]);
+
   const variantStyle = variantStyles[variant];
 
   if (isStatic) {
@@ -83,39 +122,3 @@ export default function AppCard({
     </GestureDetector>
   );
 }
-
-const baseCard: ViewStyle = {
-  backgroundColor: colors.bg.card,
-  borderRadius: radius.lg,
-  padding: space.lg,
-  marginBottom: space.md,
-  borderWidth: 1,
-  borderColor: colors.border.subtle,
-  borderTopWidth: 1,
-  borderTopColor: colors.innerHighlight,
-  ...shadows.card,
-};
-
-const variantStyles = StyleSheet.create({
-  default: { ...baseCard },
-  elevated: {
-    ...baseCard,
-    backgroundColor: colors.bg.elevated,
-    ...shadows.elevated,
-  },
-  outlined: {
-    ...baseCard,
-    backgroundColor: 'transparent',
-    borderColor: colors.border.medium,
-    elevation: 0,
-    shadowOpacity: 0,
-  },
-  ghost: {
-    ...baseCard,
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    borderTopWidth: 0,
-    elevation: 0,
-    shadowOpacity: 0,
-  },
-});

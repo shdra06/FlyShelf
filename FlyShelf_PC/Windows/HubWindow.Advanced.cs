@@ -7,6 +7,7 @@
 using FlyShelf.ViewModels;
 using FlyShelf.Classes;
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -118,13 +119,13 @@ namespace FlyShelf.Windows
                             {
                                 // Build a proper URL for the health check
                                 string checkUrl = d.LocalIp;
-                                if (!checkUrl.StartsWith("http")) checkUrl = "http://" + checkUrl;
-                                if (!checkUrl.Contains(":")) checkUrl += ":8999";
+                                if (!checkUrl.StartsWith("http", StringComparison.Ordinal)) checkUrl = "http://" + checkUrl;
+                                if (!checkUrl.Contains(':')) checkUrl += ":8999";
                                 
                                 try
                                 {
                                     using var pingClient = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMilliseconds(1000) };
-                                    var resp = await pingClient.GetAsync(checkUrl.TrimEnd('/') + "/api/health");
+                                    var resp = await pingClient.GetAsync(checkUrl.TrimEnd('/') + "/api/health").ConfigureAwait(false);
                                     isLan = resp.IsSuccessStatusCode;
                                 }
                                 catch { isLan = false; }
@@ -401,15 +402,15 @@ namespace FlyShelf.Windows
 
         private async void UpdateBtn_Click(object sender, RoutedEventArgs e)
         {
-            string btnContent = UpdateBtn.Content?.ToString() ?? "";
+            string btnContent = UpdateBtn.Content?.ToString() ?? string.Empty;
 
-            if (btnContent.Contains("Restart"))
+            if (btnContent.Contains("Restart", StringComparison.Ordinal))
             {
                 _updateManager.ApplyUpdateAndRestart();
                 return;
             }
 
-            if (btnContent.Contains("Retry"))
+            if (btnContent.Contains("Retry", StringComparison.Ordinal))
             {
                 // Retry: re-download + auto-apply
                 UpdateBtn.IsEnabled = false;
@@ -471,7 +472,7 @@ namespace FlyShelf.Windows
 
     } // end HubWindow class
 
-    public class DeviceDisplayItem
+    public sealed class DeviceDisplayItem
     {
         public string DeviceName { get; set; } = "";
         public string DeviceType { get; set; } = "";
@@ -484,7 +485,7 @@ namespace FlyShelf.Windows
         {
             get
             {
-                if (DeviceName.Contains("(You)"))
+                if (DeviceName.Contains("(You)", StringComparison.Ordinal))
                 {
                     return "💻 Local Host";
                 }

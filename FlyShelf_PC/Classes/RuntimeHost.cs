@@ -54,7 +54,7 @@ namespace FlyShelf.Classes
                         string destinationPath = Path.GetFullPath(Path.Combine(outDir, entry.FullName));
                         if (destinationPath.StartsWith(Path.GetFullPath(outDir), StringComparison.OrdinalIgnoreCase))
                         {
-                            if (string.IsNullOrEmpty(entry.Name) || entry.FullName.EndsWith("/")) 
+                            if (string.IsNullOrEmpty(entry.Name) || entry.FullName.EndsWith('/')) 
                             {
                                 Directory.CreateDirectory(destinationPath);
                             }

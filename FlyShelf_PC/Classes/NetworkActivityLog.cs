@@ -2,12 +2,13 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Windows;
 using System.Windows.Media;
 
 namespace FlyShelf.Classes
 {
-    public class NetworkLogEntry
+    public sealed class NetworkLogEntry
     {
         public DateTime Timestamp { get; set; }
         public string Category { get; set; } = "";
@@ -76,7 +77,7 @@ namespace FlyShelf.Classes
         private static bool IsNetworkCategory(string category)
         {
             foreach (var cat in NET_CATEGORIES)
-                if (category.Contains(cat)) return true;
+                if (category.Contains(cat, StringComparison.Ordinal)) return true;
             return false;
         }
 
@@ -94,11 +95,11 @@ namespace FlyShelf.Classes
                 ColorHex = color ?? GetColorForCategory(category)
             };
 
-            // Update counters
-            if (category.Contains("HTTP")) HttpRequestCount++;
-            if (category.Contains("DOWNLOAD")) DownloadCount++;
-            if (category.Contains("ERROR") || category.Contains("FAULT")) ErrorCount++;
-            LastActivity = $"{category}: {(message.Length > 60 ? message.Substring(0, 60) + "..." : message)}";
+            // Update counters (thread-safe)
+            if (category.Contains("HTTP", StringComparison.Ordinal)) { Interlocked.Increment(ref _httpCount); OnPropertyChanged(nameof(HttpRequestCount)); }
+            if (category.Contains("DOWNLOAD", StringComparison.Ordinal)) { Interlocked.Increment(ref _downloadCount); OnPropertyChanged(nameof(DownloadCount)); }
+            if (category.Contains("ERROR", StringComparison.Ordinal) || category.Contains("FAULT", StringComparison.Ordinal)) { Interlocked.Increment(ref _errorCount); OnPropertyChanged(nameof(ErrorCount)); }
+            LastActivity = $"{category}: {(message.Length > 60 ? string.Concat(message.AsSpan(0, 60), "...") : message)}";
 
             try
             {
@@ -114,14 +115,14 @@ namespace FlyShelf.Classes
 
         private static string GetColorForCategory(string cat)
         {
-            if (cat.Contains("ERROR") || cat.Contains("FAULT")) return "#EF4444";
-            if (cat.Contains("HTTP")) return "#60A5FA";
-            if (cat.Contains("DOWNLOAD")) return "#34D399";
-            if (cat.Contains("CLOUDFLARE") || cat.Contains("CF_")) return "#F59E0B";
-            if (cat.Contains("FIREBASE")) return "#F97316";
-            if (cat.Contains("P2P")) return "#06B6D4";
-            if (cat.Contains("BIND") || cat.Contains("SERVER") || cat.Contains("LISTENER")) return "#8B5CF6";
-            if (cat.Contains("HTML")) return "#A78BFA";
+            if (cat.Contains("ERROR", StringComparison.Ordinal) || cat.Contains("FAULT", StringComparison.Ordinal)) return "#EF4444";
+            if (cat.Contains("HTTP", StringComparison.Ordinal)) return "#60A5FA";
+            if (cat.Contains("DOWNLOAD", StringComparison.Ordinal)) return "#34D399";
+            if (cat.Contains("CLOUDFLARE", StringComparison.Ordinal) || cat.Contains("CF_", StringComparison.Ordinal)) return "#F59E0B";
+            if (cat.Contains("FIREBASE", StringComparison.Ordinal)) return "#F97316";
+            if (cat.Contains("P2P", StringComparison.Ordinal)) return "#06B6D4";
+            if (cat.Contains("BIND", StringComparison.Ordinal) || cat.Contains("SERVER", StringComparison.Ordinal) || cat.Contains("LISTENER", StringComparison.Ordinal)) return "#8B5CF6";
+            if (cat.Contains("HTML", StringComparison.Ordinal)) return "#A78BFA";
             return "#9CA3AF";
         }
 

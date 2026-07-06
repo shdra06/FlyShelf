@@ -91,7 +91,7 @@ namespace FlyShelf
             if (!string.IsNullOrEmpty(settings.AiApiKey))
             {
                 string key = settings.AiApiKey;
-                AiApiKeyBox.Text = key.Length > 8 ? key.Substring(0, 4) + "..." + key.Substring(key.Length - 4) : "••••••••";
+                AiApiKeyBox.Text = key.Length > 8 ? string.Concat(key.AsSpan(0, 4), "...", key.AsSpan(key.Length - 4)) : "••••••••";
                 AiApiKeyBox.Tag = "masked"; // Track that it's showing masked value
                 AiApiKeyStatus.Text = "✅ API key configured";
                 AiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
@@ -175,7 +175,7 @@ namespace FlyShelf
 
             if (!string.IsNullOrEmpty(newKey))
             {
-                AiApiKeyBox.Text = newKey.Length > 8 ? newKey.Substring(0, 4) + "..." + newKey.Substring(newKey.Length - 4) : "••••••••";
+                AiApiKeyBox.Text = newKey.Length > 8 ? string.Concat(newKey.AsSpan(0, 4), "...", newKey.AsSpan(newKey.Length - 4)) : "••••••••";
                 AiApiKeyBox.Tag = "masked";
                 AiApiKeyStatus.Text = "✅ API key saved and encrypted!";
                 AiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));

@@ -203,7 +203,7 @@ namespace FlyShelf.Classes
                 // Construct arguments preserving original ones, and ensure --no-sparse-relaunch is present
                 var newArgsList = args.Where(arg => !arg.Equals("--no-sparse-relaunch", StringComparison.OrdinalIgnoreCase)).ToList();
                 newArgsList.Add("--no-sparse-relaunch");
-                string combinedArgs = string.Join(" ", newArgsList.Select(a => a.Contains(" ") ? $"\"{a}\"" : a));
+                string combinedArgs = string.Join(" ", newArgsList.Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
                 
                 var startInfo = new ProcessStartInfo
                 {

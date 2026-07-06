@@ -7,6 +7,7 @@
 using FlyShelf.Classes;
 using FlyShelf.ViewModels;
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -79,6 +80,15 @@ namespace FlyShelf.Windows
                 };
                 _networkRefreshTimer.Start();
 
+                // H-08: Stop timer when window is hidden to avoid wasted work
+                this.IsVisibleChanged += (s, e) =>
+                {
+                    if (IsVisible)
+                        _networkRefreshTimer?.Start();
+                    else
+                        _networkRefreshTimer?.Stop();
+                };
+
                 Logger.LogAction("NETWORK_HUB", "Networking Command Center initialized");
             }
             catch (Exception ex)
@@ -109,6 +119,21 @@ namespace FlyShelf.Windows
             if (tag == "History" && NetworkTabHistory != null) NetworkTabHistory.IsChecked = true;
             if (tag == "Nearby" && NetworkTabNearby != null) NetworkTabNearby.IsChecked = true;
 
+            // ─── Fast peer status refresh: 5s timer when Devices tab is active ───
+            if (tag == "Devices")
+            {
+                if (_peerFastRefreshTimer == null)
+                {
+                    _peerFastRefreshTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+                    _peerFastRefreshTimer.Tick += (s, ev) => RefreshPairedDevicesList();
+                }
+                _peerFastRefreshTimer.Start();
+            }
+            else
+            {
+                _peerFastRefreshTimer?.Stop();
+            }
+
             // Refresh data when switching to a tab
             if (tag == "Queue") RefreshNetworkQueueDisplay();
             if (tag == "History") RefreshHistoryDisplay();
@@ -128,12 +153,7 @@ namespace FlyShelf.Windows
         {
             try
             {
-                // Update status indicators
-                if (NetStatusLanIp != null)
-                {
-                    string lanUrl = CloudDiscoveryManager.CachedLocalUrl ?? "";
-                    NetStatusLanIp.Text = !string.IsNullOrEmpty(lanUrl) ? lanUrl : "Not available";
-                }
+                // Update peer count badge in header
                 if (NetStatusPeerCount != null)
                 {
                     int aliveCount = PeerManager.Instance?.AliveCount ?? 0;
@@ -179,7 +199,9 @@ namespace FlyShelf.Windows
                 var manager = LanTransferManager.Instance;
                 if (manager != null)
                 {
-                    var activeSessions = manager.ActiveTransfers.Where(s => s.IsActive).ToArray();
+                    // M-09: Snapshot ObservableCollection before LINQ to prevent concurrent modification
+                    var transfersSnapshot = manager.ActiveTransfers.ToArray();
+                    var activeSessions = transfersSnapshot.Where(s => s.IsActive).ToArray();
                     double totalUpload = activeSessions.Where(s => s.Direction == TransferDirection.Send).Sum(s => s.SpeedBps);
                     double totalDownload = activeSessions.Where(s => s.Direction == TransferDirection.Receive).Sum(s => s.SpeedBps);
                     int activeCount = activeSessions.Length;
@@ -188,7 +210,7 @@ namespace FlyShelf.Windows
                     DashboardDownloadSpeed.Text = LanTransferSession.FormatSpeed(totalDownload);
                     DashboardActiveCount.Text = $"{activeCount} active";
                     DashboardActiveDot.Visibility = activeCount > 0 ? Visibility.Visible : Visibility.Collapsed;
-                    TransferSpeedDashboard.Visibility = (activeCount > 0 || manager.ActiveTransfers.Count > 0) ? Visibility.Visible : Visibility.Collapsed;
+                    TransferSpeedDashboard.Visibility = (activeCount > 0 || transfersSnapshot.Length > 0) ? Visibility.Visible : Visibility.Collapsed;
                 }
             }
             catch (Exception ex)
@@ -461,7 +483,7 @@ namespace FlyShelf.Windows
             RefreshHistoryDisplay();
         }
 
-        private void ExportHistory_Click(object sender, RoutedEventArgs e)
+        private async void ExportHistory_Click(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -476,7 +498,7 @@ namespace FlyShelf.Windows
                     };
                     if (dialog.ShowDialog() == true)
                     {
-                        File.WriteAllText(dialog.FileName, csv);
+                        await File.WriteAllTextAsync(dialog.FileName, csv);
                         ToastWindow.ShowToast($"📊 History exported to {Path.GetFileName(dialog.FileName)}");
                     }
                 }
@@ -567,14 +589,14 @@ namespace FlyShelf.Windows
 
                 // Try to connect to the device at the given IP
                 int port = NetworkSyncServer.Instance?.CurrentPort ?? 8080;
-                string url = ip.Contains(":") ? $"http://{ip}" : $"http://{ip}:{port}";
+                string url = ip.Contains(':') ? $"http://{ip}" : $"http://{ip}:{port}";
 
                 ToastWindow.ShowToast($"🔗 Connecting to {ip}...");
 
                 // Use PeerManager to add manual peer and attempt handshake
                 if (PeerManager.Instance != null)
                 {
-                    string deviceId = $"manual_{ip.Replace(".", "_").Replace(":", "_")}";
+                    string deviceId = $"manual_{ip.Replace('.', '_').Replace(':', '_')}";
                     bool success = await PeerManager.Instance.AddManualPeer(deviceId, ip, url);
                     if (success)
                     {
@@ -705,7 +727,7 @@ namespace FlyShelf.Windows
                 // Don't auto-stage if it's a tiny text file or temp file
                 var fi = new FileInfo(filePath);
                 if (fi.Length < 1024) return; // Skip files < 1KB
-                if (filePath.Contains("FlyShelf_Chunks") || filePath.Contains("FS_Upload_")) return;
+                if (filePath.Contains("FlyShelf_Chunks", StringComparison.Ordinal) || filePath.Contains("FS_Upload_", StringComparison.Ordinal)) return;
 
                 Dispatcher.InvokeAsync(() =>
                 {

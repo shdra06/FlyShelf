@@ -143,7 +143,7 @@ namespace FlyShelf.Classes
             }
 
             // Ensure trigger starts with /
-            if (!shortcut.Trigger.StartsWith("/"))
+            if (!shortcut.Trigger.StartsWith('/'))
                 shortcut.Trigger = "/" + shortcut.Trigger;
 
             // Check for duplicate trigger
@@ -178,7 +178,7 @@ namespace FlyShelf.Classes
                 return null;
 
             string trimmed = clipboardText.Trim();
-            if (!trimmed.StartsWith("/"))
+            if (!trimmed.StartsWith('/'))
                 return null;
 
             return Shortcuts.FirstOrDefault(s =>

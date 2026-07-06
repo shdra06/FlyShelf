@@ -1306,7 +1306,7 @@ namespace FlyShelf
             stack.Children.Add(connectBtn);
 
             dlg.Content = stack;
-            dlg.ShowDialog();
+            WindowHelper.ShowDialogInForeground(dlg, this);
             return result;
         }
     }

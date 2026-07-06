@@ -1,8 +1,11 @@
-// Settings Tab Styles — Extracted from inline styles
+// Settings Tab Styles — Theme-aware factory
 import { StyleSheet, Platform } from 'react-native';
-import { colors, font, radius, space, shadows, component } from './theme';
+import { colors as defaultColors, font, radius, space, shadows as defaultShadows, component } from './theme';
 
-export default StyleSheet.create({
+type ThemeColors = Record<string, any>;
+type ThemeShadows = Record<string, any>;
+
+export const createSettingsStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.create({
   // ── Layout ──
   container: { flex: 1, backgroundColor: 'transparent' },
   scrollContent: { paddingBottom: component.tabBarHeight + 20 },
@@ -231,3 +234,6 @@ export default StyleSheet.create({
     marginVertical: space.lg,
   },
 });
+
+/** @deprecated Use createSettingsStyles(colors, shadows) for theme support */
+export default createSettingsStyles(defaultColors, defaultShadows);

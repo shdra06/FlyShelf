@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.IO.Compression;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
@@ -202,7 +203,9 @@ namespace FlyShelf.ViewModels
                 {
                     string contentKey = RawContent ?? FileName ?? FilePath ?? "";
                     string hashInput = contentKey.Length > 1000 ? contentKey.Substring(0, 1000) : contentKey;
-                    int stableHash = hashInput.GetHashCode(StringComparison.Ordinal);
+                    // [SECURITY FIX v2.1.0]: Use deterministic FNV-1a hash instead of
+                    // String.GetHashCode() which is randomized per-process in .NET 6+ (M-14)
+                    int stableHash = FlyShelf.Classes.ClipboardHistoryManager.Fnv1aHash(hashInput);
                     _cachedId = $"{ItemType}_{DateCopied.Ticks}_{stableHash:X8}";
                 }
                 return _cachedId;
@@ -251,6 +254,7 @@ namespace FlyShelf.ViewModels
 
         private string _rawContent = string.Empty;
         private string _rawContentBackingFile = null; // For very large texts spilled to disk
+        private volatile bool _isLoadingSpilledContent; // Guard for async spill reload
 
         /// <summary>
         /// Full raw text content. No character limit — unlimited text is supported.
@@ -261,12 +265,36 @@ namespace FlyShelf.ViewModels
         {
             get
             {
-                // If content was spilled to disk, reload it on demand
+                // If content was spilled to disk, reload it asynchronously to prevent UI thread freeze.
+                // PERF: Previously did synchronous File.ReadAllText here, which blocked the UI thread
+                // when WPF evaluated bindings during scroll/virtualization.
                 if (_rawContent == null && !string.IsNullOrEmpty(_rawContentBackingFile)
                     && System.IO.File.Exists(_rawContentBackingFile))
                 {
-                    try { _rawContent = System.IO.File.ReadAllText(_rawContentBackingFile); }
-                    catch { _rawContent = string.Empty; }
+                    if (!_isLoadingSpilledContent)
+                    {
+                        _isLoadingSpilledContent = true;
+                        string backingFile = _rawContentBackingFile;
+                        System.Threading.Tasks.Task.Run(() =>
+                        {
+                            try
+                            {
+                                string loaded = System.IO.File.ReadAllText(backingFile);
+                                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                {
+                                    _rawContent = loaded;
+                                    _isLoadingSpilledContent = false;
+                                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));
+                                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLongText)));
+                                });
+                            }
+                            catch
+                            {
+                                _isLoadingSpilledContent = false;
+                            }
+                        });
+                    }
+                    return string.Empty; // Return empty immediately while loading
                 }
                 return _rawContent ?? string.Empty;
             }
@@ -281,13 +309,19 @@ namespace FlyShelf.ViewModels
                 {
                     try
                     {
+                        // [FIX H-11]: Delete previous spill file before creating a new one
+                        if (!string.IsNullOrEmpty(_rawContentBackingFile)) try { File.Delete(_rawContentBackingFile); } catch { }
+
                         string spillDir = System.IO.Path.Combine(
                             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                             "FlyShelf", "LargeTextSpill");
                         System.IO.Directory.CreateDirectory(spillDir);
                         _rawContentBackingFile = System.IO.Path.Combine(spillDir,
-                            $"spill_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString().Substring(0, 6)}.txt");
-                        System.IO.File.WriteAllText(_rawContentBackingFile, newValue);
+                            $"spill_{DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture)}_{Guid.NewGuid().ToString().Substring(0, 6)}.txt");
+                        _ = System.Threading.Tasks.Task.Run(() => System.IO.File.WriteAllText(_rawContentBackingFile, newValue));
+
+                        // [FIX M-26]: Release the in-memory copy now that it's persisted to disk
+                        _rawContent = null;
                     }
                     catch { /* If spill fails, keep in memory anyway */ }
                 }
@@ -390,7 +424,7 @@ namespace FlyShelf.ViewModels
                 if (!IsMarkdownPreview) return string.Empty;
                 string content = !string.IsNullOrEmpty(RawContent) ? RawContent : FileName;
                 // Limit preview to 3000 chars for rendering performance in the card
-                return content.Length > 3000 ? content.Substring(0, 3000) + "\n..." : content;
+                return content.Length > 3000 ? string.Concat(content.AsSpan(0, 3000), "\n...") : content;
             }
         }
         public bool IsJsonPreview => 
@@ -554,7 +588,7 @@ namespace FlyShelf.ViewModels
 
         // --- COLOR DETECTION PROPERTIES ---
         private string _detectedColor = "";
-        public string DetectedColor { get => _detectedColor; set { if(_detectedColor!=value){_detectedColor=value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DetectedColor))); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasDetectedColor))); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DetectedColorBrush)));} } }
+        public string DetectedColor { get => _detectedColor; set { if(_detectedColor!=value){_detectedColor=value; _cachedDetectedColorBrush = null; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DetectedColor))); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasDetectedColor))); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DetectedColorBrush)));} } }
         public bool HasDetectedColor => !string.IsNullOrEmpty(_detectedColor);
 
         private byte _colorR, _colorG, _colorB;
@@ -562,8 +596,12 @@ namespace FlyShelf.ViewModels
         [JsonIgnore] public byte ColorG => _colorG;
         [JsonIgnore] public byte ColorB => _colorB;
 
+        // PERF: Cache the brush to avoid allocating a new SolidColorBrush on every binding evaluation during scroll
+        // Uses the pre-frozen system brush — no need for a static constructor
+        private static readonly System.Windows.Media.SolidColorBrush _transparentBrush = System.Windows.Media.Brushes.Transparent;
+        private System.Windows.Media.SolidColorBrush _cachedDetectedColorBrush;
         [JsonIgnore]
-        public System.Windows.Media.SolidColorBrush DetectedColorBrush => HasDetectedColor ? FlyShelf.Classes.ColorHelper.ToBrush(_detectedColor) : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Transparent);        // --- PASSWORD MANAGEMENT PROPERTIES ---
+        public System.Windows.Media.SolidColorBrush DetectedColorBrush { get { if (!HasDetectedColor) return _transparentBrush; return _cachedDetectedColorBrush ??= FlyShelf.Classes.ColorHelper.ToBrush(_detectedColor); } }        // --- PASSWORD MANAGEMENT PROPERTIES ---
         private bool _isPassword;
         public bool IsPassword
         {
@@ -590,7 +628,7 @@ namespace FlyShelf.ViewModels
                 string trimmed = RawContent.Trim();
                 if (trimmed.Length == 0) return false;
                 
-                int words = trimmed.Split(new[] { ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+                int words = trimmed.Split(' ', '\r', '\n', '\t').Length;
                 return words >= 1 && words <= 2;
             }
         }
@@ -643,6 +681,13 @@ namespace FlyShelf.ViewModels
             SourceAppIcon = null;
             _rawContent = string.Empty;
             _zippedArchivePath = string.Empty;
+
+            // [SECURITY FIX v2.1.0]: Clean up spilled large-text backing file on dispose (H-04)
+            if (!string.IsNullOrEmpty(_rawContentBackingFile))
+            {
+                try { System.IO.File.Delete(_rawContentBackingFile); } catch { }
+                _rawContentBackingFile = null;
+            }
         }
         
     }

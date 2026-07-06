@@ -171,7 +171,7 @@ namespace FlyShelf.Classes
         {
             if (string.IsNullOrEmpty(value)) return value;
             // If it already looks like a URL, it's not encrypted
-            if (value.StartsWith("http://") || value.StartsWith("https://")) return value;
+            if (value.StartsWith("http://", StringComparison.Ordinal) || value.StartsWith("https://", StringComparison.Ordinal)) return value;
             try
             {
                 string? decrypted = Decrypt(value);

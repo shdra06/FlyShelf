@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
@@ -87,11 +88,11 @@ namespace FlyShelf.Windows
             if (_item == null) return;
 
             // Markdown clipboard items may have RawContent but no FilePath — allow them through
-            if (string.IsNullOrEmpty(_item.FilePath) && _item.Extension != "MARKDOWN" && _item.ItemType != FlyShelf.ViewModels.ClipboardItemType.Code && _item.Extension != "JSON") return;
+            if (string.IsNullOrEmpty(_item.FilePath) && _item.Extension != "MARKDOWN" && _item.Extension != ".MD" && _item.ItemType != FlyShelf.ViewModels.ClipboardItemType.Code && _item.Extension != "JSON") return;
 
             LoadingProgress.Visibility = Visibility.Visible;
 
-            string ext = Path.GetExtension(_item.FilePath ?? "").ToLower();
+            string ext = Path.GetExtension(_item.FilePath ?? "").ToLower(CultureInfo.InvariantCulture);
 
             try
             {
@@ -104,6 +105,12 @@ namespace FlyShelf.Windows
                     {
                         try
                         {
+                            var _fi = new System.IO.FileInfo(_item.FilePath);
+                            if (_fi.Length > 100_000_000)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[QUICKLOOK] Skipped — file too large ({_fi.Length} bytes): {_item.FilePath}");
+                                return null;
+                            }
                             byte[] imgBytes = File.ReadAllBytes(_item.FilePath);
                             BitmapImage bmp = new BitmapImage();
                             using (var imgStream = new System.IO.MemoryStream(imgBytes))
@@ -222,7 +229,7 @@ namespace FlyShelf.Windows
                     this.Height = SystemParameters.WorkArea.Height * 0.8;
                     _isImageLoaded = true; // allow dragging natively
                 }
-                else if (ext == ".md" || _item.Extension == "MARKDOWN")
+                else if (ext == ".md" || _item.Extension == "MARKDOWN" || _item.Extension == ".MD")
                 {
                     // Render Markdown beautifully using WebView2 + MarkdownTemplate (same engine as PDF export)
                     try
@@ -249,7 +256,7 @@ namespace FlyShelf.Windows
                             // Initialize WebView2 with isolated user data folder
                             string userDataFolder = System.IO.Path.Combine(
                                 System.IO.Path.GetTempPath(), 
-                                "FlyShelf_QuickLook_" + System.Diagnostics.Process.GetCurrentProcess().Id);
+                                "FlyShelf_QuickLook_" + Environment.ProcessId);
                             var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, userDataFolder);
                             await MarkdownWebView.EnsureCoreWebView2Async(env);
                             
@@ -275,10 +282,13 @@ namespace FlyShelf.Windows
                             TextPreview.Text = "[Empty Markdown]";
                         }
                     }
-                    catch
+                    catch (Exception mdEx)
                     {
                         // Fallback to raw text if WebView2 rendering fails
+                        System.Diagnostics.Debug.WriteLine($"[QUICKLOOK] Markdown WebView2 failed: {mdEx.Message}");
+                        FlyShelf.Classes.Logger.LogAction("QUICKLOOK", $"Markdown render error: {mdEx.Message}");
                         TextPreviewScroll.Visibility = Visibility.Visible;
+                        MarkdownWebView.Visibility = Visibility.Collapsed;
                         TextPreview.Text = _item.RawContent ?? "[Failed to render Markdown]";
                     }
 
@@ -298,6 +308,9 @@ namespace FlyShelf.Windows
                         });
                         if (!string.IsNullOrEmpty(svgContent))
                         {
+                            // Sanitize SVG: strip <script> tags and inline event handlers
+                            svgContent = System.Text.RegularExpressions.Regex.Replace(svgContent, @"<script[^>]*>[\s\S]*?</script>", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                            svgContent = System.Text.RegularExpressions.Regex.Replace(svgContent, @"\son\w+=""[^""]*""", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                             WebPreview.Visibility = Visibility.Visible;
                             string html = $"<!DOCTYPE html><html><body style='margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#1a1a2e'>{svgContent}</body></html>";
                             WebPreview.NavigateToString(html);
@@ -339,7 +352,7 @@ namespace FlyShelf.Windows
                         }
 
                         // Map extension to AvalonEdit highlighting name
-                        string highlightName = (ext?.TrimStart('.') ?? _item.Extension ?? "").ToLower() switch
+                        string highlightName = (ext?.TrimStart('.') ?? _item.Extension ?? "").ToLower(CultureInfo.InvariantCulture) switch
                         {
                             "cs" => "C#",
                             "c#" => "C#",
@@ -443,7 +456,7 @@ namespace FlyShelf.Windows
 
                     if (length >= 0)
                     {
-                        DocSize.Text = $"{_item.ItemType.ToString()} Document • {(length / 1024.0 / 1024.0):0.00} MB";
+                        DocSize.Text = $"{_item.ItemType} Document • {(length / 1024.0 / 1024.0):0.00} MB";
                     }
                     else
                     {
@@ -558,6 +571,12 @@ namespace FlyShelf.Windows
                     try
                     {
                         // Load the original file as bytes to avoid any file locking
+                        var _fi = new System.IO.FileInfo(filePath);
+                        if (_fi.Length > 100_000_000)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[QUICKLOOK] Skipped rotate — file too large ({_fi.Length} bytes): {filePath}");
+                            return null;
+                        }
                         byte[] fileBytes = File.ReadAllBytes(filePath);
                         BitmapImage original = new BitmapImage();
                         using (var ms = new System.IO.MemoryStream(fileBytes))
@@ -574,7 +593,7 @@ namespace FlyShelf.Windows
                         rotated.Freeze();
                         
                         // Encode and save back
-                        string ext = Path.GetExtension(filePath).ToLower();
+                        string ext = Path.GetExtension(filePath).ToLower(CultureInfo.InvariantCulture);
                         BitmapEncoder encoder;
                         if (ext == ".png") encoder = new PngBitmapEncoder();
                         else if (ext == ".bmp") encoder = new BmpBitmapEncoder();
@@ -588,6 +607,12 @@ namespace FlyShelf.Windows
                         }
                         
                         // Reload fresh from bytes
+                        var _fi2 = new System.IO.FileInfo(filePath);
+                        if (_fi2.Length > 100_000_000)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[QUICKLOOK] Skipped reload — file too large ({_fi2.Length} bytes): {filePath}");
+                            return null;
+                        }
                         byte[] freshBytes = File.ReadAllBytes(filePath);
                         BitmapImage freshBmp = new BitmapImage();
                         using (var ms2 = new System.IO.MemoryStream(freshBytes))
@@ -708,7 +733,7 @@ namespace FlyShelf.Windows
                     {
                         var dataObject = new DataObject();
                         // Allows dragging directly into WhatsApp, Discord, Photoshop natively!
-                        dataObject.SetData(DataFormats.FileDrop, new string[] { _item.FilePath });
+                        dataObject.SetData(DataFormats.FileDrop, new[] { _item.FilePath });
                         
                         DragDrop.DoDragDrop(this, dataObject, DragDropEffects.Copy);
                     }
@@ -1588,7 +1613,7 @@ namespace FlyShelf.Windows
 
             // Sync slider
             DoodleSizeSlider.Value = da.Width;
-            DoodleSizeLabel.Text = ((int)da.Width).ToString();
+            DoodleSizeLabel.Text = ((int)da.Width).ToString(CultureInfo.InvariantCulture);
 
             UpdateDoodleButtonStates();
 
@@ -1642,9 +1667,8 @@ namespace FlyShelf.Windows
             if (_doodleUndoStack.Count == 0) return;
 
             var stroke = _doodleUndoStack.Pop();
-            if (DoodleCanvas.Strokes.Contains(stroke))
+            if (DoodleCanvas.Strokes.Remove(stroke))
             {
-                DoodleCanvas.Strokes.Remove(stroke);
                 _doodleRedoStack.Push(stroke);
             }
             _hasUnsavedDoodle = DoodleCanvas.Strokes.Count > 0;
@@ -1684,7 +1708,7 @@ namespace FlyShelf.Windows
                 DoodleSaveBtn.IsEnabled = false;
 
                 string filePath = _item.FilePath;
-                string ext = Path.GetExtension(filePath).ToLower();
+                string ext = Path.GetExtension(filePath).ToLower(CultureInfo.InvariantCulture);
 
                 // Capture strokes on UI thread before going to background
                 var strokesCopy = new StrokeCollection(DoodleCanvas.Strokes);
@@ -1759,6 +1783,12 @@ namespace FlyShelf.Windows
                 {
                     try
                     {
+                        var _fi = new System.IO.FileInfo(filePath!);
+                        if (_fi.Length > 100_000_000)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[QUICKLOOK] Skipped reload — file too large ({_fi.Length} bytes): {filePath}");
+                            return null;
+                        }
                         byte[] bytes = File.ReadAllBytes(filePath);
                         var bmp = new BitmapImage();
                         using (var ms = new MemoryStream(bytes))
@@ -1854,7 +1884,7 @@ namespace FlyShelf.Windows
             int size = (int)e.NewValue;
             DoodleCanvas.DefaultDrawingAttributes.Width = size;
             DoodleCanvas.DefaultDrawingAttributes.Height = size;
-            if (DoodleSizeLabel != null) DoodleSizeLabel.Text = size.ToString();
+            if (DoodleSizeLabel != null) DoodleSizeLabel.Text = size.ToString(CultureInfo.InvariantCulture);
         }
 
         private void DoodleEraser_Click(object sender, MouseButtonEventArgs e)

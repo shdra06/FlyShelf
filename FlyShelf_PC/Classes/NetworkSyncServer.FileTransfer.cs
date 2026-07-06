@@ -3,6 +3,7 @@
 // Split from NetworkSyncServer.Advanced.cs for modularity
 // ---------------------------------------------------------------
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.IO;
@@ -81,7 +82,7 @@ namespace FlyShelf.Classes
             {
                 var fileInfo = new FileInfo(path);
                 long fileSize = fileInfo.Length;
-                string ext = Path.GetExtension(path).ToLower();
+                string ext = Path.GetExtension(path).ToLower(CultureInfo.InvariantCulture);
                 string safeFileName = Path.GetFileName(path);
                 string remoteIp = req.RemoteEndPoint?.Address?.ToString() ?? "";
 
@@ -464,7 +465,7 @@ namespace FlyShelf.Classes
                     bool isPath = false;
                     try
                     {
-                        if (_rxWinPath.IsMatch(possiblePath) || possiblePath.StartsWith("\\\\"))
+                        if (_rxWinPath.IsMatch(possiblePath) || possiblePath.StartsWith("\\\\", StringComparison.Ordinal))
                         {
                             isPath = true;
                         }
@@ -502,12 +503,12 @@ namespace FlyShelf.Classes
                         if (!string.IsNullOrEmpty(capturedType) && Enum.TryParse<ClipboardItemType>(capturedType, true, out var parsed))
                             clipType = parsed;
                         else
-                            clipType = capturedText.StartsWith("http") ? ClipboardItemType.Url : ClipboardItemType.Text;
+                            clipType = capturedText.StartsWith("http", StringComparison.Ordinal) ? ClipboardItemType.Url : ClipboardItemType.Text;
 
                         clip = new ClipboardItem
                         {
                             RawContent = capturedText,
-                            FileName = capturedText.Length > 5000 ? capturedText.Substring(0, 5000) + "..." : capturedText,
+                            FileName = capturedText.Length > 5000 ? string.Concat(capturedText.AsSpan(0, 5000), "...") : capturedText,
                             Extension = capturedTransport == "WebSocket" ? "WS" : "SYNC",
                             ItemType = clipType,
                             SourceDeviceName = capturedSource,
@@ -668,7 +669,7 @@ namespace FlyShelf.Classes
                     // Format: "bytes START-END/TOTAL"
                     var match = Regex.Match(rangeHeader, @"bytes (\d+)-(\d+)/(\d+)");
                     if (match.Success)
-                        writePosition = long.Parse(match.Groups[1].Value);
+                        writePosition = long.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
                 }
 
                 // SECURITY: Validate write position is within bounds

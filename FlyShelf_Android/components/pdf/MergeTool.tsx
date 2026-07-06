@@ -9,6 +9,7 @@ import s from '../../styles/pdfToolsStyles';
 import { mergePdfs } from '../../utils/pdfUtils';
 import { SelectedFile } from './types';
 import ResultView from './ResultView';
+import ProcessingOverlay from './ProcessingOverlay';
 
 const OUTPUT_DIR = `${FileSystem.documentDirectory}FlyShelf/PDFTools/`;
 
@@ -68,7 +69,7 @@ export default function MergeTool({ onBack, onPickFiles, saveRecent }: MergeTool
     return (
       <View style={s.modalOverlay}>
         <View style={s.modalHeader}>
-          <Pressable style={s.backBtn} onPress={onBack}><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
+          <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
           <Text style={s.modalTitle}>Success</Text>
         </View>
         <ResultView path={resultPath} onDone={onBack} />
@@ -78,12 +79,13 @@ export default function MergeTool({ onBack, onPickFiles, saveRecent }: MergeTool
 
   return (
     <View style={s.modalOverlay}>
+      <ProcessingOverlay visible={loading} text="Merging PDFs…" />
       <View style={s.modalHeader}>
-        <Pressable style={s.backBtn} onPress={onBack}><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
+        <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
         <Text style={s.modalTitle}>Merge PDFs</Text>
       </View>
       <ScrollView style={s.modalScroll} contentContainerStyle={s.pb100}>
-        <Pressable style={[s.btnPrimary, s.mb16]} onPress={handlePick}>
+        <Pressable style={[s.btnPrimary, s.mb16]} onPress={handlePick} accessibilityRole="button" accessibilityLabel="Add PDFs">
           <Text style={s.btnPrimaryText}>+ Add PDFs</Text>
         </Pressable>
         {files.map((f, i) => (
@@ -94,13 +96,13 @@ export default function MergeTool({ onBack, onPickFiles, saveRecent }: MergeTool
               {f.size ? <Text style={s.fileMeta}>{(f.size / 1024).toFixed(0)} KB</Text> : null}
             </View>
             <View style={s.fileActions}>
-              <Pressable style={s.btnSmall} onPress={() => moveFile(i, -1)} disabled={i === 0}>
+              <Pressable style={s.btnSmall} onPress={() => moveFile(i, -1)} disabled={i === 0} accessibilityRole="button" accessibilityLabel="Move up">
                 <Ionicons name="arrow-up" size={16} color={i === 0 ? colors.text.disabled : colors.text.secondary} />
               </Pressable>
-              <Pressable style={s.btnSmall} onPress={() => moveFile(i, 1)} disabled={i === files.length - 1}>
+              <Pressable style={s.btnSmall} onPress={() => moveFile(i, 1)} disabled={i === files.length - 1} accessibilityRole="button" accessibilityLabel="Move down">
                 <Ionicons name="arrow-down" size={16} color={i === files.length - 1 ? colors.text.disabled : colors.text.secondary} />
               </Pressable>
-              <Pressable style={s.btnSmall} onPress={() => removeFile(i)}>
+              <Pressable style={s.btnSmall} onPress={() => removeFile(i)} accessibilityRole="button" accessibilityLabel="Remove file">
                 <Ionicons name="trash-outline" size={16} color={colors.accent.error} />
               </Pressable>
             </View>
@@ -109,8 +111,8 @@ export default function MergeTool({ onBack, onPickFiles, saveRecent }: MergeTool
       </ScrollView>
       {files.length >= 2 && (
         <View style={s.modalActions}>
-          <Pressable style={s.btnPrimary} onPress={handleMerge} disabled={loading}>
-            <Text style={s.btnPrimaryText}>{loading ? 'Merging...' : `Merge ${files.length} PDFs`}</Text>
+          <Pressable style={s.btnPrimary} onPress={handleMerge} disabled={loading} accessibilityRole="button" accessibilityLabel="Merge PDFs">
+            <Text style={s.btnPrimaryText}>{`Merge ${files.length} PDFs`}</Text>
           </Pressable>
         </View>
       )}

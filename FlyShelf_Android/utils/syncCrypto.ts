@@ -10,7 +10,7 @@
  * so encrypted items are interoperable across platforms.
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getSecureItem } from './secureStorage';
 import { syncLog } from './debugLog';
 import { Platform } from 'react-native';
 import { base64ToUint8Array, uint8ArrayToBase64 } from './networkHelpers';
@@ -39,7 +39,7 @@ let _cachedPairingKey: string | null = null;
  * Cached for the lifetime of the pairing session.
  */
 async function getKey(): Promise<CryptoKey> {
-  const pairingKey = await AsyncStorage.getItem('pairingKey');
+  const pairingKey = await getSecureItem('pairingKey');
   if (!pairingKey) throw new Error('Cannot encrypt — no pairing key set');
 
   if (_cachedKey && _cachedPairingKey === pairingKey) return _cachedKey;
@@ -118,7 +118,7 @@ export async function encrypt(plaintext: string): Promise<string> {
  * Web Crypto expects: iv + ciphertextWithTag (tag appended to ciphertext)
  */
 export async function decrypt(base64Ciphertext: string): Promise<string | null> {
-  if (!base64Ciphertext) return base64Ciphertext;
+  if (!base64Ciphertext) return null;
 
   try {
     const key = await getKey();

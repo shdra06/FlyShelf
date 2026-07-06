@@ -1,9 +1,9 @@
-﻿{
-    "pc_version":  "3.6.0",
-    "pc_changelog":  "v3.6.0 â€” Stability \u0026 Store Update\n\nâ€¢ FIX: Drag-out ghost artifacts eliminated (4-layer cleanup)\nâ€¢ FIX: Self-contained runtime â€” no .NET install required\nâ€¢ NEW: Microsoft Store build with bundled runtime\nâ€¢ FIX: Improved drag preview cleanup on cancel/escape\nâ€¢ PERF: Safety timer for drag preview auto-cleanup\nâ€¢ UI: Research mode polish (coming soon)",
-    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v3.6.0/FlyShelf.exe",
+{
+    "pc_version":  "4.0.0",
+    "pc_changelog":  "v4.0.0 — Version 4 Release\n\n• Major version update\n• Performance and stability improvements\n• Enhanced user experience",
+    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v4.0.0/FlyShelf.exe",
     "pc_sha256":  "263f19e3137cdee9a37f758794f85905b124043f8990f0862d5b0db86fb5e8bb",
     "android_version":  "7.1.0",
-    "android_changelog":  "v7.1.0 â€” Version Sync\n\nâ€¢ Bumped version to sync with Desktop client release.",
+    "android_changelog":  "v7.1.0 — Version Sync\n\n• Bumped version to sync with Desktop client release.",
     "android_download":  "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
 }

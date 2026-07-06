@@ -112,3 +112,9 @@ firebase-database-rules.json
 
 # ─── Security: Android Environment Secrets ────────────────────
 FlyShelf_Android/.env
+
+# ─── YouTube Shorts (large video/ML assets — NEVER push) ──────
+youtube_shorts/
+
+# ─── AI Mind Map Cache (local dev only) ────────────────────────
+.mindmap/

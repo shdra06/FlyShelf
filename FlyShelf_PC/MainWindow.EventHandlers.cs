@@ -19,6 +19,8 @@ namespace FlyShelf
     {
         internal static bool _isInternalDragSource = false;
         private System.Windows.Threading.DispatcherTimer? _searchDebounceTimer;
+        private System.Windows.Threading.DispatcherTimer? _notesSearchDebounce;
+        private System.Windows.Threading.DispatcherTimer? _todoSearchDebounce;
         private Action<bool>? _incognitoStateChangedHandler; // TODO: Unsubscribe in OnClosed()
 
         private void Window_PreviewDrop(object sender, DragEventArgs e)
@@ -465,7 +467,6 @@ namespace FlyShelf
             if (picker.Top < 0) picker.Top = this.Top + this.Height + 8;
             picker.Closed += (s, args) => { if (_emojiPickerInstance == picker) _emojiPickerInstance = null; };
             _emojiPickerInstance = picker;
-            picker.Topmost = true;
             picker.Show();
             picker.Activate();
             picker.Focus();
@@ -588,12 +589,12 @@ namespace FlyShelf
                 }
                 finally
                 {
-                    IsDeletingItem = false;
-                    _isSuppressingSizeSync = false;
                     if (_isEdgeLocked && this.ActualHeight > 0)
                     {
                         _lockedBottomEdge = this.Top + this.ActualHeight + 20;
                     }
+                    IsDeletingItem = false;
+                    _isSuppressingSizeSync = false;
                 }
 
                 if (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text)))
@@ -636,12 +637,12 @@ namespace FlyShelf
                 }
                 finally
                 {
-                    IsDeletingItem = false;
-                    _isSuppressingSizeSync = false;
                     if (_isEdgeLocked && this.ActualHeight > 0)
                     {
                         _lockedBottomEdge = this.Top + this.ActualHeight + 20;
                     }
+                    IsDeletingItem = false;
+                    _isSuppressingSizeSync = false;
                 }
 
                 if (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text)))
@@ -671,7 +672,7 @@ namespace FlyShelf
                         var container = tuple.Item1;
                         container.BeginAnimation(ListViewItem.HeightProperty, null);
                         container.BeginAnimation(ListViewItem.OpacityProperty, null);
-                        container.Height = double.NaN;
+                        container.Height = 0;
                         container.Opacity = 1.0;
                         container.IsHitTestVisible = true;
                     }
@@ -686,12 +687,12 @@ namespace FlyShelf
                     }
                     finally
                     {
-                        IsDeletingItem = false;
-                        _isSuppressingSizeSync = false;
                         if (_isEdgeLocked && this.ActualHeight > 0)
                         {
                             _lockedBottomEdge = this.Top + this.ActualHeight + 20;
                         }
+                        IsDeletingItem = false;
+                        _isSuppressingSizeSync = false;
                     }
 
                     // Reapply filters if needed
@@ -762,7 +763,7 @@ namespace FlyShelf
                     string itemKey = $"idx{i}";
                     if (container.DataContext is ClipboardItem ci)
                     {
-                        string preview = ci.RawContent?.Length > 20 ? ci.RawContent.Substring(0, 20) : (ci.RawContent ?? ci.ItemType.ToString());
+                        string preview = ci.RawContent?.Length > 20 ? ci.RawContent[..20] : (ci.RawContent ?? ci.ItemType.ToString());
                         itemKey = $"idx{i}:\"{preview}\"";
                     }
                     posMap[itemKey] = pos.Y;
@@ -790,7 +791,7 @@ namespace FlyShelf
                     string itemKey = $"idx{i}";
                     if (container.DataContext is ClipboardItem ci)
                     {
-                        string preview = ci.RawContent?.Length > 20 ? ci.RawContent.Substring(0, 20) : (ci.RawContent ?? ci.ItemType.ToString());
+                        string preview = ci.RawContent?.Length > 20 ? ci.RawContent[..20] : (ci.RawContent ?? ci.ItemType.ToString());
                         itemKey = $"idx{i}:\"{preview}\"";
                     }
                     map[itemKey] = pos.Y;
@@ -908,6 +909,12 @@ namespace FlyShelf
                     // Rotate the file on a background thread to keep UI responsive
                     await System.Threading.Tasks.Task.Run(() =>
                     {
+                        var _fi = new System.IO.FileInfo(filePath);
+                        if (_fi.Length > 100_000_000)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[ROTATE] Skipped — file too large ({_fi.Length} bytes): {filePath}");
+                            return;
+                        }
                         byte[] fileBytes = System.IO.File.ReadAllBytes(filePath);
                         // PERF: BitmapImage with CacheOption.OnLoad + Freeze() is thread-safe
                         // — no need to marshal to UI thread via Dispatcher.Invoke
@@ -924,7 +931,7 @@ namespace FlyShelf
                         var rotated = new System.Windows.Media.Imaging.TransformedBitmap(original, new System.Windows.Media.RotateTransform(90));
                         rotated.Freeze();
 
-                        string ext = System.IO.Path.GetExtension(filePath).ToLower();
+                        string ext = System.IO.Path.GetExtension(filePath).ToLower(System.Globalization.CultureInfo.InvariantCulture);
                         System.Windows.Media.Imaging.BitmapEncoder encoder;
                         if (ext == ".png") encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
                         else if (ext == ".bmp") encoder = new System.Windows.Media.Imaging.BmpBitmapEncoder();
@@ -942,7 +949,13 @@ namespace FlyShelf
                     await System.Threading.Tasks.Task.Delay(320);
 
                     // Reload the icon from the freshly rotated file
-                    byte[] freshBytes = System.IO.File.ReadAllBytes(filePath);
+                    var _fi2 = new System.IO.FileInfo(filePath);
+                    if (_fi2.Length > 100_000_000)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[ROTATE] Skipped reload — file too large ({_fi2.Length} bytes): {filePath}");
+                        return;
+                    }
+                    byte[] freshBytes = await System.Threading.Tasks.Task.Run(() => System.IO.File.ReadAllBytes(filePath));
                     var freshBitmap = new System.Windows.Media.Imaging.BitmapImage();
                     using (var ms = new System.IO.MemoryStream(freshBytes))
                     {

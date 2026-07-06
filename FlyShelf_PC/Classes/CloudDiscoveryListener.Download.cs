@@ -13,6 +13,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Globalization;
 using FlyShelf.ViewModels;
 
 namespace FlyShelf.Classes
@@ -115,7 +116,7 @@ namespace FlyShelf.Classes
                 }
 
                 // AUTHENTICATION: /download requires pairing key or PIN
-                HttpResponseMessage response = null;
+                HttpResponseMessage? response = null;
                 int maxRetries = 2;
                 int[] retryDelays = { 500, 1500 };
 
@@ -126,14 +127,14 @@ namespace FlyShelf.Classes
                 var urlsToTry = new List<string> { cloudItem.Raw };
                 
                 // If primary is Cloudflare, add DownloadUrl and SenderUrl-based alternatives
-                if (cloudItem.Raw.Contains(".trycloudflare.com"))
+                if (cloudItem.Raw.Contains(".trycloudflare.com", StringComparison.Ordinal))
                 {
                     try
                     {
                         string senderCurrentUrl = await CloudDiscoveryManager.GetSenderCurrentUrl(cloudItem.SourceDeviceId);
                         if (string.IsNullOrEmpty(senderCurrentUrl))
                             senderCurrentUrl = await CloudDiscoveryManager.FindSenderUrlByName(cloudItem.SourceDeviceName);
-                        if (!string.IsNullOrEmpty(senderCurrentUrl) && senderCurrentUrl.Contains(".trycloudflare.com"))
+                        if (!string.IsNullOrEmpty(senderCurrentUrl) && senderCurrentUrl.Contains(".trycloudflare.com", StringComparison.Ordinal))
                         {
                             var pathMatch = System.Text.RegularExpressions.Regex.Match(cloudItem.Raw, @"(/download\?path=.+)$");
                             if (pathMatch.Success)
@@ -149,10 +150,10 @@ namespace FlyShelf.Classes
                     }
                     catch (Exception ex) { Logger.LogAction("FIREBASE SSE", $"Sender URL lookup failed: {ex.Message}"); }
 
-                    if (!string.IsNullOrEmpty(cloudItem.DownloadUrl) && cloudItem.DownloadUrl.StartsWith("http") && cloudItem.DownloadUrl != cloudItem.Raw)
+                    if (!string.IsNullOrEmpty(cloudItem.DownloadUrl) && cloudItem.DownloadUrl.StartsWith("http", StringComparison.Ordinal) && cloudItem.DownloadUrl != cloudItem.Raw)
                         urlsToTry.Add(cloudItem.DownloadUrl);
                     
-                    if (!string.IsNullOrEmpty(cloudItem.SenderUrl) && cloudItem.SenderUrl.Contains(".trycloudflare.com") && !cloudItem.Raw.Contains(cloudItem.SenderUrl))
+                    if (!string.IsNullOrEmpty(cloudItem.SenderUrl) && cloudItem.SenderUrl.Contains(".trycloudflare.com", StringComparison.Ordinal) && !cloudItem.Raw.Contains(cloudItem.SenderUrl, StringComparison.Ordinal))
                     {
                         var pathMatch = System.Text.RegularExpressions.Regex.Match(cloudItem.Raw, @"/download\?path=(.+)$");
                         if (pathMatch.Success)
@@ -165,14 +166,14 @@ namespace FlyShelf.Classes
                         string lanUrl = await CloudDiscoveryManager.FindSenderLanUrl(cloudItem.SourceDeviceName);
                         if (!string.IsNullOrEmpty(lanUrl))
                         {
-                            var parts = lanUrl.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                            var parts = lanUrl.Split(',', StringSplitOptions.RemoveEmptyEntries);
                             var lanPathMatch = System.Text.RegularExpressions.Regex.Match(cloudItem.Raw, @"(/download\?path=.+)$");
                             if (lanPathMatch.Success)
                             {
                                 foreach (var part in parts)
                                 {
                                     var trimmedPart = part.Trim();
-                                    if (trimmedPart.StartsWith("http"))
+                                    if (trimmedPart.StartsWith("http", StringComparison.Ordinal))
                                     {
                                         string lanDownloadUrl = trimmedPart.TrimEnd('/') + lanPathMatch.Groups[1].Value;
                                         urlsToTry.Add(lanDownloadUrl);
@@ -187,7 +188,7 @@ namespace FlyShelf.Classes
 
                 urlsToTry = urlsToTry.Distinct().ToList();
 
-                string successUrl = null;
+                string? successUrl = null;
                 foreach (var tryUrl in urlsToTry)
                 {
                     bool succeeded = false;
@@ -230,8 +231,8 @@ namespace FlyShelf.Classes
                             string errMsg = retryEx.Message;
                             Logger.LogAction("FIREBASE SSE", $"Download attempt {attempt + 1} error: {errMsg}");
 
-                            bool isDnsFailure = errMsg.Contains("No such host") || errMsg.Contains("name or address could not be resolved");
-                            bool isConnectionRefused = errMsg.Contains("actively refused") || errMsg.Contains("Connection refused");
+                            bool isDnsFailure = errMsg.Contains("No such host", StringComparison.Ordinal) || errMsg.Contains("name or address could not be resolved", StringComparison.Ordinal);
+                            bool isConnectionRefused = errMsg.Contains("actively refused", StringComparison.Ordinal) || errMsg.Contains("Connection refused", StringComparison.Ordinal);
 
                             if (isDnsFailure || isConnectionRefused)
                             {
@@ -261,13 +262,13 @@ namespace FlyShelf.Classes
                 if (response == null || !response.IsSuccessStatusCode)
                 {
                     int code = response != null ? (int)response.StatusCode : 0;
-                    string tried = string.Join(", ", urlsToTry.Select(u => u.Length > 60 ? u.Substring(0, 60) + "..." : u));
+                    string tried = string.Join(", ", urlsToTry.Select(u => u.Length > 60 ? string.Concat(u.AsSpan(0, 60), "...") : u));
                     throw new Exception($"File Download Error: HTTP {code} after {maxRetries} attempts from {tried}");
                 }
 
                 long totalBytes = response.Content.Headers.ContentLength ?? -1;
                 string totalSizeStr = totalBytes > 0
-                    ? (totalBytes > 1_073_741_824 ? $"{totalBytes / 1_073_741_824.0:F1}GB" : $"{totalBytes / 1_048_576.0:F1}MB")
+                    ? (totalBytes > 1_073_741_824 ? string.Create(CultureInfo.InvariantCulture, $"{totalBytes / 1_073_741_824.0:F1}GB") : string.Create(CultureInfo.InvariantCulture, $"{totalBytes / 1_048_576.0:F1}MB"))
                     : "unknown";
 
                 using (var contentStream = await response.Content.ReadAsStreamAsync())
@@ -288,7 +289,7 @@ namespace FlyShelf.Classes
                             if ((DateTime.Now - lastProgressUpdate).TotalMilliseconds > 300 && progressClip != null)
                             {
                                 lastProgressUpdate = DateTime.Now;
-                                string readStr = totalRead > 1_073_741_824 ? $"{totalRead / 1_073_741_824.0:F1} GB" : $"{totalRead / 1_048_576.0:F1} MB";
+                                string readStr = totalRead > 1_073_741_824 ? string.Create(CultureInfo.InvariantCulture, $"{totalRead / 1_073_741_824.0:F1} GB") : string.Create(CultureInfo.InvariantCulture, $"{totalRead / 1_048_576.0:F1} MB");
                                 int pct = totalBytes > 0 ? (int)(totalRead * 100 / totalBytes) : -1;
                                 string statusText = pct >= 0
                                     ? $"⬇️ {pct}% — {readStr}/{totalSizeStr} — {cloudItem.Title}"
@@ -350,8 +351,8 @@ namespace FlyShelf.Classes
 
                     var fileInfo = new FileInfo(filePath);
                     string sizeStr = fileInfo.Length > 1_073_741_824
-                        ? $"{fileInfo.Length / 1_073_741_824.0:F1} GB"
-                        : $"{fileInfo.Length / 1_048_576.0:F1} MB";
+                        ? string.Create(CultureInfo.InvariantCulture, $"{fileInfo.Length / 1_073_741_824.0:F1} GB")
+                        : string.Create(CultureInfo.InvariantCulture, $"{fileInfo.Length / 1_048_576.0:F1} MB");
 
                     ClipboardHelper.SafeSetFileDropList(new System.Collections.Specialized.StringCollection { filePath }, suppressEcho: true, echoDelayMs: 100);
                     FlyShelf.Windows.ToastWindow.ShowToast($"✅ {cloudItem.Title} ({sizeStr}) from {cloudItem.SourceDeviceName}");
@@ -359,8 +360,8 @@ namespace FlyShelf.Classes
                     var clip = new ClipboardItem(filePath);
                     clip.SourceDeviceName = cloudItem.SourceDeviceName ?? "Remote";
                     clip.SourceDeviceType = "Mobile";
-                    bool isCfDownload = (!string.IsNullOrEmpty(cloudItem.Raw) && cloudItem.Raw.Contains(".trycloudflare.com")) ||
-                                        (!string.IsNullOrEmpty(cloudItem.SenderUrl) && cloudItem.SenderUrl.Contains(".trycloudflare.com"));
+                    bool isCfDownload = (!string.IsNullOrEmpty(cloudItem.Raw) && cloudItem.Raw.Contains(".trycloudflare.com", StringComparison.Ordinal)) ||
+                                        (!string.IsNullOrEmpty(cloudItem.SenderUrl) && cloudItem.SenderUrl.Contains(".trycloudflare.com", StringComparison.Ordinal));
                     clip.TransferMethod = isCfDownload ? "Cloudflare" : "Cloud";
 
                     if (clip.ItemType == ClipboardItemType.Image && clip.Icon == null)
@@ -432,10 +433,10 @@ namespace FlyShelf.Classes
                 string localHashHex = BitConverter.ToString(localHash).Replace("-", "").ToLowerInvariant();
                 if (localHashHex != expectedHash)
                 {
-                    Logger.LogAction("INTEGRITY", $"❌ SHA-256 MISMATCH for {title}: expected {expectedHash.Substring(0, 16)}..., got {localHashHex.Substring(0, 16)}...");
+                    Logger.LogAction("INTEGRITY", $"❌ SHA-256 MISMATCH for {title}: expected {string.Concat(expectedHash.AsSpan(0, 16), "...")}, got {string.Concat(localHashHex.AsSpan(0, 16), "...")}");
                     return false;
                 }
-                Logger.LogAction("INTEGRITY", $"✅ SHA-256 verified: {title} ({expectedHash.Substring(0, 16)}...)");
+                Logger.LogAction("INTEGRITY", $"✅ SHA-256 verified: {title} ({string.Concat(expectedHash.AsSpan(0, 16), "...")})");
                 return true;
             }
             catch (Exception hashEx)

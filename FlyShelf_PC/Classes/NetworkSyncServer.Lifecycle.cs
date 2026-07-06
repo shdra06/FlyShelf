@@ -4,6 +4,7 @@
 // Split from NetworkSyncServer.cs for modularity
 // ---------------------------------------------------------------
 using System;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -436,14 +437,14 @@ namespace FlyShelf.Classes
                         await targetStream.WriteAsync(buffer, headerEndIndex, leftoverBytes);
                     }
 
-                    // Bi-directional relay with 5-minute timeout to prevent zombie connections
-                    using var proxyCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                    // Bi-directional relay with 30-minute timeout to prevent zombie connections
+                    using var proxyCts = new CancellationTokenSource(TimeSpan.FromMinutes(30));
                     var t1 = clientStream.CopyToAsync(targetStream, proxyCts.Token);
                     var t2 = targetStream.CopyToAsync(clientStream, proxyCts.Token);
                     await Task.WhenAny(t1, t2);
                 }
             }
-            catch { } // Best-effort: failure is acceptable � Connection closed — normal
+            catch { } // Best-effort: failure is acceptable � Connection closed — normal
             finally
             {
                 _proxySemaphore.Release();
@@ -564,7 +565,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("TLS", $"Client TLS handshake failed: {ex.Message}");
             }
-            catch { } // Best-effort: failure is acceptable � Connection closed — normal
+            catch { } // Best-effort: failure is acceptable � Connection closed — normal
             finally
             {
                 _proxySemaphore.Release();
@@ -605,10 +606,10 @@ namespace FlyShelf.Classes
             {
                 var ips = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
                     .Where(x => x.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up 
-                             && !x.Description.ToLower().Contains("virtualbox") 
-                             && !x.Description.ToLower().Contains("vmware") 
-                             && !x.Description.ToLower().Contains("hyper-v")
-                             && !x.Description.ToLower().Contains("wsl"))
+                             && !x.Description.Contains("virtualbox", StringComparison.OrdinalIgnoreCase) 
+                             && !x.Description.Contains("vmware", StringComparison.OrdinalIgnoreCase) 
+                             && !x.Description.Contains("hyper-v", StringComparison.OrdinalIgnoreCase)
+                             && !x.Description.Contains("wsl", StringComparison.OrdinalIgnoreCase))
                     .SelectMany(x => x.GetIPProperties().UnicastAddresses)
                     .Where(x => x.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork 
                              && !System.Net.IPAddress.IsLoopback(x.Address))

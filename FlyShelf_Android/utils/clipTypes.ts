@@ -20,10 +20,18 @@ export type ClipItem = {
 };
 
 // ═══ Organized Storage Paths ═══
-export const DOWNLOAD_BASE = `${(FileSystem as any).documentDirectory}FlyShelf/`;
-export const SYNC_CACHE_BASE = `${(FileSystem as any).cacheDirectory}FlyShelf/SyncCache/`;
-export const CONVERTED_BASE = `${(FileSystem as any).documentDirectory}FlyShelf/Converted/`;
-export const IMAGE_CACHE_BASE = `${(FileSystem as any).documentDirectory}FlyShelf/Downloads/Images/`;
+const _docDir = (FileSystem as any).documentDirectory;
+const _cacheDir = (FileSystem as any).cacheDirectory;
+if (!_docDir) {
+  console.error('[clipTypes] FileSystem.documentDirectory is undefined — file operations will fail');
+}
+if (!_cacheDir) {
+  console.error('[clipTypes] FileSystem.cacheDirectory is undefined — cache operations will fail');
+}
+export const DOWNLOAD_BASE = `${_docDir || ''}FlyShelf/`;
+export const SYNC_CACHE_BASE = `${_cacheDir || ''}FlyShelf/SyncCache/`;
+export const CONVERTED_BASE = `${_docDir || ''}FlyShelf/Converted/`;
+export const IMAGE_CACHE_BASE = `${_docDir || ''}FlyShelf/Downloads/Images/`;
 
 /** User-initiated downloads: documentDirectory/FlyShelf/Downloads/{subfolder}/{filename} */
 export const getDownloadPath = async (subfolder: string, filename: string) => {

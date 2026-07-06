@@ -56,9 +56,9 @@ namespace FlyShelf.Classes
             var rgbMatch = RgbPattern.Match(text);
             if (rgbMatch.Success)
             {
-                r = ClampByte(int.Parse(rgbMatch.Groups[1].Value));
-                g = ClampByte(int.Parse(rgbMatch.Groups[2].Value));
-                b = ClampByte(int.Parse(rgbMatch.Groups[3].Value));
+                r = ClampByte(int.Parse(rgbMatch.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture));
+                g = ClampByte(int.Parse(rgbMatch.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture));
+                b = ClampByte(int.Parse(rgbMatch.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture));
                 hexColor = $"#{r:X2}{g:X2}{b:X2}";
                 return true;
             }
@@ -67,9 +67,9 @@ namespace FlyShelf.Classes
             var hslMatch = HslPattern.Match(text);
             if (hslMatch.Success)
             {
-                int h = int.Parse(hslMatch.Groups[1].Value) % 360;
-                int s = Math.Clamp(int.Parse(hslMatch.Groups[2].Value), 0, 100);
-                int l = Math.Clamp(int.Parse(hslMatch.Groups[3].Value), 0, 100);
+                int h = int.Parse(hslMatch.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) % 360;
+                int s = Math.Clamp(int.Parse(hslMatch.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture), 0, 100);
+                int l = Math.Clamp(int.Parse(hslMatch.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture), 0, 100);
                 HslToRgb(h, s / 100.0, l / 100.0, out r, out g, out b);
                 hexColor = $"#{r:X2}{g:X2}{b:X2}";
                 return true;

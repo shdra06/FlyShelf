@@ -6,6 +6,7 @@
 using FlyShelf.ViewModels;
 using FlyShelf.Classes;
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -354,7 +355,7 @@ namespace FlyShelf.Windows
 
         private async void ConnectByCode_Click(object sender, RoutedEventArgs e)
         {
-            string code = RemoteCodeInput?.Text?.Trim().ToUpper() ?? "";
+            string code = RemoteCodeInput?.Text?.Trim().ToUpper(CultureInfo.InvariantCulture) ?? "";
             if (string.IsNullOrEmpty(code) || code.Length != 6)
             {
                 Windows.ToastWindow.ShowToast("⚠️ Enter a 6-character code");
@@ -376,6 +377,20 @@ namespace FlyShelf.Windows
                     _viewModel.CloudListener?.StopPolling();
                     _viewModel.CloudListener?.StartPolling();
                     Logger.LogAction("PAIR CODE", "Firebase listener restarted for new pairing key scope");
+
+                    // Immediately attempt P2P connection to the new device for instant LAN/Cloud status
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            if (PeerManager.Instance != null)
+                            {
+                                await PeerManager.Instance.ForceResync();
+                                Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
+                            }
+                        }
+                        catch (Exception ex) { Logger.LogAction("PAIR CODE", $"Post-pair ForceResync failed: {ex.Message}"); }
+                    });
                 }
                 else if (!string.IsNullOrEmpty(deviceName))
                 {
@@ -383,7 +398,8 @@ namespace FlyShelf.Windows
                 }
                 else
                 {
-                    Windows.ToastWindow.ShowToast("❌ Code not found or expired");
+                    Windows.ToastWindow.ShowToast($"❌ Code {code} not found — check the other device has internet and re-generate the code");
+                    Logger.LogAction("PAIR CODE", $"Code {code} lookup returned null — not found in Firebase");
                 }
             }
             catch (Exception ex)
@@ -958,7 +974,7 @@ namespace FlyShelf.Windows
         }
     }
 
-    public class GroupDisplayItem
+    public sealed class GroupDisplayItem
     {
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";

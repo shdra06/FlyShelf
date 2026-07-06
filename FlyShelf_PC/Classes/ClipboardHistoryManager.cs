@@ -51,7 +51,7 @@ namespace FlyShelf.Classes
         public static string GetPersistentImagePath()
         {
             Directory.CreateDirectory(_imagesDir);
-            return Path.Combine(_imagesDir, $"FlyShelf_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString().Substring(0, 4)}.png");
+            return Path.Combine(_imagesDir, $"FlyShelf_{DateTime.Now.ToString("yyyyMMdd_HHmmss", System.Globalization.CultureInfo.InvariantCulture)}_{Guid.NewGuid().ToString().Substring(0, 4)}.png");
         }
 
         /// <summary>
@@ -72,14 +72,6 @@ namespace FlyShelf.Classes
                 if (File.Exists(_historyPath))
                 {
                     try { snapshotJson = RunWithRetry(() => File.ReadAllText(_historyPath)); }
-                    catch (JsonException)
-                    {
-                        string backupPath = _historyPath + ".bak";
-                        if (File.Exists(backupPath))
-                            backupJson = RunWithRetry(() => File.ReadAllText(backupPath));
-                        else
-                            throw;
-                    }
                     catch { /* Will fall through to empty list */ }
                 }
                 if (File.Exists(_journalPath))
@@ -101,34 +93,70 @@ namespace FlyShelf.Classes
                     var items = new List<ViewModels.ClipboardItem>();
 
                     // Step 1: Parse compacted snapshot
-                    string? jsonToParse = snapshotJson ?? backupJson;
+                    string? jsonToParse = snapshotJson;
                     if (jsonToParse != null)
                     {
                         try
                         {
-                            var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(jsonToParse);
-                            if (snapshot != null)
-                            {
-                                foreach (var snapshotItem in snapshot)
-                                {
-                                    if (snapshotItem.IsPassword)
-                                    {
-                                        snapshotItem.RawContent = SecureStorage.Decrypt(snapshotItem.RawContent);
-                                    }
-                                    if (IsValidClipboardItem(snapshotItem))
-                                        items.Add(snapshotItem);
-                                    else
-                                        Logger.LogAction("HISTORY_CLEANUP", $"Pruned dead/deleted snapshot item: {snapshotItem.FileName ?? snapshotItem.RawContent}");
-                                }
-                            }
-                            if (backupJson != null && snapshotJson == null)
-                            {
-                                Logger.LogAction("HISTORY_RECOVERY", $"Successfully recovered {items.Count} valid items from backup database!");
-                            }
+                            items = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(jsonToParse) ?? items;
                         }
                         catch (JsonException jsonEx)
                         {
+                            // H-18 FIX: Snapshot deserialization failed — try backup
                             Logger.LogAction("HISTORY_LOAD_ERROR", $"Snapshot failed to deserialize: {jsonEx.Message}");
+                            string backupPath = _historyPath + ".bak";
+                            if (File.Exists(backupPath))
+                            {
+                                try { backupJson = RunWithRetry(() => File.ReadAllText(backupPath)); }
+                                catch { /* backup read failed too */ }
+                            }
+                            if (backupJson != null)
+                            {
+                                try
+                                {
+                                    items = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(backupJson) ?? items;
+                                    jsonToParse = backupJson; // mark that we used backup
+                                }
+                                catch (JsonException backupEx)
+                                {
+                                    Logger.LogAction("HISTORY_LOAD_ERROR", $"Backup also failed to deserialize: {backupEx.Message}");
+                                }
+                            }
+                        }
+                    }
+                    else if (backupJson != null)
+                    {
+                        // snapshotJson was null (file read failed), try backup directly
+                        try
+                        {
+                            items = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(backupJson) ?? items;
+                            jsonToParse = backupJson;
+                        }
+                        catch (JsonException jsonEx)
+                        {
+                            Logger.LogAction("HISTORY_LOAD_ERROR", $"Backup failed to deserialize: {jsonEx.Message}");
+                        }
+                    }
+
+                    // Process loaded items: decrypt passwords and validate
+                    if (items.Count > 0)
+                    {
+                        var validItems = new List<ViewModels.ClipboardItem>();
+                        foreach (var snapshotItem in items)
+                        {
+                            if (snapshotItem.IsPassword)
+                            {
+                                snapshotItem.RawContent = SecureStorage.Decrypt(snapshotItem.RawContent);
+                            }
+                            if (IsValidClipboardItem(snapshotItem))
+                                validItems.Add(snapshotItem);
+                            else
+                                Logger.LogAction("HISTORY_CLEANUP", $"Pruned dead/deleted snapshot item: {snapshotItem.FileName ?? snapshotItem.RawContent}");
+                        }
+                        items = validItems;
+                        if (backupJson != null && snapshotJson == null)
+                        {
+                            Logger.LogAction("HISTORY_RECOVERY", $"Successfully recovered {items.Count} valid items from backup database!");
                         }
                     }
 
@@ -530,6 +558,27 @@ namespace FlyShelf.Classes
                 Logger.LogAction("SANDBOX_SCAVENGE_ERR", $"Scavenge failed: {ex.Message}");
             }
 
+            // [SECURITY FIX v2.1.0]: Clean up stale LargeTextSpill backing files older than 24 hours (H-04)
+            try
+            {
+                string spillDir = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "FlyShelf", "LargeTextSpill");
+                if (System.IO.Directory.Exists(spillDir))
+                {
+                    foreach (var file in System.IO.Directory.GetFiles(spillDir, "spill_*.txt"))
+                    {
+                        try
+                        {
+                            if (System.IO.File.GetLastWriteTime(file) < DateTime.Now.AddHours(-24))
+                                System.IO.File.Delete(file);
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
+
             // Also clean up stale FlyShelf zip files older than 24 hours
             ScavengeStaleZipFiles();
         }
@@ -649,7 +698,7 @@ namespace FlyShelf.Classes
         /// Computes a deterministic FNV-1a hash from a string.
         /// Unlike String.GetHashCode(), this is stable across process restarts and .NET versions.
         /// </summary>
-        private static int Fnv1aHash(string input)
+        public static int Fnv1aHash(string input)
         {
             const uint fnvOffsetBasis = 2166136261;
             const uint fnvPrime = 16777619;

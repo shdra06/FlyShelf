@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -26,6 +27,7 @@ namespace FlyShelf.Windows
         private Action<string, string>? _peerConnectedHandler;
         private Action<string>? _peerDisconnectedHandler;
         private Action<string, string>? _transportSwitchedHandler;
+        private System.Windows.Threading.DispatcherTimer? _peerFastRefreshTimer;
 
         // ═══ Hub Thumbnail Rendering ═══
         private System.Windows.Threading.DispatcherTimer? _hubScrollHighQualityTimer;
@@ -91,7 +93,7 @@ namespace FlyShelf.Windows
 #if !DEBUG
             // Release builds: hide developer-only UI (System Logs tab, Network live logs button)
             if (LogsNavItem != null) LogsNavItem.Visibility = Visibility.Collapsed;
-            if (NetworkLiveLogsBtn != null) NetworkLiveLogsBtn.Visibility = Visibility.Collapsed;
+            if (NetActionLiveLogs != null) NetActionLiveLogs.Visibility = Visibility.Collapsed;
 #endif
 
             // Wire up UpdateManager events
@@ -198,6 +200,7 @@ namespace FlyShelf.Windows
                 {
                     _deviceRefreshTimer?.Stop();
                     _pairingHandshakeTimer?.Stop();
+                    _peerFastRefreshTimer?.Stop();
                 }
             };
 
@@ -207,7 +210,7 @@ namespace FlyShelf.Windows
                 // Production Store build: hide all log/diagnostics UI — not relevant for end users
                 if (LogsNavItem != null)        LogsNavItem.Visibility        = Visibility.Collapsed;
                 if (LogsGrid != null)           LogsGrid.Visibility           = Visibility.Collapsed;
-                if (NetworkLiveLogsBtn != null) NetworkLiveLogsBtn.Visibility = Visibility.Collapsed;
+                if (NetActionLiveLogs != null) NetActionLiveLogs.Visibility = Visibility.Collapsed;
 #endif
                 // Defer wiring and refreshing to background dispatcher frames so that
                 // the main window shell and layout appear instantly without any initial blocking ticks.
@@ -232,7 +235,7 @@ namespace FlyShelf.Windows
                         }
                         for (int i = 0; i < RetentionCombo.Items.Count; i++)
                         {
-                            if (RetentionCombo.Items[i] is ComboBoxItem cbi && cbi.Tag?.ToString() == retention.ToString())
+                            if (RetentionCombo.Items[i] is ComboBoxItem cbi && cbi.Tag?.ToString() == retention.ToString(CultureInfo.InvariantCulture))
                             {
                                 RetentionCombo.SelectedIndex = i;
                                 break;
@@ -694,7 +697,7 @@ namespace FlyShelf.Windows
 
             if (RetentionCombo.SelectedItem is ComboBoxItem selected && selected.Tag != null)
             {
-                if (int.TryParse(selected.Tag.ToString(), out int days))
+                if (int.TryParse(selected.Tag.ToString(), CultureInfo.InvariantCulture, out int days))
                 {
                     if (days == 0 && !LicenseManager.IsPro)
                     {
@@ -750,7 +753,7 @@ namespace FlyShelf.Windows
             int hours = 1;
             if (IncognitoDurationCombo.SelectedItem is ComboBoxItem selected && selected.Tag != null)
             {
-                if (int.TryParse(selected.Tag.ToString(), out int h))
+                if (int.TryParse(selected.Tag.ToString(), CultureInfo.InvariantCulture, out int h))
                     hours = h;
             }
 
@@ -1212,7 +1215,7 @@ namespace FlyShelf.Windows
                         {
                             try
                             {
-                                var bmp = FlyShelfViewModel.LoadImageThumbnail(filePath, 300);
+                                var bmp = FlyShelfViewModel.LoadImageThumbnail(filePath, 100);
                                 if (bmp != null)
                                 {
                                     Dispatcher.InvokeAsync(() =>
@@ -1247,7 +1250,7 @@ namespace FlyShelf.Windows
             {
                 var onboarding = new OnboardingWindow();
                 onboarding.Owner = this;
-                onboarding.ShowDialog();
+                WindowHelper.ShowDialogInForeground(onboarding, this);
             }
             catch (Exception ex)
             {

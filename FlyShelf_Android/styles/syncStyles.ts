@@ -1,7 +1,15 @@
 import { StyleSheet } from 'react-native';
-import { colors, radius, space, shadows, font } from './theme';
+import { colors as defaultColors, radius, space, shadows as defaultShadows, font } from './theme';
 
-export const styles = StyleSheet.create({
+// Type aliases for the factory parameters
+type ThemeColors = Record<string, any>;
+type ThemeShadows = Record<string, any>;
+
+/**
+ * Creates theme-aware styles for the Sync tab.
+ * Call inside a component with colors/shadows from useAppTheme().
+ */
+export const createSyncStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg.base,
@@ -291,3 +299,9 @@ export const styles = StyleSheet.create({
     borderRadius: 10,
   },
 });
+
+/**
+ * @deprecated Use createSyncStyles(colors, shadows) instead for theme support.
+ * Kept for backward compatibility — returns dark-theme styles.
+ */
+export const styles = createSyncStyles(defaultColors, defaultShadows);

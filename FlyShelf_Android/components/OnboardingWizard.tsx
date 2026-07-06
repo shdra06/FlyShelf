@@ -64,7 +64,11 @@ export default function OnboardingWizard({ visible, onComplete }: Props) {
   };
 
   const handleComplete = async () => {
-    await AsyncStorage.setItem('@flyshelf_onboarding_done', 'true');
+    try {
+      await AsyncStorage.setItem('@flyshelf_onboarding_done', 'true');
+    } catch (err) {
+      console.warn('[OnboardingWizard] Failed to persist onboarding status:', err);
+    }
     onComplete();
   };
 

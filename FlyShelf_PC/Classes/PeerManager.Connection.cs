@@ -3,6 +3,7 @@
 // Split from PeerManager.cs for modularity
 // ---------------------------------------------------------------
 using System;
+using System.Globalization;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -93,9 +94,9 @@ namespace FlyShelf.Classes
         {
             if (string.IsNullOrEmpty(testUrl)) return false;
             
-            if (testUrl.Contains(","))
+            if (testUrl.Contains(','))
             {
-                var urls = testUrl.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                var urls = testUrl.Split(',', StringSplitOptions.RemoveEmptyEntries);
                 foreach (var url in urls)
                 {
                     var trimmed = url.Trim();
@@ -114,7 +115,7 @@ namespace FlyShelf.Classes
         {
             if (string.IsNullOrEmpty(testUrl)) return false;
             // Reject non-URL values like "offline", corrupted decryptions, etc.
-            if (!testUrl.StartsWith("http://") && !testUrl.StartsWith("https://")) return false;
+            if (!testUrl.StartsWith("http://", StringComparison.Ordinal) && !testUrl.StartsWith("https://", StringComparison.Ordinal)) return false;
 
             // Reject loopback URLs to ourselves
             string myLocalUrl = CloudDiscoveryManager.CachedLocalUrl;
@@ -139,20 +140,25 @@ namespace FlyShelf.Classes
 
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 linkedCts.CancelAfter(timeout);
-                var r = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
+                using var r = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
                 if (r.IsSuccessStatusCode)
                 {
-                    peer.ActiveUrl = testUrl;
-                    peer.Transport = transport;
-                    peer.IsAlive = true;
-                    peer.LastSeen = DateTime.UtcNow;
-                    peer.ConsecutiveFailures = 0;
+                    // First-writer-wins: if another thread already connected, don't overwrite
+                    lock (peer.StateLock)
+                    {
+                        if (peer.IsAlive) return false;
+                        peer.ActiveUrl = testUrl;
+                        peer.Transport = transport;
+                        peer.IsAlive = true;
+                        peer.LastSeen = DateTime.UtcNow;
+                        peer.ConsecutiveFailures = 0;
+                    }
 
                     // Parse rich health response for smart transport + version info
                     try
                     {
                         string healthJson = await r.Content.ReadAsStringAsync();
-                        if (!string.IsNullOrEmpty(healthJson) && healthJson.StartsWith("{"))
+                        if (!string.IsNullOrEmpty(healthJson) && healthJson.StartsWith('{'))
                         {
                             using var doc = JsonDocument.Parse(healthJson);
                             var root = doc.RootElement;
@@ -183,7 +189,7 @@ namespace FlyShelf.Classes
                                 if (tr.TryGetProperty("lan", out var lanProp))
                                 {
                                     string peerLan = lanProp.GetString() ?? "";
-                                    if (!string.IsNullOrEmpty(peerLan) && peerLan.StartsWith("http") && peerLan != peer.LanUrl)
+                                    if (!string.IsNullOrEmpty(peerLan) && peerLan.StartsWith("http", StringComparison.Ordinal) && peerLan != peer.LanUrl)
                                     {
                                         peer.LanUrl = peerLan;
                                         Logger.LogAction("PEER", $"🔎 Discovered {peer.DeviceName} LAN URL from health: {peerLan}");
@@ -192,7 +198,7 @@ namespace FlyShelf.Classes
                                 if (tr.TryGetProperty("cloudflare", out var cfProp))
                                 {
                                     string peerCf = cfProp.GetString() ?? "";
-                                    if (!string.IsNullOrEmpty(peerCf) && peerCf.Contains("trycloudflare") && peerCf != peer.CloudflareUrl)
+                                    if (!string.IsNullOrEmpty(peerCf) && peerCf.Contains("trycloudflare", StringComparison.Ordinal) && peerCf != peer.CloudflareUrl)
                                     {
                                         peer.CloudflareUrl = peerCf;
                                         Logger.LogAction("PEER", $"🔎 Discovered {peer.DeviceName} CF URL from health: {peerCf}");
@@ -235,12 +241,12 @@ namespace FlyShelf.Classes
                 Logger.LogAction("PEER", $"{transport} handshake {peer.DeviceName} for URL '{testUrl}': {ex.Message}");
                 if (transport == "Cloudflare")
                 {
-                    string msg = ex.Message.ToLower();
-                    bool isHostError = msg.Contains("no such host is known") || 
-                                       msg.Contains("name or service not known") || 
-                                       msg.Contains("timed out") || 
-                                       msg.Contains("connection refused") || 
-                                       msg.Contains("canceled");
+                    string msg = ex.Message;
+                    bool isHostError = msg.Contains("no such host is known", StringComparison.OrdinalIgnoreCase) || 
+                                       msg.Contains("name or service not known", StringComparison.OrdinalIgnoreCase) || 
+                                       msg.Contains("timed out", StringComparison.OrdinalIgnoreCase) || 
+                                       msg.Contains("connection refused", StringComparison.OrdinalIgnoreCase) || 
+                                       msg.Contains("canceled", StringComparison.OrdinalIgnoreCase);
                     
                     peer.IncrementFailures();
                     if (peer.ConsecutiveFailures >= 5 || isHostError)
@@ -267,6 +273,7 @@ namespace FlyShelf.Classes
 
             try
             {
+                if (string.IsNullOrEmpty(peer.ActiveUrl)) return; // No URL to connect to
                 var ws = new ClientWebSocket();
                 peer.WsCts = new CancellationTokenSource();
                 string pk = DevicePairingManager.GetPairingKeyForDevice(peer.DeviceId);
@@ -276,14 +283,15 @@ namespace FlyShelf.Classes
                 string wsUrl = peer.ActiveUrl.TrimEnd('/')
                     .Replace("https://", "wss://")
                     .Replace("http://", "ws://");
-                wsUrl += $"/ws/peer?key={Uri.EscapeDataString(pk)}&deviceId={Uri.EscapeDataString(_myDeviceId)}";
+                // Key is sent in headers (lines below) — don't expose in URL query for security
+                wsUrl += $"/ws/peer?deviceId={Uri.EscapeDataString(_myDeviceId)}";
 
                 ws.Options.SetRequestHeader("X-Pairing-Key", pk);
                 ws.Options.SetRequestHeader("X-Device-Id", _myDeviceId);
 
                 await ws.ConnectAsync(new Uri(wsUrl), peer.WsCts.Token);
                 peer.LiveSocket = ws;
-                peer.WsReconnectAttempts = 0; // Reset backoff on successful connection
+                peer.ResetWsReconnectAttempts(); // Reset backoff on successful connection
                 Logger.LogAction("WS", $"🔗 WebSocket connected to {peer.DeviceName} via {peer.Transport}");
 
                 // Monitor the WebSocket — when it drops, peer is dead
@@ -345,7 +353,7 @@ namespace FlyShelf.Classes
 
                         // Parse the message — could be "pong" or a JSON envelope
                         string text = Encoding.UTF8.GetString(ms.ToArray());
-                        if (text != "pong" && text.TrimStart().StartsWith("{"))
+                        if (text != "pong" && text.TrimStart().StartsWith('{'))
                         {
                             // JSON message — handle UrlUpdate
                             try
@@ -472,7 +480,7 @@ namespace FlyShelf.Classes
                     if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
 
                     using var healthCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-                    var r = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, healthCts.Token);
+                    using var r = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, healthCts.Token);
                     if (r.IsSuccessStatusCode)
                     {
                         stillAlive = true;
@@ -487,7 +495,12 @@ namespace FlyShelf.Classes
                     try { peer.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
                     peer.LiveSocket = null;
                     // Re-establish WebSocket with exponential backoff to prevent tight reconnect loops
-                    peer.WsReconnectAttempts++;
+                    peer.IncrementWsReconnectAttempts();
+                    if (peer.WsReconnectAttempts > 20)
+                    {
+                        Logger.LogAction("WS", $"⛔ Max reconnect attempts reached for {peer.DeviceName} — giving up");
+                        return;
+                    }
                     int delay = Math.Min(1000 * (1 << Math.Min(peer.WsReconnectAttempts, 5)), 30000);
                     Logger.LogAction("WS", $"⏳ Reconnecting WebSocket to {peer.DeviceName} in {delay}ms (attempt #{peer.WsReconnectAttempts})");
                     await Task.Delay(delay);
@@ -538,7 +551,7 @@ namespace FlyShelf.Classes
                     try
                     {
                         string respJson = await resp.Content.ReadAsStringAsync();
-                        if (!string.IsNullOrEmpty(respJson) && respJson.StartsWith("{"))
+                        if (!string.IsNullOrEmpty(respJson) && respJson.StartsWith('{'))
                         {
                             using var doc = JsonDocument.Parse(respJson);
                             var root = doc.RootElement;
@@ -547,7 +560,7 @@ namespace FlyShelf.Classes
                             if (root.TryGetProperty("lanUrl", out var peerLan))
                             {
                                 string newLan = peerLan.GetString() ?? "";
-                                if (!string.IsNullOrEmpty(newLan) && newLan.StartsWith("http") && newLan != peer.LanUrl)
+                                if (!string.IsNullOrEmpty(newLan) && newLan.StartsWith("http", StringComparison.Ordinal) && newLan != peer.LanUrl)
                                 {
                                     peer.LanUrl = newLan;
                                     SaveUrlCache();
@@ -556,7 +569,7 @@ namespace FlyShelf.Classes
                             if (root.TryGetProperty("cloudflareUrl", out var peerCf))
                             {
                                 string newCf = peerCf.GetString() ?? "";
-                                if (!string.IsNullOrEmpty(newCf) && newCf.Contains("trycloudflare") && newCf != peer.CloudflareUrl)
+                                if (!string.IsNullOrEmpty(newCf) && newCf.Contains("trycloudflare", StringComparison.Ordinal) && newCf != peer.CloudflareUrl)
                                 {
                                     peer.CloudflareUrl = newCf;
                                     SaveUrlCache();
@@ -699,12 +712,12 @@ namespace FlyShelf.Classes
             {
                 bool changed = false;
 
-                if (!string.IsNullOrEmpty(newLanUrl) && newLanUrl.StartsWith("http") && newLanUrl != peer.LanUrl)
+                if (!string.IsNullOrEmpty(newLanUrl) && newLanUrl.StartsWith("http", StringComparison.Ordinal) && newLanUrl != peer.LanUrl)
                 {
                     peer.LanUrl = newLanUrl;
                     changed = true;
                 }
-                if (!string.IsNullOrEmpty(newCfUrl) && newCfUrl.StartsWith("http") && newCfUrl != peer.CloudflareUrl)
+                if (!string.IsNullOrEmpty(newCfUrl) && newCfUrl.StartsWith("http", StringComparison.Ordinal) && newCfUrl != peer.CloudflareUrl)
                 {
                     peer.CloudflareUrl = newCfUrl;
                     changed = true;

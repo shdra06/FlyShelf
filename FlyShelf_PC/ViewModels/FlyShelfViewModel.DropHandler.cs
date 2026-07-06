@@ -6,12 +6,14 @@
 // ---------------------------------------------------------------using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FlyShelf.Classes;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -22,6 +24,12 @@ namespace FlyShelf.ViewModels
 {
     public partial class FlyShelfViewModel
     {
+        private static readonly char[] NewLineChars = { '\r', '\n' };
+        private static readonly char[] SpaceSeparator = { ' ' };
+        private static readonly string[] CommonExtensions = { ".txt", ".md", ".cs", ".ts", ".js", ".py", ".json", ".xml",
+            ".html", ".css", ".jpg", ".png", ".gif", ".pdf", ".exe", ".dll", ".zip",
+            ".config", ".yaml", ".yml", ".toml", ".log", ".bat", ".sh", ".ps1",
+            ".xaml", ".csproj", ".sln", ".gradle", ".kt", ".swift", ".dart" };
         public void HandleDrop(IDataObject data, bool forceClipboardSync = false, bool skipCloudSync = false, string? sourceDevice = null, string? sourceDeviceType = null, string? transferMethod = null)
         {
             string[]? files = null;
@@ -44,12 +52,12 @@ namespace FlyShelf.ViewModels
                     string uriText = data.GetData("text/uri-list") as string;
                     if (!string.IsNullOrEmpty(uriText))
                     {
-                        var lines = uriText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                        var lines = uriText.Split(NewLineChars, StringSplitOptions.RemoveEmptyEntries);
                         var parsedPaths = new System.Collections.Generic.List<string>();
                         foreach (var l in lines)
                         {
                             string p = l.Trim();
-                            if (p.StartsWith("file:///")) p = new Uri(p).LocalPath;
+                            if (p.StartsWith("file:///", StringComparison.Ordinal)) p = new Uri(p).LocalPath;
                             if (File.Exists(p) || Directory.Exists(p)) parsedPaths.Add(p);
                         }
                         if (parsedPaths.Count > 0) files = parsedPaths.ToArray();
@@ -201,7 +209,7 @@ namespace FlyShelf.ViewModels
                 if (newItems.Count > 0)
                 {
                     var first = newItems[0].item;
-                    FlyShelf.Classes.NetworkSyncServer.Instance?.NotifyClipboardChanged(first.ItemType.ToString(), first.FileName ?? first.RawContent?.Substring(0, Math.Min(40, first.RawContent?.Length ?? 0)) ?? "");
+                    FlyShelf.Classes.NetworkSyncServer.Instance?.NotifyClipboardChanged(first.ItemType.ToString(), first.FileName ?? (first.RawContent != null ? first.RawContent[..Math.Min(40, first.RawContent.Length)] : ""));
                 }
 
                 // Phase 3: Background — load icons + run sync (completely off the UI thread)
@@ -684,28 +692,48 @@ namespace FlyShelf.ViewModels
                             bool classified = false;
 
                             // ═══ FILE PATH FALLBACK ═══
-                            // If the text looks like a file path with a known document extension
+                            // If the text looks like a file path with a known content extension
                             // AND the file actually exists on disk, classify it as a document card.
                             // If File.Exists fails (stale path, network drive, etc.), fall through
                             // to normal text classification — paths that don't resolve to real files
                             // should be treated as plain text.
+                            // Quoted strings ("path" or 'path') are treated as text, NOT files.
                             string trimmedText = capturedText.Trim();
-                            bool looksLikeFilePath = (trimmedText.Contains("\\") || trimmedText.Contains("/"))
-                                                     && !trimmedText.Contains("\n")
+
+                            // ── Quote detection: "path" → treat as string, not file ──
+                            bool isQuotedString = (trimmedText.Length >= 2
+                                && ((trimmedText[0] == '"' && trimmedText[^1] == '"')
+                                    || (trimmedText[0] == '\'' && trimmedText[^1] == '\'')));
+
+                            bool looksLikeFilePath = !isQuotedString
+                                                     && (trimmedText.Contains('\\') || trimmedText.Contains('/'))
+                                                     && !trimmedText.Contains('\n')
                                                      && trimmedText.Length < 1000;
                             if (looksLikeFilePath)
                             {
-                                string lowTrimmed = trimmedText.ToLowerInvariant();
-                                if (lowTrimmed.EndsWith(".md") || lowTrimmed.EndsWith(".txt") || lowTrimmed.EndsWith(".doc") || lowTrimmed.EndsWith(".docx"))
-                                {
-                                    // Normalize and check existence
-                                    string normalizedPath = trimmedText.Replace('/', '\\').TrimEnd();
-                                    bool fileExists = false;
-                                    try { fileExists = File.Exists(normalizedPath); } catch { }
+                                // Normalize and check existence
+                                string normalizedPath = trimmedText.Replace('/', '\\').TrimEnd();
+                                bool fileExists = false;
+                                try { fileExists = File.Exists(normalizedPath); } catch { }
 
-                                    if (fileExists)
+                                if (fileExists)
+                                {
+                                    string pathExt = Path.GetExtension(normalizedPath).ToUpperInvariant();
+
+                                    // Only resolve content/media types (same list as drag/drop detection)
+                                    bool isContentFile = pathExt switch
                                     {
-                                        string pathExt = Path.GetExtension(normalizedPath).ToUpperInvariant();
+                                        ".PNG" or ".JPG" or ".JPEG" or ".GIF" or ".BMP" or ".WEBP" or ".SVG" or ".ICO" or ".TIFF" => true,
+                                        ".PDF" or ".DOC" or ".DOCX" or ".TXT" or ".MD" or ".RTF" => true,
+                                        ".PPT" or ".PPTX" => true,
+                                        ".MP4" or ".MKV" or ".AVI" or ".MOV" or ".WMV" or ".FLV" => true,
+                                        ".MP3" or ".WAV" or ".FLAC" or ".OGG" or ".AAC" or ".WMA" => true,
+                                        ".ZIP" or ".RAR" or ".7Z" or ".TAR" or ".GZ" or ".APK" => true,
+                                        _ => false
+                                    };
+
+                                    if (isContentFile)
+                                    {
                                         item.ItemType = ClipboardItemType.Document;
                                         item.Extension = pathExt;
                                         item.FileName = Path.GetFileName(normalizedPath);
@@ -714,8 +742,9 @@ namespace FlyShelf.ViewModels
 
                                         if (pathExt == ".MD")
                                         {
-                                            // Read file contents for rich markdown preview
+                                            // Read file contents for rich markdown preview in QuickLook
                                             try { item.RawContent = File.ReadAllText(normalizedPath); } catch { }
+                                            item.Extension = "MARKDOWN"; // QuickLook checks for "MARKDOWN", not ".MD"
                                             item.GenerateMarkdownIcon();
                                         }
 
@@ -740,7 +769,7 @@ namespace FlyShelf.ViewModels
                                     item.RawContent = capturedText;
                                     item.Extension = "MARKDOWN";
                                     string mdDisplay = capturedText.Trim();
-                                    item.FileName = mdDisplay.Length > 5000 ? mdDisplay.Substring(0, 5000) + "..." : mdDisplay;
+                                    item.FileName = mdDisplay.Length > 5000 ? string.Concat(mdDisplay.AsSpan(0, 5000), "...") : mdDisplay;
                                     item.GenerateMarkdownIcon();
                                 }
                                 else if (IsProperCode(classificationSample))
@@ -748,19 +777,19 @@ namespace FlyShelf.ViewModels
                                     item.ItemType = ClipboardItemType.Code;
                                     item.RawContent = capturedText;
                                 
-                                    if (classificationSample.Contains("std::") || classificationSample.Contains("<iostream>") || classificationSample.Contains("<cstdlib>") || classificationSample.Contains("<vector>") || classificationSample.Contains("using namespace") || _rxCpp.IsMatch(classificationSample))
+                                    if (classificationSample.Contains("std::", StringComparison.Ordinal) || classificationSample.Contains("<iostream>", StringComparison.Ordinal) || classificationSample.Contains("<cstdlib>", StringComparison.Ordinal) || classificationSample.Contains("<vector>", StringComparison.Ordinal) || classificationSample.Contains("using namespace", StringComparison.Ordinal) || _rxCpp.IsMatch(classificationSample))
                                     {
                                         item.Extension = "C++";
                                     }
-                                    else if (classificationSample.Contains("<stdio.h>") || classificationSample.Contains("<stdlib.h>") || classificationSample.Contains("<string.h>") || _rxC.IsMatch(classificationSample))
+                                    else if (classificationSample.Contains("<stdio.h>", StringComparison.Ordinal) || classificationSample.Contains("<stdlib.h>", StringComparison.Ordinal) || classificationSample.Contains("<string.h>", StringComparison.Ordinal) || _rxC.IsMatch(classificationSample))
                                     {
                                         item.Extension = "C";
                                     }
-                                    else if (classificationSample.Contains("def ") || classificationSample.Contains("import ") || classificationSample.Contains("self.") || _rxPython.IsMatch(classificationSample))
+                                    else if (classificationSample.Contains("def ", StringComparison.Ordinal) || classificationSample.Contains("import ", StringComparison.Ordinal) || classificationSample.Contains("self.", StringComparison.Ordinal) || _rxPython.IsMatch(classificationSample))
                                     {
                                         item.Extension = "PYTHON";
                                     }
-                                    else if (classificationSample.Contains("public class") || classificationSample.Contains("System.out") || classificationSample.Contains("@Override") || _rxJava.IsMatch(classificationSample))
+                                    else if (classificationSample.Contains("public class", StringComparison.Ordinal) || classificationSample.Contains("System.out", StringComparison.Ordinal) || classificationSample.Contains("@Override", StringComparison.Ordinal) || _rxJava.IsMatch(classificationSample))
                                     {
                                         item.Extension = "JAVA";
                                     }
@@ -768,7 +797,7 @@ namespace FlyShelf.ViewModels
                                     {
                                         item.Extension = "JS";
                                     }
-                                    else if (classificationSample.Contains("public class") || classificationSample.Contains("private void") || classificationSample.Contains("Console.") || classificationSample.Contains("namespace ") || _rxCs.IsMatch(classificationSample))
+                                    else if (classificationSample.Contains("public class", StringComparison.Ordinal) || classificationSample.Contains("private void", StringComparison.Ordinal) || classificationSample.Contains("Console.", StringComparison.Ordinal) || classificationSample.Contains("namespace ", StringComparison.Ordinal) || _rxCs.IsMatch(classificationSample))
                                     {
                                         item.Extension = "C#";
                                     }
@@ -776,7 +805,7 @@ namespace FlyShelf.ViewModels
                                     {
                                         item.Extension = "SQL";
                                     }
-                                    else if (classificationSample.TrimStart().StartsWith("{\"") || classificationSample.TrimStart().StartsWith("[{\""))
+                                    else if (classificationSample.TrimStart().StartsWith("{\"", StringComparison.Ordinal) || classificationSample.TrimStart().StartsWith("[{\"", StringComparison.Ordinal))
                                     {
                                         item.Extension = "JSON";
                                     }
@@ -789,7 +818,7 @@ namespace FlyShelf.ViewModels
                                         item.Extension = "CODE";
                                     }
                                     string shortText = capturedText.Trim();
-                                    item.FileName = shortText.Length > 5000 ? shortText.Substring(0, 5000) + "..." : shortText;
+                                    item.FileName = shortText.Length > 5000 ? string.Concat(shortText.AsSpan(0, 5000), "...") : shortText;
                                 }
                                 else
                                 {
@@ -802,8 +831,8 @@ namespace FlyShelf.ViewModels
                                         item.Extension = "PASSWORD";
                                         string label = "Protected Password";
                                         string lower = displayText.ToLowerInvariant();
-                                        if (lower.StartsWith("sk-") || lower.StartsWith("pk-") || lower.StartsWith("ghp_") || 
-                                            lower.Contains("key") || lower.Contains("api") || lower.Contains("token") || lower.Contains("secret"))
+                                        if (lower.StartsWith("sk-", StringComparison.Ordinal) || lower.StartsWith("pk-", StringComparison.Ordinal) || lower.StartsWith("ghp_", StringComparison.Ordinal) || 
+                                            lower.Contains("key", StringComparison.Ordinal) || lower.Contains("api", StringComparison.Ordinal) || lower.Contains("token", StringComparison.Ordinal) || lower.Contains("secret", StringComparison.Ordinal))
                                         {
                                             label = "API Key";
                                         }
@@ -813,7 +842,7 @@ namespace FlyShelf.ViewModels
                                     else
                                     {
                                         item.Extension = "TEXT";
-                                        item.FileName = displayText.Length > 5000 ? displayText.Substring(0, 5000) + "..." : displayText;
+                                        item.FileName = displayText.Length > 5000 ? string.Concat(displayText.AsSpan(0, 5000), "...") : displayText;
                                     }
                                 }
                             }
@@ -877,7 +906,7 @@ namespace FlyShelf.ViewModels
                     if (FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery && FlyShelf.Classes.SettingsManager.Current.EnableOutgoingSync && !skipCloudSync)
                     {
                         string normalizedContent = NormalizeTextForFingerprint(item.RawContent ?? "");
-                        string txtFp = $"TXT::{normalizedContent.Substring(0, Math.Min(200, normalizedContent.Length))}";
+                        string txtFp = string.Concat("TXT::", normalizedContent.AsSpan(0, Math.Min(200, normalizedContent.Length)));
                         if (!IsCloudSourced(txtFp))
                         {
                             FlyShelf.Classes.SyncQueue.Enqueue(item);
@@ -893,12 +922,12 @@ namespace FlyShelf.ViewModels
                     {
                         DeduplicateAndInsert(item);
 
-                        FlyShelf.Classes.NetworkSyncServer.Instance?.NotifyClipboardChanged(item.ItemType.ToString(), item.FileName ?? item.RawContent?.Substring(0, Math.Min(40, item.RawContent?.Length ?? 0)) ?? "");
+                        FlyShelf.Classes.NetworkSyncServer.Instance?.NotifyClipboardChanged(item.ItemType.ToString(), item.FileName ?? (item.RawContent != null ? item.RawContent[..Math.Min(40, item.RawContent.Length)] : ""));
 
                         if (item.SmartActionType == "SetTimer" && _rxSlashTimer.IsMatch(item.RawContent.Trim()))
                         {
                             var tw = new FlyShelf.Windows.TimerWindow(item.RawContent.Trim());
-                            tw.Show();
+                            WindowHelper.ShowInForeground(tw);
                         }
 
                         if (capturedForceSync)
@@ -909,7 +938,7 @@ namespace FlyShelf.ViewModels
                         if (!string.IsNullOrEmpty(sourceDevice))
                         {
                             string normalizedContent = NormalizeTextForFingerprint(item.RawContent ?? "");
-                            string txtFp = $"TXT::{normalizedContent.Substring(0, Math.Min(200, normalizedContent.Length))}";
+                            string txtFp = string.Concat("TXT::", normalizedContent.AsSpan(0, Math.Min(200, normalizedContent.Length)));
                             MarkAsCloudSourced(txtFp);
                             PersistHistory();
                         }
@@ -952,6 +981,12 @@ namespace FlyShelf.ViewModels
 
             try
             {
+                var fi = new FileInfo(filePath);
+                if (fi.Length > 100_000_000)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[DROP] Skipped thumbnail — file too large ({fi.Length} bytes): {filePath}");
+                    return null;
+                }
                 byte[] fileBytes = File.ReadAllBytes(filePath);
                 var bmp = new BitmapImage();
                 using (var ms = new MemoryStream(fileBytes))
@@ -1114,15 +1149,15 @@ namespace FlyShelf.ViewModels
 
             // 2. 1st Priority: Strong Entry Points & Function Calling / Signature Detections
             // If the text contains these explicit identifiers, we prioritize marking it as code immediately.
-            bool hasEntryPoint = text.Contains("int main") || 
-                                 text.Contains("void main") || 
-                                 text.Contains("public static void main") ||
-                                 text.Contains("using namespace std") ||
-                                 text.Contains("#include <") ||
-                                 text.Contains("System.Console.WriteLine") ||
-                                 text.Contains("Console.WriteLine") ||
-                                 text.Contains("System.out.println") ||
-                                 text.Contains("console.log(");
+            bool hasEntryPoint = text.Contains("int main", StringComparison.Ordinal) || 
+                                 text.Contains("void main", StringComparison.Ordinal) || 
+                                 text.Contains("public static void main", StringComparison.Ordinal) ||
+                                 text.Contains("using namespace std", StringComparison.Ordinal) ||
+                                 text.Contains("#include <", StringComparison.Ordinal) ||
+                                 text.Contains("System.Console.WriteLine", StringComparison.Ordinal) ||
+                                 text.Contains("Console.WriteLine", StringComparison.Ordinal) ||
+                                 text.Contains("System.out.println", StringComparison.Ordinal) ||
+                                 text.Contains("console.log(", StringComparison.Ordinal);
 
             if (hasEntryPoint) return true;
 
@@ -1135,7 +1170,7 @@ namespace FlyShelf.ViewModels
             catch { }
 
             // 3. Fallback: Structural & Punctuation Constraints
-            var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            var lines = text.Split(NewLineChars, StringSplitOptions.RemoveEmptyEntries);
             if (lines.Length == 0) return false;
 
             // 3a. Very short contents (1 or 2 lines)
@@ -1144,9 +1179,9 @@ namespace FlyShelf.ViewModels
                 if (!_rxCode.IsMatch(text)) return false;
 
                 // For single-line or double-line, require high confidence code syntax indicators
-                bool hasCodePunctuation = text.Contains(";") || text.Contains("{") || text.Contains("}") || text.Contains("=>") || text.Contains("/*") || text.Contains("*/") || text.Contains("//");
-                bool hasCodeStructure = text.Contains("(") && text.Contains(")");
-                bool hasCommonStart = text.StartsWith("#include") || text.StartsWith("import ") || text.StartsWith("def ") || text.StartsWith("from ") || text.StartsWith("using ");
+                bool hasCodePunctuation = text.Contains(';') || text.Contains('{') || text.Contains('}') || text.Contains("=>", StringComparison.Ordinal) || text.Contains("/*", StringComparison.Ordinal) || text.Contains("*/", StringComparison.Ordinal) || text.Contains("//", StringComparison.Ordinal);
+                bool hasCodeStructure = text.Contains('(') && text.Contains(')');
+                bool hasCommonStart = text.StartsWith("#include", StringComparison.Ordinal) || text.StartsWith("import ", StringComparison.Ordinal) || text.StartsWith("def ", StringComparison.Ordinal) || text.StartsWith("from ", StringComparison.Ordinal) || text.StartsWith("using ", StringComparison.Ordinal);
 
                 return hasCodePunctuation || hasCodeStructure || hasCommonStart;
             }
@@ -1169,7 +1204,7 @@ namespace FlyShelf.ViewModels
                 }
 
                 bool lineMatchesCode = _rxCode.IsMatch(line);
-                bool hasCodeSuffix = line.EndsWith(";") || line.EndsWith("{") || line.EndsWith("}") || line.EndsWith(",") || line.EndsWith(":") || line.StartsWith("//") || line.StartsWith("/*") || line.StartsWith("*") || line.StartsWith("#") || line.StartsWith("import ") || line.StartsWith("export ");
+                bool hasCodeSuffix = line.EndsWith(';') || line.EndsWith('{') || line.EndsWith('}') || line.EndsWith(',') || line.EndsWith(':') || line.StartsWith("//", StringComparison.Ordinal) || line.StartsWith("/*", StringComparison.Ordinal) || line.StartsWith('*') || line.StartsWith('#') || line.StartsWith("import ", StringComparison.Ordinal) || line.StartsWith("export ", StringComparison.Ordinal);
 
                 if (lineMatchesCode || hasCodeSuffix)
                 {
@@ -1187,7 +1222,7 @@ namespace FlyShelf.ViewModels
             double codeDensity = (double)codeLineCount / totalValuableLines;
 
             // Must contain some basic code punctuation overall
-            bool hasAbsoluteIndicators = text.Contains(";") || text.Contains("{") || text.Contains("}") || text.Contains("=>") || text.Contains("</") || text.Contains("/>") || text.Contains("/*") || text.Contains("*/") || text.Contains("//") || text.Contains("def ") || text.Contains("import ") || text.Contains("#include");
+            bool hasAbsoluteIndicators = text.Contains(';') || text.Contains('{') || text.Contains('}') || text.Contains("=>", StringComparison.Ordinal) || text.Contains("</", StringComparison.Ordinal) || text.Contains("/>", StringComparison.Ordinal) || text.Contains("/*", StringComparison.Ordinal) || text.Contains("*/", StringComparison.Ordinal) || text.Contains("//", StringComparison.Ordinal) || text.Contains("def ", StringComparison.Ordinal) || text.Contains("import ", StringComparison.Ordinal) || text.Contains("#include", StringComparison.Ordinal);
 
             if (!hasAbsoluteIndicators) return false;
 
@@ -1204,10 +1239,10 @@ namespace FlyShelf.ViewModels
             if (trimmed.Length < 6 || trimmed.Length > 128) return false;
 
             // Cannot contain newlines
-            if (trimmed.Contains("\n") || trimmed.Contains("\r")) return false;
+            if (trimmed.Contains('\n') || trimmed.Contains('\r')) return false;
 
             // Split into words
-            string[] words = trimmed.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] words = trimmed.Split(SpaceSeparator, StringSplitOptions.RemoveEmptyEntries);
             if (words.Length > 2) return false;
 
             // ── NEGATIVE PATTERNS: things that are NOT passwords ──
@@ -1215,39 +1250,35 @@ namespace FlyShelf.ViewModels
             string lower = trimmed.ToLowerInvariant();
 
             // File paths (e.g., "E:\Comfy-Desktop", "C:\Users\...", "/home/user/...")
-            if (trimmed.Contains(":\\") || trimmed.Contains(":/") || 
-                trimmed.StartsWith("\\\\") || trimmed.StartsWith("/") ||
-                trimmed.Contains("\\") || System.IO.Path.IsPathRooted(trimmed))
+            if (trimmed.Contains(":\\", StringComparison.Ordinal) || trimmed.Contains(":/", StringComparison.Ordinal) || 
+                trimmed.StartsWith("\\\\", StringComparison.Ordinal) || trimmed.StartsWith('/') ||
+                trimmed.Contains('\\') || System.IO.Path.IsPathRooted(trimmed))
                 return false;
 
             // URLs and URIs (e.g., "http://...", "https://...", "ftp://...", "localhost:3000")
-            if (lower.StartsWith("http://") || lower.StartsWith("https://") || 
-                lower.StartsWith("ftp://") || lower.StartsWith("file://") ||
-                lower.StartsWith("ws://") || lower.StartsWith("wss://") ||
-                lower.StartsWith("ssh://") || lower.StartsWith("git://") ||
-                lower.Contains("://") || lower.StartsWith("localhost") ||
-                lower.StartsWith("www."))
+            if (lower.StartsWith("http://", StringComparison.Ordinal) || lower.StartsWith("https://", StringComparison.Ordinal) || 
+                lower.StartsWith("ftp://", StringComparison.Ordinal) || lower.StartsWith("file://", StringComparison.Ordinal) ||
+                lower.StartsWith("ws://", StringComparison.Ordinal) || lower.StartsWith("wss://", StringComparison.Ordinal) ||
+                lower.StartsWith("ssh://", StringComparison.Ordinal) || lower.StartsWith("git://", StringComparison.Ordinal) ||
+                lower.Contains("://", StringComparison.Ordinal) || lower.StartsWith("localhost", StringComparison.Ordinal) ||
+                lower.StartsWith("www.", StringComparison.Ordinal))
                 return false;
 
             // Email addresses
-            if (trimmed.Contains("@") && trimmed.Contains(".") && !trimmed.Contains(" "))
+            if (trimmed.Contains('@') && trimmed.Contains('.') && !trimmed.Contains(' '))
                 return false;
 
             // File extensions (e.g., "readme.md", "index.html", "package.json")
-            string[] commonExtensions = { ".txt", ".md", ".cs", ".ts", ".js", ".py", ".json", ".xml",
-                ".html", ".css", ".jpg", ".png", ".gif", ".pdf", ".exe", ".dll", ".zip",
-                ".config", ".yaml", ".yml", ".toml", ".log", ".bat", ".sh", ".ps1",
-                ".xaml", ".csproj", ".sln", ".gradle", ".kt", ".swift", ".dart" };
-            foreach (var ext in commonExtensions)
+            foreach (var ext in CommonExtensions)
             {
-                if (lower.EndsWith(ext)) return false;
+                if (lower.EndsWith(ext, StringComparison.Ordinal)) return false;
             }
 
             // Common non-password words/phrases people copy
             if (lower == "password" || lower == "username" || lower == "admin" ||
-                lower.StartsWith("hello") || lower.StartsWith("test") ||
-                lower.StartsWith("example") || lower.StartsWith("sample") ||
-                lower.StartsWith("version") || lower.StartsWith("release"))
+                lower.StartsWith("hello", StringComparison.Ordinal) || lower.StartsWith("test", StringComparison.Ordinal) ||
+                lower.StartsWith("example", StringComparison.Ordinal) || lower.StartsWith("sample", StringComparison.Ordinal) ||
+                lower.StartsWith("version", StringComparison.Ordinal) || lower.StartsWith("release", StringComparison.Ordinal))
                 return false;
 
             // Pure numbers (phone numbers, IDs, etc.) -- not passwords
@@ -1262,11 +1293,11 @@ namespace FlyShelf.ViewModels
             // ── POSITIVE PATTERNS: things that ARE passwords/keys ──
 
             // Known API key prefixes (high confidence)
-            if (lower.StartsWith("sk-") || lower.StartsWith("pk-") || lower.StartsWith("ghp_") || 
-                lower.StartsWith("key_") || lower.StartsWith("api_") || lower.StartsWith("token_") || 
-                lower.StartsWith("secret_") || lower.StartsWith("pwd_") || lower.StartsWith("passwd_") ||
-                lower.StartsWith("auth_") || lower.StartsWith("bearer ") ||
-                lower.StartsWith("eyj"))  // JWT tokens start with base64 of {"
+            if (lower.StartsWith("sk-", StringComparison.Ordinal) || lower.StartsWith("pk-", StringComparison.Ordinal) || lower.StartsWith("ghp_", StringComparison.Ordinal) || 
+                lower.StartsWith("key_", StringComparison.Ordinal) || lower.StartsWith("api_", StringComparison.Ordinal) || lower.StartsWith("token_", StringComparison.Ordinal) || 
+                lower.StartsWith("secret_", StringComparison.Ordinal) || lower.StartsWith("pwd_", StringComparison.Ordinal) || lower.StartsWith("passwd_", StringComparison.Ordinal) ||
+                lower.StartsWith("auth_", StringComparison.Ordinal) || lower.StartsWith("bearer ", StringComparison.Ordinal) ||
+                lower.StartsWith("eyj", StringComparison.Ordinal))  // JWT tokens start with base64 of {"
             {
                 return true;
             }
@@ -1293,7 +1324,7 @@ namespace FlyShelf.ViewModels
                 // High-entropy API key/token: 20+ chars, alphanumeric, with mixed case or digits
                 // But exclude anything with path separators
                 if (w.Length >= 20 && hasUpper && hasLower && hasDigit && 
-                    !w.Contains("\\") && !w.Contains("/") &&
+                    !w.Contains('\\') && !w.Contains('/') &&
                     w.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' || c == '+'))
                 {
                     // Extra check: ensure it's not just camelCase words (e.g., "MyApplicationSettings")
@@ -1314,7 +1345,7 @@ namespace FlyShelf.ViewModels
         }
     }
 
-    public class RelayCommand : ICommand
+    public sealed class RelayCommand : ICommand
     {
         private readonly Action _execute;
         public RelayCommand(Action execute) { _execute = execute; }
@@ -1323,7 +1354,7 @@ namespace FlyShelf.ViewModels
         public event EventHandler? CanExecuteChanged { add { } remove { } }
     }
 
-    public class RelayCommand<T> : ICommand
+    public sealed class RelayCommand<T> : ICommand
     {
         private readonly Action<T> _execute;
         public RelayCommand(Action<T> execute) { _execute = execute; }

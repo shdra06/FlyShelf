@@ -1,7 +1,7 @@
 // PDF Tools — Modularized Suite for FlyShelf Android
 import { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, Pressable, SafeAreaView,
+  View, Text, ScrollView, Pressable, SafeAreaView, Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -12,6 +12,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { colors } from '../styles/theme';
 import s from '../styles/pdfToolsStyles';
 
+import { cleanupOldPdfFiles } from '../utils/pdfToolsUtils';
 import { ToolId, SelectedFile, RecentPdf } from '../components/pdf/types';
 import MergeTool from '../components/pdf/MergeTool';
 import SplitTool from '../components/pdf/SplitTool';
@@ -43,70 +44,88 @@ export default function PdfToolsScreen() {
 
   useEffect(() => {
     AsyncStorage.getItem(RECENT_KEY).then(data => {
-      if (data) setRecentPdfs(JSON.parse(data));
+      if (data) {
+        try { setRecentPdfs(JSON.parse(data)); } catch { /* corrupted data, ignore */ }
+      }
     }).catch(() => {});
   }, []);
 
+  useEffect(() => { cleanupOldPdfFiles(); }, []);
+
   const saveRecent = async (name: string, path: string, pages: number, tool: ToolId) => {
     const entry: RecentPdf = { name, path, pages, date: Date.now(), tool };
-    const updated = [entry, ...recentPdfs.filter(r => r.path !== path)].slice(0, 10);
-    setRecentPdfs(updated);
-    await AsyncStorage.setItem(RECENT_KEY, JSON.stringify(updated)).catch(() => {});
+    setRecentPdfs(prev => {
+      const updated = [entry, ...prev.filter(r => r.path !== path)].slice(0, 10);
+      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
   };
 
   const pickPdf = async (multiple = false): Promise<SelectedFile[]> => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: 'application/pdf', multiple,
-      copyToCacheDirectory: true,
-    });
-    if (result.canceled || !result.assets?.length) return [];
-    return result.assets.map(a => ({ uri: a.uri, name: a.name || 'document.pdf', size: a.size }));
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf', multiple,
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.length) return [];
+      return result.assets.map(a => ({ uri: a.uri, name: a.name || 'document.pdf', size: a.size ?? 0 }));
+    } catch (e: any) {
+      Alert.alert('File Picker Error', e.message || 'Failed to pick PDF file(s).');
+      return [];
+    }
   };
 
   const pickImages = async (): Promise<SelectedFile[]> => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true, quality: 1,
-    });
-    if (result.canceled || !result.assets?.length) return [];
-    return result.assets.map((a, i) => ({
-      uri: a.uri,
-      name: a.fileName || `image_${i + 1}.${a.uri.split('.').pop() || 'jpg'}`,
-      size: a.fileSize,
-    }));
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true, quality: 1,
+      });
+      if (result.canceled || !result.assets?.length) return [];
+      return result.assets.map((a, i) => ({
+        uri: a.uri,
+        name: a.fileName || `image_${i + 1}.${a.uri.split('.').pop() || 'jpg'}`,
+        size: a.fileSize,
+      }));
+    } catch (e: any) {
+      Alert.alert('Image Picker Error', e.message || 'Failed to pick image(s).');
+      return [];
+    }
   };
 
   const renderTool = () => {
     const back = () => setActiveTool(null);
     switch (activeTool) {
       case 'merge': return <MergeTool onBack={back} onPickFiles={() => pickPdf(true)} saveRecent={saveRecent} />;
-      case 'split': return <SplitTool onBack={back} onPickFile={() => pickPdf(false)} />;
+      case 'split': return <SplitTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} />;
       case 'editPages': return <EditPagesTool onBack={back} onPickFile={() => pickPdf(false)} onPickImages={pickImages} saveRecent={saveRecent} />;
       case 'imagesToPdf': return <ImagesToPdfTool onBack={back} onPickImages={pickImages} saveRecent={saveRecent} />;
       case 'extract': return <ExtractTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} />;
       case 'watermark': return <WatermarkTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} />;
       case 'password': return <PasswordTool onBack={back} onPickFile={() => pickPdf(false)} />;
-      case 'metadata': return <MetadataTool onBack={back} onPickFile={() => pickPdf(false)} />;
+      case 'metadata': return <MetadataTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} />;
       case 'info': return <InfoTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} />;
       default: return null;
     }
   };
 
-  if (activeTool) return <SafeAreaView style={s.safeArea}>{renderTool()}</SafeAreaView>;
+  if (activeTool) return <SafeAreaView style={s.safe}>{renderTool()}</SafeAreaView>;
 
   return (
-    <SafeAreaView style={s.safeArea}>
+    <SafeAreaView style={s.safe}>
       <View style={s.container}>
-        <Text style={s.title}>PDF Tools</Text>
+        <Text style={s.headerTitle}>PDF Tools</Text>
         <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={s.grid}>
+          <View style={s.toolGrid}>
             {TOOLS.map((tool, i) => (
               <Animated.View key={tool.id} entering={FadeInDown.delay(i * 50)}>
                 <Pressable
                   style={s.toolCard}
                   onPress={() => { setActiveTool(tool.id); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                  accessibilityLabel={`${tool.label}: ${tool.desc}`}
+                  accessibilityRole="button"
                 >
-                  <View style={[s.iconBox, { backgroundColor: tool.color + '20' }]}>
+                  <View style={[s.toolIconWrap, { backgroundColor: tool.color + '20' }]}>
                     {tool.iconLib === 'mci' ? 
                       <MaterialCommunityIcons name={tool.icon as any} size={28} color={tool.color} /> :
                       <Ionicons name={tool.icon as any} size={28} color={tool.color} />

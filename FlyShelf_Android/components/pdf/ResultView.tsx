@@ -10,16 +10,26 @@ interface ResultViewProps {
   path?: string | null;
   paths?: string[];
   onDone: () => void;
+  onSendToPc?: (filePath: string) => void;
 }
 
-export default function ResultView({ path, paths, onDone }: ResultViewProps) {
+export default function ResultView({ path, paths, onDone, onSendToPc }: ResultViewProps) {
   const sharePdf = async (filePath: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(filePath, { mimeType: 'application/pdf' });
-    } else {
-      Alert.alert('Error', 'Sharing not available on this device');
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(filePath, { mimeType: 'application/pdf' });
+      } else {
+        Alert.alert('Error', 'Sharing not available on this device');
+      }
+    } catch (err: any) {
+      Alert.alert('Share Failed', err?.message || 'An unexpected error occurred while sharing the PDF.');
     }
+  };
+
+  const handleSendToPc = (filePath: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onSendToPc?.(filePath);
   };
 
   if (!path && !(paths && paths.length)) return null;
@@ -36,6 +46,12 @@ export default function ResultView({ path, paths, onDone }: ResultViewProps) {
             <Pressable style={s.btnPrimary} onPress={() => sharePdf(path)}>
               <Text style={s.btnPrimaryText}>Share</Text>
             </Pressable>
+            {onSendToPc && (
+              <Pressable style={s.btnSecondary} onPress={() => handleSendToPc(path)}>
+                <Ionicons name="desktop-outline" size={18} color={colors.text.secondary} style={{ marginRight: 6 }} />
+                <Text style={s.btnSecondaryText}>Send to PC</Text>
+              </Pressable>
+            )}
             <Pressable style={s.btnSecondary} onPress={onDone}>
               <Text style={s.btnSecondaryText}>Done</Text>
             </Pressable>
@@ -49,6 +65,11 @@ export default function ResultView({ path, paths, onDone }: ResultViewProps) {
             <View key={i} style={[s.fileItem, s.mt8]}>
               <Ionicons name="document" size={20} color={colors.type.pdf} style={s.fileIcon} />
               <Text style={[s.fileName, s.flex1]} numberOfLines={1}>{p.split('/').pop()}</Text>
+              {onSendToPc && (
+                <Pressable style={s.btnSmall} onPress={() => handleSendToPc(p)}>
+                  <Ionicons name="desktop-outline" size={16} color={colors.accent.primary} />
+                </Pressable>
+              )}
               <Pressable style={s.btnSmall} onPress={() => sharePdf(p)}>
                 <Ionicons name="share-outline" size={16} color={colors.accent.primary} />
               </Pressable>

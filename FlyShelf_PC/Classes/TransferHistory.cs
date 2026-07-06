@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Globalization;
 using System.Text.Json.Serialization;
 
 namespace FlyShelf.Classes
@@ -46,14 +47,14 @@ namespace FlyShelf.Classes
             get
             {
                 if (DurationSeconds <= 0) return "—";
-                if (DurationSeconds < 1) return $"{DurationSeconds * 1000:F0}ms";
-                if (DurationSeconds < 60) return $"{DurationSeconds:F1}s";
+                if (DurationSeconds < 1) return string.Create(CultureInfo.InvariantCulture, $"{DurationSeconds * 1000:F0}ms");
+                if (DurationSeconds < 60) return string.Create(CultureInfo.InvariantCulture, $"{DurationSeconds:F1}s");
                 int minutes = (int)(DurationSeconds / 60);
                 int seconds = (int)(DurationSeconds % 60);
-                if (minutes < 60) return $"{minutes}m {seconds}s";
+                if (minutes < 60) return string.Create(CultureInfo.InvariantCulture, $"{minutes}m {seconds}s");
                 int hours = minutes / 60;
                 minutes %= 60;
-                return $"{hours}h {minutes}m";
+                return string.Create(CultureInfo.InvariantCulture, $"{hours}h {minutes}m");
             }
         }
 
@@ -70,18 +71,18 @@ namespace FlyShelf.Classes
 
         private static string FormatBytes(long bytes)
         {
-            if (bytes < 1024) return $"{bytes} B";
-            if (bytes < 1_048_576) return $"{bytes / 1024.0:F1} KB";
-            if (bytes < 1_073_741_824) return $"{bytes / 1_048_576.0:F1} MB";
-            return $"{bytes / 1_073_741_824.0:F2} GB";
+            if (bytes < 1024) return string.Create(CultureInfo.InvariantCulture, $"{bytes} B");
+            if (bytes < 1_048_576) return string.Create(CultureInfo.InvariantCulture, $"{bytes / 1024.0:F1} KB");
+            if (bytes < 1_073_741_824) return string.Create(CultureInfo.InvariantCulture, $"{bytes / 1_048_576.0:F1} MB");
+            return string.Create(CultureInfo.InvariantCulture, $"{bytes / 1_073_741_824.0:F2} GB");
         }
 
         private static string FormatSpeed(double bytesPerSecond)
         {
             if (bytesPerSecond <= 0) return "—";
-            if (bytesPerSecond < 1_048_576) return $"{bytesPerSecond / 1024.0:F0} KB/s";
-            if (bytesPerSecond < 1_073_741_824) return $"{bytesPerSecond / 1_048_576.0:F1} MB/s";
-            return $"{bytesPerSecond / 1_073_741_824.0:F2} GB/s";
+            if (bytesPerSecond < 1_048_576) return string.Create(CultureInfo.InvariantCulture, $"{bytesPerSecond / 1024.0:F0} KB/s");
+            if (bytesPerSecond < 1_073_741_824) return string.Create(CultureInfo.InvariantCulture, $"{bytesPerSecond / 1_048_576.0:F1} MB/s");
+            return string.Create(CultureInfo.InvariantCulture, $"{bytesPerSecond / 1_073_741_824.0:F2} GB/s");
         }
     }
 
@@ -218,15 +219,15 @@ namespace FlyShelf.Classes
         /// </summary>
         public void ClearAll()
         {
-            lock (_lock)
+            // Use synchronous Invoke so Clear+Save happen atomically before returning
+            System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
             {
-                System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                lock (_lock)
                 {
                     Entries.Clear();
-                });
-            }
-
-            Save();
+                }
+                Save();
+            });
             Logger.LogAction("HISTORY", "All transfer history cleared");
         }
 
@@ -296,16 +297,16 @@ namespace FlyShelf.Classes
                     sb.AppendLine(string.Join(",",
                         CsvEscape(e.Id),
                         CsvEscape(e.FileName),
-                        e.FileSize.ToString(),
+                        e.FileSize.ToString(CultureInfo.InvariantCulture),
                         CsvEscape(e.Direction),
                         CsvEscape(e.PeerName),
                         CsvEscape(e.PeerDeviceId),
                         CsvEscape(e.Status),
-                        CsvEscape(e.StartedAt.ToString("o")),
-                        CsvEscape(e.CompletedAt.ToString("o")),
-                        e.DurationSeconds.ToString("F2"),
-                        e.AverageSpeedBps.ToString("F0"),
-                        e.PeakSpeedBps.ToString("F0"),
+                        CsvEscape(e.StartedAt.ToString("o", CultureInfo.InvariantCulture)),
+                        CsvEscape(e.CompletedAt.ToString("o", CultureInfo.InvariantCulture)),
+                        e.DurationSeconds.ToString("F2", CultureInfo.InvariantCulture),
+                        e.AverageSpeedBps.ToString("F0", CultureInfo.InvariantCulture),
+                        e.PeakSpeedBps.ToString("F0", CultureInfo.InvariantCulture),
                         CsvEscape(e.ErrorMessage ?? "")
                     ));
                 }

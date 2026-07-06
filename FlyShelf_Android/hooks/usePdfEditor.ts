@@ -25,6 +25,8 @@ export function usePdfEditor(): UsePdfEditorReturn {
 
   const closePageEditor = useCallback(() => {
     setPageEditorVisible(false);
+    setPageEditorUri('');
+    setPageEditorTitle('');
   }, []);
 
   return {

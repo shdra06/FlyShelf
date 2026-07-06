@@ -8,6 +8,7 @@ import s from '../../styles/pdfToolsStyles';
 import { imagesToPdf } from '../../utils/pdfToolsUtils';
 import { SelectedFile } from './types';
 import ResultView from './ResultView';
+import ProcessingOverlay from './ProcessingOverlay';
 
 interface ImagesToPdfToolProps {
   onBack: () => void;
@@ -60,7 +61,7 @@ export default function ImagesToPdfTool({ onBack, onPickImages, saveRecent }: Im
     return (
       <View style={s.modalOverlay}>
         <View style={s.modalHeader}>
-          <Pressable style={s.backBtn} onPress={onBack}><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
+          <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
           <Text style={s.modalTitle}>Success</Text>
         </View>
         <ResultView path={resultPath} onDone={onBack} />
@@ -70,12 +71,13 @@ export default function ImagesToPdfTool({ onBack, onPickImages, saveRecent }: Im
 
   return (
     <View style={s.modalOverlay}>
+      <ProcessingOverlay visible={loading} text="Converting images…" />
       <View style={s.modalHeader}>
-        <Pressable style={s.backBtn} onPress={onBack}><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
+        <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
         <Text style={s.modalTitle}>Images → PDF</Text>
       </View>
       <ScrollView style={s.modalScroll} contentContainerStyle={s.pb100}>
-        <Pressable style={[s.btnPrimary, s.mb16]} onPress={handlePick}>
+        <Pressable style={[s.btnPrimary, s.mb16]} onPress={handlePick} accessibilityRole="button" accessibilityLabel="Pick images">
           <Text style={s.btnPrimaryText}>+ Pick Images</Text>
         </Pressable>
         {files.map((f, i) => (
@@ -85,13 +87,13 @@ export default function ImagesToPdfTool({ onBack, onPickImages, saveRecent }: Im
               <Text style={s.fileName} numberOfLines={1}>{f.name}</Text>
             </View>
             <View style={s.fileActions}>
-              <Pressable style={s.btnSmall} onPress={() => moveFile(i, -1)} disabled={i === 0}>
+              <Pressable style={s.btnSmall} onPress={() => moveFile(i, -1)} disabled={i === 0} accessibilityRole="button" accessibilityLabel="Move image up">
                 <Ionicons name="arrow-up" size={16} color={i === 0 ? colors.text.disabled : colors.text.secondary} />
               </Pressable>
-              <Pressable style={s.btnSmall} onPress={() => moveFile(i, 1)} disabled={i === files.length - 1}>
+              <Pressable style={s.btnSmall} onPress={() => moveFile(i, 1)} disabled={i === files.length - 1} accessibilityRole="button" accessibilityLabel="Move image down">
                 <Ionicons name="arrow-down" size={16} color={i === files.length - 1 ? colors.text.disabled : colors.text.secondary} />
               </Pressable>
-              <Pressable style={s.btnSmall} onPress={() => removeFile(i)}>
+              <Pressable style={s.btnSmall} onPress={() => removeFile(i)} accessibilityRole="button" accessibilityLabel="Remove image">
                 <Ionicons name="trash-outline" size={16} color={colors.accent.error} />
               </Pressable>
             </View>
@@ -100,8 +102,8 @@ export default function ImagesToPdfTool({ onBack, onPickImages, saveRecent }: Im
       </ScrollView>
       {files.length > 0 && (
         <View style={s.modalActions}>
-          <Pressable style={s.btnPrimary} onPress={handleConvert} disabled={loading}>
-            <Text style={s.btnPrimaryText}>{loading ? 'Converting...' : `Convert ${files.length} Images`}</Text>
+          <Pressable style={s.btnPrimary} onPress={handleConvert} disabled={loading} accessibilityRole="button" accessibilityLabel="Convert images to PDF">
+            <Text style={s.btnPrimaryText}>{`Convert ${files.length} Images`}</Text>
           </Pressable>
         </View>
       )}

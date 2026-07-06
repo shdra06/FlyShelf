@@ -4,6 +4,7 @@
 // tracks per-file progress. Not persisted across restarts.
 // ---------------------------------------------------------------
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -107,7 +108,7 @@ namespace FlyShelf.Classes
                 if (elapsed.TotalSeconds < 60) return $"{(int)elapsed.TotalSeconds}s ago";
                 if (elapsed.TotalMinutes < 60) return $"{(int)elapsed.TotalMinutes} min ago";
                 if (elapsed.TotalHours < 24) return $"{(int)elapsed.TotalHours}h ago";
-                return AddedAt.ToString("MMM d, HH:mm");
+                return AddedAt.ToString("MMM d, HH:mm", CultureInfo.InvariantCulture);
             }
         }
 
