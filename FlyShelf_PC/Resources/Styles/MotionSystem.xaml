@@ -1,0 +1,32 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
+                    mc:Ignorable="po">
+
+    <!--
+         FlyShelf Motion System: single source of truth for animation
+         durations and easings in XAML.
+         Code-behind counterpart: Classes/AnimationHelper.cs (Motion class).
+         Keep both in sync when changing values.
+    -->
+
+    <!-- Duration tokens -->
+    <!-- Instant: press feedback, immediate reactions -->
+    <Duration x:Key="Motion.Instant">0:0:0.08</Duration>
+    <!-- Fast: hover states, small fades -->
+    <Duration x:Key="Motion.Fast">0:0:0.12</Duration>
+    <!-- Normal: standard UI transitions -->
+    <Duration x:Key="Motion.Normal">0:0:0.18</Duration>
+    <!-- Entrance: element entrances (fade + scale) -->
+    <Duration x:Key="Motion.Entrance">0:0:0.22</Duration>
+    <!-- Slow: large surfaces, emphasis moments -->
+    <Duration x:Key="Motion.Slow">0:0:0.3</Duration>
+
+    <!-- Easing tokens -->
+    <CubicEase x:Key="Motion.EaseOut" EasingMode="EaseOut" po:Freeze="True"/>
+    <CubicEase x:Key="Motion.EaseIn" EasingMode="EaseIn" po:Freeze="True"/>
+    <CubicEase x:Key="Motion.EaseInOut" EasingMode="EaseInOut" po:Freeze="True"/>
+    <BackEase x:Key="Motion.Spring" EasingMode="EaseOut" Amplitude="0.4" po:Freeze="True"/>
+
+</ResourceDictionary>

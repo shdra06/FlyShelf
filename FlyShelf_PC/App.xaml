@@ -12,6 +12,7 @@
                 <ui:ControlsDictionary />
                 <mica:ThemeDictionary Theme="Dark"/>
                 <mica:ControlsDictionary />
+                <ResourceDictionary Source="pack://application:,,,/Resources/Styles/MotionSystem.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/CustomSlider.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/GlobalScrollBar.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/ImagePlaceholder.xaml"/>
