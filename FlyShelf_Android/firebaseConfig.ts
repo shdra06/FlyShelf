@@ -165,8 +165,15 @@ async function signInAnonymouslyRest(): Promise<void> {
       _restIdToken = data.idToken;
       console.log('[FirebaseAuth] REST sign-in successful, token cached');
       
-      // Auto-clear token after 50 minutes (Firebase tokens last 1 hour)
-      setTimeout(() => { _restIdToken = null; }, 50 * 60 * 1000);
+      // AC-11: Auto-refresh token after 50 minutes instead of just clearing it
+      // Firebase tokens last 1 hour — proactively re-authenticate before expiry
+      setTimeout(() => {
+        console.log('[FirebaseAuth] REST token expiring — refreshing...');
+        signInAnonymouslyRest().catch(e => {
+          console.warn('[FirebaseAuth] REST token refresh failed:', e);
+          _restIdToken = null;
+        });
+      }, 50 * 60 * 1000);
     }
   } catch (error) {
     throw error;

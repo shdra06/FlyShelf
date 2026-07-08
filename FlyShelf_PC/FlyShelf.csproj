@@ -75,6 +75,7 @@
 
     <PackageReference Include="MicaWPF" Version="6.3.2" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
     <PackageReference Include="Microsoft.Recognizers.Text.DateTime" Version="1.8.13" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
@@ -103,7 +104,7 @@
 
   <Target Name="GenerateFirebaseSecrets" BeforeTargets="BeforeBuild">
     <PropertyGroup>
-      <SecretsFile>Classes\FirebaseSecrets.cs</SecretsFile>
+      <SecretsFile>Classes\Security\FirebaseSecrets.cs</SecretsFile>
     </PropertyGroup>
     <!-- Stub: compiles but Firebase features won't work until real file is provided -->
     <WriteLinesToFile File="$(SecretsFile)" Lines="namespace FlyShelf.Classes%0D%0A{%0D%0A    public static class FirebaseSecrets%0D%0A    {%0D%0A        public static string ApiKey =&gt; &quot;&quot;;%0D%0A        public static string DatabaseUrl =&gt; &quot;&quot;;%0D%0A    }%0D%0A}" Overwrite="true" Condition="!Exists('$(SecretsFile)')" />

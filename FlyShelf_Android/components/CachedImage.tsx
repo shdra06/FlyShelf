@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Image as RNImage } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import * as FileSystem from 'expo-file-system/legacy';
 import { IMAGE_CACHE_BASE } from '../utils/clipTypes';
+import { useAppTheme } from '../hooks/useAppTheme';
 
 const safeHash = (s: string): string => {
   let h = 0;
@@ -15,12 +16,17 @@ const safeHash = (s: string): string => {
 /**
  * CachedImage: Downloads remote images to local cache for reliable rendering.
  * Handles local file paths, content URIs, and remote URLs.
+ * Uses a FIXED height (200px) matching the PC app's uniform card sizing.
  */
+const MAX_RETRY_COUNT = 3;
+// Uniform card height — matches PC app's Height=165 scaled for mobile density
+const CARD_IMAGE_HEIGHT = 200;
+
 const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: () => void }) => {
+  const { colors } = useAppTheme();
   const [localUri, setLocalUri] = React.useState<string | null>(null);
   const [failed, setFailed] = React.useState(false);
   const [retryCount, setRetryCount] = React.useState(0);
-  const [aspectRatio, setAspectRatio] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     if (!imgUri) { setFailed(true); return; }
@@ -28,7 +34,6 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
     let cancelled = false;
     setFailed(false);
     setLocalUri(null);
-    setAspectRatio(null);
 
     const loadImage = async () => {
       try {
@@ -138,52 +143,34 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
     return () => { cancelled = true; };
   }, [imgUri, retryCount]);
 
-  React.useEffect(() => {
-    if (!localUri) return;
-    let cancelled = false;
-    RNImage.getSize(
-      localUri,
-      (w, h) => {
-        if (!cancelled && w && h) {
-          setAspectRatio(w / h);
-        }
-      },
-      () => {}
-    );
-    return () => { cancelled = true; };
-  }, [localUri]);
-
   // Show a retry button instead of hiding broken images
   if (failed) return (
     <TouchableOpacity 
-      style={{ marginBottom: 8, height: 100, borderRadius: 12, backgroundColor: '#1C202B', justifyContent: 'center', alignItems: 'center' }}
-      onPress={() => { setFailed(false); setRetryCount(c => c + 1); }}
+      style={{ marginBottom: 8, height: CARD_IMAGE_HEIGHT, borderRadius: 12, backgroundColor: colors.bg.card, justifyContent: 'center', alignItems: 'center' }}
+      onPress={() => { if (retryCount < MAX_RETRY_COUNT) { setFailed(false); setRetryCount(c => c + 1); } }}
       activeOpacity={0.7}
-      accessibilityLabel="Retry loading image"
+      disabled={retryCount >= MAX_RETRY_COUNT}
+      accessibilityLabel={retryCount >= MAX_RETRY_COUNT ? 'Image failed to load' : 'Retry loading image'}
       accessibilityRole="button"
       accessibilityHint="Attempts to reload the failed image"
     >
-      <Text style={{ fontSize: 24 }}>🔄</Text>
-      <Text style={{ color: '#8A8F98', fontSize: 11, marginTop: 4 }}>Tap to retry image</Text>
+      <Text style={{ fontSize: 24 }}>{retryCount >= MAX_RETRY_COUNT ? '❌' : '🔄'}</Text>
+      <Text style={{ color: colors.text.tertiary, fontSize: 11, marginTop: 4 }}>{retryCount >= MAX_RETRY_COUNT ? 'Image unavailable' : 'Tap to retry image'}</Text>
     </TouchableOpacity>
   );
 
   if (!localUri) return (
-    <View style={{ marginBottom: 8, height: 120, borderRadius: 12, backgroundColor: '#1C202B', justifyContent: 'center', alignItems: 'center' }}>
-      <ActivityIndicator size="small" color="#4A62EB" />
-      <Text style={{ color: '#8A8F98', fontSize: 10, marginTop: 4 }}>Loading image...</Text>
+    <View style={{ marginBottom: 8, height: CARD_IMAGE_HEIGHT, borderRadius: 12, backgroundColor: colors.bg.card, justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator size="small" color={colors.accent.primary} />
+      <Text style={{ color: colors.text.tertiary, fontSize: 10, marginTop: 4 }}>Loading image...</Text>
     </View>
   );
-
-  const imageStyle: any = aspectRatio 
-    ? { width: '100%', aspectRatio, borderRadius: 12, backgroundColor: '#1C202B' }
-    : { width: '100%', minHeight: 160, maxHeight: 320, borderRadius: 12, backgroundColor: '#1C202B' };
 
   return (
     <TouchableOpacity style={{ marginBottom: 8 }} onPress={onPress} activeOpacity={0.85} accessibilityLabel="Synced image" accessibilityRole="image" accessibilityHint="Tap to view full size">
       <Image
         source={{ uri: localUri }}
-        style={imageStyle}
+        style={{ width: '100%', height: CARD_IMAGE_HEIGHT, borderRadius: 12, backgroundColor: colors.bg.card }}
         contentFit="contain"
         accessibilityLabel="Synced image preview"
         onError={() => {

@@ -36,7 +36,7 @@ namespace FlyShelf
         /// Guard flag: when true, clipboard changes from networking copy/export
         /// won't be re-captured.
         /// </summary>
-        internal static bool _suppressResearchCapture;
+        internal static bool _suppressResearchCapture = false;
 
         private static readonly SolidColorBrush _researchHeaderBrush =
             new(Color.FromRgb(0x0D, 0x11, 0x17)); // Dark theme for networking panel
@@ -1136,6 +1136,26 @@ namespace FlyShelf
             {
                 NearbyDiscovery.Instance?.PruneStale();
                 await (NearbyDiscovery.Instance?.BroadcastProbe() ?? Task.CompletedTask);
+
+                // Also register alive PeerManager peers as nearby (they may be
+                // connected via HTTP polling or WebSocket but not UDP broadcast)
+                if (PeerManager.Instance != null && NearbyDiscovery.Instance != null)
+                {
+                    foreach (var peer in PeerManager.Instance.ConnectedPeers.Values.Where(p => p.IsAlive))
+                    {
+                        string peerIp = "";
+                        if (!string.IsNullOrEmpty(peer.LanUrl))
+                        {
+                            try { peerIp = new Uri(peer.LanUrl).Host; } catch { }
+                        }
+                        if (!string.IsNullOrEmpty(peerIp))
+                        {
+                            NearbyDiscovery.Instance.RecordHttpDiscovery(
+                                peer.DeviceId, peer.DeviceName, peerIp, peer.TransferPort, "PC");
+                        }
+                    }
+                }
+
                 // Wait a moment for responses to arrive
                 await Task.Delay(1500);
                 RefreshNearbyDevices();
@@ -1173,7 +1193,14 @@ namespace FlyShelf
                     return;
                 }
 
-                // Build a WPF pairing dialog
+                // Show pairing code inline in the header bar
+                if (NetPanelPairingInfo != null && NetPanelPairingCodeText != null)
+                {
+                    NetPanelPairingCodeText.Text = code;
+                    NetPanelPairingInfo.Visibility = Visibility.Visible;
+                }
+
+                // Build a WPF pairing dialog to enter ANOTHER device's code
                 string? enteredCode = ShowPairingDialog(code);
 
                 if (!string.IsNullOrEmpty(enteredCode) && enteredCode != code)
@@ -1185,6 +1212,8 @@ namespace FlyShelf
                         ToastWindow.ShowToast($"✅ Paired with {deviceName}!");
                         await Task.Delay(2000);
                         RefreshNetworkPanelDevices();
+                        // Hide pairing info after successful pair
+                        if (NetPanelPairingInfo != null) NetPanelPairingInfo.Visibility = Visibility.Collapsed;
                     }
                     else
                     {
@@ -1197,6 +1226,12 @@ namespace FlyShelf
                 Logger.LogAction("NETWORK", $"Pair error: {ex.Message}");
                 ToastWindow.ShowToast($"❌ Pairing failed: {ex.Message}");
             }
+        }
+
+        private void NetPanel_DismissPairing_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (NetPanelPairingInfo != null) NetPanelPairingInfo.Visibility = Visibility.Collapsed;
         }
 
         private string? ShowPairingDialog(string myCode)

@@ -1,10 +1,11 @@
 /**
  * EmptyState — Standard empty view with icon, title, description, and optional CTA
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, font, space } from '../styles/theme';
+import { font, space } from '../styles/theme';
+import { useAppTheme } from '../hooks/useAppTheme';
 import AppButton from './AppButton';
 
 interface EmptyStateProps {
@@ -18,16 +19,20 @@ interface EmptyStateProps {
 
 export default function EmptyState({
   icon = 'file-tray-outline',
-  iconColor = colors.text.disabled,
+  iconColor,
   title,
   description,
   actionLabel,
   onAction,
 }: EmptyStateProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const resolvedIconColor = iconColor ?? colors.text.disabled;
+
   return (
     <View style={styles.container}>
       <View style={styles.iconWrap}>
-        <Ionicons name={icon as any} size={48} color={iconColor} />
+        <Ionicons name={icon as any} size={48} color={resolvedIconColor} />
       </View>
       <Text style={styles.title}>{title}</Text>
       {description && <Text style={styles.description}>{description}</Text>}
@@ -40,7 +45,7 @@ export default function EmptyState({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: Record<string, any>) => StyleSheet.create({
   container: {
     alignItems: 'center',
     paddingVertical: 60,
@@ -74,3 +79,4 @@ const styles = StyleSheet.create({
     marginTop: space.xl,
   },
 });
+

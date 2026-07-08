@@ -580,6 +580,7 @@ namespace FlyShelf
             {
                 IsDeletingItem = true;
                 _isSuppressingSizeSync = true;
+                ActivateDeletionScrollGuard(items);
                 try
                 {
                     foreach (var item in items)
@@ -589,6 +590,7 @@ namespace FlyShelf
                 }
                 finally
                 {
+                    _isDeletionScrollGuardActive = false;
                     if (_isEdgeLocked && this.ActualHeight > 0)
                     {
                         _lockedBottomEdge = this.Top + this.ActualHeight + 20;
@@ -628,6 +630,7 @@ namespace FlyShelf
             if (containersToAnimate.Count == 0)
             {
                 // No visible containers to animate — remove instantly
+                ActivateDeletionScrollGuard(items);
                 try
                 {
                     foreach (var item in items)
@@ -637,6 +640,7 @@ namespace FlyShelf
                 }
                 finally
                 {
+                    _isDeletionScrollGuardActive = false;
                     if (_isEdgeLocked && this.ActualHeight > 0)
                     {
                         _lockedBottomEdge = this.Top + this.ActualHeight + 20;
@@ -677,6 +681,9 @@ namespace FlyShelf
                         container.IsHitTestVisible = true;
                     }
 
+                    // Activate deletion scroll guard BEFORE removing items
+                    ActivateDeletionScrollGuard(items);
+
                     // NOW physically remove the items from the view model
                     try
                     {
@@ -687,6 +694,7 @@ namespace FlyShelf
                     }
                     finally
                     {
+                        _isDeletionScrollGuardActive = false;
                         if (_isEdgeLocked && this.ActualHeight > 0)
                         {
                             _lockedBottomEdge = this.Top + this.ActualHeight + 20;
@@ -721,6 +729,56 @@ namespace FlyShelf
                 container.BeginAnimation(ListViewItem.HeightProperty, hAnim);
                 container.BeginAnimation(ListViewItem.OpacityProperty, oAnim);
             }
+        }
+
+        /// <summary>
+        /// Captures an anchor card below the deleted items and activates the deletion scroll guard.
+        /// The ScrollChanged handler uses this anchor to correct any scroll drift caused by
+        /// VirtualizingStackPanel extent recalculation during item removal.
+        /// </summary>
+        private void ActivateDeletionScrollGuard(System.Collections.Generic.List<ClipboardItem> itemsToDelete)
+        {
+            try
+            {
+                // Find the highest index among items being deleted
+                int maxDeletedIndex = -1;
+                foreach (var item in itemsToDelete)
+                {
+                    int idx = ShelfListView.Items.IndexOf(item);
+                    if (idx > maxDeletedIndex) maxDeletedIndex = idx;
+                }
+
+                // Anchor = first item AFTER the deleted items
+                int anchorIndex = maxDeletedIndex + 1;
+                if (anchorIndex >= ShelfListView.Items.Count)
+                {
+                    // Deleting last items — anchor to the item BEFORE the deleted range
+                    int minDeletedIndex = int.MaxValue;
+                    foreach (var item in itemsToDelete)
+                    {
+                        int idx = ShelfListView.Items.IndexOf(item);
+                        if (idx >= 0 && idx < minDeletedIndex) minDeletedIndex = idx;
+                    }
+                    anchorIndex = minDeletedIndex - 1;
+                }
+
+                if (anchorIndex >= 0 && anchorIndex < ShelfListView.Items.Count)
+                {
+                    var anchorContainer = ShelfListView.ItemContainerGenerator.ContainerFromIndex(anchorIndex) as ListViewItem;
+                    if (anchorContainer != null)
+                    {
+                        var transform = anchorContainer.TransformToAncestor(this);
+                        var pos = transform.Transform(new Point(0, 0));
+                        _deletionAnchorIndex = anchorIndex;
+                        _deletionAnchorTargetY = pos.Y;
+                        _isDeletionScrollGuardActive = true;
+                        return;
+                    }
+                }
+            }
+            catch { }
+            // If we couldn't find a valid anchor, don't activate the guard
+            _isDeletionScrollGuardActive = false;
         }
 
         /// <summary>

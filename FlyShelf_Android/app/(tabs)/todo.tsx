@@ -4,7 +4,7 @@ import {
   Alert, Platform, Modal, Animated, KeyboardAvoidingView,
   ToastAndroid, FlatList,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { FlashList } from '@shopify/flash-list';
 const FlashListCast = FlashList as any;
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,17 +14,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { useSettings } from '../../context/SettingsContext';
-import { getSecureItem } from '../../utils/secureStorage';
-import { fetchWithTimeout } from '../../utils/networkHelpers';
 import { NetworkClock } from '../../utils/networkClock';
+import { useTodoSync } from '../../features/todo/useTodoSync';
+import { useTodoTimers } from '../../features/todo/useTodoTimers';
 import {
   TodoDay, TodoItem, TodoPriority, TodoRecurrence,
   createTodoItem, createTodoDay, generateId,
   PriorityLabels, PriorityColors, RecurrenceLabels,
   getDueDateDisplay, isOverdue, isToday, parseDate,
 } from '../../utils/noteTypes';
-import { todoStyles as s } from '../../styles/todoStyles';
-import { colors, font, space, component } from '../../styles/theme';
+import { createTodoStyles } from '../../styles/todoStyles';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import { font, space } from '../../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 import RAnimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -35,9 +36,6 @@ import ScreenHeader from '../../components/ScreenHeader';
 
 const TODOS_STORAGE_KEY = '@flyshelf_todos';
 const MIGRATE_DATE_KEY = '@flyshelf_last_migrate_date';
-const POLL_INTERVAL = 10_000;
-const DEBOUNCE_POST_MS = 2_000;
-const TIMERS_STORAGE_KEY = '@flyshelf_active_timers';
 
 const COLOR_OPTIONS = ['', '#6384FF', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6', '#38BDF8'];
 
@@ -121,6 +119,8 @@ const isDueDateToday = (dueDateStr: string | null | undefined): boolean => {
 
 export default function TodoScreen() {
   const { pairingKey, deviceName } = useSettings();
+  const { colors, shadows } = useAppTheme();
+  const s = createTodoStyles(colors, shadows);
 
   // ─── State ─────────────────────────────────────────────
   const [days, setDays] = useState<TodoDay[]>([]);
@@ -147,31 +147,20 @@ export default function TodoScreen() {
   // ─── Sort state ───────────────────────────────────────
   const [sortMode, setSortMode] = useState<TodoSortMode>('manual');
   const [showSortModal, setShowSortModal] = useState(false);
-  const [activeTimers, setActiveTimers] = useState<Record<string, { remaining: number; intervalId: ReturnType<typeof setInterval> }>>({});
   const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [reminderPickerItemId, setReminderPickerItemId] = useState<string | null>(null);
   const [reminderPickerValue, setReminderPickerValue] = useState(new Date());
   const [reminderPickerMode, setReminderPickerMode] = useState<'date' | 'time'>('date');
 
   // ─── Refs ──────────────────────────────────────────────
-  const pcUrlRef = useRef<string>('');
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const daysRef = useRef<TodoDay[]>([]);
   const changedDayKeysRef = useRef<Set<string>>(new Set());
   const dayRange = useMemo(() => buildDayRange(), []);
   const checkboxScales = useRef<Map<string, Animated.Value>>(new Map());
-  const pollCountRef = useRef(0);
-  const syncFailCountRef = useRef(0);
   const mountedRef = useRef(true);
-  // T-3 fix: mirror active timers in a ref so unmount cleanup can clear the
-  // interval handles directly. React does not run setState updaters on
-  // unmounted components, so cleanup must never rely on them.
-  const activeTimersRef = useRef<Record<string, { remaining: number; intervalId: ReturnType<typeof setInterval> }>>({});
 
-  // Keep refs in sync
+  // Keep daysRef in sync
   useEffect(() => { daysRef.current = days; }, [days]);
-  useEffect(() => { activeTimersRef.current = activeTimers; }, [activeTimers]);
 
   // Unmount guard
   useEffect(() => {
@@ -185,21 +174,6 @@ export default function TodoScreen() {
     const newDay = createTodoDay(new Date(dateKey));
     const updated = [...currentDays, newDay];
     return [newDay, updated];
-  }, []);
-
-  // ─── Resolve PC URL ────────────────────────────────────
-  const resolvePcUrl = useCallback(async () => {
-    try {
-      const globalUrl = await getSecureItem('pairedGlobalUrl');
-      if (globalUrl) { pcUrlRef.current = globalUrl; return; }
-      const localIp = await AsyncStorage.getItem('@pcLocalIp');
-      if (localIp) {
-        let base = localIp.includes('://') ? localIp : `http://${localIp}`;
-        const hostPart = base.replace(/^https?:\/\//, '');
-        if (!hostPart.includes(':')) base = `${base}:8999`;
-        pcUrlRef.current = base.replace(/\/$/, '');
-      }
-    } catch {}
   }, []);
 
   // ─── Load from AsyncStorage + migrate incomplete tasks ─
@@ -341,112 +315,19 @@ export default function TodoScreen() {
     return Array.from(map.values()).sort((a, b) => a.Date.localeCompare(b.Date));
   }, []);
 
-  // ─── Poll PC for todos ─────────────────────────────────
-  const pollTodos = useCallback(async () => {
-    // Re-resolve PC URL every 5th poll
-    pollCountRef.current++;
-    if (pollCountRef.current % 5 === 0) {
-      await resolvePcUrl();
-    }
+  // ─── useTodoSync hook (placed after saveLocal + mergeDays are declared) ─
+  const { schedulePush } = useTodoSync({
+    pairingKey,
+    deviceName,
+    daysRef,
+    changedDayKeysRef,
+    mountedRef,
+    mergeDays,
+    saveLocal,
+    onDaysMerged: (merged) => setDays(merged),
+    onStatusChange: (status) => setSyncStatus(status),
+  });
 
-    if (!pcUrlRef.current || !pairingKey) return;
-    try {
-      setSyncStatus('syncing');
-      const resp = await fetchWithTimeout(
-        `${pcUrlRef.current}/api/todos`,
-        {
-          method: 'GET',
-          headers: {
-            'X-Pairing-Key': pairingKey,
-            'X-Device-Name': deviceName || 'Android',
-          },
-        },
-        5000,
-      );
-      if (resp.ok) {
-        const remote: TodoDay[] = await resp.json();
-        const merged = mergeDays(daysRef.current, remote);
-        setDays(merged);
-        saveLocal(merged);
-        setSyncStatus('connected');
-        syncFailCountRef.current = 0;
-
-        // Flush offline queue on successful connection
-        try {
-          const pendingRaw = await AsyncStorage.getItem('@flyshelf_pending_todo_sync');
-          if (pendingRaw) {
-            const pendingKeys: string[] = JSON.parse(pendingRaw);
-            if (pendingKeys.length > 0) {
-              const payload = daysRef.current.filter(d => pendingKeys.includes(d.Date));
-              if (payload.length > 0) {
-                await fetchWithTimeout(`${pcUrlRef.current}/api/todos`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'X-Pairing-Key': pairingKey, 'X-Device-Name': deviceName || 'Android' },
-                  body: JSON.stringify(payload),
-                }, 5000);
-              }
-              await AsyncStorage.removeItem('@flyshelf_pending_todo_sync');
-            }
-          }
-        } catch {}
-      } else {
-        setSyncStatus('offline');
-        syncFailCountRef.current++;
-        if (syncFailCountRef.current === 2) {
-          if (Platform.OS === 'android') ToastAndroid.show('Todo sync offline — PC may be unreachable', ToastAndroid.SHORT);
-        }
-      }
-    } catch {
-      setSyncStatus('offline');
-      syncFailCountRef.current++;
-      if (syncFailCountRef.current === 2) {
-        if (Platform.OS === 'android') ToastAndroid.show('Todo sync offline — PC may be unreachable', ToastAndroid.SHORT);
-      }
-    }
-  }, [pairingKey, deviceName, mergeDays, saveLocal, resolvePcUrl, getSyncPrefsForDevice]);
-
-  // ─── Push changed days to PC ───────────────────────────
-  const pushChangedDays = useCallback(async () => {
-    if (!mountedRef.current) return;
-    if (!pcUrlRef.current || !pairingKey) return;
-    const keys = Array.from(changedDayKeysRef.current);
-    if (keys.length === 0) return;
-    changedDayKeysRef.current.clear();
-
-    const payload = daysRef.current.filter(d => keys.includes(d.Date));
-    if (payload.length === 0) return;
-
-    try {
-      await fetchWithTimeout(
-        `${pcUrlRef.current}/api/todos`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Pairing-Key': pairingKey,
-            'X-Device-Name': deviceName || 'Android',
-          },
-          body: JSON.stringify(payload),
-        },
-        5000,
-      );
-    } catch {
-      // Persist failed sync keys for retry
-      try {
-        const existing = await AsyncStorage.getItem('@flyshelf_pending_todo_sync');
-        const pending: string[] = existing ? JSON.parse(existing) : [];
-        for (const k of keys) { if (!pending.includes(k)) pending.push(k); }
-        await AsyncStorage.setItem('@flyshelf_pending_todo_sync', JSON.stringify(pending));
-      } catch {}
-    }
-  }, [pairingKey, deviceName]);
-
-  // ─── Debounced push ────────────────────────────────────
-  const schedulePush = useCallback((dayKey: string) => {
-    changedDayKeysRef.current.add(dayKey);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(pushChangedDays, DEBOUNCE_POST_MS);
-  }, [pushChangedDays]);
 
   // ─── Mark day modified & trigger sync (M-8 fix: immutable copy) ──
   const markModified = useCallback((dayKey: string, inputDays: TodoDay[]) => {
@@ -458,104 +339,23 @@ export default function TodoScreen() {
     schedulePush(dayKey);
   }, [saveLocal, schedulePush]);
 
-  // ─── Lifecycle: init ───────────────────────────────────
+  // ─── Lifecycle: load local data on mount ──────────────
   useEffect(() => {
     loadLocal();
-    resolvePcUrl().then(() => {
-      pollTodos();
-      pollRef.current = setInterval(pollTodos, POLL_INTERVAL);
-    });
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [loadLocal, resolvePcUrl, pollTodos]);
-
-  // ─── Restore persisted timers on mount & clean up on unmount ───
-  useEffect(() => {
-    const restoreTimers = async () => {
-      try {
-        const raw = await AsyncStorage.getItem(TIMERS_STORAGE_KEY);
-        if (!raw) return;
-        const saved: Record<string, { taskId: string; endTime: number; duration: number; dayKey: string }> = JSON.parse(raw);
-        const now = Date.now();
-        const toRemove: string[] = [];
-
-        for (const [taskId, data] of Object.entries(saved)) {
-          // Check the task still exists
-          const taskExists = daysRef.current.some(d => d.Items.some(i => i.Id === taskId));
-          if (!taskExists) { toRemove.push(taskId); continue; }
-
-          const remainingMs = data.endTime - now;
-          if (remainingMs <= 0) {
-            // Timer expired while away — fire completion immediately
-            toRemove.push(taskId);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            Alert.alert('⏱ Timer Complete!', `Your timer for "${getItemText(taskId)}" has finished.`);
-            try {
-              Notifications.scheduleNotificationAsync({
-                content: { title: '⏱ Timer Complete', body: getItemText(taskId) },
-                trigger: null,
-              });
-            } catch {}
-          } else {
-            // Resume countdown with remaining time
-            const remainingSec = Math.ceil(remainingMs / 1000);
-            const intervalId = setInterval(() => {
-              setActiveTimers(prev => {
-                const timer = prev[taskId];
-                if (!timer || timer.remaining <= 1) {
-                  clearInterval(intervalId);
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  Alert.alert('⏱ Timer Complete!', `Your timer for "${getItemText(taskId)}" has finished.`);
-                  try {
-                    Notifications.scheduleNotificationAsync({
-                      content: { title: '⏱ Timer Complete', body: getItemText(taskId) },
-                      trigger: null,
-                    });
-                  } catch {}
-                  // Remove from AsyncStorage on completion
-                  AsyncStorage.getItem(TIMERS_STORAGE_KEY).then(r => {
-                    if (r) {
-                      const timers = JSON.parse(r);
-                      delete timers[taskId];
-                      AsyncStorage.setItem(TIMERS_STORAGE_KEY, JSON.stringify(timers)).catch(() => {});
-                    }
-                  }).catch(() => {});
-                  const { [taskId]: _, ...rest } = prev;
-                  return rest;
-                }
-                return { ...prev, [taskId]: { ...timer, remaining: timer.remaining - 1 } };
-              });
-            }, 1000);
-            setActiveTimers(prev => ({ ...prev, [taskId]: { remaining: remainingSec, intervalId } }));
-          }
-        }
-
-        // Clean up expired/orphaned timers from storage
-        if (toRemove.length > 0) {
-          for (const id of toRemove) delete saved[id];
-          await AsyncStorage.setItem(TIMERS_STORAGE_KEY, JSON.stringify(saved));
-        }
-      } catch {}
-    };
-    restoreTimers();
-
-    return () => {
-      // T-3 fix: clear interval handles from the ref (AsyncStorage data is kept
-      // for restoration). The previous code cleared them inside a setActiveTimers
-      // updater, but React does not invoke state updaters on unmounted
-      // components - the intervals leaked and kept firing forever.
-      Object.values(activeTimersRef.current).forEach(t => clearInterval(t.intervalId));
-      activeTimersRef.current = {};
-    };
-  }, []);
+  }, [loadLocal]);
 
   // ─── Currently selected day key & items ────────────────
   const selectedDate = dayRange[selectedDayIndex];
   const selectedDayKey = formatDayKey(selectedDate);
   const selectedDay = days.find(d => d.Date === selectedDayKey);
   const rawTodoItems = selectedDay?.Items || [];
+
+  // ─── useTodoTimers hook ────────────────────────────────
+  const { activeTimers, activeTimersRef, startTimer, cancelTimer, formatCountdown, getItemText } = useTodoTimers({
+    daysRef,
+    selectedDayKey,
+  });
+
 
   // ─── Sort items based on sort mode ─────────────────────
   const todoItems = useMemo(() => {
@@ -593,6 +393,12 @@ export default function TodoScreen() {
   // ─── Summary counts ────────────────────────────────────
   const doneCount = todoItems.filter(i => i.IsDone).length;
   const totalCount = todoItems.length;
+
+  // AL-8: Memoize extraData to prevent new array reference on every render
+  const extraDataMemo = useMemo(
+    () => [expandedItemId, editingItemId, showColorPicker, tagInputItemId, editingSubtaskId, activeTimers],
+    [expandedItemId, editingItemId, showColorPicker, tagInputItemId, editingSubtaskId, activeTimers]
+  );
 
   // ─── Search results ────────────────────────────────────
   const searchResults = useMemo(() => {
@@ -935,88 +741,12 @@ export default function TodoScreen() {
   }, [dayRange]);
 
   // ─── Timer helpers ─────────────────────────────────────
-  const getItemText = useCallback((itemId: string): string => {
-    if (!daysRef.current || daysRef.current.length === 0) return 'Task';
-    for (const d of daysRef.current) {
-      const it = d.Items.find(i => i.Id === itemId);
-      if (it) return it.Text || 'Task';
-    }
-    return 'Task';
-  }, []);
-
   const handleCycleTimer = useCallback((item: TodoItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const currentIdx = TIMER_PRESETS.indexOf(item.TimerMinutes as any);
     const nextIdx = (currentIdx + 1) % TIMER_PRESETS.length;
     handleUpdateItem(item.Id, { TimerMinutes: TIMER_PRESETS[nextIdx] });
   }, [handleUpdateItem]);
-
-  const startTimer = useCallback((itemId: string, minutes: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const remaining = minutes * 60;
-    const endTime = Date.now() + remaining * 1000;
-
-    // Persist timer to AsyncStorage
-    AsyncStorage.getItem(TIMERS_STORAGE_KEY).then(raw => {
-      const timers = raw ? JSON.parse(raw) : {};
-      timers[itemId] = { taskId: itemId, endTime, duration: minutes * 60, dayKey: selectedDayKey };
-      AsyncStorage.setItem(TIMERS_STORAGE_KEY, JSON.stringify(timers)).catch(() => {});
-    }).catch(() => {});
-
-    const intervalId = setInterval(() => {
-      setActiveTimers(prev => {
-        const timer = prev[itemId];
-        if (!timer || timer.remaining <= 1) {
-          clearInterval(intervalId);
-          // Timer complete
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert('⏱ Timer Complete!', `Your timer for "${getItemText(itemId)}" has finished.`);
-          try {
-            Notifications.scheduleNotificationAsync({
-              content: { title: '⏱ Timer Complete', body: getItemText(itemId) },
-              trigger: null,
-            });
-          } catch {}
-          // Remove from AsyncStorage on completion
-          AsyncStorage.getItem(TIMERS_STORAGE_KEY).then(r => {
-            if (r) {
-              const timers = JSON.parse(r);
-              delete timers[itemId];
-              AsyncStorage.setItem(TIMERS_STORAGE_KEY, JSON.stringify(timers)).catch(() => {});
-            }
-          }).catch(() => {});
-          const { [itemId]: _, ...rest } = prev;
-          return rest;
-        }
-        return { ...prev, [itemId]: { ...timer, remaining: timer.remaining - 1 } };
-      });
-    }, 1000);
-    setActiveTimers(prev => ({ ...prev, [itemId]: { remaining, intervalId } }));
-  }, [getItemText, selectedDayKey]);
-
-  const cancelTimer = useCallback((itemId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setActiveTimers(prev => {
-      const timer = prev[itemId];
-      if (timer) clearInterval(timer.intervalId);
-      const { [itemId]: _, ...rest } = prev;
-      return rest;
-    });
-    // Remove from AsyncStorage
-    AsyncStorage.getItem(TIMERS_STORAGE_KEY).then(raw => {
-      if (raw) {
-        const timers = JSON.parse(raw);
-        delete timers[itemId];
-        AsyncStorage.setItem(TIMERS_STORAGE_KEY, JSON.stringify(timers)).catch(() => {});
-      }
-    }).catch(() => {});
-  }, []);
-
-  const formatCountdown = (totalSeconds: number): string => {
-    const m = Math.floor(totalSeconds / 60);
-    const sec = totalSeconds % 60;
-    return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
-  };
 
   // ─── Reminder helpers ──────────────────────────────────
   const handleOpenReminderPicker = useCallback((item: TodoItem) => {
@@ -1047,7 +777,7 @@ export default function TodoScreen() {
                   title: '🔔 Todo Reminder',
                   body: getItemText(reminderPickerItemId) || 'You have a pending task',
                 },
-                trigger: { date: finalDate },
+                trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: finalDate },
               });
             } catch {}
           }
@@ -1068,7 +798,7 @@ export default function TodoScreen() {
               title: '🔔 Todo Reminder',
               body: getItemText(reminderPickerItemId) || 'You have a pending task',
             },
-            trigger: { date: reminderPickerValue },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: reminderPickerValue },
           });
         } catch {}
       }
@@ -1802,7 +1532,7 @@ export default function TodoScreen() {
                 keyExtractor={(item: TodoItem) => item.Id}
                 contentContainerStyle={s.listContent}
                 showsVerticalScrollIndicator={false}
-                extraData={[expandedItemId, editingItemId, showColorPicker, tagInputItemId, editingSubtaskId, activeTimers]}
+                extraData={extraDataMemo}
               />
             )}
           </View>
@@ -1936,7 +1666,7 @@ export default function TodoScreen() {
               }}>
                 <Text style={{
                   color: colors.text.primary, fontSize: 18,
-                  fontFamily: font.semiBold, marginBottom: 16, textAlign: 'center',
+                  fontFamily: font.semibold, marginBottom: 16, textAlign: 'center',
                 }}>
                   📋 Todo Templates
                 </Text>
@@ -1953,7 +1683,7 @@ export default function TodoScreen() {
                   >
                     <Text style={{
                       color: colors.text.primary, fontSize: 15,
-                      fontFamily: font.semiBold, marginBottom: 6,
+                      fontFamily: font.semibold, marginBottom: 6,
                     }}>
                       {tmpl.name}
                     </Text>
@@ -2001,7 +1731,7 @@ export default function TodoScreen() {
               }}>
                 <Text style={{
                   color: colors.text.primary, fontSize: 18,
-                  fontFamily: font.semiBold, marginBottom: 16, textAlign: 'center',
+                  fontFamily: font.semibold, marginBottom: 16, textAlign: 'center',
                 }}>
                   ↕ Sort Tasks
                 </Text>

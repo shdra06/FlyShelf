@@ -17,6 +17,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using FlyShelf.Models;
 
 namespace FlyShelf
 {
@@ -196,7 +197,10 @@ namespace FlyShelf
         /// </summary>
         private void UpdateNotesSyncStatus()
         {
-            var count = Classes.PeerManager.Instance?.AliveCount ?? 0;
+            var peerCount = Classes.PeerManager.Instance?.AliveCount ?? 0;
+            // Also count directly-connected mobile devices polling via LAN
+            var mobileCount = Classes.NetworkSyncServer.Instance?.GetDirectlyConnectedDeviceCount() ?? 0;
+            var count = peerCount + mobileCount;
             var isSynced = count > 0;
 
             var colorHex = isSynced ? "#10B981" : "#F59E0B";
@@ -2921,46 +2925,5 @@ namespace FlyShelf
 
     }
 
-    /// <summary>ViewModel for search results display.</summary>
-    public class NoteSearchResult
-    {
-        public string DateLabel { get; set; } = "";
-        public string Content { get; set; } = "";
-        public NoteDay Day { get; set; } = null!;
-        public NoteBullet Bullet { get; set; } = null!;
-    }
 
-    /// <summary>ViewModel for sidebar display representing day or month box.</summary>
-    public class NotesSidebarItem : System.ComponentModel.INotifyPropertyChanged
-    {
-        public bool IsMonthHeader { get; set; }
-        public string Label { get; set; } = "";
-        public string MonthLabel { get; set; } = "";
-        public string FullLabel { get; set; } = "";
-        public bool IsToday { get; set; }
-
-        private bool _isSelected;
-        public bool IsSelected
-        {
-            get => _isSelected;
-            set { if (_isSelected != value) { _isSelected = value; OnPropertyChanged(nameof(IsSelected)); } }
-        }
-
-        public NoteDay Day { get; set; } = null!;
-        public int MonthValue { get; set; }
-        public int YearValue { get; set; }
-
-        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(name));
-    }
-
-    /// <summary>ViewModel for the month picker popup items.</summary>
-    public class NotesMonthPickerItem
-    {
-        public string MonthName { get; set; } = "";
-        public string YearText { get; set; } = "";
-        public string DayCount { get; set; } = "";
-        public int Month { get; set; }
-        public int Year { get; set; }
-    }
 }

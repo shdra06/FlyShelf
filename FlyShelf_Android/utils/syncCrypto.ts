@@ -15,12 +15,26 @@ import { syncLog } from './debugLog';
 import { Platform } from 'react-native';
 import { base64ToUint8Array, uint8ArrayToBase64 } from './networkHelpers';
 
-const getCrypto = () => {
+const getCrypto = (): { subtle: SubtleCrypto; getRandomValues: (arr: Uint8Array) => Uint8Array } => {
   if (Platform.OS === 'web') {
-    return typeof crypto !== 'undefined' ? crypto : (globalThis as any).crypto;
+    const w = typeof crypto !== 'undefined' ? crypto : (globalThis as any).crypto;
+    return w;
   }
-  const qc = require('react-native-quick-crypto');
-  return qc.default || qc;
+  try {
+    // react-native-quick-crypto: named exports at module root
+    const { subtle, getRandomValues } = require('react-native-quick-crypto');
+    if (subtle && typeof subtle.importKey === 'function') {
+      return { subtle: subtle as SubtleCrypto, getRandomValues };
+    }
+    // Fallback: try .default
+    const qc = require('react-native-quick-crypto');
+    const subtleObj = qc?.default?.subtle || qc?.subtle;
+    const grv = qc?.default?.getRandomValues || qc?.getRandomValues;
+    if (subtleObj) return { subtle: subtleObj as SubtleCrypto, getRandomValues: grv };
+  } catch {}
+  // Last resort: Web Crypto (works in Metro/Hermes dev)
+  if (typeof crypto !== 'undefined' && crypto.subtle) return crypto as any;
+  throw new Error('No crypto implementation available');
 };
 
 // Must match PC-side constants in SyncCrypto.cs

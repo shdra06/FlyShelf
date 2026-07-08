@@ -1,0 +1,224 @@
+import React, { useRef, useCallback } from 'react';
+import { Platform, ToastAndroid } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Notifications from 'expo-notifications';
+import { ref, set, get } from 'firebase/database';
+import { database } from '../../firebaseConfig';
+import { ClipItem, SYNC_CACHE_BASE } from '../../utils/clipTypes';
+import { syncLog } from '../../utils/debugLog';
+import { NetworkClock } from '../../utils/networkClock';
+
+// ─── Download Queue: Sequential file download processor ───
+export interface DownloadQueueItem {
+  id: string;
+  title: string;
+  type: string;
+  fileUrl: string;
+  destPath: string;
+  source: string;
+  sourceDevice: string;
+  retryCount?: number;
+  timestamp?: number;
+}
+
+export function useDownloadQueue(params: {
+  pairingKeyRef: React.MutableRefObject<string>;
+  deviceName: string;
+  getCachedPcUrl: () => Promise<string>;
+  setClips: React.Dispatch<React.SetStateAction<ClipItem[]>>;
+  setDownloadedItems: React.Dispatch<React.SetStateAction<Set<string>>>;
+}): {
+  enqueueDownload: (item: DownloadQueueItem) => void;
+  markFileDownloaded: (entryId: string) => Promise<void>;
+} {
+  const { pairingKeyRef, deviceName, getCachedPcUrl, setClips, setDownloadedItems } = params;
+
+  const downloadQueueRef = useRef<DownloadQueueItem[]>([]);
+  const isDownloadingRef = useRef<boolean>(false);
+  const processedDownloadsRef = useRef<Set<string>>(new Set());
+
+  const processDownloadQueue = useCallback(async () => {
+    if (isDownloadingRef.current) return; // Already processing
+    if (downloadQueueRef.current.length === 0) return;
+    isDownloadingRef.current = true;
+
+    while (downloadQueueRef.current.length > 0) {
+      const item = downloadQueueRef.current.shift()!;
+      const dedupKey = `${item.title}::${item.timestamp || item.fileUrl}`;
+      if (processedDownloadsRef.current.has(dedupKey)) continue;
+
+      const progressId = `dl_queue_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+      try {
+        // Check if already downloaded
+        const existing = await FileSystem.getInfoAsync(item.destPath);
+        if (existing.exists && (existing as any).size > 100) {
+          syncLog('DL-QUEUE', `Skip (exists): ${item.title}`);
+          setDownloadedItems(prev => { const n = new Set(prev); n.add(item.id || item.title); return n; });
+          // Update clip with CachedUri
+          setClips(prev => prev.map(c =>
+            (c.id === item.id || c.Title === item.title) ? { ...c, CachedUri: item.destPath } : c
+          ));
+          continue;
+        }
+
+        // Show progress card
+        setClips(prev => [{
+          id: progressId, Title: `⬇️ ${item.title}`, Type: 'Text',
+          Raw: `Downloading from ${item.sourceDevice} via ${item.source}...`,
+          Time: new Date().toLocaleTimeString(),
+        }, ...prev]);
+
+        syncLog('DL-QUEUE', `Downloading: ${item.title} via ${item.source}`);
+        const dlHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
+        if (pairingKeyRef.current) dlHeaders['X-Pairing-Key'] = pairingKeyRef.current;
+
+        // Retry loop: 2 attempts with URL re-resolution on failure
+        let queueDlSuccess = false;
+        let currentFileUrl = item.fileUrl;
+        for (let queueAttempt = 0; queueAttempt < 2 && !queueDlSuccess; queueAttempt++) {
+          try {
+            // Re-resolve URL on retry (tunnel URL may have changed)
+            if (queueAttempt > 0 && currentFileUrl.includes('trycloudflare.com')) {
+              try {
+                const freshBase = await getCachedPcUrl();
+                if (freshBase && currentFileUrl.includes('?')) {
+                  const queryPart = currentFileUrl.substring(currentFileUrl.indexOf('?'));
+                  currentFileUrl = `${freshBase}/download${queryPart}`;
+                } else if (freshBase) {
+                  currentFileUrl = freshBase;
+                }
+              } catch (e) { console.warn('DL-Queue URL resolve: error', (e as any)?.message || e); }
+              syncLog('DL-QUEUE', `Retry #${queueAttempt}: ${currentFileUrl.substring(0, 80)}`);
+            }
+            // 60s timeout prevents stalled downloads from blocking the entire queue forever
+            const dlResult = await Promise.race([
+              FileSystem.downloadAsync(currentFileUrl, item.destPath, { headers: dlHeaders }),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Download timeout (60s)')), 60000)),
+            ]);
+
+            if (dlResult && dlResult.status === 200) {
+              queueDlSuccess = true;
+            } else {
+              throw new Error(`HTTP ${dlResult?.status}`);
+            }
+          } catch (retryErr: any) {
+            if (queueAttempt >= 1) {
+              syncLog('DL-QUEUE', `❌ ${item.title} failed after 2 attempts: ${retryErr?.message || retryErr}`);
+            }
+          }
+        }
+
+        // Remove progress card
+        setClips(prev => prev.filter(c => c.id !== progressId));
+
+        if (queueDlSuccess) {
+          processedDownloadsRef.current.add(dedupKey);
+          syncLog('DL-QUEUE', `✅ ${item.title} saved via ${item.source}`);
+          setDownloadedItems(prev => { const n = new Set(prev); n.add(item.id || item.title); return n; });
+          // Update clip with CachedUri
+          setClips(prev => prev.map(c =>
+            (c.id === item.id || c.Title === item.title) ? { ...c, CachedUri: item.destPath } : c
+          ));
+          if (Platform.OS === 'android') ToastAndroid.show(`✅ ${item.title} saved`, ToastAndroid.SHORT);
+          Notifications.scheduleNotificationAsync({
+            content: { title: '📁 File Downloaded', body: `${item.title} saved successfully` },
+            trigger: null,
+          }).catch(() => {});
+          if (item.id) { try { await markFileDownloaded(item.id); } catch {} }
+        } else {
+          const retries = item.retryCount || 0;
+          if (retries < 3) {
+            // Exponential backoff: 2s, 5s, 10s
+            const backoffDelays = [2000, 5000, 10000];
+            const delay = backoffDelays[retries] || 10000;
+            syncLog('DL-QUEUE', `⏳ ${item.title} failed attempt ${retries + 1}/3, retrying in ${delay / 1000}s...`);
+            await new Promise(r => setTimeout(r, delay));
+            item.retryCount = retries + 1;
+            downloadQueueRef.current.push(item);
+          } else {
+            syncLog('DL-QUEUE', `❌ ${item.title} permanently failed after 3 retries`);
+          }
+          await FileSystem.deleteAsync(item.destPath, { idempotent: true }).catch(() => {});
+        }
+      } catch (err: any) {
+        syncLog('DL-QUEUE', `❌ ${item.title} error: ${err?.message || err}`);
+        setClips(prev => prev.filter(c => c.id !== progressId));
+        await FileSystem.deleteAsync(item.destPath, { idempotent: true }).catch(() => {});
+      }
+    }
+    isDownloadingRef.current = false;
+    // Cap processed set using sliding slice eviction to prevent unbounded memory growth while keeping history
+    if (processedDownloadsRef.current.size > 500) {
+      const items = Array.from(processedDownloadsRef.current);
+      processedDownloadsRef.current = new Set(items.slice(-200));
+    }
+  }, []);
+
+  // ─── downloadedBy Tracking: Mark file as downloaded by this device ───
+  const markFileDownloaded = async (entryId: string) => {
+    try {
+      const pk = pairingKeyRef.current;
+      if (!pk || !entryId) return;
+      const myDeviceId = `Mobile_${(deviceName || 'phone').replace(/\s/g, '_')}`;
+
+      // Step 1: Mark this device as downloaded
+      await set(ref(database, `clipboard/${pk}/${entryId}/downloadedBy/${myDeviceId}`), NetworkClock.now());
+
+      // Step 2: Read the full entry to check targets
+      const snap = await get(ref(database, `clipboard/${pk}/${entryId}`));
+      if (!snap.exists()) return;
+      const data = snap.val();
+
+      const targets: string[] = data.targetDevices || [];
+      const downloaded = Object.keys(data.downloadedBy || {});
+
+      if (targets.length === 0) {
+        // Legacy entry or no targets — just delete
+        await set(ref(database, `clipboard/${pk}/${entryId}`), null);
+        return;
+      }
+
+      // Step 3: Check which remaining targets are offline → mark them done
+      const remaining = targets.filter((t: string) => !downloaded.includes(t));
+      if (remaining.length > 0) {
+        try {
+          const devSnap = await get(ref(database, `active_devices/${pk}`));
+          if (devSnap.exists()) {
+            const devices = devSnap.val();
+            const now = NetworkClock.now();
+            const onlineIds = new Set<string>();
+            Object.values(devices).forEach((dev: any) => {
+              if (dev.IsOnline && (now - (dev.Timestamp || 0)) < 300000) {
+                onlineIds.add(dev.DeviceId || '');
+              }
+            });
+            // Mark offline devices as done
+            for (const offId of remaining.filter((r: string) => !onlineIds.has(r))) {
+              await set(ref(database, `clipboard/${pk}/${entryId}/downloadedBy/${offId}`), -1);
+              downloaded.push(offId);
+            }
+          }
+        } catch (e) { console.warn('Firebase download tracking: error', (e as any)?.message || e); }
+      }
+
+      // Step 4: If all targets downloaded → delete entry
+      if (targets.every((t: string) => downloaded.includes(t))) {
+        await set(ref(database, `clipboard/${pk}/${entryId}`), null);
+        syncLog(`[SYNC_CLEANUP] All ${targets.length} devices done — entry deleted`);
+      } else {
+        syncLog(`[SYNC_TRACK] ${downloaded.length}/${targets.length} devices done`);
+      }
+    } catch (e) { syncLog(`[SYNC_TRACK] markFileDownloaded error: ${e}`); }
+  };
+
+  const enqueueDownload = useCallback((item: DownloadQueueItem) => {
+    // Dedup: don't re-enqueue already-processed or already-queued items
+    const dedupKey = `${item.title}::${item.timestamp || item.fileUrl}`;
+    if (processedDownloadsRef.current.has(dedupKey)) return;
+    if (downloadQueueRef.current.some(q => `${q.title}::${q.timestamp || q.fileUrl}` === dedupKey)) return;
+    downloadQueueRef.current.push(item);
+    processDownloadQueue();
+  }, [processDownloadQueue]);
+
+  return { enqueueDownload, markFileDownloaded };
+}

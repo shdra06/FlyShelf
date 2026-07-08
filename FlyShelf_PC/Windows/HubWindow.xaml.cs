@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -27,10 +26,13 @@ namespace FlyShelf.Windows
         private Action<string, string>? _peerConnectedHandler;
         private Action<string>? _peerDisconnectedHandler;
         private Action<string, string>? _transportSwitchedHandler;
-        private System.Windows.Threading.DispatcherTimer? _peerFastRefreshTimer;
 
-        // ═══ Hub Thumbnail Rendering ═══
+        // ΓòÉΓòÉΓòÉ Hub Thumbnail Rendering ΓòÉΓòÉΓòÉ
         private System.Windows.Threading.DispatcherTimer? _hubScrollHighQualityTimer;
+
+        // ═══ Peer fast-refresh & coast prefetch (restored from deleted partials) ═══
+        private System.Windows.Threading.DispatcherTimer? _peerFastRefreshTimer;
+        private Action? _coastPrefetchHandler;
 
         public HubWindow(FlyShelfViewModel viewModel)
         {
@@ -55,7 +57,7 @@ namespace FlyShelf.Windows
             };
             DevicePairingManager.OnDevicePaired += _devicePairedHandler;
 
-            // Real-time peer status updates — refresh UI when peers connect/disconnect
+            // Real-time peer status updates ΓÇö refresh UI when peers connect/disconnect
             _peerConnectedHandler = (deviceId, transport) => Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
             _peerDisconnectedHandler = (deviceId) => Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
             _transportSwitchedHandler = (deviceId, newTransport) => Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
@@ -78,22 +80,26 @@ namespace FlyShelf.Windows
             {
                 UpdateSectionCard.Visibility = Visibility.Collapsed;
             }
+            // Show the "download from website for Cloudflare" notice in the About section
+            if (MsixStoreNotice != null)
+            {
+                MsixStoreNotice.Visibility = Visibility.Visible;
+            }
 #endif
 
-            // ═══ HUB UPDATE BANNER ═══
+            // ΓòÉΓòÉΓòÉ HUB UPDATE BANNER ΓòÉΓòÉΓòÉ
             // Show the update notification banner if an update was already detected
             if (UpdateManager.GlobalUpdateAvailable)
             {
-                HubUpdateBannerText.Text = $"🚀 FlyShelf v{UpdateManager.GlobalLatestVersion} is available — update now!";
+                HubUpdateBannerText.Text = $"≡ƒÜÇ FlyShelf v{UpdateManager.GlobalLatestVersion} is available ΓÇö update now!";
                 HubUpdateBanner.Visibility = Visibility.Visible;
             }
             // Subscribe to future update detections
             UpdateManager.GlobalUpdateStatusChanged += OnHubGlobalUpdateStatusChanged;
 
 #if !DEBUG
-            // Release builds: hide developer-only UI (System Logs tab, Network live logs button)
+            // Release builds: hide developer-only UI (System Logs tab)
             if (LogsNavItem != null) LogsNavItem.Visibility = Visibility.Collapsed;
-            if (NetActionLiveLogs != null) NetActionLiveLogs.Visibility = Visibility.Collapsed;
 #endif
 
             // Wire up UpdateManager events
@@ -113,7 +119,7 @@ namespace FlyShelf.Windows
             {
                 if (hasUpdate)
                 {
-                    LatestVersionText.Text = $"→ v{_updateManager.LatestVersion} available!";
+                    LatestVersionText.Text = $"ΓåÆ v{_updateManager.LatestVersion} available!";
                     ChangelogText.Text = _updateManager.Changelog;
                     ChangelogPanel.Visibility = Visibility.Visible;
                     UpdateBtn.Content = "Downloading...";
@@ -125,7 +131,7 @@ namespace FlyShelf.Windows
                     if (success)
                     {
                         UpdateBtn.Content = "Restarting...";
-                        UpdateStatusText.Text = "✅ Update downloaded! Restarting now...";
+                        UpdateStatusText.Text = "Γ£à Update downloaded! Restarting now...";
                         UpdatePctText.Text = "100%";
 
                         // Auto-apply after a brief moment so user sees the status
@@ -140,7 +146,7 @@ namespace FlyShelf.Windows
                 }
                 else
                 {
-                    UpdateBtn.Content = "✓ Up to Date";
+                    UpdateBtn.Content = "Γ£ô Up to Date";
                     UpdateBtn.IsEnabled = false;
                     UpdateProgressPanel.Visibility = Visibility.Collapsed;
 
@@ -151,7 +157,7 @@ namespace FlyShelf.Windows
                 }
             });
 
-            // No auto-update at startup — manual only via the button
+            // No auto-update at startup ΓÇö manual only via the button
 
             // Active fast-polling timer for pairing handshakes (runs every 2 seconds when Network tab is visible)
             _pairingHandshakeTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
@@ -200,17 +206,16 @@ namespace FlyShelf.Windows
                 {
                     _deviceRefreshTimer?.Stop();
                     _pairingHandshakeTimer?.Stop();
-                    _peerFastRefreshTimer?.Stop();
                 }
             };
 
             Loaded += (s, ev) =>
             {
 #if MSIX_STORE
-                // Production Store build: hide all log/diagnostics UI — not relevant for end users
+                // Production Store build: hide all log/diagnostics UI ΓÇö not relevant for end users
                 if (LogsNavItem != null)        LogsNavItem.Visibility        = Visibility.Collapsed;
                 if (LogsGrid != null)           LogsGrid.Visibility           = Visibility.Collapsed;
-                if (NetActionLiveLogs != null) NetActionLiveLogs.Visibility = Visibility.Collapsed;
+                if (NetworkLiveLogsBtn != null) NetworkLiveLogsBtn.Visibility = Visibility.Collapsed;
 #endif
                 // Defer wiring and refreshing to background dispatcher frames so that
                 // the main window shell and layout appear instantly without any initial blocking ticks.
@@ -235,7 +240,7 @@ namespace FlyShelf.Windows
                         }
                         for (int i = 0; i < RetentionCombo.Items.Count; i++)
                         {
-                            if (RetentionCombo.Items[i] is ComboBoxItem cbi && cbi.Tag?.ToString() == retention.ToString(CultureInfo.InvariantCulture))
+                            if (RetentionCombo.Items[i] is ComboBoxItem cbi && cbi.Tag?.ToString() == retention.ToString(System.Globalization.CultureInfo.InvariantCulture))
                             {
                                 RetentionCombo.SelectedIndex = i;
                                 break;
@@ -366,7 +371,7 @@ namespace FlyShelf.Windows
             int count = _viewModel.DroppedItems.Count;
             _viewModel.ClearShelf();
             UpdateEmptyState();
-            ToastWindow.ShowToast($"Cleared {count} items 🗑ï¸");
+            ToastWindow.ShowToast($"Cleared {count} items ≡ƒùæ├»┬╕┬Å");
         }
 
         private bool _isApplicationShuttingDown = false;
@@ -384,7 +389,7 @@ namespace FlyShelf.Windows
                 e.Cancel = true;
                 this.Hide();
 
-                // ═══ TIMER CLEANUP: Stop all DispatcherTimers when window is hidden ═══
+                // ΓòÉΓòÉΓòÉ TIMER CLEANUP: Stop all DispatcherTimers when window is hidden ΓòÉΓòÉΓòÉ
                 // Prevents timers from firing in the background, wasting CPU and
                 // potentially accessing disposed/stale UI elements.
                 _pairingHandshakeTimer?.Stop();
@@ -435,7 +440,7 @@ namespace FlyShelf.Windows
                 var hwnd = new WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    int colorNone = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE — fully invisible border
+                    int colorNone = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE ΓÇö fully invisible border
                     DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref colorNone, Marshal.SizeOf<int>());
 
                     // Force dark caption color to prevent title bar red accent color bleeding
@@ -483,10 +488,16 @@ namespace FlyShelf.Windows
                             : Visibility.Collapsed;
                     }
                 }
+                if (tag == "History")
+                {
+                    _hubThumbnailRetryCount = 0;
+                    Dispatcher.InvokeAsync(() => RenderHubVisibleThumbnails(),
+                        System.Windows.Threading.DispatcherPriority.Loaded);
+                }
             });
         }
 
-        // ═══ HUB UPDATE BANNER HANDLERS ═══
+        // ΓòÉΓòÉΓòÉ HUB UPDATE BANNER HANDLERS ΓòÉΓòÉΓòÉ
         private bool _hubUpdateBannerDismissed = false;
 
         private void OnHubGlobalUpdateStatusChanged(bool updateAvailable)
@@ -495,7 +506,7 @@ namespace FlyShelf.Windows
             {
                 if (updateAvailable && !_hubUpdateBannerDismissed)
                 {
-                    HubUpdateBannerText.Text = $"🚀 FlyShelf v{UpdateManager.GlobalLatestVersion} is available — update now!";
+                    HubUpdateBannerText.Text = $"≡ƒÜÇ FlyShelf v{UpdateManager.GlobalLatestVersion} is available ΓÇö update now!";
                     HubUpdateBanner.Visibility = Visibility.Visible;
                 }
             });
@@ -507,7 +518,7 @@ namespace FlyShelf.Windows
             {
                 if (StartupHelper.IsPackaged())
                 {
-                    // MSIX/Store install — open the Store app directly
+                    // MSIX/Store install ΓÇö open the Store app directly
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = "ms-windows-store://pdp/?ProductId=9PM37CMM3T72",
@@ -516,7 +527,7 @@ namespace FlyShelf.Windows
                 }
                 else
                 {
-                    // Non-packaged (sideload) — navigate to Settings tab which has the updater
+                    // Non-packaged (sideload) ΓÇö navigate to Settings tab which has the updater
                     NavigateToTab("Settings");
                 }
             }
@@ -530,6 +541,20 @@ namespace FlyShelf.Windows
         {
             _hubUpdateBannerDismissed = true;
             HubUpdateBanner.Visibility = Visibility.Collapsed;
+        }
+
+        private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = e.Uri.AbsoluteUri,
+                    UseShellExecute = true
+                });
+            }
+            catch { } // Best-effort: failure is acceptable
+            e.Handled = true;
         }
 
         private void Nav_Click(object sender, MouseButtonEventArgs e)
@@ -697,12 +722,12 @@ namespace FlyShelf.Windows
 
             if (RetentionCombo.SelectedItem is ComboBoxItem selected && selected.Tag != null)
             {
-                if (int.TryParse(selected.Tag.ToString(), CultureInfo.InvariantCulture, out int days))
+                if (int.TryParse(selected.Tag.ToString(), out int days))
                 {
                     if (days == 0 && !LicenseManager.IsPro)
                     {
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            Windows.ToastWindow.ShowToast("🔒 Unlock Premium to use this option!"));
+                            Windows.ToastWindow.ShowToast("≡ƒöÆ Unlock Premium to use this option!"));
 
                         _isRetentionChanging = true;
                         try
@@ -723,7 +748,7 @@ namespace FlyShelf.Windows
 
                         MessageBox.Show(
                             "Disabling auto-cleanup (Never delete unpinned history) is a Pro feature.\n\nUpgrade to Pro to unlock the Never option!",
-                            "FlyShelf — Pro Feature",
+                            "FlyShelf ΓÇö Pro Feature",
                             MessageBoxButton.OK,
                             MessageBoxImage.Information);
 
@@ -737,7 +762,7 @@ namespace FlyShelf.Windows
             }
         }
 
-        // ═══ Incognito Mode ═══
+        // ΓòÉΓòÉΓòÉ Incognito Mode ΓòÉΓòÉΓòÉ
 
         private void IncognitoToggle_Click(object sender, RoutedEventArgs e)
         {
@@ -745,7 +770,7 @@ namespace FlyShelf.Windows
             {
                 Classes.IncognitoManager.DisableIncognito();
                 UpdateIncognitoUI();
-                ToastWindow.ShowToast("👁 Clipboard monitoring resumed");
+                ToastWindow.ShowToast("≡ƒæü Clipboard monitoring resumed");
                 return;
             }
 
@@ -753,21 +778,21 @@ namespace FlyShelf.Windows
             int hours = 1;
             if (IncognitoDurationCombo.SelectedItem is ComboBoxItem selected && selected.Tag != null)
             {
-                if (int.TryParse(selected.Tag.ToString(), CultureInfo.InvariantCulture, out int h))
+                if (int.TryParse(selected.Tag.ToString(), out int h))
                     hours = h;
             }
 
             // Pro gate for 6h and 8h
             if (hours >= 6 && !LicenseManager.IsPro)
             {
-                ToastWindow.ShowToast("🔒 6+ hour incognito requires Pro!");
+                ToastWindow.ShowToast("≡ƒöÆ 6+ hour incognito requires Pro!");
                 UpgradePrompt.ShowActivationDialog(this);
                 return;
             }
 
             Classes.IncognitoManager.EnableIncognito(hours);
             UpdateIncognitoUI();
-            ToastWindow.ShowToast($"🕶 Incognito enabled for {hours}h");
+            ToastWindow.ShowToast($"≡ƒò╢ Incognito enabled for {hours}h");
         }
 
         internal void UpdateIncognitoUI()
@@ -783,7 +808,7 @@ namespace FlyShelf.Windows
                 string remaining = Classes.IncognitoManager.RemainingTimeText;
                 if (!string.IsNullOrEmpty(remaining))
                 {
-                    IncognitoStatusText.Text = $"🕶 Active — {remaining}";
+                    IncognitoStatusText.Text = $"≡ƒò╢ Active ΓÇö {remaining}";
                     IncognitoStatusText.Visibility = Visibility.Visible;
                 }
             }
@@ -812,7 +837,7 @@ namespace FlyShelf.Windows
 
         private void SizingLockedCard_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            ToastWindow.ShowToast("🔒 Unlock Premium to use this option!");
+            ToastWindow.ShowToast("≡ƒöÆ Unlock Premium to use this option!");
             UpgradePrompt.ShowActivationDialog(this);
             e.Handled = true;
         }
@@ -901,7 +926,7 @@ namespace FlyShelf.Windows
                 var items = _viewModel.DroppedItems.ToList();
                 if (items.Count == 0)
                 {
-                    ToastWindow.ShowToast("Clipboard history is empty. 📋");
+                    ToastWindow.ShowToast("Clipboard history is empty. ≡ƒôï");
                     return;
                 }
 
@@ -939,14 +964,14 @@ namespace FlyShelf.Windows
 
                 if (itemsToDelete.Count == 0)
                 {
-                    ToastWindow.ShowToast("No duplicates found! ✨");
+                    ToastWindow.ShowToast("No duplicates found! Γ£¿");
                     return;
                 }
 
                 // Perform fast bulk removal
                 _viewModel.BulkRemoveItems(itemsToDelete);
 
-                ToastWindow.ShowToast($"Successfully swept {itemsToDelete.Count} duplicate(s)! 🧹");
+                ToastWindow.ShowToast($"Successfully swept {itemsToDelete.Count} duplicate(s)! ≡ƒº╣");
             }
             catch (Exception ex)
             {
@@ -1005,13 +1030,13 @@ namespace FlyShelf.Windows
 
                     if (itemsToDelete.Count == 0)
                     {
-                        ToastWindow.ShowToast($"No entries found from the {timeframeName}. ✨");
+                        ToastWindow.ShowToast($"No entries found from the {timeframeName}. Γ£¿");
                         return;
                     }
 
                     _viewModel.BulkRemoveItems(itemsToDelete);
 
-                    ToastWindow.ShowToast($"Successfully deleted {itemsToDelete.Count} entry/entries! 🧹");
+                    ToastWindow.ShowToast($"Successfully deleted {itemsToDelete.Count} entry/entries! ≡ƒº╣");
                 }
             }
             catch (Exception ex)
@@ -1073,7 +1098,7 @@ namespace FlyShelf.Windows
         {
             int currentOffset = SettingsManager.Current.WidgetHorizontalOffset;
             // Reset to center (50%) if the current offset is out of range for percentage mode,
-            // or if it's 0 (which places widget behind Start button — invisible)
+            // or if it's 0 (which places widget behind Start button ΓÇö invisible)
             if (currentOffset <= 0 || currentOffset > 100)
             {
                 SettingsManager.Current.WidgetHorizontalOffset = 50; // default to center (50%)
@@ -1099,11 +1124,11 @@ namespace FlyShelf.Windows
             }
         }
 
-        // ═══ Logs, Diagnostics & Drag-Drop moved to HubWindow.Logs.cs ═══
+        // ΓòÉΓòÉΓòÉ Logs, Diagnostics & Drag-Drop moved to HubWindow.Logs.cs ΓòÉΓòÉΓòÉ
 
-        // ═══════════════════════════════════════════════════════════════════
-        // Hub Thumbnail Rendering — Scroll-based lazy load for History tab
-        // ═══════════════════════════════════════════════════════════════════
+        // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+        // Hub Thumbnail Rendering ΓÇö Scroll-based lazy load for History tab
+        // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 
         private void HubListView_ScrollChanged(object sender, ScrollChangedEventArgs e)
         {
@@ -1133,8 +1158,28 @@ namespace FlyShelf.Windows
         {
             if (HubListView == null) return null;
             if (VisualTreeHelper.GetChildrenCount(HubListView) == 0) return null;
+
+            // Try the standard WPF pattern first: Border → ScrollViewer
             var border = VisualTreeHelper.GetChild(HubListView, 0) as System.Windows.Controls.Decorator;
-            return border?.Child as ScrollViewer;
+            if (border?.Child is ScrollViewer sv1)
+                return sv1;
+
+            // Fallback: walk the visual tree recursively to find any ScrollViewer descendant.
+            // This handles cases where the ListView template is wrapped (e.g., VSCodeScrollViewer style).
+            return FindDescendantScrollViewer(HubListView);
+        }
+
+        private static ScrollViewer? FindDescendantScrollViewer(DependencyObject parent)
+        {
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is ScrollViewer sv) return sv;
+                var found = FindDescendantScrollViewer(child);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         /// <summary>
@@ -1143,98 +1188,128 @@ namespace FlyShelf.Windows
         /// Does NOT evict — eviction is handled by OptimizeMemoryUsage on window close.
         /// </summary>
         private int _hubThumbnailRetryCount = 0;
+        private static void ThumbDiag(string msg)
+        {
+            Logger.LogAction("HUB_THUMB", msg);
+        }
 
         private void RenderHubVisibleThumbnails()
         {
+            ThumbDiag($"RENDER CALLED (before dispatch)");
             Dispatcher.InvokeAsync(() =>
             {
                 try
                 {
-                    if (!this.IsVisible) return;
-                    if (HistoryGrid == null || HistoryGrid.Visibility != Visibility.Visible) return;
+                    if (!this.IsVisible) { ThumbDiag("SKIP: window not visible"); return; }
+                    if (HistoryGrid == null || HistoryGrid.Visibility != Visibility.Visible) { ThumbDiag("SKIP: HistoryGrid not visible"); return; }
 
                     // Force layout pass to ensure containers are generated
                     HubListView.UpdateLayout();
 
                     if (HubListView.ItemContainerGenerator.Status != System.Windows.Controls.Primitives.GeneratorStatus.ContainersGenerated)
                     {
-                        // Containers not ready yet — retry after 100ms (up to 5 times)
-                        if (_hubThumbnailRetryCount < 5)
+                        // Containers not ready yet — retry with a small delay (up to 10 times)
+                        if (_hubThumbnailRetryCount < 10)
                         {
                             _hubThumbnailRetryCount++;
-                            Dispatcher.InvokeAsync(() => RenderHubVisibleThumbnails(),
-                                System.Windows.Threading.DispatcherPriority.Loaded);
+                            var retryTimer = new System.Windows.Threading.DispatcherTimer
+                            {
+                                Interval = TimeSpan.FromMilliseconds(100)
+                            };
+                            retryTimer.Tick += (s, ev) =>
+                            {
+                                retryTimer.Stop();
+                                RenderHubVisibleThumbnails();
+                            };
+                            retryTimer.Start();
                         }
                         return;
                     }
                     _hubThumbnailRetryCount = 0;
+                    ThumbDiag($"RENDER START: items={HubListView.Items.Count}, containers=Generated");
 
                     var sv = GetHubScrollViewer();
-                    if (sv == null) return;
+                    if (sv == null) { ThumbDiag("ABORT: GetHubScrollViewer returned null"); return; }
 
                     double viewportWidth = sv.ViewportWidth;
                     double viewportHeight = sv.ViewportHeight;
-                    if (viewportHeight <= 0 || viewportWidth <= 0) return;
 
-                    // Prefetch overdraw: expand viewport by 300px top and bottom
-                    Rect viewportRect = new Rect(0, -300, viewportWidth, viewportHeight + 600);
                     int count = HubListView.Items.Count;
+                    int loadedCount = 0;
+                    int imageCount = 0;
+                    int skippedHasIcon = 0;
+                    int skippedLoading = 0;
 
-                    for (int i = 0; i < count; i++)
+                    // If viewport dimensions are valid, use viewport-based visibility check
+                    if (viewportHeight > 0 && viewportWidth > 0)
                     {
-                        var item = HubListView.Items[i] as ClipboardItem;
-                        if (item == null) continue;
+                        // Prefetch overdraw: expand viewport by 300px top and bottom
+                        Rect viewportRect = new Rect(0, -300, viewportWidth, viewportHeight + 600);
 
-                        // Only process image and QR code items
-                        if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode)
-                            continue;
-
-                        // Skip if already loaded or currently loading
-                        if (item.Icon != null || item.IsLoadingHighQuality)
-                            continue;
-
-                        var container = HubListView.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
-                        if (container == null || !container.IsLoaded) continue;
-
-                        bool isVisible = false;
-                        try
+                        for (int i = 0; i < count; i++)
                         {
-                            GeneralTransform transform = container.TransformToAncestor(sv);
-                            Rect bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
-                            isVisible = viewportRect.IntersectsWith(bounds);
-                        }
-                        catch { /* container not fully in visual tree */ }
+                            var item = HubListView.Items[i] as ClipboardItem;
+                            if (item == null) continue;
 
-                        if (!isVisible) continue;
+                            // Only process image and QR code items
+                            if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode)
+                                continue;
 
-                        // Load 300px thumbnail on background thread
-                        item.IsLoadingHighQuality = true;
-                        string filePath = item.FilePath;
+                            imageCount++;
 
-                        _ = System.Threading.Tasks.Task.Run(() =>
-                        {
+                            // Skip if already loaded or currently loading
+                            if (item.Icon != null) { skippedHasIcon++; continue; }
+                            if (item.IsLoadingHighQuality) { skippedLoading++; continue; }
+
+                            var container = HubListView.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
+                            if (container == null || !container.IsLoaded) continue;
+
+                            bool isVisible = false;
                             try
                             {
-                                var bmp = FlyShelfViewModel.LoadImageThumbnail(filePath, 100);
-                                if (bmp != null)
-                                {
-                                    Dispatcher.InvokeAsync(() =>
-                                    {
-                                        item.Icon = bmp;
-                                        item.IsLoadedHighQuality = true;
-                                        item.IsLoadingHighQuality = false;
-                                    }, System.Windows.Threading.DispatcherPriority.Normal);
-                                }
-                                else
-                                {
-                                    Dispatcher.InvokeAsync(() => { item.IsLoadingHighQuality = false; });
-                                }
+                                GeneralTransform transform = container.TransformToAncestor(sv);
+                                Rect bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
+                                isVisible = viewportRect.IntersectsWith(bounds);
                             }
-                            catch
-                            {
-                                Dispatcher.InvokeAsync(() => { item.IsLoadingHighQuality = false; });
-                            }
-                        });
+                            catch { /* container not fully in visual tree */ }
+
+                            if (!isVisible) continue;
+
+                            LoadHubThumbnailAsync(item);
+                            loadedCount++;
+                        }
+                    }
+                    else
+                    {
+                        ThumbDiag($"VIEWPORT INVALID: w={viewportWidth}, h={viewportHeight}");
+                    }
+
+                    ThumbDiag($"SCAN: images={imageCount}, hasIcon={skippedHasIcon}, loading={skippedLoading}, viewportLoaded={loadedCount}");
+
+                    // Fallback: if no thumbnails were loaded via viewport check, force-load the first
+                    // batch of image items. This handles the initial open where transforms may not be ready.
+                    if (loadedCount == 0)
+                    {
+                        int batchLoaded = 0;
+                        for (int i = 0; i < count && batchLoaded < 20; i++)
+                        {
+                            var item = HubListView.Items[i] as ClipboardItem;
+                            if (item == null) continue;
+
+                            if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode)
+                                continue;
+
+                            if (item.Icon != null || item.IsLoadingHighQuality)
+                                continue;
+
+                            LoadHubThumbnailAsync(item);
+                            batchLoaded++;
+                        }
+                        ThumbDiag($"FALLBACK: loaded {batchLoaded} items");
+                    }
+                    else
+                    {
+                        ThumbDiag($"VIEWPORT: loaded {loadedCount} items");
                     }
                 }
                 catch (Exception ex)
@@ -1244,13 +1319,50 @@ namespace FlyShelf.Windows
             }, System.Windows.Threading.DispatcherPriority.Normal);
         }
 
+        /// <summary>
+        /// Loads a 300px thumbnail for the given item on a background thread and updates Icon on the UI thread.
+        /// </summary>
+        private void LoadHubThumbnailAsync(ClipboardItem item)
+        {
+            item.IsLoadingHighQuality = true;
+            string filePath = item.FilePath;
+            ThumbDiag($"LOAD START: {System.IO.Path.GetFileName(filePath)}, exists={System.IO.File.Exists(filePath)}");
+
+            _ = System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    var bmp = FlyShelfViewModel.LoadImageThumbnail(filePath, 300);
+                    if (bmp != null)
+                    {
+                        ThumbDiag($"LOAD OK: {System.IO.Path.GetFileName(filePath)}, w={bmp.PixelWidth}, h={bmp.PixelHeight}");
+                        Dispatcher.InvokeAsync(() =>
+                        {
+                            item.Icon = bmp;
+                            item.IsLoadedHighQuality = true;
+                            item.IsLoadingHighQuality = false;
+                        }, System.Windows.Threading.DispatcherPriority.Normal);
+                    }
+                    else
+                    {
+                        ThumbDiag($"LOAD NULL: {System.IO.Path.GetFileName(filePath)}");
+                        Dispatcher.InvokeAsync(() => { item.IsLoadingHighQuality = false; });
+                    }
+                }
+                catch
+                {
+                    Dispatcher.InvokeAsync(() => { item.IsLoadingHighQuality = false; });
+                }
+            });
+        }
+
         private void ReplayOnboarding_Click(object sender, RoutedEventArgs e)
         {
             try
             {
                 var onboarding = new OnboardingWindow();
                 onboarding.Owner = this;
-                WindowHelper.ShowDialogInForeground(onboarding, this);
+                onboarding.ShowDialog();
             }
             catch (Exception ex)
             {

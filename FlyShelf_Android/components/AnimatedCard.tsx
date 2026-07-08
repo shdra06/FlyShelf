@@ -67,7 +67,17 @@ export default function AnimatedCard({
         })
       );
       // Mark as animated so it won't re-animate on list data changes
-      if (itemKey) animatedItemKeys.add(itemKey);
+      if (itemKey) {
+        animatedItemKeys.add(itemKey);
+        // Prune oldest entries to prevent unbounded growth
+        if (animatedItemKeys.size > 500) {
+          let toDelete = 300;
+          for (const key of animatedItemKeys) {
+            if (toDelete-- <= 0) break;
+            animatedItemKeys.delete(key);
+          }
+        }
+      }
     }
   }, []);
 

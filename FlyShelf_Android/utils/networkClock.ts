@@ -83,7 +83,8 @@ export const NetworkClock = {
       }
     }
     
-    syncLog('CLOCK', 'All HEAD sync servers failed — falling back to system clock');
+    syncLog('CLOCK', 'All HEAD sync servers failed — falling back to system clock. Retrying in 30s...');
+    setTimeout(() => { NetworkClock.sync().catch(() => {}); }, 30000);
     return clockOffsetMs;
   },
 

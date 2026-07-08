@@ -8,7 +8,7 @@
  *  - Spring open/close animation
  *  - Configurable max height
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions, Modal } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -18,7 +18,8 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { colors, radius, space, surface, spring as springConfig } from '../styles/theme';
+import { radius, space, spring as springConfig } from '../styles/theme';
+import { useAppTheme } from '../hooks/useAppTheme';
 
 
 
@@ -39,6 +40,8 @@ export default function BottomSheet({
   title,
   maxHeight = 0.85,
 }: BottomSheetProps) {
+  const { colors, surface } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, surface), [colors, surface]);
   const { height: screenH } = useWindowDimensions();
   const sheetHeight = screenH * maxHeight;
   const translateY = useSharedValue(sheetHeight);
@@ -120,7 +123,7 @@ export default function BottomSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: Record<string, any>, surface: Record<string, any>) => StyleSheet.create({
   wrapper: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -166,3 +169,4 @@ const styles = StyleSheet.create({
     color: colors.accent.primary,
   },
 });
+

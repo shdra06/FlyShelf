@@ -54,7 +54,6 @@ export default function OnboardingWizard({ visible, onComplete }: Props) {
 
   const goToPage = (page: number) => {
     scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: true });
-    setCurrentPage(page);
   };
 
   const handleNext = () => {

@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FlyShelf;
 
@@ -355,15 +356,56 @@ public partial class App : Application
         System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, args) =>
         {
             args.SetObserved();
-            try { System.IO.File.AppendAllText(
-                System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs", "flyshelf_debugger.log"),
-                $"[{DateTime.Now}] ASYNC SWALLOWED: {args.Exception.Message}\n"); } catch { } // Best-effort: failure is acceptable
+            // PL-14: Only write debug log when logging is enabled (avoids file I/O in Release when disabled)
+            if (FlyShelf.Classes.Logger.IsEnabled)
+            {
+                try { System.IO.File.AppendAllText(
+                    System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs", "flyshelf_debugger.log"),
+                    $"[{DateTime.Now}] ASYNC SWALLOWED: {args.Exception.Message}\n"); } catch { } // Best-effort: failure is acceptable
+            }
         };
 
         // ------------------------------------------------------------------
         // Single File Deployment: Synthesize the physical scripts locally FIRST!
         FlyShelf.Classes.RuntimeHost.Initialize();
         // ------------------------------------------------------------------
+
+        // ═══ DEPENDENCY INJECTION: Register all services ═══
+        // Bridge pattern: existing singletons registered in DI container.
+        // This enables incremental migration from static access to constructor injection.
+        try
+        {
+            var services = new ServiceCollection();
+
+            // Settings & Configuration (SettingsManager.Current is the settings instance)
+            services.AddSingleton(FlyShelf.Classes.SettingsManager.Current);
+
+            // Theming & Animation (private-ctor singletons — register the existing instance)
+            services.AddSingleton(FlyShelf.Classes.ThemeManager.Instance);
+            services.AddSingleton(FlyShelf.Classes.AnimationTriggerService.Instance);
+
+            // Networking (PeerManager has public parameterless ctor)
+            // NetworkSyncServer requires FlyShelfViewModel — registered later after MainWindow init
+            services.AddSingleton<FlyShelf.Classes.PeerManager>();
+
+            // Services (newly extracted)
+            services.AddSingleton<FlyShelf.Services.SearchService>();
+
+            // NOTE: The following managers are static classes and accessed directly:
+            // ClipboardHistoryManager, NoteManager, TodoManager, ReminderManager,
+            // LicenseManager, UpdateManager, FirebaseAuthManager, AiProviderService,
+            // CloudDiscoveryManager.
+            // They will be migrated from static to instance classes incrementally.
+
+            FlyShelf.Classes.ServiceLocator.Configure(services.BuildServiceProvider());
+
+            FlyShelf.Classes.Logger.LogAction("DI_INIT", "ServiceLocator configured with all services");
+        }
+        catch (Exception diEx)
+        {
+            // DI failure is non-fatal — app can still work with static singletons
+            FlyShelf.Classes.Logger.LogAction("DI_INIT_FAILED", diEx.Message);
+        }
 
         try { FlyShelf.Classes.SettingsManager.Load(); }
         catch (Exception ex)

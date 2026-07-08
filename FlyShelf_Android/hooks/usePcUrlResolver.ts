@@ -7,8 +7,11 @@ import { useRef, useCallback } from 'react';
 
 import { getSecureItem, removeSecureItem } from '../utils/secureStorage';
 import { fetchWithTimeout, resolveOptimalUrl, scanSubnetForPc } from '../utils/networkHelpers';
+import { discoverPcOnLan, addToPcIpCache } from '../utils/lanDiscovery';
 import { NetworkClock } from '../utils/networkClock';
 import { syncLog } from '../utils/debugLog';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getLocalPairedDevices, updatePairedDeviceIp } from './useLanPresence';
 
 /** Cached active device from Firebase */
 export interface ActiveDeviceInfo {
@@ -24,7 +27,7 @@ export interface ActiveDeviceInfo {
 }
 
 /** URL cache TTL in ms — adaptive based on connection type */
-const LAN_CACHE_TTL = 60_000;  // 60s for stable LAN
+const LAN_CACHE_TTL = 30_000;  // 30s — reduced from 60s for faster stale detection
 const CLOUD_CACHE_TTL = 30_000; // 30s for Cloudflare (tunnels rotate)
 
 /**
@@ -39,6 +42,19 @@ export function usePcUrlResolver(
   const cachedPcUrlTimestampRef = useRef<number>(0);
   const activeUrlResolutionPromiseRef = useRef<Promise<string> | null>(null);
   const discoveryMethodRef = useRef<'stored-lan' | 'subnet-scan' | 'firebase' | 'cloudflare' | null>(null);
+
+  /** Load persisted LAN URL on mount for instant reconnect */
+  const persistedUrlLoadedRef = useRef(false);
+  if (!persistedUrlLoadedRef.current) {
+    persistedUrlLoadedRef.current = true;
+    AsyncStorage.getItem('@flyshelf_last_lan_url').then(url => {
+      if (url && !cachedPcUrlRef.current) {
+        cachedPcUrlRef.current = url;
+        cachedPcUrlTimestampRef.current = NetworkClock.now() - LAN_CACHE_TTL + 10_000; // Valid for 10s to allow fresh probe
+        syncLog('URL-RESOLVE', `Loaded persisted LAN URL: ${url}`);
+      }
+    }).catch(() => {});
+  }
 
   /** Cloudflare consecutive failure counter */
   const cloudflareFailCountRef = useRef<number>(0);
@@ -81,50 +97,129 @@ export function usePcUrlResolver(
     const runResolution = async (): Promise<string> => {
       const startNow = NetworkClock.now();
       const pk = pairingKeyRef.current;
-      const headers = { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk || '' };
+      syncLog('URL-RESOLVE', `Starting resolution — pk=${pk ? 'set' : 'empty'}`);
 
       const tryResolve = async (urls: string[], timeout = 2000): Promise<string | null> => {
         if (urls.length === 0) return null;
+        // v6.0.2 audit: health probes should NOT send X-Pairing-Key
+        // The health endpoint is just a reachability check — no auth needed
+        const probeHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
+        syncLog('URL-RESOLVE', `Probing ${urls.length} URL(s): ${urls.slice(0, 3).join(', ')}`);
         try {
           return await Promise.any(
             urls.map(async (url) => {
-              const res = await fetchWithTimeout(`${url}/api/health`, { headers }, timeout);
-              if (res.ok) return url;
+              try {
+                const res = await fetchWithTimeout(`${url}/api/health`, { headers: probeHeaders }, timeout);
+                // Accept 200 (ok) or 401 (server reachable but needs auth on other endpoints)
+                if (res.ok || res.status === 401) {
+                  syncLog('URL-RESOLVE', `✅ Reachable: ${url} (status=${res.status})`);
+                  return url;
+                }
+                syncLog('URL-RESOLVE', `❌ Bad status ${res.status} for ${url}`);
+              } catch (e: any) {
+                syncLog('URL-RESOLVE', `❌ Probe failed ${url}: ${e?.message}`);
+              }
               throw new Error();
             })
           );
         } catch {
-          return null;
+          // v6.0.2 fallback: return first URL as "best guess" even if all probes failed
+          // The PC may still be reachable — don't give up
+          syncLog('URL-RESOLVE', `⚠️ All probes failed — using best-guess: ${urls[0]}`);
+          return urls[0];
         }
       };
 
+      // 0. Probe locally stored paired device IPs (fastest — from pairing/last connection)
+      try {
+        const localDevices = await getLocalPairedDevices();
+        const allIps: string[] = [];
+        for (const dev of Object.values(localDevices)) {
+          if (dev.deviceType === 'PC' && dev.lastKnownIps?.length > 0) {
+            for (const ip of dev.lastKnownIps) {
+              allIps.push(`http://${ip}`);
+            }
+          }
+        }
+        if (allIps.length > 0) {
+          syncLog('URL-RESOLVE', `Step 0: Probing ${allIps.length} stored device IPs`);
+          const localHit = await tryResolve(allIps, 1500);
+          if (localHit) {
+            cachedPcUrlRef.current = localHit;
+            cachedPcUrlTimestampRef.current = startNow;
+            discoveryMethodRef.current = 'stored-lan';
+            // Update stored IP timestamp
+            try {
+              const urlObj = new URL(localHit);
+              for (const dev of Object.values(localDevices)) {
+                if (dev.deviceType === 'PC') {
+                  await updatePairedDeviceIp(dev.deviceId, `${urlObj.hostname}:${urlObj.port || '8999'}`);
+                }
+              }
+            } catch {}
+            return localHit;
+          }
+        }
+      } catch {}
+
       // 1. Check Pairing URLs & Local IP together (Highest priority)
-      const storedLocal = await getSecureItem('pairedLocalUrl');
-      const storedTls = await getSecureItem('pairedTlsUrl');
-      const storedGlobal = await getSecureItem('pairedGlobalUrl');
+      // v6.0.2 audit: read from BOTH SecureStore AND AsyncStorage
+      // Old versions stored URLs in AsyncStorage — migration may not have happened
+      const storedLocal = (await getSecureItem('pairedLocalUrl')) || (await AsyncStorage.getItem('pairedLocalUrl'));
+      const storedTls = (await getSecureItem('pairedTlsUrl')) || (await AsyncStorage.getItem('pairedTlsUrl'));
+      const storedGlobal = (await getSecureItem('pairedGlobalUrl')) || (await AsyncStorage.getItem('pairedGlobalUrl'));
+      // Also check old Cloudflare cache key from v6.0.2
+      let lastCfUrl: string | null = null;
+      try { lastCfUrl = await AsyncStorage.getItem('lastCloudflareUrl'); } catch {}
       
       const lanCandidates: string[] = [];
-      if (storedLocal) lanCandidates.push(...storedLocal.split(',').map(s => s.trim()));
+      if (storedLocal) lanCandidates.push(...storedLocal.split(',').map((s: string) => s.trim()).filter(Boolean));
       if (storedTls) lanCandidates.push(storedTls.trim());
-      if (pcLocalIp) lanCandidates.push(...pcLocalIp.split(',').map(s => s.trim()));
+      if (pcLocalIp) lanCandidates.push(...pcLocalIp.split(',').map((s: string) => s.trim()).filter(Boolean));
+
+      // Add cached last successful LAN URL
+      try {
+        const lastLanUrl = await AsyncStorage.getItem('@flyshelf_last_lan_url');
+        if (lastLanUrl) lanCandidates.push(lastLanUrl.trim());
+      } catch {}
+
+      // Emulator fallback: host machine is always at 10.0.2.2 from inside an Android emulator
+      // localhost:8999 also works when 'adb reverse tcp:8999 tcp:8999' is active
+      // This fixes the case where the PC's pairedLocalUrl is 192.168.x.x (unreachable from emulator)
+      if (!lanCandidates.some(u => u.includes('10.0.2.2'))) {
+        lanCandidates.push('http://10.0.2.2:8999');
+      }
+      if (!lanCandidates.some(u => u.includes('localhost') || u.includes('127.0.0.1'))) {
+        lanCandidates.push('http://127.0.0.1:8999');
+      }
 
       const resolvedLan = await tryResolve(lanCandidates, 1500);
       if (resolvedLan) {
         cachedPcUrlRef.current = resolvedLan;
         cachedPcUrlTimestampRef.current = startNow;
         discoveryMethodRef.current = 'stored-lan';
+        // Persist LAN URL for instant reconnect on next app launch
+        if (!resolvedLan.includes('trycloudflare.com')) {
+          AsyncStorage.setItem('@flyshelf_last_lan_url', resolvedLan).catch(() => {});
+          try {
+            const urlObj = new URL(resolvedLan);
+            addToPcIpCache(urlObj.hostname, parseInt(urlObj.port) || 8999).catch(() => {});
+          } catch {}
+        }
         return resolvedLan;
       }
 
-      // 2. Subnet Discovery (Scan for PC without Firebase)
-      if (pcLocalIp) {
-        syncLog('URL-RESOLVE', 'LAN IPs unreachable — triggering subnet scan discovery...');
-        const discovered = await scanSubnetForPc(pcLocalIp.split(',')[0]);
-        if (discovered.length > 0) {
-          cachedPcUrlRef.current = discovered[0];
+      // 2. Enhanced LAN Discovery (cached IPs + priority DHCP ranges + subnet scan)
+      const myIp = pcLocalIp?.split(',')[0]?.trim();
+      if (myIp) {
+        syncLog('URL-RESOLVE', 'LAN IPs unreachable — triggering enhanced LAN discovery...');
+        const discovered = await discoverPcOnLan(myIp);
+        if (discovered) {
+          cachedPcUrlRef.current = discovered.url;
           cachedPcUrlTimestampRef.current = startNow;
           discoveryMethodRef.current = 'subnet-scan';
-          return discovered[0];
+          AsyncStorage.setItem('@flyshelf_last_lan_url', discovered.url).catch(() => {});
+          return discovered.url;
         }
       }
 
@@ -140,9 +235,12 @@ export function usePcUrlResolver(
         }
       }
 
-      // 4. Global Cloudflare Fallback
-      if (storedGlobal && storedGlobal.includes('trycloudflare.com')) {
-        const resolvedGlobal = await tryResolve([storedGlobal], 3000);
+      // 4. Global Cloudflare Fallback (check both new and old storage keys)
+      const cfCandidates: string[] = [];
+      if (storedGlobal && storedGlobal.includes('trycloudflare.com')) cfCandidates.push(storedGlobal);
+      if (lastCfUrl && lastCfUrl.includes('trycloudflare.com') && !cfCandidates.includes(lastCfUrl)) cfCandidates.push(lastCfUrl);
+      if (cfCandidates.length > 0) {
+        const resolvedGlobal = await tryResolve(cfCandidates, 3000);
         if (resolvedGlobal) {
           cachedPcUrlRef.current = resolvedGlobal;
           cachedPcUrlTimestampRef.current = startNow;
@@ -151,6 +249,7 @@ export function usePcUrlResolver(
         }
       }
 
+      syncLog('URL-RESOLVE', '❌ All resolution strategies exhausted');
       return '';
     };
 

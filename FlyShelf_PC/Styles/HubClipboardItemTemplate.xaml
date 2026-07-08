@@ -1108,13 +1108,22 @@
                                                        Foreground="{DynamicResource TypeImageColor}" ToolTip="Quick Look"
                                                        PreviewMouseLeftButtonDown="QuickLookSpecific_Click">
                                                 <ui:Button.Icon>
-                                                    <ui:SymbolIcon Symbol="Eye24" FontSize="14"/>
+                                                    <ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="14"/>
                                                 </ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsPdfPreview}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsMarkdownPreview}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsDocPreview}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>

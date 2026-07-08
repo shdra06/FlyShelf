@@ -69,7 +69,14 @@
       "expo-background-fetch",
       "./plugins/withOverlayService",
       "react-native-quick-crypto",
-      "expo-build-properties",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
       "expo-web-browser",
       "expo-secure-store"
     ],

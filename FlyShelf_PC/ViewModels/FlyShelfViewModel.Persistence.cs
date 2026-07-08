@@ -535,10 +535,10 @@ namespace FlyShelf.ViewModels
             try
             {
                 long fSize = new FileInfo(filePath).Length;
-                if (fSize > 50L * 1024 * 1024 && !Classes.LicenseManager.IsPro)
+                if (fSize > Classes.LicenseManager.FREE_SYNC_SIZE_LIMIT && !Classes.LicenseManager.IsPro)
                 {
                     Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) exceeds 50 MB Free tier sync limit."));
+                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) exceeds 50 GB Free tier sync limit."));
                     return;
                 }
 

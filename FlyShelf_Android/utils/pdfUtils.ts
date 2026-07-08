@@ -12,6 +12,14 @@ async function readPdfBytes(uri: string): Promise<Uint8Array> {
   const isRemote = uri.startsWith('http://') || uri.startsWith('https://');
   let localUri = isRemote ? `${FileSystem.cacheDirectory}pdf_temp_${Date.now()}.pdf` : (uri.startsWith('file://') ? uri : `file://${uri}`);
 
+  // Guard: reject files > 30MB to prevent OOM in JS memory
+  if (!isRemote) {
+    const info = await FileSystem.getInfoAsync(localUri);
+    if (info.exists && 'size' in info && typeof info.size === 'number' && info.size > 30 * 1024 * 1024) {
+      throw new Error(`This PDF is too large (${(info.size / 1024 / 1024).toFixed(1)}MB). The maximum supported file size is 30MB. Please use a smaller file or split it first.`);
+    }
+  }
+
   try {
     if (isRemote) {
       await FileSystem.downloadAsync(uri, localUri, {

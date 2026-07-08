@@ -92,6 +92,40 @@
                                    Visibility="Collapsed" AutomationProperties.Name="Convert markdown to PDF">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
+                        <!-- PDF Manage Pages Button -->
+                        <ui:Button x:Name="PdfManageBtn" Click="PdfManage_Click" Appearance="Secondary" 
+                                   Foreground="{DynamicResource GeminiAccentColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Manage Pages (Reorder / Add)"
+                                   Visibility="Collapsed" AutomationProperties.Name="Manage PDF pages">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Layer24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
+                        <!-- Zoom Control -->
+                        <StackPanel x:Name="ZoomPanel" Orientation="Horizontal" Visibility="Collapsed" VerticalAlignment="Center" Margin="0,0,8,0">
+                            <ui:SymbolIcon Symbol="ZoomIn24" FontSize="14" Foreground="{DynamicResource ThemeTextMuted}" Margin="0,0,4,0"/>
+                            <Slider x:Name="ZoomSlider" Width="80" Minimum="0.5" Maximum="3" Value="1" 
+                                    ValueChanged="ZoomSlider_ValueChanged" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <!-- PDF Add Pages Button -->
+                        <ui:Button x:Name="PdfAddBtn" Click="PdfAdd_Click" Appearance="Secondary" 
+                                   Foreground="{DynamicResource SuccessColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Add Pages from PDF"
+                                   Visibility="Collapsed" AutomationProperties.Name="Add PDF pages">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Add24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
+                        <!-- PDF Save Button (Split) -->
+                        <ui:Button x:Name="PdfSaveBtn" Click="PdfSave_Click" Appearance="Primary" 
+                                   Foreground="White" Padding="5,3" Margin="0,0,4,0" ToolTip="Save Changes (Right click for more)"
+                                   Visibility="Collapsed" AutomationProperties.Name="Save PDF changes">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Save24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                            <ui:Button.ContextMenu>
+                                <ContextMenu x:Name="PdfSaveMenu">
+                                    <MenuItem Header="Overwrite Original" Click="PdfSaveOverwrite_Click">
+                                        <MenuItem.Icon><ui:SymbolIcon Symbol="SaveEdit24"/></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Save as Copy..." Click="PdfSaveAs_Click">
+                                        <MenuItem.Icon><ui:SymbolIcon Symbol="SaveCopy24"/></MenuItem.Icon>
+                                    </MenuItem>
+                                </ContextMenu>
+                            </ui:Button.ContextMenu>
+                        </ui:Button>
                         <!-- Pin Button (toggle always on top) -->
                         <ui:Button x:Name="PinBtn" Click="PinButton_Click" Appearance="Secondary" 
                                    Foreground="{DynamicResource PinActiveColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Pin on top"
@@ -136,8 +170,46 @@
                                         BorderThickness="1" BorderBrush="Transparent" MouseLeftButtonDown="DoodleColorPick_Click" Tag="#F59E0B"/>
                                 <Border x:Name="DoodleColorGreen" Width="18" Height="18" CornerRadius="9" Background="#10B981" Margin="0,0,3,0" Cursor="Hand"
                                         BorderThickness="1" BorderBrush="Transparent" MouseLeftButtonDown="DoodleColorPick_Click" Tag="#10B981"/>
-                                <Border x:Name="DoodleColorBlue" Width="18" Height="18" CornerRadius="9" Background="#3B82F6" Margin="0,0,8,0" Cursor="Hand"
+                                <Border x:Name="DoodleColorBlue" Width="18" Height="18" CornerRadius="9" Background="#3B82F6" Margin="0,0,4,0" Cursor="Hand"
                                         BorderThickness="1" BorderBrush="Transparent" MouseLeftButtonDown="DoodleColorPick_Click" Tag="#3B82F6"/>
+
+                                <!-- Color palette toggle -->
+                                <Border x:Name="DoodlePaletteBtn" Width="20" Height="20" CornerRadius="10" Cursor="Hand"
+                                        Margin="0,0,8,0" ToolTip="More colors"
+                                        MouseLeftButtonDown="DoodlePalette_Click">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#EF4444" Offset="0"/>
+                                            <GradientStop Color="#F59E0B" Offset="0.25"/>
+                                            <GradientStop Color="#10B981" Offset="0.5"/>
+                                            <GradientStop Color="#3B82F6" Offset="0.75"/>
+                                            <GradientStop Color="#8B5CF6" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
+
+                                <!-- Color palette popup -->
+                                <Popup x:Name="DoodlePalettePopup" Placement="Top" StaysOpen="False"
+                                       PlacementTarget="{Binding ElementName=DoodlePaletteBtn}" AllowsTransparency="True"
+                                       VerticalOffset="-6" HorizontalOffset="-60">
+                                    <Border CornerRadius="10" Padding="10" Background="#F0181825" BorderBrush="#40A78BFA" BorderThickness="1">
+                                        <Border.Effect>
+                                            <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.4" Color="Black"/>
+                                        </Border.Effect>
+                                        <StackPanel>
+                                            <TextBlock Text="Color Palette" Foreground="#94A3B8" FontSize="10" FontWeight="SemiBold" Margin="2,0,0,6"/>
+                                            <UniformGrid x:Name="DoodlePaletteGrid" Columns="7"/>
+                                            <Border Margin="0,6,0,0" CornerRadius="6" Padding="6,4" Cursor="Hand"
+                                                    Background="#18A78BFA" BorderBrush="#30A78BFA" BorderThickness="1"
+                                                    MouseLeftButtonDown="DoodleCustomColor_Click" ToolTip="Custom color picker">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                    <ui:SymbolIcon Symbol="Color24" Foreground="#A78BFA" FontSize="12" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Custom Color..." Foreground="#A78BFA" FontSize="10" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+                                </Popup>
 
                                 <!-- Separator -->
                                 <Border Width="1" Height="18" Background="#30FFFFFF" Margin="0,0,8,0"/>
@@ -172,7 +244,14 @@
                     </Grid>
                     
                     <!-- Dynamic Document Mode (PDF/HTML) -->
-                    <WebBrowser x:Name="WebPreview" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                    <wv2:WebView2 x:Name="WebPreview" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" DefaultBackgroundColor="Transparent"/>
+                    
+                    <!-- PDF Editor Mode (Grid View) -->
+                    <Grid x:Name="PdfEditorGrid" Visibility="Collapsed" Background="{DynamicResource ThemeWindowFallback}">
+                        <ScrollViewer x:Name="PdfGridScroll" VerticalScrollBarVisibility="Auto">
+                            <WrapPanel x:Name="PdfThumbnailPanel" Margin="10" HorizontalAlignment="Center"/>
+                        </ScrollViewer>
+                    </Grid>
                     
                     <!-- Raw Text/Code/DOCX Extracted Frame -->
                     <ScrollViewer x:Name="TextPreviewScroll" Visibility="Collapsed" Background="{DynamicResource ThemeCodePreviewBg}">

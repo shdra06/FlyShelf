@@ -22,7 +22,7 @@ namespace FlyShelf.Windows
     {
         private string _activeNetworkSubTab = "Devices";
         private DispatcherTimer? _networkRefreshTimer;
-        private DispatcherTimer? _historyRefreshTimer;
+        private DispatcherTimer? _historyRefreshTimer = null;
 
         /// <summary>
         /// Initialize the Networking command center — called from HubWindow constructor after InitializeComponent.

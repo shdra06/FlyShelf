@@ -51,9 +51,12 @@ export default function SettingsScreen() {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       // Validate IP format if provided
-      if (localIpInput.trim() && !/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(localIpInput.trim())) {
-        Alert.alert('Invalid IP', 'Enter a valid IP (e.g., 192.168.1.5:8999)');
-        return;
+      if (localIpInput.trim()) {
+        const ipPortMatch = localIpInput.trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(:\d+)?$/);
+        if (!ipPortMatch || [ipPortMatch[1], ipPortMatch[2], ipPortMatch[3], ipPortMatch[4]].some(octet => Number(octet) > 255)) {
+          Alert.alert('Invalid IP', 'Enter a valid IP (e.g., 192.168.1.5:8999). Each octet must be 0-255.');
+          return;
+        }
       }
 
       await setPcLocalIp(localIpInput);

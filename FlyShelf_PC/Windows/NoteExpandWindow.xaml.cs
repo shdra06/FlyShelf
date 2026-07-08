@@ -381,12 +381,10 @@ namespace FlyShelf.Windows
                     var files = dataObject.GetData(DataFormats.FileDrop) as string[];
                     if (files != null)
                     {
-                        bool anyImage = false;
                         foreach (string f in files)
                         {
                             if (f != null && IsImageFile(f))
                             {
-                                anyImage = true;
                                 e.CancelCommand();
 
                                 if (!CanAddImage()) break;

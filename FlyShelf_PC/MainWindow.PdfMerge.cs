@@ -8,6 +8,7 @@ using FlyShelf.ViewModels;
 using FlyShelf.Classes;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Windows;
@@ -35,22 +36,17 @@ namespace FlyShelf
 
             var convertedPdfPaths = new List<string>();
 
-            // Convert DOC/DOCX files to PDF first
+            // Convert DOC/DOCX files to PDF first (Batch optimized)
             if (checkedDocs.Count > 0)
             {
                 FlyShelf.Windows.ToastWindow.ShowToast($"📄 Converting {checkedDocs.Count} DOC file(s) to PDF...");
+                string[] docs = checkedDocs.Select(d => d.FilePath).ToArray();
+                string[] results = await ConversionUtils.ConvertDocsToPdfsAsync(docs);
+                convertedPdfPaths.AddRange(results);
 
-                foreach (var doc in checkedDocs)
+                if (results.Length < docs.Length)
                 {
-                    string pdfPath = await ConversionUtils.ConvertDocToPdfAsync(doc.FilePath);
-                    if (!string.IsNullOrEmpty(pdfPath) && System.IO.File.Exists(pdfPath))
-                    {
-                        convertedPdfPaths.Add(pdfPath);
-                    }
-                    else
-                    {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"❌ Failed to convert: {doc.FileName}");
-                    }
+                    FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ {docs.Length - results.Length} DOC files failed to convert.");
                 }
             }
 
@@ -130,6 +126,7 @@ namespace FlyShelf
                 DismissMergeState();
                 var newItem = new ClipboardItem(allPdfs[0].FilePath);
                 _viewModel.DroppedItems.Insert(0, newItem);
+                Classes.ClipboardHistoryManager.AppendToJournal(newItem);
                 _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                 FlyShelf.Windows.ToastWindow.ShowToast("✅ PDF added to clipboard");
             }
@@ -142,6 +139,96 @@ namespace FlyShelf
             {
                 FlyShelf.Classes.Logger.LogAction("PDF_MERGE_ERROR", ex.Message);
                 FlyShelf.Windows.ToastWindow.ShowToast($"Merge failed: {ex.Message}");
+            }
+        }
+
+        private async void InstantMergeSelectedPdfsBtn_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (OverflowPopup != null) OverflowPopup.IsOpen = false;
+                var items = _viewModel.DroppedItems.Where(i => i.IsCheckedForMerge).ToList();
+                if (items.Count < 2)
+                {
+                    // Fallback to normal click if somehow called for 1 item
+                    MergeSelectedPdfsBtn_Click(sender, e);
+                    return;
+                }
+
+                FlyShelf.Windows.ToastWindow.ShowToast($"⚡ Instant Merging {items.Count} files...");
+                LoadingProgress.Visibility = Visibility.Visible;
+
+                await System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        var pdfPaths = new System.Collections.Generic.List<string>();
+                        
+                        // 1. Convert DOCs in Batch (Fastest)
+                        var docItems = items.Where(i => i.IsDocPreview).ToList();
+                        if (docItems.Count > 0)
+                        {
+                            string[] docs = docItems.Select(d => d.FilePath).ToArray();
+                            string[] results = await ConversionUtils.ConvertDocsToPdfsAsync(docs);
+                            pdfPaths.AddRange(results);
+                        }
+
+                        // 2. Handle Images & PDFs
+                        foreach (var item in items)
+                        {
+                            if (item.IsPdfPreview) pdfPaths.Add(item.FilePath);
+                            else if (item.ItemType == ClipboardItemType.Image)
+                            {
+                                string p = ConversionUtils.ConvertImageToPdf(item.FilePath);
+                                if (!string.IsNullOrEmpty(p)) pdfPaths.Add(p);
+                            }
+                        }
+
+                        if (pdfPaths.Count < 2) throw new Exception("Not enough files could be converted for merging.");
+
+                        // Perform the merge using PDFSharp directly (Instant)
+                        string outputDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Merged");
+                        Directory.CreateDirectory(outputDir);
+                        string outputPath = Path.Combine(outputDir, $"InstantMerge_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
+
+                        using (var outputDoc = new PdfSharp.Pdf.PdfDocument())
+                        {
+                            foreach (var path in pdfPaths)
+                            {
+                                using (var inputDoc = PdfSharp.Pdf.IO.PdfReader.Open(path, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
+                                {
+                                    for (int i = 0; i < inputDoc.PageCount; i++)
+                                    {
+                                        outputDoc.AddPage(inputDoc.Pages[i]);
+                                    }
+                                }
+                            }
+                            outputDoc.Save(outputPath);
+                        }
+
+                        await Dispatcher.InvokeAsync(() =>
+                        {
+                            DismissMergeState();
+                            var newItem = new ClipboardItem(outputPath);
+                            _viewModel.DroppedItems.Insert(0, newItem);
+                            Classes.ClipboardHistoryManager.AppendToJournal(newItem);
+                            _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+                            FlyShelf.Windows.ToastWindow.ShowToast("✅ Instant Merge complete!");
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        await Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Instant Merge failed: {ex.Message}"));
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"Error: {ex.Message}");
+            }
+            finally
+            {
+                LoadingProgress.Visibility = Visibility.Collapsed;
             }
         }
 
@@ -196,12 +283,20 @@ namespace FlyShelf
 
                 MergeSelectedPdfsBtn.Visibility = Visibility.Visible;
                 MergePdfToolbarBtn.Visibility = Visibility.Visible;
+
+                // Show Instant Merge only if 2+ items selected
+                var instantVis = totalChecked >= 2 ? Visibility.Visible : Visibility.Collapsed;
+                InstantMergeSelectedPdfsBtn.Visibility = instantVis;
+                InstantMergePdfToolbarBtn.Visibility = instantVis;
+
                 UpdateToolbarButtonsVisibility();
             }
             else
             {
                 MergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
                 MergePdfToolbarBtn.Visibility = Visibility.Collapsed;
+                InstantMergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
+                InstantMergePdfToolbarBtn.Visibility = Visibility.Collapsed;
                 UpdateToolbarButtonsVisibility();
             }
         }
@@ -213,10 +308,13 @@ namespace FlyShelf
             // isn't visible. Called from CollectionChanged on every item add — with 5000 items,
             // the two O(n) scans below cost 10K evaluations per clipboard copy for zero benefit.
             bool wasVisible = MergeSelectedPdfsBtn.Visibility == Visibility.Visible ||
-                              MergePdfToolbarBtn.Visibility == Visibility.Visible;
+                              MergePdfToolbarBtn.Visibility == Visibility.Visible ||
+                              InstantMergeSelectedPdfsBtn.Visibility == Visibility.Visible;
 
             MergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
             MergePdfToolbarBtn.Visibility = Visibility.Collapsed;
+            InstantMergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
+            InstantMergePdfToolbarBtn.Visibility = Visibility.Collapsed;
             UpdateToolbarButtonsVisibility();
 
             // Uncheck all IsCheckedForMerge only if merge mode was actually active
@@ -1158,7 +1256,7 @@ $word.Quit()
                 {
                     var sb = new System.Text.StringBuilder();
 
-                    using (var doc = PdfSharp.Pdf.IO.PdfReader.Open(item.FilePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.ReadOnly))
+                    using (var doc = PdfSharp.Pdf.IO.PdfReader.Open(item.FilePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
                     {
                         foreach (PdfSharp.Pdf.PdfPage page in doc.Pages)
                         {

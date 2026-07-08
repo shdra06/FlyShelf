@@ -41,16 +41,19 @@
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
                 <Setter Property="Focusable" Value="False"/>
                 <Style.Resources>
-                    <SolidColorBrush x:Key="ButtonBackground" Color="{DynamicResource ThemeHeaderBtnBgColor}"/>
-                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="{DynamicResource ThemeHeaderBtnBorderColor}"/>
+                    <!-- Hardcoded fallback colors (default dark theme) prevent WPF-UI's accent color
+                         from flashing during startup before theme dictionaries are merged.
+                         The outer DynamicResource Brush setters still update these once themes load. -->
+                    <SolidColorBrush x:Key="ButtonBackground" Color="#16FFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="#20FFFFFF"/>
 
-                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{DynamicResource ThemeHeaderBtnBgHoverColor}"/>
-                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{DynamicResource ThemeHeaderBtnBorderHoverColor}"/>
-                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{DynamicResource ThemeHeaderBtnFgHoverColor}"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#2AFFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#40FFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFFFFFFF"/>
                     
-                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{DynamicResource ThemeHeaderBtnBgPressedColor}"/>
-                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="{DynamicResource ThemeHeaderBtnBorderPressedColor}"/>
-                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{DynamicResource ThemeHeaderBtnFgPressedColor}"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#12FFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#30FFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#DDFFFFFF"/>
                 </Style.Resources>
             </Style>
 
@@ -654,7 +657,12 @@
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.10" Color="#000000" Direction="270"/>
                 </Border.Effect>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <ScrollViewer x:Name="CategoryFilterScroller"
+                              HorizontalScrollBarVisibility="Hidden"
+                              VerticalScrollBarVisibility="Disabled"
+                              PanningMode="HorizontalOnly"
+                              PreviewMouseWheel="CategoryFilterScroller_MouseWheel">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,2,0">
 
                     <!-- Images Chip -->
                     <Border x:Name="FilterBtn_Images" CornerRadius="10" Margin="1,0" Cursor="Hand"
@@ -732,8 +740,10 @@
                         <ui:SymbolIcon Symbol="Dismiss16" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" HorizontalAlignment="Center"/>
                     </Border>
 
-                </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
             </Border>
+
 
             <!-- Sync Direction Control Bar — Inline popup for granular incoming/outgoing toggles -->
             <Border x:Name="SyncDirectionBar" Margin="14,0,14,8" Visibility="Collapsed" Opacity="0"
@@ -831,7 +841,10 @@
 
                         <!-- Merge PDF button — hidden by default, replaces emoji space when PDFs selected -->
                         <ui:Button x:Name="MergePdfToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,4,0" AutomationProperties.Name="Merge selected PDFs">
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24"/></ui:Button.Icon>
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Layer24" /></ui:Button.Icon>
+                        </ui:Button>
+                        <ui:Button x:Name="InstantMergePdfToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="InstantMergeSelectedPdfsBtn_Click" ToolTip="Instant Merge (Direct)" Margin="0,0,4,0" AutomationProperties.Name="Instant merge selected PDFs">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Flash24" Filled="True" Foreground="{DynamicResource ThemeAccentLight}"/></ui:Button.Icon>
                         </ui:Button>
                         
                         <!-- Global Sync Toggle -->
@@ -985,6 +998,10 @@
             </Border.Background>
         </Border>
 
+        <ProgressBar x:Name="LoadingProgress" Grid.Row="1" Height="2" VerticalAlignment="Top" 
+                     IsIndeterminate="True" Visibility="Collapsed" Panel.ZIndex="100"
+                     Background="Transparent" BorderThickness="0" Foreground="{DynamicResource ThemeAccentLight}"/>
+
         <ListView Name="ShelfListView" Grid.Row="1" ItemsSource="{Binding DroppedItems}" Background="#01000000" BorderThickness="0" Margin="12,0,2,12" Padding="0,0,0,250"
                   Focusable="True" KeyboardNavigation.DirectionalNavigation="Contained" FocusVisualStyle="{x:Null}"
                   AutomationProperties.Name="Clipboard items list" TabIndex="10"
@@ -1052,8 +1069,16 @@
                                 <Setter Property="Opacity" Value="1" />
                                 <!-- NOTE: Loaded animation REMOVED — virtualization recycling causes lag -->
                                 <Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Trigger.EnterActions>
+                                    <!-- STABILITY FIX: Gate hover animation by AllowHover to prevent
+                                         dozens of simultaneous enter/exit animations during fast scrolling.
+                                         AllowHover is only true when the user physically moves the mouse
+                                         and scrolling has stopped. -->
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/>
+                                            <Condition Binding="{Binding DataContext.AllowHover, ElementName=ShelfListView}" Value="True"/>
+                                        </MultiDataTrigger.Conditions>
+                                        <MultiDataTrigger.EnterActions>
                                             <BeginStoryboard>
                                                 <Storyboard>
                                                     <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(TranslateTransform.Y)" To="-2" Duration="0:0:0.2">
@@ -1063,8 +1088,8 @@
                                                     </DoubleAnimation>
                                                 </Storyboard>
                                             </BeginStoryboard>
-                                        </Trigger.EnterActions>
-                                        <Trigger.ExitActions>
+                                        </MultiDataTrigger.EnterActions>
+                                        <MultiDataTrigger.ExitActions>
                                             <BeginStoryboard>
                                                 <Storyboard>
                                                     <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(TranslateTransform.Y)" To="0" Duration="0:0:0.25">
@@ -1074,8 +1099,8 @@
                                                     </DoubleAnimation>
                                                 </Storyboard>
                                             </BeginStoryboard>
-                                        </Trigger.ExitActions>
-                                    </Trigger>
+                                        </MultiDataTrigger.ExitActions>
+                                    </MultiDataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Border.Style>
@@ -1354,6 +1379,7 @@
                                                 <DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                                 <DataTrigger Binding="{Binding IsMarkdownPreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                                 <DataTrigger Binding="{Binding IsDocPreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                <DataTrigger Binding="{Binding IsPdfPreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
@@ -2219,10 +2245,10 @@
             </Border.BorderBrush>
             <Border.BorderThickness>1</Border.BorderThickness>
             <!-- PERF: DropShadowEffect removed — was software-rendered every frame -->
-            <StackPanel Orientation="Horizontal">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <!-- Merge PDF action (primary — always left, theme-aware accent pill) -->
                 <Button x:Name="MergeSelectedPdfsBtn" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" Cursor="Hand"
-                        Focusable="False" OverridesDefaultStyle="True" Content="Merge 2 PDFs" AutomationProperties.Name="Merge selected PDFs">
+                        Focusable="False" OverridesDefaultStyle="True" Content="Merge PDFs" AutomationProperties.Name="Merge selected PDFs">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Border x:Name="MergePillBg" CornerRadius="20" Padding="16,9" BorderThickness="1">
@@ -2242,10 +2268,38 @@
                                     </Style>
                                 </Border.Style>
                                 <StackPanel Orientation="Horizontal">
-                                    <ui:SymbolIcon Symbol="DocumentCopy24" FontSize="15"
+                                    <ui:SymbolIcon Symbol="Layer24" FontSize="15"
                                                    Foreground="{DynamicResource FloatingMergeAccentIcon}" Margin="0,0,8,0"/>
                                     <TextBlock Text="{TemplateBinding Content}" FontWeight="SemiBold" FontSize="13"
                                                Foreground="{DynamicResource FloatingMergeAccentText}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Instant Merge action -->
+                <Button x:Name="InstantMergeSelectedPdfsBtn" Visibility="Collapsed" Click="InstantMergeSelectedPdfsBtn_Click" Cursor="Hand"
+                        Focusable="False" OverridesDefaultStyle="True" Content="Instant Merge" AutomationProperties.Name="Instant merge selected PDFs" Margin="8,0,0,0">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="InstantMergePillBg" CornerRadius="20" Padding="14,9" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource ThemeOverlayBorder}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource ThemeOverlayBgHover}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Flash24" FontSize="14" 
+                                                   Foreground="{DynamicResource ThemeAccentLight}" Margin="0,0,8,0"/>
+                                    <TextBlock Text="{TemplateBinding Content}" FontSize="12.5" FontWeight="SemiBold" 
+                                               Foreground="{DynamicResource ThemeTextPrimary}" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
                         </ControlTemplate>
@@ -2806,9 +2860,10 @@
                         <ui:SymbolIcon Symbol="ArrowLeft24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="14"/>
                     </Border>
                     
-                    <!-- Network Title -->
+                    
+                    <!-- Network Title (compact — just dot + peer count) -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0,0,0">
-                        <Border Width="7" Height="7" CornerRadius="4" Margin="0,0,7,0" VerticalAlignment="Center">
+                        <Border Width="7" Height="7" CornerRadius="4" Margin="0,0,5,0" VerticalAlignment="Center">
                             <Border.Background>
                                 <RadialGradientBrush>
                                     <GradientStop Color="#818CF8" Offset="0"/>
@@ -2816,14 +2871,27 @@
                                 </RadialGradientBrush>
                             </Border.Background>
                         </Border>
-                        <TextBlock Text="Network" FontSize="13" FontWeight="SemiBold" 
-                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                     
                     <!-- Status pill -->
-                    <Border Grid.Column="2" CornerRadius="10" Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center"
+                    <Border Grid.Column="2" CornerRadius="10" Padding="8,2" Margin="2,0,0,0" VerticalAlignment="Center"
                             Background="#18818CF8" BorderBrush="#30818CF8" BorderThickness="1">
                         <TextBlock x:Name="NetPanelPeerCount" Text="0 devices" FontSize="10" Foreground="#A5B4FC" FontWeight="SemiBold"/>
+                    </Border>
+                    
+                    <!-- Inline Pairing Code (visible only when pairing is active) -->
+                    <Border x:Name="NetPanelPairingInfo" Grid.Column="3" CornerRadius="8" Padding="8,3" 
+                            VerticalAlignment="Center" Visibility="Collapsed" HorizontalAlignment="Left" Margin="6,0,0,0"
+                            Background="#18F59E0B" BorderBrush="#30F59E0B" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Key24" FontSize="10" Foreground="#F59E0B" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="NetPanelPairingCodeText" Text="" FontSize="11" Foreground="#FCD34D" FontWeight="Bold"
+                                       FontFamily="Consolas" VerticalAlignment="Center"/>
+                            <Border CornerRadius="4" Cursor="Hand" Padding="3,1" Margin="6,0,0,0"
+                                    Background="#20FFFFFF" PreviewMouseLeftButtonDown="NetPanel_DismissPairing_Click" ToolTip="Stop pairing">
+                                <ui:SymbolIcon Symbol="Dismiss16" FontSize="9" Foreground="#94A3B8"/>
+                            </Border>
+                        </StackPanel>
                     </Border>
                     
                     <!-- Pair Device -->
@@ -2855,7 +2923,7 @@
                         <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#30818CF8"/></Trigger></Style.Triggers></Style></Border.Style>
                         <StackPanel Orientation="Horizontal">
                             <ui:SymbolIcon Symbol="Add24" FontSize="12" Foreground="#818CF8" Margin="0,0,4,0"/>
-                            <TextBlock Text="Add Files" FontSize="11" Foreground="#C4B5FD" FontWeight="SemiBold"/>
+                            <TextBlock Text="+" FontSize="11" Foreground="#C4B5FD" FontWeight="SemiBold"/>
                         </StackPanel>
                     </Border>
                     

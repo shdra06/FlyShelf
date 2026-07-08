@@ -384,8 +384,8 @@ namespace FlyShelf
                     double viewportHeight = sv.ViewportHeight;
                     if (viewportHeight <= 0 || viewportWidth <= 0) return;
 
-                    // Prefetch 800px above and below viewport
-                    System.Windows.Rect viewportRect = new System.Windows.Rect(0, -800, viewportWidth, viewportHeight + 1600);
+                    // Prefetch 1200px above and below viewport for smooth pre-loading
+                    System.Windows.Rect viewportRect = new System.Windows.Rect(0, -1200, viewportWidth, viewportHeight + 2400);
                     // ═══ FULL-COLLECTION SCAN (mirrors MainWindow.Positioning.cs) ═══
                     int count = AltShelfListView.Items.Count;
 

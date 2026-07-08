@@ -521,12 +521,10 @@ namespace FlyShelf.ViewModels
 
                             if (!forceClipboardSync)
                             {
-                                var dataObj = new System.Windows.DataObject();
-                                dataObj.SetImage(bitmap);
-                                var dropList = new System.Collections.Specialized.StringCollection();
-                                dropList.Add(tempFile);
-                                dataObj.SetFileDropList(dropList);
-                                Classes.ClipboardHelper.SafeSetDataObject(dataObj, true, suppressEcho: true, echoDelayMs: 500);
+                                // Don't re-write clipboard for passive captures.
+                                // The image is already on the clipboard from the user's copy action.
+                                // Re-writing caused race conditions that left the clipboard empty,
+                                // breaking Ctrl+V paste. We just save the image to our history.
                             }
                             
                             if (forceClipboardSync)

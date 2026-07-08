@@ -9,50 +9,23 @@ import * as DocumentPicker from 'expo-document-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSettings } from '../../context/SettingsContext';
-import { database } from '../../firebaseConfig';
-import { ref as dbRef, push, set, onValue, query } from 'firebase/database';
 import { font, radius, space, component } from '../../styles/theme';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import AnimatedCard from '../../components/AnimatedCard';
 import AnimatedPressable from '../../components/AnimatedPressable';
-import { decryptDeviceList, isValidPairingKey, resolveBestPcUrl } from '../../utils/networkHelpers';
+import { resolveBestPcUrl } from '../../utils/networkHelpers';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import ScreenHeader from '../../components/ScreenHeader';
-
-type DeviceGroup = { id: string; name: string; deviceNames: string[] };
-
-interface MediaAsset {
-  id: string;
-  uri: string;
-  filename: string;
-  mediaType: string;
-  width?: number;
-  height?: number;
-  creationTime: number;
-  duration?: number;
-  source?: string;
-  fileSize?: number;
-}
-
-interface FirebaseDevice {
-  firebaseKey?: string;
-  DeviceName: string;
-  DeviceType?: string;
-  IsOnline?: boolean;
-  Url?: string;
-  GlobalUrl?: string;
-  connectionType?: string;
-  resolvedUrl?: string;
-  // Allow PairedDevice fields to pass through
-  [key: string]: unknown;
-}
+import {
+  useArchiveSync,
+  MediaAsset, FirebaseDevice, DeviceGroup, SourceFilter,
+} from '../../features/archive/useArchiveSync';
 
 const getThumbSize = (w: number) => (w - 50) / 4;
 
-type SourceFilter = 'Camera' | 'WhatsApp' | 'Downloads' | 'All';
 
 export default function FilesScreen() {
   const { colors, shadows } = useAppTheme();
@@ -60,67 +33,69 @@ export default function FilesScreen() {
   const { pcLocalIp, deviceName, defaultTargetDeviceName, pairingKey, pairedDevices } = useSettings();
   const { width: screenWidth } = useWindowDimensions();
   const THUMB_SIZE = getThumbSize(screenWidth);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  
-  // Transfer state
-  const [isPaused, setIsPaused] = useState(false);
-  const isPausedRef = useRef(false);
-  const isCancelledRef = useRef(false);
-  
+
+  // ─── Sync hook (Firebase listeners + media scan + upload pipeline) ───
+  const {
+    allFirebaseDevices,
+    deviceGroups,
+    saveGroupToFirebase,
+    deleteGroupFromFirebase,
+    hasPermission,
+    mediaAssets, setMediaAssets,
+    isScanning,
+    scanMedia: scanMediaHook,
+    autoScan,
+    hasScannedRef,
+    isUploading,
+    isPausedRef,
+    isCancelledRef,
+    uploadIndex,
+    uploadTotal,
+    uploadProgress, setUploadProgress,
+    executeTransfer,
+    pauseTransfer,
+    cancelTransfer,
+  } = useArchiveSync();
+
   // Date range — default 1 year (so images/videos load broadly)
-  const [startDate, setStartDate] = useState(new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)); 
+  const [startDate, setStartDate] = useState(new Date(Date.now() - 365 * 24 * 60 * 60 * 1000));
   const [endDate, setEndDate] = useState(new Date());
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
-  
-  // Media state
-  const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
-  const [isScanning, setIsScanning] = useState(false);
+
+  // Wrap scanMedia so the UI can pass current date range
+  const scanMedia = useCallback(() => {
+    scanMediaHook(startDate, endDate);
+  }, [scanMediaHook, startDate, endDate]);
+
+  // Transfer pause state (mirrored for UI)
+  const [isPaused, setIsPaused] = useState(false);
+
+  // Media UI state
   const [activeTab, setActiveTab] = useState<'Images'|'Videos'|'PDFs'|'Docs'|'All'>('All');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('All');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [enlargedPreview, setEnlargedPreview] = useState<MediaAsset | null>(null);
-  
-  // Upload state
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadIndex, setUploadIndex] = useState(0);
-  const [uploadTotal, setUploadTotal] = useState(0);
-  const [uploadProgress, setUploadProgress] = useState<Record<string, string>>({});
-  
+
   // Files browser state
   const [fileSearchText, setFileSearchText] = useState('');
   const [browserFiles, setBrowserFiles] = useState<MediaAsset[]>([]);
 
-  // Device & group state
-  const [allFirebaseDevices, setAllFirebaseDevices] = useState<FirebaseDevice[]>([]);
+  // Device & group UI state
   const [selectedTarget, setSelectedTarget] = useState<FirebaseDevice | null>(null);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState<DeviceGroup | null>(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [selectedGroupDevices, setSelectedGroupDevices] = useState<Set<string>>(new Set());
   const [urlPopup, setUrlPopup] = useState<{ device: FirebaseDevice; localUrl: string; globalUrl: string } | null>(null);
-  const [deviceGroups, setDeviceGroups] = useState<DeviceGroup[]>([]);
 
-  // Real-time Firebase sync for groups
+  // Auto-scan when permission is available and haven't scanned yet
   useEffect(() => {
-    if (!pairingKey) return;
-    const groupsRef = dbRef(database, `device_groups/${pairingKey}`);
-    const unsubGroups = onValue(groupsRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        const groups = Object.keys(data).map(k => ({ ...data[k], id: k }));
-        setDeviceGroups(groups);
-      } else {
-        setDeviceGroups([]);
-      }
-    });
-    return () => unsubGroups();
-  }, [pairingKey]);
+    autoScan(startDate, endDate);
+  }, [hasPermission]);
 
-  const saveGroupToFirebase = async (group: DeviceGroup) => {
-    if (!pairingKey) return;
-    const groupRef = dbRef(database, `device_groups/${pairingKey}/${group.id}`);
-    await set(groupRef, { name: group.name, deviceNames: group.deviceNames });
+  const saveGroupHandler = async (group: DeviceGroup) => {
+    await saveGroupToFirebase(group);
   };
 
   const createOrUpdateGroup = async () => {
@@ -140,156 +115,12 @@ export default function FilesScreen() {
     Alert.alert('Delete Group', 'Are you sure?', [
       { text: 'Cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
-        if (!pairingKey) return;
-        const groupRef = dbRef(database, `device_groups/${pairingKey}/${groupId}`);
-        await set(groupRef, null);
+        await deleteGroupFromFirebase(groupId);
       }}
     ]);
   };
 
-  // Device discovery — now simplified to use global context
-  useEffect(() => {
-    if (!pairingKey || !isValidPairingKey(pairingKey)) { return; }
-    const nodesRef = query(dbRef(database, `active_devices/${pairingKey}`));
-    const unsubscribeNodes = onValue(nodesRef, async (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        const filtered = Object.keys(data).map(k => ({ ...data[k], firebaseKey: k })).filter(d => d.IsOnline);
-        const allDevs = await decryptDeviceList(filtered);
-        setAllFirebaseDevices(allDevs);
-      } else {
-        setAllFirebaseDevices([]);
-      }
-    });
-    return () => unsubscribeNodes();
-  }, [pairingKey]);
-
-  // Permissions + auto-scan on mount
-  const hasScannedRef = useRef(false);
-  useEffect(() => {
-    (async () => {
-      try {
-        const { status } = await MediaLibrary.requestPermissionsAsync(false, ['photo', 'video']);
-        setHasPermission(status === 'granted');
-        
-        // On Android 11+, All Files Access may be needed for document scanning.
-        // A more robust check would involve a dedicated Expo plugin / native module.
-      } catch { setHasPermission(false); }
-    })();
-  }, []);
-
-  // Auto-scan when permission is available and haven't scanned yet
-  useEffect(() => {
-    if (hasPermission && !hasScannedRef.current && mediaAssets.length === 0 && !isScanning) {
-      hasScannedRef.current = true;
-      scanMedia();
-    }
-  }, [hasPermission]);
-
-  // Media scan — uses native MediaStore for instant document discovery
-  const scanMedia = useCallback(async () => {
-    if (hasPermission === false) {
-      if (Platform.OS === 'android') ToastAndroid.show('Permission denied — enable storage access in Settings', ToastAndroid.LONG);
-      return;
-    }
-    setIsScanning(true);
-    setMediaAssets([]);
-    setSelectedIds(new Set());
-    setBrowserFiles([]);
-    if (Platform.OS === 'android') ToastAndroid.show('🔍 Scanning files...', ToastAndroid.SHORT);
-    
-    try {
-      let allFound: any[] = [];
-
-      // 1. Gallery scan for images/videos with date filter (via expo-media-library)
-      try {
-        let hasNextPage = true;
-        let after = undefined;
-        while (hasNextPage) {
-          let media = await MediaLibrary.getAssetsAsync({
-            first: 100,
-            after: after,
-            mediaType: ['photo', 'video'],
-            createdAfter: startDate.getTime(),
-            createdBefore: endDate.getTime(),
-            sortBy: [[MediaLibrary.SortBy.creationTime, false]]
-          });
-          allFound = [...allFound, ...media.assets.map(a => ({ ...a, source: 'Camera' }))];
-          hasNextPage = media.hasNextPage;
-          after = media.endCursor;
-        }
-      } catch (mediaErr: any) {
-        console.warn('MediaLibrary scan failed:', mediaErr?.message);
-      }
-
-      // 2. Native Document Scanner (Disabled as module is missing — using fallback scan instead)
-      let nativeScanWorked = false;
-
-      // 3. Always run fallback filesystem scan to supplement (catches files MediaStore might miss)
-      if (!nativeScanWorked) {
-        await fallbackFileScan(allFound);
-      }
-
-      const uniqueAssets = Array.from(new Map(allFound.map(item => [item.id, item])).values());
-      uniqueAssets.sort((a, b) => b.creationTime - a.creationTime);
-      setMediaAssets(uniqueAssets);
-      
-      if (Platform.OS === 'android') {
-        const imgCount = uniqueAssets.filter(a => a.mediaType === 'photo').length;
-        const vidCount = uniqueAssets.filter(a => a.mediaType === 'video').length;
-        const docCount = uniqueAssets.filter(a => a.mediaType === 'pdf' || a.mediaType === 'doc').length;
-        ToastAndroid.show(`✅ ${imgCount} images, ${vidCount} videos, ${docCount} docs`, ToastAndroid.LONG);
-      }
-    } catch (e) { console.error(e); }
-    setIsScanning(false);
-  }, [startDate, endDate, hasPermission]);
-
-  // Fallback filesystem scan (for non-Android or if native module fails)
-  const fallbackFileScan = async (allFound: any[]) => {
-    if (Platform.OS === 'web') return;
-    const scanRoots: { path: string, source: SourceFilter, recursive?: boolean }[] = [
-      { path: 'file:///storage/emulated/0/Download/', source: 'Downloads', recursive: true },
-      { path: 'file:///storage/emulated/0/Documents/', source: 'Downloads', recursive: true },
-      { path: 'file:///storage/emulated/0/WhatsApp/Media/WhatsApp Documents/', source: 'WhatsApp', recursive: true },
-      { path: 'file:///storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents/', source: 'WhatsApp', recursive: true },
-    ];
-
-    const scanDir = async (dirPath: string, source: SourceFilter, depth: number = 0, maxDepth: number = 2) => {
-      if (depth > maxDepth) return;
-      try {
-        const check = await FileSystem.getInfoAsync(dirPath);
-        if (!check.exists || !check.isDirectory) return;
-        const files = await FileSystem.readDirectoryAsync(dirPath);
-        for (const file of files) {
-          if (file === '.nomedia' || file.startsWith('.') || file === 'Android' || file === 'node_modules') continue;
-          const fullPath = dirPath + file;
-          try {
-            const fInfo = await FileSystem.getInfoAsync(fullPath);
-            if (fInfo.exists && fInfo.isDirectory && depth < maxDepth) {
-              await scanDir(fullPath + '/', source, depth + 1, maxDepth);
-            } else if (fInfo.exists && !fInfo.isDirectory) {
-              const lowerFile = file.toLowerCase();
-              let mediaType = '';
-              if (lowerFile.endsWith('.pdf')) mediaType = 'pdf';
-              else if (lowerFile.match(/\.(doc|docx|txt|xlsx|xls|pptx|ppt|odt|rtf|csv)$/)) mediaType = 'doc';
-              else if (lowerFile.match(/\.(apk|zip|rar|7z|tar|gz)$/)) mediaType = 'doc';
-              if (!mediaType) continue;
-              const rawModTime = fInfo.modificationTime || 0;
-              // Sanity check: if modificationTime is already in ms (>1e12), don't multiply
-              const modTimeMs = rawModTime > 1e12 ? rawModTime : rawModTime * 1000;
-              allFound.push({ id: fullPath, uri: fullPath, filename: file, creationTime: modTimeMs, mediaType, source, fileSize: (fInfo as any).size || 0 });
-            }
-          } catch {}
-        }
-      } catch {}
-    };
-
-    for (const { path, source, recursive } of scanRoots) {
-      await scanDir(path, source, 0, recursive ? 4 : 0);
-    }
-  };
-
-  // Browse Android files
+  // ─── Browse Android files ───
   const browseFiles = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
@@ -317,7 +148,7 @@ export default function FilesScreen() {
     }
   };
 
-  // Build date range folder name
+  // ─── Build date-range folder name ───
   const buildBatchName = () => {
     const sender = deviceName || 'Mobile';
     const from = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).replace(/\s/g, '');
@@ -325,233 +156,56 @@ export default function FilesScreen() {
     return `${sender}_${from}_to_${to}`;
   };
 
-  // Execute transfer
-  const executeTransfer = async (targetNode: any) => {
+  /**
+   * handleTransfer — resolves relay routing then delegates to useArchiveSync.executeTransfer.
+   * This keeps URL-resolution logic in the UI layer (where pairedDevices is available)
+   * while the actual upload pipeline lives in the hook.
+   */
+  const handleTransfer = async (targetNode: any) => {
     if (!pairingKey) { Alert.alert('Error', 'No pairing key configured.'); return; }
     const allItems = [...getFilteredAssets(), ...browserFiles];
     const targetQueue = allItems.filter(a => selectedIds.has(a.id));
-    
+
     if (targetQueue.length === 0) {
-      Alert.alert("No Items", "Select items to send first.");
+      Alert.alert('No Items', 'Select items to send first.');
       return;
     }
 
     // Find a PC relay if target has no direct route
     let resolvedUrl = targetNode.resolvedUrl;
     let useRelay = false;
-    
+
     if (targetNode.connectionType === 'sync-only' || !resolvedUrl) {
       // Find any PC with Cloudflare to relay through
       const relayPC = pairedDevices.find(d => d.deviceType === 'PC' && d.isOnline && d.globalUrl);
-      
       if (relayPC) {
         resolvedUrl = relayPC.localUrl || relayPC.globalUrl;
         useRelay = true;
         if (Platform.OS === 'android') ToastAndroid.show(`📡 Relaying via ${relayPC.deviceName}`, ToastAndroid.SHORT);
       } else {
-        Alert.alert("No Route Available", "No PC with Cloudflare is online to relay files.\n\nEnsure at least one PC is running FlyShelf with internet access.");
+        Alert.alert('No Route Available', 'No PC with Cloudflare is online to relay files.\n\nEnsure at least one PC is running FlyShelf with internet access.');
         return;
       }
     }
-    
+
     if (!resolvedUrl) {
-      Alert.alert("Route Failed", "No reachable URL for this device.");
+      Alert.alert('Route Failed', 'No reachable URL for this device.');
       return;
     }
 
-    setIsUploading(true);
-    setUploadIndex(0);
-    setUploadTotal(targetQueue.length);
-    isCancelledRef.current = false;
-    isPausedRef.current = false;
     setIsPaused(false);
-    setUploadProgress({});
-
-    const batchName = buildBatchName();
-    const isCloudflare = useRelay || targetNode.connectionType === 'cloudflare';
-    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks (base64 overhead ~13MB in memory, safe for low-RAM devices)
-
-    const processUpload = async (asset: any): Promise<void> => {
-      if (isCancelledRef.current) return;
-      while (isPausedRef.current) {
-        if (isCancelledRef.current) return;
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-      if (isCancelledRef.current) return;
-
-      setUploadIndex(prev => prev + 1);
-      setUploadProgress(prev => ({ ...prev, [asset.id]: 'sending' }));
-
-      let attempt = 0;
-      let success = false;
-
-      while (attempt < 3 && !success && !isCancelledRef.current) {
-        attempt++;
-        try {
-          let finalUploadUri = asset.uri;
-          
-          // Handle content:// URIs
-          if (asset.uri.startsWith('content://') || (!asset.uri.startsWith('file://') && !asset.uri.startsWith('http'))) {
-            if (asset.id && !asset.id.startsWith('browse_')) {
-              const assetInfo = await MediaLibrary.getAssetInfoAsync(asset.id);
-              finalUploadUri = assetInfo.localUri || assetInfo.uri;
-            }
-          }
-          if (finalUploadUri.startsWith('content://')) {
-            const safeName = `transfer_${Date.now()}_` + (asset.filename || 'file.bin').replace(/[^a-zA-Z0-9.-]/g, '_');
-            const cachePath = `${FileSystem.cacheDirectory}${safeName}`;
-            await FileSystem.copyAsync({ from: finalUploadUri, to: cachePath });
-            finalUploadUri = cachePath;
-          }
-
-          const fileInfo = await FileSystem.getInfoAsync(finalUploadUri);
-          if (fileInfo.exists) {
-            const fileSize = (fileInfo as any).size || 0;
-            const uploadEndpoint = useRelay ? 'relay_upload' : 'archive_upload';
-            
-            // Use chunked upload for large files over Cloudflare (>50MB)
-            if (isCloudflare && fileSize > CHUNK_SIZE) {
-              await uploadChunked(resolvedUrl, finalUploadUri, asset, batchName, fileSize);
-            } else {
-              // Single-POST for LAN or small files
-              const uploadUrl = `${resolvedUrl}/api/${uploadEndpoint}`;
-              const response = await FileSystem.uploadAsync(uploadUrl, finalUploadUri, {
-                httpMethod: 'POST',
-                uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-                headers: {
-                  'X-FlyShelf-Client': 'MobileCompanion',
-                  'X-Pairing-Key': pairingKey,
-                  'X-Original-Date': (asset.creationTime || Date.now()).toString(),
-                  'X-File-Name': encodeURIComponent(asset.filename || 'file.bin'),
-                  'X-Batch-Name': encodeURIComponent(batchName),
-                  'X-Source-Device': deviceName || 'Android',
-                }
-              });
-              if (response.status !== 200) throw new Error("HTTP " + response.status);
-            }
-            setUploadProgress(prev => ({ ...prev, [asset.id]: 'done' }));
-            success = true;
-          }
-        } catch (error) {
-          if (attempt === 3) {
-            setUploadProgress(prev => ({ ...prev, [asset.id]: 'error' }));
-          }
-        }
-      }
-    };
-
-    // Chunked upload: split file into 50MB chunks, send each, then finalize
-    const uploadChunked = async (baseUrl: string, fileUri: string, asset: any, batch: string, totalSize: number) => {
-      const sessionId = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-      const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
-
-      for (let i = 0; i < totalChunks; i++) {
-        if (isCancelledRef.current) throw new Error('Cancelled');
-        while (isPausedRef.current) {
-          if (isCancelledRef.current) throw new Error('Cancelled');
-          await new Promise(r => setTimeout(r, 500));
-        }
-
-        // Read chunk from file
-        const offset = i * CHUNK_SIZE;
-        const length = Math.min(CHUNK_SIZE, totalSize - offset);
-        
-        // Read chunk as base64, write to temp file, upload temp file
-        const chunkB64 = await FileSystem.readAsStringAsync(fileUri, {
-          encoding: FileSystem.EncodingType.Base64,
-          position: offset,
-          length: length,
-        });
-        const chunkTempUri = `${FileSystem.cacheDirectory}chunk_${sessionId}_${i}`;
-        await FileSystem.writeAsStringAsync(chunkTempUri, chunkB64, { encoding: FileSystem.EncodingType.Base64 });
-
-        // Upload chunk
-        let chunkAttempt = 0;
-        let chunkDone = false;
-        while (chunkAttempt < 3 && !chunkDone) {
-          chunkAttempt++;
-          // Re-resolve URL on retry (tunnel URL may have changed)
-          if (chunkAttempt > 1 && baseUrl.includes('trycloudflare.com')) {
-            const freshPc = pairedDevices.find(d => d.deviceType === 'PC' && d.isOnline && (d.localUrl || d.globalUrl));
-            if (freshPc) baseUrl = freshPc.localUrl || freshPc.globalUrl || baseUrl;
-          }
-          try {
-            const res = await FileSystem.uploadAsync(`${baseUrl}/api/upload_chunk`, chunkTempUri, {
-              httpMethod: 'POST',
-              uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-              headers: {
-                'X-FlyShelf-Client': 'MobileCompanion',
-                'X-Pairing-Key': pairingKey,
-                'X-Upload-Session': sessionId,
-                'X-Chunk-Index': i.toString(),
-              }
-            });
-            if (res.status === 200) chunkDone = true;
-            else throw new Error(`Chunk ${i} failed: HTTP ${res.status}`);
-          } catch (e) {
-            if (chunkAttempt === 3) throw e;
-            await new Promise(r => setTimeout(r, 1000));
-          }
-        }
-
-        // Clean up temp chunk file
-        try { await FileSystem.deleteAsync(chunkTempUri, { idempotent: true }); } catch {}
-
-        // Update progress text
-        setUploadProgress(prev => ({ ...prev, [asset.id]: `chunk ${i + 1}/${totalChunks}` }));
-      }
-
-      // Finalize — tell PC to merge all chunks (with retry — chunks are useless without this)
-      let finalizeOk = false;
-      for (let finAttempt = 0; finAttempt < 3 && !finalizeOk; finAttempt++) {
-        try {
-          const finRes = await fetch(`${baseUrl}/api/upload_finalize`, {
-            method: 'POST',
-            headers: {
-              'X-FlyShelf-Client': 'MobileCompanion',
-              'X-Pairing-Key': pairingKey,
-              'X-Upload-Session': sessionId,
-              'X-File-Name': encodeURIComponent(asset.filename || 'file.bin'),
-              'X-Batch-Name': encodeURIComponent(batch),
-              'X-Original-Date': (asset.creationTime || Date.now()).toString(),
-              'X-Total-Chunks': totalChunks.toString(),
-            }
-          });
-          if (finRes.ok) { finalizeOk = true; }
-          else if (finAttempt === 2) throw new Error(`Finalize failed after 3 attempts: ${finRes.status}`);
-        } catch (finErr) {
-          if (finAttempt === 2) throw finErr;
-          await new Promise(r => setTimeout(r, 2000)); // Wait 2s before retry
-        }
-      }
-    };
-
-    // Concurrent workers
-    const workers = [];
-    let currentIndex = 0;
-    const CONCURRENCY = 2;
-    for (let i = 0; i < Math.min(CONCURRENCY, targetQueue.length); i++) {
-      workers.push((async function worker() {
-        while (currentIndex < targetQueue.length) {
-          if (isCancelledRef.current) break;
-          const asset = targetQueue[currentIndex++];
-          await processUpload(asset);
-        }
-      })());
-    }
-    await Promise.all(workers);
-
-    setIsUploading(false);
-    if (isCancelledRef.current) {
-      Alert.alert('Cancelled', 'Transfer was cancelled.');
-    } else {
-      setTimeout(() => {
+    await executeTransfer(
+      targetNode,
+      targetQueue,
+      buildBatchName(),
+      useRelay,
+      resolvedUrl,
+      () => {
+        // onComplete callback — reset selection
         setSelectedIds(new Set());
-        setUploadProgress({});
         setBrowserFiles([]);
-        Alert.alert('Transfer Complete ✅', `Sent ${targetQueue.length} items to ${targetNode.DeviceName}`);
-      }, 1000);
-    }
+      },
+    );
   };
 
   const toggleSelection = (id: string) => {
@@ -670,10 +324,10 @@ export default function FilesScreen() {
             <View style={{ height: '100%', width: `${pct}%`, backgroundColor: colors.accent.success, borderRadius: 4 }} />
           </View>
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <TouchableOpacity style={[s.controlBtn, { backgroundColor: isPaused ? colors.accent.success : colors.accent.warning, flex: 1 }]} onPress={() => { isPausedRef.current = !isPausedRef.current; setIsPaused(isPausedRef.current); }} accessibilityLabel={isPaused ? 'Resume transfer' : 'Pause transfer'} accessibilityRole="button">
+            <TouchableOpacity style={[s.controlBtn, { backgroundColor: isPaused ? colors.accent.success : colors.accent.warning, flex: 1 }]} onPress={() => { const next = pauseTransfer(); setIsPaused(next); }} accessibilityLabel={isPaused ? 'Resume transfer' : 'Pause transfer'} accessibilityRole="button">
               <Text style={s.controlBtnText}>{isPaused ? '▶ Resume' : '⏸ Pause'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[s.controlBtn, { backgroundColor: colors.accent.error, flex: 1 }]} onPress={() => { isCancelledRef.current = true; }} accessibilityLabel="Abort transfer" accessibilityRole="button">
+            <TouchableOpacity style={[s.controlBtn, { backgroundColor: colors.accent.error, flex: 1 }]} onPress={() => { cancelTransfer(); }} accessibilityLabel="Abort transfer" accessibilityRole="button">
               <Text style={s.controlBtnText}>✕ Abort</Text>
             </TouchableOpacity>
           </View>
@@ -813,7 +467,7 @@ export default function FilesScreen() {
         {/* Send Button */}
         {selectedIds.size > 0 && (
           <View style={{ position: 'absolute', bottom: 20, left: 20, right: 20 }}>
-            <TouchableOpacity style={s.sendButton} onPress={() => executeTransfer(selectedTarget)} activeOpacity={0.8} accessibilityLabel={`Send ${selectedIds.size} items to ${selectedTarget.DeviceName}`} accessibilityRole="button">
+            <TouchableOpacity style={s.sendButton} onPress={() => handleTransfer(selectedTarget)} activeOpacity={0.8} accessibilityLabel={`Send ${selectedIds.size} items to ${selectedTarget.DeviceName}`} accessibilityRole="button">
               <Text style={s.sendButtonText}>Send {selectedIds.size} Items to {selectedTarget.DeviceName}</Text>
               <Text style={{ color: colors.accent.success, fontSize: 10, marginTop: 3 }}>{buildBatchName()}</Text>
             </TouchableOpacity>
@@ -879,6 +533,8 @@ export default function FilesScreen() {
         await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
           data: contentUri, flags: 1, type: mimeType,
         });
+        // AM-8: Schedule cleanup of temp cache file after intent resolves (60s delay)
+        setTimeout(() => FileSystem.deleteAsync(appLocalPath, { idempotent: true }).catch(() => {}), 60000);
       }
     } catch (e: any) {
       // Fallback: use share sheet
@@ -1056,7 +712,7 @@ export default function FilesScreen() {
                   if (!pc) { Alert.alert('No PC', 'Connect to a PC to merge files.'); return; }
                   const target = { ...pc, resolvedUrl: pc.localUrl || pc.globalUrl, DeviceName: pc.deviceName };
                   setSelectedTarget(target);
-                  executeTransfer(target);
+                  handleTransfer(target);
                 }} accessibilityLabel="Merge selected files on PC" accessibilityRole="button">
                   <Text style={{ color: colors.bg.base, fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📑 Merge on PC</Text>
                 </TouchableOpacity>
@@ -1068,7 +724,7 @@ export default function FilesScreen() {
               if (onlineDevs.length === 1) { 
                 const target = { ...onlineDevs[0], resolvedUrl: onlineDevs[0].localUrl || onlineDevs[0].globalUrl, DeviceName: onlineDevs[0].deviceName };
                 setSelectedTarget(target); 
-                executeTransfer(target); 
+                handleTransfer(target); 
                 return; 
               }
               Alert.alert('Send to:', '', onlineDevs.map(d => ({ 
@@ -1076,7 +732,7 @@ export default function FilesScreen() {
                 onPress: () => { 
                   const target = { ...d, resolvedUrl: d.localUrl || d.globalUrl, DeviceName: d.deviceName };
                   setSelectedTarget(target); 
-                  executeTransfer(target); 
+                  handleTransfer(target); 
                 } 
               })).concat([{ text: 'Cancel' } as any]));
             }} accessibilityLabel={`Send ${selectedIds.size} files to device`} accessibilityRole="button">
@@ -1087,19 +743,7 @@ export default function FilesScreen() {
       )}
 
 
-      {/* Preview Modal */}
-      <Modal visible={!!enlargedPreview} animationType="fade" transparent>
-        <View style={[s.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.95)' }]}>
-          <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setEnlargedPreview(null)} accessibilityLabel="Close preview" accessibilityRole="button">
-            <View style={{ padding: 10, backgroundColor: colors.bg.cardHover, borderRadius: 20 }}><Ionicons name="close" size={24} color={colors.text.primary} /></View>
-          </TouchableOpacity>
-          {enlargedPreview && (enlargedPreview.mediaType === 'photo' || enlargedPreview.mediaType === 'video') ? (
-            <Image source={{ uri: enlargedPreview.uri }} style={{ width: '100%', height: '80%', resizeMode: 'contain' }} />
-          ) : (
-            <View style={{ alignItems: 'center' }}><Ionicons name="document" size={80} color={colors.accent.warning} /><Text style={{ color: colors.text.primary, marginTop: 20, fontSize: 18, fontWeight: 'bold' }}>{enlargedPreview?.filename}</Text></View>
-          )}
-        </View>
-      </Modal>
+      {/* AL-9: Duplicate Preview Modal removed — already rendered above (lines ~823-840) */}
 
       {/* URL Popup */}
       <Modal visible={!!urlPopup} transparent animationType="fade" onRequestClose={() => setUrlPopup(null)}>

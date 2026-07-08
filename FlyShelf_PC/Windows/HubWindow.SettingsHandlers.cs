@@ -385,9 +385,11 @@ namespace FlyShelf.Windows
         protected override void OnClosed(EventArgs e)
         {
             base.OnClosed(e);
+            if (_coastPrefetchHandler != null) { Classes.SmoothScrollPCApp.CoastPrefetchNeeded -= _coastPrefetchHandler; _coastPrefetchHandler = null; }
             if (_devicePairedHandler != null) { DevicePairingManager.OnDevicePaired -= _devicePairedHandler; _devicePairedHandler = null; }
             if (_viewModel?.DroppedItems != null) { _viewModel.DroppedItems.CollectionChanged -= DroppedItems_CollectionChanged; }
             if (_deviceRefreshTimer != null) { _deviceRefreshTimer.Stop(); _deviceRefreshTimer = null; }
+            if (_hubScrollHighQualityTimer != null) { _hubScrollHighQualityTimer.Stop(); _hubScrollHighQualityTimer = null; }
         }
     }
 }

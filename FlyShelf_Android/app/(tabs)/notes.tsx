@@ -15,6 +15,7 @@ import { useSettings } from '../../context/SettingsContext';
 import { fetchWithTimeout, resolveBestPcUrl } from '../../utils/networkHelpers';
 import { NetworkClock } from '../../utils/networkClock';
 import { getSecureItem } from '../../utils/secureStorage';
+import { useNotesSync, NOTES_STORAGE_KEY } from '../../features/notes/useNotesSync';
 import {
   NoteDay, NoteBullet, FreeformSection, SubBulletItem,
   createNoteDay, createNoteBullet, createFreeformSection,
@@ -31,10 +32,8 @@ import ScreenHeader from '../../components/ScreenHeader';
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════
 
-const NOTES_STORAGE_KEY = '@flyshelf_notes';
-const PENDING_NOTES_SYNC_KEY = '@flyshelf_pending_notes_sync';
-const POLL_INTERVAL = 10_000;
-const DEBOUNCE_POST_MS = 2_000;
+// NOTES_STORAGE_KEY, PENDING_NOTES_SYNC_KEY, POLL_INTERVAL, DEBOUNCE_POST_MS
+// are now internal to features/notes/useNotesSync.ts
 const RECENT_DAYS_COUNT = 30;
 // First element '' means 'no color' / default (transparent strip)
 const BULLET_COLORS = ['', '#6384FF', '#34D399', '#F87171', '#FBBF24', '#A78BFA', '#F472B6', '#60A5FA'];
@@ -109,12 +108,16 @@ const showToast = (msg: string) => {
 export default function NotesScreen() {
   const { colors, shadows } = useAppTheme();
   const styles = useMemo(() => createNotesStyles(colors, shadows), [colors, shadows]);
-  const { pcLocalIp, pairingKey, pairedDevices, deviceName, syncPreferences, getSyncPrefsForDevice } = useSettings();
+  const { deviceName } = useSettings();
 
-  // ─── State ───
-  const [days, setDays] = useState<NoteDay[]>([]);
+  // ─── Sync hook (PC polling + debounced POST) ───
+  const {
+    days, setDays, syncStatus, isLoading,
+    modifiedDatesRef, schedulePost, schedulePostRef, daysRef,
+  } = useNotesSync();
+
+  // ─── UI-only state ───
   const [selectedDateIdx, setSelectedDateIdx] = useState(0);
-  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('offline');
   const [deletingBulletId, setDeletingBulletId] = useState<string | null>(null);
   const [editingTagBulletId, setEditingTagBulletId] = useState<string | null>(null);
   const [newTagText, setNewTagText] = useState('');
@@ -122,36 +125,9 @@ export default function NotesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
-  // ─── Refs ───
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pcUrlRef = useRef<string | null>(null);
-  const daysRef = useRef<NoteDay[]>([]);
-  const modifiedDatesRef = useRef<Set<string>>(new Set());
+  // ─── UI refs ───
   const fabScale = useRef(new Animated.Value(1)).current;
-
-  const syncFailCountRef = useRef(0);
-  const mountedRef = useRef(true);
-  const schedulePostRef = useRef<(() => void) | null>(null);
-
-  // Refs to avoid stale closures in fetchRemoteNotes (fix #3)
-  const pairedDevicesRef = useRef(pairedDevices);
-  useEffect(() => { pairedDevicesRef.current = pairedDevices; }, [pairedDevices]);
-  const pcLocalIpRef = useRef(pcLocalIp);
-  useEffect(() => { pcLocalIpRef.current = pcLocalIp; }, [pcLocalIp]);
-
-  // Keep ref in sync
-  useEffect(() => { daysRef.current = days; }, [days]);
-
-  // Unmount guard + cleanup debounce timer
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    };
-  }, []);
 
   // ─── Generated date chips (refreshes after midnight) ───
   const [todayKey, setTodayKey] = useState(new Date().toISOString().split('T')[0]);
@@ -169,240 +145,6 @@ export default function NotesScreen() {
   // ─── Current day data ───
   const currentDay = days.find(d => d.Date === selectedDateKey);
   const isFreeformMode = currentDay?.IsFreeformMode ?? false;
-
-  // ═══════════════════════════════════════════════════════════
-  // SYNC: Load cached notes & resolve PC URL
-  // ═══════════════════════════════════════════════════════════
-  useEffect(() => {
-    (async () => {
-      // Load cached notes
-      try {
-        const stored = await AsyncStorage.getItem(NOTES_STORAGE_KEY);
-        if (stored) {
-          const parsed: NoteDay[] = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setDays(parsed);
-          }
-        }
-      } catch (e) { console.warn('[Notes] Failed to load cached notes:', e); }
-
-      setIsLoading(false);
-    })();
-  }, []);
-
-  // ═══════════════════════════════════════════════════════════
-  // SYNC: Poll for remote notes
-  // ═══════════════════════════════════════════════════════════
-  const fetchRemoteNotes = useCallback(async () => {
-    // Resolve PC URL from global context (discovered by main tab)
-    // Uses refs to avoid stale closure — pairedDevicesRef/pcLocalIpRef stay current
-    const pcUrl = resolveBestPcUrl(pairedDevicesRef.current, pcLocalIpRef.current);
-    if (pcUrl) pcUrlRef.current = pcUrl;
-
-    if (!pcUrlRef.current || !pairingKey) {
-      setSyncStatus('offline');
-      return;
-    }
-
-    // Gate: skip sync if no paired device has notes sync enabled
-    const anyDeviceWantsNotes = pairedDevicesRef.current.length === 0 || pairedDevicesRef.current.some(d => getSyncPrefsForDevice(d.deviceId).notes);
-    if (!anyDeviceWantsNotes) {
-      setSyncStatus('offline');
-      return;
-    }
-
-    try {
-      setSyncStatus('syncing');
-      const res = await fetchWithTimeout(`${pcUrlRef.current}/api/notes`, {
-        method: 'GET',
-        headers: {
-          'X-FlyShelf-Client': 'MobileCompanion',
-          'X-Pairing-Key': pairingKey,
-        },
-      }, 5000);
-
-      if (!res.ok) {
-        setSyncStatus('offline');
-        syncFailCountRef.current++;
-        if (syncFailCountRef.current === 2) {
-          showToast('Notes sync offline — PC may be unreachable');
-        }
-        return;
-      }
-
-      const remoteDays: NoteDay[] = await res.json();
-      if (!Array.isArray(remoteDays)) {
-        setSyncStatus('offline');
-        syncFailCountRef.current++;
-        if (syncFailCountRef.current === 2) {
-          showToast('Notes sync offline — PC may be unreachable');
-        }
-        return;
-      }
-
-      // Per-bullet merge: iterate each remote day, merge individual bullets by Id
-      // Each bullet's LastEdited timestamp is compared independently — the most recent edit wins.
-      // New bullets from either side are preserved. This prevents data loss on concurrent edits.
-      setDays(prev => {
-        const merged = [...prev];
-        for (const remote of remoteDays) {
-          const localIdx = merged.findIndex(d => d.Date === remote.Date);
-          if (localIdx >= 0) {
-            const localDay = merged[localIdx];
-            // Merge bullets by Id: most-recently-edited wins per bullet
-            const bulletMap = new Map<string, NoteBullet>();
-            for (const lb of localDay.Bullets) bulletMap.set(lb.Id, lb);
-            for (const rb of remote.Bullets) {
-              const existing = bulletMap.get(rb.Id);
-              if (!existing) {
-                // New from remote — add it
-                bulletMap.set(rb.Id, rb);
-              } else {
-                // Both have it — compare LastEdited timestamps
-                const localTs = new Date(existing.LastEdited || existing.CreatedAt).getTime();
-                const remoteTs = new Date(rb.LastEdited || rb.CreatedAt).getTime();
-                if (remoteTs > localTs) {
-                  bulletMap.set(rb.Id, rb); // Remote wins
-                }
-                // else: local wins, keep existing
-              }
-            }
-            // Preserve order: remote order for remote bullets, append local-only bullets at end
-            const remoteIds = new Set(remote.Bullets.map(b => b.Id));
-            const orderedBullets: NoteBullet[] = [];
-            // First: follow remote ordering for all bullets that exist in remote
-            for (const rb of remote.Bullets) {
-              const resolved = bulletMap.get(rb.Id);
-              if (resolved) orderedBullets.push(resolved);
-            }
-            // Then: append local-only bullets (not in remote)
-            for (const lb of localDay.Bullets) {
-              if (!remoteIds.has(lb.Id)) orderedBullets.push(lb);
-            }
-            // Use the later LastModified for the day
-            const dayTs = Math.max(localDay.LastModified || 0, remote.LastModified || 0);
-            merged[localIdx] = { ...localDay, Bullets: orderedBullets, LastModified: dayTs };
-          } else {
-            merged.push(remote);
-          }
-        }
-        // Persist after merge
-        queueMicrotask(() => {
-          AsyncStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(merged)).catch(() => {});
-        });
-        return merged;
-      });
-
-      setSyncStatus('synced');
-      syncFailCountRef.current = 0;
-
-      // Clear dates that were merged from remote to avoid re-POSTing stale data
-      for (const remote of remoteDays) {
-        modifiedDatesRef.current.delete(remote.Date);
-      }
-
-      // Flush offline queue: re-add pending dates and trigger POST
-      try {
-        const pendingRaw = await AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY);
-        if (pendingRaw) {
-          const pendingDates: string[] = JSON.parse(pendingRaw);
-          if (pendingDates.length > 0) {
-            for (const dateKey of pendingDates) {
-              modifiedDatesRef.current.add(dateKey);
-            }
-            await AsyncStorage.removeItem(PENDING_NOTES_SYNC_KEY);
-            // Use queueMicrotask to defer — schedulePost may be defined after fetchRemoteNotes
-            queueMicrotask(() => { if (schedulePostRef.current) schedulePostRef.current(); });
-          }
-        }
-      } catch { /* ignore queue flush errors */ }
-    } catch {
-      setSyncStatus('offline');
-      syncFailCountRef.current++;
-      if (syncFailCountRef.current === 2) {
-        showToast('Notes sync offline — PC may be unreachable');
-      }
-    }
-  }, [pairingKey]);
-
-  // Start polling
-  useEffect(() => {
-    // Initial fetch
-    fetchRemoteNotes();
-
-    pollTimerRef.current = setInterval(fetchRemoteNotes, POLL_INTERVAL);
-    return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-    };
-  }, [fetchRemoteNotes]);
-
-  // ═══════════════════════════════════════════════════════════
-  // SYNC: Debounced POST of modified days
-  // ═══════════════════════════════════════════════════════════
-  const schedulePost = useCallback(() => {
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = setTimeout(async () => {
-      if (!mountedRef.current) return;
-      if (!pcUrlRef.current || !pairingKey) return;
-      const modifiedDates = modifiedDatesRef.current;
-      if (modifiedDates.size === 0) return;
-
-      const currentDays = daysRef.current;
-      const toPost = currentDays.filter(d => modifiedDates.has(d.Date));
-      if (toPost.length === 0) return;
-
-      try {
-        setSyncStatus('syncing');
-        const res = await fetchWithTimeout(`${pcUrlRef.current}/api/notes`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-FlyShelf-Client': 'MobileCompanion',
-            'X-Pairing-Key': pairingKey,
-            'X-Device-Name': deviceName || 'Android',
-          },
-          body: JSON.stringify(toPost),
-        }, 5000);
-
-        if (res.ok) {
-          // M-7 Fix: Only remove the dates we successfully posted, not all modified dates
-          for (const d of toPost) modifiedDatesRef.current.delete(d.Date);
-          setSyncStatus('synced');
-          syncFailCountRef.current = 0;
-          // Clear pending offline queue on success
-          AsyncStorage.removeItem(PENDING_NOTES_SYNC_KEY).catch(() => {});
-        } else {
-          setSyncStatus('offline');
-          syncFailCountRef.current++;
-          // Persist failed dates to offline queue for retry
-          const failedDates = toPost.map(d => d.Date);
-          AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY).then(stored => {
-            const existing: string[] = stored ? JSON.parse(stored) : [];
-            const merged = [...new Set([...existing, ...failedDates])];
-            AsyncStorage.setItem(PENDING_NOTES_SYNC_KEY, JSON.stringify(merged)).catch(() => {});
-          }).catch(() => {});
-          if (syncFailCountRef.current === 2) {
-            showToast('Notes sync offline — PC may be unreachable');
-          }
-        }
-      } catch {
-        setSyncStatus('offline');
-        syncFailCountRef.current++;
-        // Persist failed dates to offline queue for retry
-        const failedDates = toPost.map(d => d.Date);
-        AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY).then(stored => {
-          const existing: string[] = stored ? JSON.parse(stored) : [];
-          const merged = [...new Set([...existing, ...failedDates])];
-          AsyncStorage.setItem(PENDING_NOTES_SYNC_KEY, JSON.stringify(merged)).catch(() => {});
-        }).catch(() => {});
-        if (syncFailCountRef.current === 2) {
-          showToast('Notes sync offline — PC may be unreachable');
-        }
-      }
-    }, DEBOUNCE_POST_MS);
-  }, [pairingKey]);
-  // Keep ref in sync for offline queue flush in fetchRemoteNotes
-  useEffect(() => { schedulePostRef.current = schedulePost; }, [schedulePost]);
 
   // ═══════════════════════════════════════════════════════════
   // EDIT HELPERS
@@ -934,16 +676,58 @@ export default function NotesScreen() {
     }), selectedDateKey);
   }, [selectedDateKey, updateDays]);
 
+  // AH-6: Debounced freeform TextInput wrapper — uses local state + 300ms debounce to avoid
+  // triggering main state updates (and sync) on every keystroke
+  const DebouncedFreeformInput = useMemo(() => {
+    return React.memo(({ sectionId, initialContent, onDebouncedChange, placeholder, placeholderTextColor, style }: {
+      sectionId: string; initialContent: string;
+      onDebouncedChange: (id: string, text: string) => void;
+      placeholder: string; placeholderTextColor: string; style: any;
+    }) => {
+      const [localText, setLocalText] = React.useState(initialContent);
+      const debounceTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+      // Keep local text in sync if the external value changes (e.g. from sync)
+      const prevContentRef = React.useRef(initialContent);
+      React.useEffect(() => {
+        if (initialContent !== prevContentRef.current) {
+          prevContentRef.current = initialContent;
+          setLocalText(initialContent);
+        }
+      }, [initialContent]);
+      const handleChange = React.useCallback((text: string) => {
+        setLocalText(text);
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = setTimeout(() => {
+          onDebouncedChange(sectionId, text);
+        }, 300);
+      }, [sectionId, onDebouncedChange]);
+      // Flush on unmount
+      React.useEffect(() => {
+        return () => { if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current); };
+      }, []);
+      return (
+        <TextInput
+          style={style}
+          value={localText}
+          onChangeText={handleChange}
+          placeholder={placeholder}
+          placeholderTextColor={placeholderTextColor}
+          multiline
+        />
+      );
+    });
+  }, []);
+
   const renderFreeformCard = useCallback(({ item, index }: { item: FreeformSection; index: number }) => (
     <View>
       <View style={styles.freeformCard}>
-        <TextInput
-          style={styles.freeformInput}
-          value={item.Content}
-          onChangeText={text => updateFreeformSection(item.Id, text)}
+        <DebouncedFreeformInput
+          sectionId={item.Id}
+          initialContent={item.Content}
+          onDebouncedChange={updateFreeformSection}
           placeholder="Start writing..."
           placeholderTextColor={colors.text.tertiary}
-          multiline
+          style={styles.freeformInput}
         />
         <View style={styles.freeformMeta}>
           <Text style={styles.freeformTime}>
@@ -973,7 +757,7 @@ export default function NotesScreen() {
         <Text style={styles.addSectionText}>section</Text>
       </TouchableOpacity>
     </View>
-  ), [colors, updateFreeformSection, handleAddFreeformSection, handleDeleteFreeformSection, freeformData.length]);
+  ), [colors, updateFreeformSection, handleAddFreeformSection, handleDeleteFreeformSection, freeformData.length, DebouncedFreeformInput]);
 
   // ═══════════════════════════════════════════════════════════
   // RENDER: Empty State

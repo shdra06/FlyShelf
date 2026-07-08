@@ -9,6 +9,12 @@ using System.Windows.Ink;
 using System.Windows.Media;
 using FlyShelf.Classes;
 using ICSharpCode.AvalonEdit.Highlighting;
+using WinPdf = global::Windows.Data.Pdf;
+using global::Windows.Storage;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.IO;
+using FlyShelf.Controls;
+using WpfUi = Wpf.Ui.Controls;
 
 namespace FlyShelf.Windows
 {
@@ -40,6 +46,16 @@ namespace FlyShelf.Windows
         private bool _hasUnsavedDoodle = false;
         private Border _activeDoodleColorBorder = null;
 
+        // ═══════════════════════════════════════════════════════════
+        // PDF STATE
+        // ═══════════════════════════════════════════════════════════
+        private bool _isPdfMode = false;
+        private bool _isPdfEditorMode = false;
+        private List<PageEntry> _pdfPageEntries = new();
+        private Dictionary<string, BitmapImage> _pdfThumbnails = new();
+        private Dictionary<int, string> _pdfModifiedPages = new(); // index -> temp image path
+        private bool _isPdfModified = false;
+
         public QuickLookWindow(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null, bool autoTriggerOcr = false)
         {
             InitializeComponent();
@@ -50,9 +66,10 @@ namespace FlyShelf.Windows
 
             PreviewImage.Visibility = Visibility.Collapsed;
             if (ImageModeGrid != null) ImageModeGrid.Visibility = Visibility.Collapsed;
-            WebPreview.Visibility = Visibility.Collapsed;
+            if (WebPreview != null) WebPreview.Visibility = Visibility.Collapsed;
             TextPreviewScroll.Visibility = Visibility.Collapsed;
             DocumentPanel.Visibility = Visibility.Collapsed;
+            if (PdfEditorGrid != null) PdfEditorGrid.Visibility = Visibility.Collapsed;
 
             PreviewImage.SizeChanged += (s, eArgs) =>
             {
@@ -220,14 +237,40 @@ namespace FlyShelf.Windows
                         }
                     }
                 }
-                else if (ext == ".pdf" || ext == ".html" || ext == ".htm" || ext == ".xml")
+                else if (ext == ".pdf")
                 {
+                    _isPdfMode = true;
                     WebPreview.Visibility = Visibility.Visible;
-                    try { WebPreview.Navigate(new Uri(_item.FilePath)); } catch { } // Best-effort: failure is acceptable
+                    PdfManageBtn.Visibility = Visibility.Visible;
+                    
+                    try 
+                    {
+                        // Initialize WebView2 for PDF with modern features
+                        string userDataFolder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FlyShelf_PdfQL_" + Environment.ProcessId);
+                        var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                        await WebPreview.EnsureCoreWebView2Async(env);
+                        
+                        WebPreview.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                        WebPreview.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+                        WebPreview.CoreWebView2.Settings.IsZoomControlEnabled = true;
+                        WebPreview.Source = new Uri(_item.FilePath);
+                    } 
+                    catch { } 
+                    
+                    this.Width = 800;
+                    this.Height = SystemParameters.WorkArea.Height * 0.8;
+                    _isImageLoaded = true;
+                    if (DoodleBtn != null) DoodleBtn.Visibility = Visibility.Visible;
+                    if (ZoomPanel != null) ZoomPanel.Visibility = Visibility.Visible;
+                }
+                else if (ext == ".html" || ext == ".htm" || ext == ".xml")
+                {
+                    // Fallback for non-PDF web content
+                    WebPreview.Visibility = Visibility.Visible;
+                    try { WebPreview.Source = new Uri(_item.FilePath); } catch { }
                     
                     this.Width = 600;
                     this.Height = SystemParameters.WorkArea.Height * 0.8;
-                    _isImageLoaded = true; // allow dragging natively
                 }
                 else if (ext == ".md" || _item.Extension == "MARKDOWN" || _item.Extension == ".MD")
                 {
@@ -472,6 +515,34 @@ namespace FlyShelf.Windows
             {
                 LoadingProgress.Visibility = Visibility.Collapsed;
             }
+        }
+
+        private async System.Threading.Tasks.Task RenderPdfPageToImage(int pageIndex, string outputPath)
+        {
+            await System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var file = await StorageFile.GetFileFromPathAsync(_item.FilePath);
+                    var pdfDoc = await WinPdf.PdfDocument.LoadFromFileAsync(file);
+                    using (var page = pdfDoc.GetPage((uint)pageIndex))
+                    {
+                        using (var stream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream())
+                        {
+                            await page.RenderToStreamAsync(stream);
+                            var decoder = await global::Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
+                            var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
+                            var storageFile = await StorageFile.GetFileFromPathAsync(outputPath);
+                            var encoder = await global::Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
+                                global::Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId,
+                                await storageFile.OpenAsync(FileAccessMode.ReadWrite));
+                            encoder.SetSoftwareBitmap(softwareBitmap);
+                            await encoder.FlushAsync();
+                        }
+                    }
+                }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"PDF Page Render Error: {ex.Message}"); }
+            });
         }
 
         // ═════════════════════════════════════════════════════════════
@@ -891,33 +962,34 @@ namespace FlyShelf.Windows
 
             try
             {
-                var dlg = new Microsoft.Win32.SaveFileDialog
+                MdToPdfBtn.IsEnabled = false;
+                LoadingProgress.Visibility = Visibility.Visible;
+
+                // Save PDF to the same directory as source file, or temp
+                string sourceDir = !string.IsNullOrEmpty(_item?.FilePath) && Directory.Exists(Path.GetDirectoryName(_item.FilePath))
+                    ? Path.GetDirectoryName(_item.FilePath)!
+                    : Path.GetTempPath();
+                string baseName = Path.GetFileNameWithoutExtension(_item?.FilePath ?? "document");
+                string outputPdf = Path.Combine(sourceDir, $"{baseName}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
+
+                bool success = await FlyShelf.Classes.WebView2Converter.ConvertMarkdownToPdfAsync(_markdownRawContent, outputPdf);
+
+                LoadingProgress.Visibility = Visibility.Collapsed;
+                MdToPdfBtn.IsEnabled = true;
+
+                if (success && File.Exists(outputPdf))
                 {
-                    Title = "Export Markdown as PDF",
-                    Filter = "PDF Files|*.pdf",
-                    DefaultExt = ".pdf",
-                    FileName = System.IO.Path.GetFileNameWithoutExtension(_item?.FilePath ?? "document") + ".pdf"
-                };
-
-                if (dlg.ShowDialog() == true)
+                    // Drop into clipboard via HandleDrop — same pattern as ConvertDocumentTask
+                    var dataObj = new System.Windows.DataObject();
+                    dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { outputPdf });
+                    var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
+                    (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Markdown → PDF exported! ✅ {Path.GetFileName(outputPdf)}");
+                    mainWin?.ScrollClipboardToTop();
+                }
+                else
                 {
-                    MdToPdfBtn.IsEnabled = false;
-                    LoadingProgress.Visibility = Visibility.Visible;
-
-                    bool success = await FlyShelf.Classes.WebView2Converter.ConvertMarkdownToPdfAsync(_markdownRawContent, dlg.FileName);
-
-                    LoadingProgress.Visibility = Visibility.Collapsed;
-                    MdToPdfBtn.IsEnabled = true;
-
-                    if (success && File.Exists(dlg.FileName))
-                    {
-                        // Open the exported PDF
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = dlg.FileName,
-                            UseShellExecute = true
-                        });
-                    }
+                    FlyShelf.Windows.ToastWindow.ShowToast("PDF export failed ❌");
                 }
             }
             catch
@@ -1555,7 +1627,7 @@ namespace FlyShelf.Windows
         // DOODLE / DRAWING MODE
         // ═════════════════════════════════════════════════════════════
 
-        private void DoodleButton_Click(object sender, RoutedEventArgs e)
+        private async void DoodleButton_Click(object sender, RoutedEventArgs e)
         {
             if (_isDoodleMode)
             {
@@ -1563,7 +1635,46 @@ namespace FlyShelf.Windows
             }
             else
             {
+                if (_isPdfMode)
+                {
+                    // For PDF, we enter doodle mode by rendering the first page 
+                    // (or the one they are looking at) to the ImageModeGrid
+                    await RenderPdfPageToImage(0); // Default to first page for now
+                    WebPreview.Visibility = Visibility.Collapsed;
+                    PdfEditorGrid.Visibility = Visibility.Collapsed;
+                    ImageModeGrid.Visibility = Visibility.Visible;
+                }
                 EnterDoodleMode();
+            }
+        }
+
+        private async System.Threading.Tasks.Task RenderPdfPageToImage(int pageIndex)
+        {
+            try
+            {
+                var file = await StorageFile.GetFileFromPathAsync(_item.FilePath);
+                var pdfDoc = await WinPdf.PdfDocument.LoadFromFileAsync(file);
+                if (pageIndex >= pdfDoc.PageCount) return;
+
+                using (var page = pdfDoc.GetPage((uint)pageIndex))
+                using (var stream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream())
+                {
+                    await page.RenderToStreamAsync(stream);
+                    
+                    var bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.StreamSource = stream.AsStream();
+                    bitmap.EndInit();
+                    bitmap.Freeze();
+                    
+                    PreviewImage.Source = bitmap;
+                    _isImageLoaded = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"PDF Render Error: {ex.Message}");
             }
         }
 
@@ -1610,6 +1721,9 @@ namespace FlyShelf.Windows
             // Set default color highlight
             _activeDoodleColorBorder = DoodleColorWhite;
             UpdateDoodleColorHighlight();
+
+            // Populate color palette grid (7 columns × 5 rows = 35 colors)
+            PopulateDoodlePalette();
 
             // Sync slider
             DoodleSizeSlider.Value = da.Width;
@@ -1695,7 +1809,43 @@ namespace FlyShelf.Windows
 
         private async void DoodleSave_Click(object sender, RoutedEventArgs e)
         {
-            if (!_hasUnsavedDoodle || _item == null || string.IsNullOrEmpty(_item.FilePath)) return;
+            if (_isPdfMode)
+            {
+                try
+                {
+                    LoadingProgress.Visibility = Visibility.Visible;
+                    // Flatten doodle to image
+                    var rtb = new RenderTargetBitmap((int)ImageContainerGrid.Width, (int)ImageContainerGrid.Height, 96, 96, PixelFormats.Pbgra32);
+                    rtb.Render(ImageContainerGrid);
+                    
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(rtb));
+                    
+                    string tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"FlyShelf_PdfDoodle_{Guid.NewGuid()}.png");
+                    using (var fs = System.IO.File.OpenWrite(tempPath))
+                    {
+                        encoder.Save(fs);
+                    }
+                    
+                    // We assume doodle was on page 0 for now (the one loaded in RenderPdfPageToImage)
+                    // In a full impl, we'd track WHICH page was being doodled.
+                    _pdfModifiedPages[0] = tempPath;
+                    _isPdfModified = true;
+                    
+                    FlyShelf.Windows.ToastWindow.ShowToast("🎨 Annotation applied to page");
+                    ExitDoodleMode();
+                }
+                catch (Exception ex)
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Doodle Save Error: {ex.Message}");
+                }
+                finally
+                {
+                    LoadingProgress.Visibility = Visibility.Collapsed;
+                }
+                return;
+            }
+            if (!_isImageLoaded || string.IsNullOrEmpty(_item?.FilePath)) return;
             if (DoodleCanvas.Strokes.Count == 0)
             {
                 FlyShelf.Windows.ToastWindow.ShowToast("No strokes to save");
@@ -1844,6 +1994,18 @@ namespace FlyShelf.Windows
                     _activeDoodleColorBorder = colorBorder;
                     UpdateDoodleColorHighlight();
 
+                    // Reset palette button to rainbow gradient (preset selected, not custom)
+                    var rainbow = new LinearGradientBrush(new GradientStopCollection
+                    {
+                        new GradientStop(Color.FromRgb(0xEF, 0x44, 0x44), 0),
+                        new GradientStop(Color.FromRgb(0xF5, 0x9E, 0x0B), 0.25),
+                        new GradientStop(Color.FromRgb(0x10, 0xB9, 0x81), 0.5),
+                        new GradientStop(Color.FromRgb(0x3B, 0x82, 0xF6), 0.75),
+                        new GradientStop(Color.FromRgb(0x8B, 0x5C, 0xF6), 1),
+                    }, new System.Windows.Point(0, 0), new System.Windows.Point(1, 1));
+                    rainbow.Freeze();
+                    DoodlePaletteBtn.Background = rainbow;
+
                     // Switch back to ink mode if in eraser mode
                     if (DoodleCanvas.EditingMode == InkCanvasEditingMode.EraseByStroke)
                     {
@@ -1878,6 +2040,203 @@ namespace FlyShelf.Windows
             }
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // COLOR PALETTE — Full color grid with custom picker
+        // ═══════════════════════════════════════════════════════════════
+
+        private static readonly string[] _paletteColors = new[]
+        {
+            // Row 1: Pure + Warm tones
+            "#FFFFFF", "#C0C0C0", "#808080", "#404040", "#000000", "#FFF1F2", "#FEF3C7",
+            // Row 2: Reds
+            "#FCA5A5", "#F87171", "#EF4444", "#DC2626", "#B91C1C", "#991B1B", "#7F1D1D",
+            // Row 3: Oranges + Yellows
+            "#FDBA74", "#FB923C", "#F59E0B", "#EAB308", "#CA8A04", "#A16207", "#854D0E",
+            // Row 4: Greens + Teals
+            "#86EFAC", "#4ADE80", "#22C55E", "#10B981", "#059669", "#047857", "#065F46",
+            // Row 5: Blues + Purples
+            "#93C5FD", "#60A5FA", "#3B82F6", "#6366F1", "#8B5CF6", "#A855F7", "#EC4899",
+        };
+
+        private void PopulateDoodlePalette()
+        {
+            if (DoodlePaletteGrid.Children.Count > 0) return; // Already populated
+
+            foreach (string hex in _paletteColors)
+            {
+                var swatch = new Border
+                {
+                    Width = 22,
+                    Height = 22,
+                    CornerRadius = new CornerRadius(4),
+                    Margin = new Thickness(1.5),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    Tag = hex,
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)),
+                    BorderThickness = new Thickness(1),
+                    BorderBrush = hex == "#FFFFFF"
+                        ? new SolidColorBrush(Color.FromArgb(0x40, 0x94, 0xA3, 0xB8))
+                        : Brushes.Transparent,
+                    ToolTip = hex,
+                };
+
+                // Hover effect
+                swatch.MouseEnter += (s, _) =>
+                {
+                    if (s is Border b) b.RenderTransform = new System.Windows.Media.ScaleTransform(1.15, 1.15, 11, 11);
+                };
+                swatch.MouseLeave += (s, _) =>
+                {
+                    if (s is Border b) b.RenderTransform = null;
+                };
+
+                swatch.MouseLeftButtonDown += DoodlePaletteSwatch_Click;
+                DoodlePaletteGrid.Children.Add(swatch);
+            }
+        }
+
+        private void DoodlePalette_Click(object sender, MouseButtonEventArgs e)
+        {
+            DoodlePalettePopup.IsOpen = !DoodlePalettePopup.IsOpen;
+            e.Handled = true;
+        }
+
+        private void DoodlePaletteSwatch_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is Border swatch && swatch.Tag is string hex)
+            {
+                ApplyDoodleColor(hex);
+                DoodlePalettePopup.IsOpen = false;
+            }
+            e.Handled = true;
+        }
+
+        private void DoodleCustomColor_Click(object sender, MouseButtonEventArgs e)
+        {
+            DoodlePalettePopup.IsOpen = false;
+
+            // WPF-native hex color input dialog
+            var currentColor = DoodleCanvas.DefaultDrawingAttributes.Color;
+            string currentHex = $"#{currentColor.R:X2}{currentColor.G:X2}{currentColor.B:X2}";
+
+            var inputWin = new Window
+            {
+                Title = "Custom Color",
+                Width = 320,
+                Height = 200,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStyle = WindowStyle.ToolWindow,
+                Background = new SolidColorBrush(Color.FromRgb(0x18, 0x18, 0x25)),
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(16) };
+
+            var label = new TextBlock
+            {
+                Text = "Enter hex color (e.g. #FF5733):",
+                Foreground = new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8)),
+                FontSize = 12,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            panel.Children.Add(label);
+
+            var inputRow = new StackPanel { Orientation = Orientation.Horizontal };
+            var hexInput = new TextBox
+            {
+                Text = currentHex,
+                Width = 160,
+                FontSize = 14,
+                FontFamily = new FontFamily("Consolas"),
+                Background = new SolidColorBrush(Color.FromRgb(0x0D, 0x11, 0x17)),
+                Foreground = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x40, 0xA7, 0x8B, 0xFA)),
+                Padding = new Thickness(8, 6, 8, 6),
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+            var previewSwatch = new Border
+            {
+                Width = 36,
+                Height = 36,
+                CornerRadius = new CornerRadius(6),
+                Margin = new Thickness(10, 0, 0, 0),
+                Background = new SolidColorBrush(currentColor),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(1),
+            };
+            hexInput.TextChanged += (_, _) =>
+            {
+                try
+                {
+                    var c = (Color)ColorConverter.ConvertFromString(hexInput.Text.Trim());
+                    previewSwatch.Background = new SolidColorBrush(c);
+                }
+                catch { }
+            };
+            inputRow.Children.Add(hexInput);
+            inputRow.Children.Add(previewSwatch);
+            panel.Children.Add(inputRow);
+
+            string result = null;
+            var okBtn = new System.Windows.Controls.Button
+            {
+                Content = "Apply",
+                Width = 80,
+                Margin = new Thickness(0, 14, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Padding = new Thickness(0, 6, 0, 6),
+                FontSize = 12,
+            };
+            okBtn.Click += (_, _) => { result = hexInput.Text.Trim(); inputWin.Close(); };
+            panel.Children.Add(okBtn);
+
+            inputWin.Content = panel;
+            hexInput.SelectAll();
+            hexInput.Focus();
+            inputWin.ShowDialog();
+
+            if (!string.IsNullOrEmpty(result))
+            {
+                try
+                {
+                    // Validate it parses
+                    ColorConverter.ConvertFromString(result);
+                    ApplyDoodleColor(result);
+                }
+                catch
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("Invalid color — use format like #FF5733");
+                }
+            }
+            e.Handled = true;
+        }
+
+        private void ApplyDoodleColor(string hex)
+        {
+            try
+            {
+                var color = (Color)ColorConverter.ConvertFromString(hex);
+                DoodleCanvas.DefaultDrawingAttributes.Color = color;
+
+                // Clear preset highlight (custom color selected)
+                _activeDoodleColorBorder = null;
+                UpdateDoodleColorHighlight();
+
+                // Update palette button to show the chosen color
+                DoodlePaletteBtn.Background = new SolidColorBrush(color);
+
+                // Switch back to ink mode if in eraser mode
+                if (DoodleCanvas.EditingMode == InkCanvasEditingMode.EraseByStroke)
+                {
+                    DoodleCanvas.EditingMode = InkCanvasEditingMode.Ink;
+                    DoodleEraserBtn.Background = Brushes.Transparent;
+                    DoodleEraserLabel.Text = "Eraser";
+                }
+            }
+            catch { } // Best-effort: failure is acceptable
+        }
+
         private void DoodleSizeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (DoodleCanvas == null) return;
@@ -1885,6 +2244,26 @@ namespace FlyShelf.Windows
             DoodleCanvas.DefaultDrawingAttributes.Width = size;
             DoodleCanvas.DefaultDrawingAttributes.Height = size;
             if (DoodleSizeLabel != null) DoodleSizeLabel.Text = size.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            double scale = e.NewValue;
+            if (_isPdfMode && !_isPdfEditorMode && WebPreview != null && WebPreview.CoreWebView2 != null)
+            {
+                WebPreview.ZoomFactor = scale;
+            }
+            else if (_isPdfEditorMode && PdfThumbnailPanel != null)
+            {
+                foreach (UIElement child in PdfThumbnailPanel.Children)
+                {
+                    if (child is FrameworkElement fe)
+                    {
+                        fe.Width = 130 * scale;
+                        fe.Height = 170 * scale;
+                    }
+                }
+            }
         }
 
         private void DoodleEraser_Click(object sender, MouseButtonEventArgs e)
@@ -1922,6 +2301,309 @@ namespace FlyShelf.Windows
 
             FlyShelf.Windows.ToastWindow.ShowToast("All strokes cleared");
             e.Handled = true;
+        }
+        // ═══════════════════════════════════════════════════════════
+        // PDF MANAGEMENT LOGIC
+        // ═══════════════════════════════════════════════════════════
+
+        private async void PdfManage_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_isPdfMode) return;
+
+            if (!_isPdfEditorMode)
+            {
+                _isPdfEditorMode = true;
+                PdfAddBtn.Visibility = Visibility.Visible;
+                PdfSaveBtn.Visibility = Visibility.Visible;
+                PdfEditorGrid.Visibility = Visibility.Visible;
+                WebPreview.Visibility = Visibility.Collapsed;
+                PdfManageBtn.Appearance = WpfUi.ControlAppearance.Primary;
+                PdfManageBtn.ToolTip = "Back to Browser View";
+
+                if (_pdfPageEntries.Count == 0)
+                {
+                    await LoadPdfPagesAsync(_item.FilePath, true);
+                }
+                else
+                {
+                    RebuildPdfGrid();
+                }
+            }
+            else
+            {
+                _isPdfEditorMode = false;
+                WebPreview.Visibility = Visibility.Visible;
+                PdfEditorGrid.Visibility = Visibility.Collapsed;
+                PdfAddBtn.Visibility = Visibility.Collapsed;
+                PdfSaveBtn.Visibility = Visibility.Collapsed;
+                PdfManageBtn.Appearance = WpfUi.ControlAppearance.Secondary;
+                PdfManageBtn.ToolTip = "Manage Pages (Reorder / Add)";
+            }
+        }
+
+        private async System.Threading.Tasks.Task LoadPdfPagesAsync(string path, bool isInitial = false)
+        {
+            try
+            {
+                LoadingProgress.Visibility = Visibility.Visible;
+                var file = await StorageFile.GetFileFromPathAsync(path);
+                var pdfDoc = await WinPdf.PdfDocument.LoadFromFileAsync(file);
+                
+                string fileName = System.IO.Path.GetFileName(path);
+
+                for (uint i = 0; i < pdfDoc.PageCount; i++)
+                {
+                    var entry = new PageEntry
+                    {
+                        OriginalPage = (int)i + 1,
+                        SourceFile = path,
+                        SourceLabel = isInitial ? "" : fileName,
+                        IsExternal = !isInitial
+                    };
+                    _pdfPageEntries.Add(entry);
+
+                    // Load thumbnail
+                    using (var page = pdfDoc.GetPage(i))
+                    using (var stream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream())
+                    {
+                        var options = new WinPdf.PdfPageRenderOptions
+                        {
+                            DestinationWidth = 200,
+                            BackgroundColor = global::Windows.UI.Color.FromArgb(255, 255, 255, 255)
+                        };
+                        await page.RenderToStreamAsync(stream, options);
+                        
+                        var bitmap = new BitmapImage();
+                        bitmap.BeginInit();
+                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                        bitmap.StreamSource = stream.AsStream();
+                        bitmap.EndInit();
+                        bitmap.Freeze();
+
+                        _pdfThumbnails[$"{path}:{i+1}"] = bitmap;
+                    }
+                }
+
+                RebuildPdfGrid();
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"PDF Load Error: {ex.Message}");
+            }
+            finally
+            {
+                LoadingProgress.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void RebuildPdfGrid()
+        {
+            PdfThumbnailPanel.Children.Clear();
+            for (int i = 0; i < _pdfPageEntries.Count; i++)
+            {
+                var entry = _pdfPageEntries[i];
+                var tile = new PdfPageTile
+                {
+                    PageIndex = i,
+                    SourceFile = entry.SourceFile
+                };
+
+                string key = $"{entry.SourceFile}:{entry.OriginalPage}";
+                if (_pdfThumbnails.TryGetValue(key, out var bmp))
+                {
+                    tile.SetThumbnail(bmp);
+                }
+
+                tile.SetPageInfo(i + 1, entry.SourceLabel, entry.RotationDegrees);
+                
+                tile.DeleteRequested += (s, idx) => {
+                    _pdfPageEntries.RemoveAt(idx);
+                    _isPdfModified = true;
+                    RebuildPdfGrid();
+                };
+
+                tile.RotateRequested += (s, idx) => {
+                    _pdfPageEntries[idx].RotationDegrees = (tile.Rotation);
+                    _isPdfModified = true;
+                };
+
+                // Simple drag-and-drop support
+                tile.MouseMove += (s, e) => {
+                    if (e.LeftButton == MouseButtonState.Pressed && tile.ActionsOverlay.Visibility != Visibility.Visible)
+                    {
+                        DragDrop.DoDragDrop(tile, tile, DragDropEffects.Move);
+                    }
+                };
+
+                tile.Drop += (s, e) => {
+                    if (e.Data.GetData(typeof(PdfPageTile)) is PdfPageTile sourceTile)
+                    {
+                        int oldIndex = sourceTile.PageIndex;
+                        int newIndex = tile.PageIndex;
+                        if (oldIndex != newIndex)
+                        {
+                            var item = _pdfPageEntries[oldIndex];
+                            _pdfPageEntries.RemoveAt(oldIndex);
+                            _pdfPageEntries.Insert(newIndex, item);
+                            _isPdfModified = true;
+                            RebuildPdfGrid();
+                        }
+                    }
+                };
+                tile.AllowDrop = true;
+
+                PdfThumbnailPanel.Children.Add(tile);
+            }
+        }
+
+        private async void PdfAdd_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "PDF Files|*.pdf",
+                Title = "Add Pages from PDF",
+                Multiselect = true
+            };
+
+            if (dlg.ShowDialog() == true)
+            {
+                foreach (string file in dlg.FileNames)
+                {
+                    await LoadPdfPagesAsync(file, false);
+                }
+                _isPdfModified = true;
+            }
+        }
+
+        private void PdfSave_Click(object sender, RoutedEventArgs e)
+        {
+            if (PdfSaveBtn.ContextMenu != null)
+            {
+                PdfSaveBtn.ContextMenu.PlacementTarget = PdfSaveBtn;
+                PdfSaveBtn.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                PdfSaveBtn.ContextMenu.IsOpen = true;
+            }
+        }
+
+        private async void PdfSaveOverwrite_Click(object sender, RoutedEventArgs e)
+        {
+            await SavePdfChangesAsync(_item.FilePath);
+        }
+
+        private async void PdfSaveAs_Click(object sender, RoutedEventArgs e)
+        {
+            // Save directly to same directory as source — no file picker
+            string sourceDir = Path.GetDirectoryName(_item.FilePath) ?? Path.GetTempPath();
+            string baseName = Path.GetFileNameWithoutExtension(_item.FilePath) + $"_Edited_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+            string outputPath = Path.Combine(sourceDir, baseName);
+
+            await SavePdfChangesAsync(outputPath);
+
+            if (File.Exists(outputPath))
+            {
+                // Drop into clipboard via HandleDrop
+                var dataObj = new System.Windows.DataObject();
+                dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { outputPath });
+                var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
+                (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
+                FlyShelf.Windows.ToastWindow.ShowToast($"PDF saved as copy ✅ {Path.GetFileName(outputPath)}");
+                mainWin?.ScrollClipboardToTop();
+            }
+        }
+
+        private async System.Threading.Tasks.Task SavePdfChangesAsync(string targetPath)
+        {
+            try
+            {
+                LoadingProgress.Visibility = Visibility.Visible;
+                FlyShelf.Windows.ToastWindow.ShowToast("💾 Saving PDF changes...");
+
+                await System.Threading.Tasks.Task.Run(() =>
+                {
+                    using (var outDoc = new PdfDocument())
+                    {
+                        var sourceDocs = new Dictionary<string, PdfDocument>();
+
+                        try
+                        {
+                            foreach (var entry in _pdfPageEntries)
+                            {
+                                if (_pdfModifiedPages.TryGetValue(_pdfPageEntries.IndexOf(entry), out var modImagePath))
+                                {
+                                    // Use modified image page
+                                    string pagePdf = ConversionUtils.ConvertImageToPdf(modImagePath);
+                                    using (var tempDoc = PdfReader.Open(pagePdf, PdfDocumentOpenMode.Import))
+                                    {
+                                        outDoc.AddPage(tempDoc.Pages[0]);
+                                    }
+                                }
+                                else
+                                {
+                                    if (!sourceDocs.TryGetValue(entry.SourceFile, out var srcDoc))
+                                    {
+                                        srcDoc = PdfReader.Open(entry.SourceFile, PdfDocumentOpenMode.Import);
+                                        sourceDocs[entry.SourceFile] = srcDoc;
+                                    }
+
+                                    var page = outDoc.AddPage(srcDoc.Pages[entry.OriginalPage - 1]);
+                                    if (entry.RotationDegrees != 0)
+                                    {
+                                        page.Rotate = (page.Rotate + entry.RotationDegrees) % 360;
+                                    }
+                                }
+                            }
+
+                            bool isOverwrite = string.Equals(targetPath, _item.FilePath, StringComparison.OrdinalIgnoreCase);
+                            string finalPath = targetPath;
+                            if (isOverwrite)
+                            {
+                                finalPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString() + ".pdf");
+                            }
+
+                            outDoc.Save(finalPath);
+
+                            if (isOverwrite)
+                            {
+                                System.IO.File.Copy(finalPath, targetPath, true);
+                                System.IO.File.Delete(finalPath);
+                            }
+                        }
+                        finally
+                        {
+                            foreach (var doc in sourceDocs.Values) doc.Dispose();
+                        }
+                    }
+                });
+
+                FlyShelf.Windows.ToastWindow.ShowToast("✅ PDF saved successfully!");
+                _isPdfModified = false;
+                
+                bool isOverwrite = string.Equals(targetPath, _item.FilePath, StringComparison.OrdinalIgnoreCase);
+                if (!isOverwrite)
+                {
+                    var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
+                    var vm = mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
+                    if (vm != null)
+                    {
+                        var newItem = new FlyShelf.ViewModels.ClipboardItem(targetPath);
+                        vm.DroppedItems.Insert(0, newItem);
+                        FlyShelf.Classes.ClipboardHistoryManager.AppendToJournal(newItem);
+                        mainWin?.ScrollClipboardToTop();
+                    }
+                }
+
+                WebPreview.Source = new Uri(targetPath);
+                PdfManage_Click(null, null);
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"Save Failed: {ex.Message}");
+                FlyShelf.Classes.Logger.LogAction("PDF_SAVE_ERR", ex.ToString());
+            }
+            finally
+            {
+                LoadingProgress.Visibility = Visibility.Collapsed;
+            }
         }
     }
 }

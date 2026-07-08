@@ -242,7 +242,7 @@
                 
                 <!-- 0. DASHBOARD TAB -->
                 <Grid x:Name="DashboardGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                    <ScrollViewer x:Name="DashboardScroll" Style="{StaticResource VSCodeScrollViewer}" Padding="0,0,16,0">
                         <StackPanel Margin="0,8,0,0">
 
                             <!-- TOP ROW: 3 Stat Cards  -->
@@ -911,7 +911,7 @@
                         <!-- TAB 1: DEVICES (default visible — all existing Network content) -->
                         <!-- ═══════════════════════════════════════════════════════════════ -->
                         <Grid x:Name="NetworkDevicesTab" Visibility="Visible">
-                            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="NetworkDevicesScroll" Style="{StaticResource VSCodeScrollViewer}" Padding="0,0,16,0">
                                 <StackPanel>
                                     <!-- Connection Settings -->
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
@@ -1423,7 +1423,7 @@
                         <!-- TAB 2: FILE QUEUE                                              -->
                         <!-- ═══════════════════════════════════════════════════════════════ -->
                         <Grid x:Name="NetworkFileQueueTab" Visibility="Collapsed">
-                            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="NetworkFileQueueScroll" Style="{StaticResource VSCodeScrollViewer}" Padding="0,0,16,0">
                                 <StackPanel>
                                     <StackPanel Margin="0,0,0,10">
                                         <TextBlock Text="File Queue" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
@@ -1586,7 +1586,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
-                            <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="NetworkHistoryScroll" Grid.Row="0" Style="{StaticResource VSCodeScrollViewer}" Padding="0,0,16,0">
                                 <StackPanel>
                                     <StackPanel Margin="0,0,0,10">
                                         <TextBlock Text="Transfer History" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
@@ -1763,7 +1763,7 @@
                         <!-- TAB 4: NEARBY                                                  -->
                         <!-- ═══════════════════════════════════════════════════════════════ -->
                         <Grid x:Name="NetworkNearbyTab" Visibility="Collapsed">
-                            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="NetworkNearbyScroll" Style="{StaticResource VSCodeScrollViewer}" Padding="0,0,16,0">
                                 <StackPanel>
                                     <StackPanel Margin="0,0,0,10">
                                         <TextBlock Text="Nearby Devices" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
@@ -1909,7 +1909,7 @@
 
                 <!-- 4. CORE SETTINGS TAB -->
                 <Grid x:Name="SettingsGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                    <ScrollViewer x:Name="SettingsScroll" Style="{StaticResource VSCodeScrollViewer}" Padding="0,0,16,0">
                         <StackPanel>
                             <!-- Settings Meta -->
                             <StackPanel Margin="0,0,0,6">
@@ -3045,7 +3045,7 @@
 
                 <!-- ═══ AI SETTINGS TAB (Separate Page) ═══ -->
                 <Grid x:Name="AiGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                    <ScrollViewer x:Name="AiScroll" Style="{StaticResource VSCodeScrollViewer}" Padding="0,0,16,0">
                         <StackPanel>
                             <!-- Header -->
                             <StackPanel Margin="0,0,0,6">
@@ -3151,7 +3151,7 @@
 
                  <!-- 5. SYSTEM LOGS TAB -->
                 <Grid x:Name="LogsGrid" Visibility="Collapsed">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer x:Name="LogsScroll" Style="{StaticResource VSCodeScrollViewer}">
                     <StackPanel>
                         <StackPanel Margin="0,0,0,6">
                             <TextBlock Text="System Logs" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
@@ -3326,7 +3326,7 @@
 
                 <!-- 6. ABOUT TAB -->
                 <Grid x:Name="AboutGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                    <ScrollViewer x:Name="AboutScroll" Style="{StaticResource VSCodeScrollViewer}" Padding="0,0,16,0">
                         <StackPanel Margin="0,8,0,0">
                             
                             <!-- Header branding -->
@@ -3359,6 +3359,36 @@
                                         <GradientStop Color="#8B5CF6" Offset="1"/>
                                     </LinearGradientBrush>
                                 </Border.Background>
+                            </Border>
+
+                            <!-- Microsoft Store Edition Notice (hidden by default, shown in MSIX builds) -->
+                            <Border x:Name="MsixStoreNotice" Visibility="Collapsed" CornerRadius="12" Padding="16" Margin="0,0,0,16">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#180EA5E9" Offset="0"/>
+                                        <GradientStop Color="#103B82F6" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <Border.BorderBrush>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#300EA5E9" Offset="0"/>
+                                        <GradientStop Color="#203B82F6" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.BorderBrush>
+                                <Border.BorderThickness>1</Border.BorderThickness>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <ui:SymbolIcon Symbol="Globe24" Foreground="#0EA5E9" FontSize="18" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBlock Text="Microsoft Store Edition" FontSize="15" FontWeight="Bold" Foreground="#0EA5E9" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" LineHeight="18">
+                                        <Run Text="This version does not include Cloudflare Tunnel for remote sync outside your LAN. To enable cross-network synchronization, download the full app with Cloudflare from"/>
+                                        <Hyperlink x:Name="WebsiteLink" Foreground="#60A5FA" FontWeight="SemiBold" NavigateUri="https://flyshelf.in" RequestNavigate="Hyperlink_RequestNavigate">
+                                            flyshelf.in
+                                        </Hyperlink>
+                                        <Run Text=". LAN sync works normally in this edition."/>
+                                    </TextBlock>
+                                </StackPanel>
                             </Border>
 
                             <!-- Core Features Card -->
@@ -3686,7 +3716,7 @@
 
                 <!-- ═══════════════════ TUTORIAL GRID ═══════════════════ -->
                 <Grid x:Name="TutorialGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                    <ScrollViewer x:Name="TutorialScroll" Style="{StaticResource VSCodeScrollViewer}" Padding="0,0,16,0">
                         <StackPanel Margin="0,8,0,0">
 
                             <!-- Header -->

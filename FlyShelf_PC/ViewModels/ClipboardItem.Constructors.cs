@@ -230,9 +230,19 @@ namespace FlyShelf.ViewModels
             else if (ext == ".doc" || ext == ".docx" || ext == ".txt" || ext == ".md")
             {
                 ItemType = ClipboardItemType.Document;
-                if (ext == ".md")
+                if (ext == ".md" || ext == ".txt")
                 {
-                    GenerateMarkdownIcon();
+                    if (ext == ".md") GenerateMarkdownIcon();
+                    
+                    try
+                    {
+                        var fi = new System.IO.FileInfo(path);
+                        if (fi.Exists && fi.Length < 1024 * 1024) // 1MB limit for in-memory preview content
+                        {
+                            RawContent = System.IO.File.ReadAllText(path);
+                        }
+                    }
+                    catch { }
                 }
             }
             else if (ext == ".cpp" || ext == ".c" || ext == ".bat" || ext == ".cmd" || ext == ".ps1" || ext == ".js" || ext == ".py" || ext == ".cs")

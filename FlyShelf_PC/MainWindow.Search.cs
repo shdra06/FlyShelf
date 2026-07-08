@@ -594,6 +594,22 @@ namespace FlyShelf
             ToggleFilterBar(false);
         }
 
+        /// <summary>
+        /// Redirects vertical mouse-wheel / touchpad scroll to horizontal offset on the
+        /// category chip ScrollViewer. The scrollbar stays hidden; the gesture still works.
+        /// </summary>
+        private void CategoryFilterScroller_MouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+        {
+            if (CategoryFilterScroller == null) return;
+
+            // Delta >0 = scroll up (wheel forward) → shift chips left (scroll right on bar)
+            // Use a 40px step per notch, same feel as Windows Explorer breadcrumb scroll.
+            double scrollAmount = e.Delta > 0 ? -40 : 40;
+            CategoryFilterScroller.ScrollToHorizontalOffset(
+                CategoryFilterScroller.HorizontalOffset + scrollAmount);
+            e.Handled = true; // Prevent the list behind from scrolling
+        }
+
         private void ClearCategoryFilter()
         {
             _activeCategoryFilter = null;

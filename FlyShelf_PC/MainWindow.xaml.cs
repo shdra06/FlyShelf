@@ -44,7 +44,7 @@ namespace FlyShelf
         private DateTime _showAnimEndTime = DateTime.MinValue; // Timestamp when show animation completed — used for post-animation cooldown
         private Windows.TaskbarWindow? _taskbarWidget;
         private Windows.MascotCompanionWindow? _mascotCompanion;
-        private System.Windows.Threading.DispatcherTimer? _clipboardDebounceTimer;
+        private System.Windows.Threading.DispatcherTimer? _clipboardDebounceTimer = null;
         private System.Windows.Threading.DispatcherTimer? _scrollDecayTimer;
         private System.Windows.Threading.DispatcherTimer? _scrollHighQualityTimer;
         private System.Windows.Threading.DispatcherTimer? _scrollLiveLoadTimer; // PERF: Live thumbnail loading during active scroll
@@ -1339,6 +1339,10 @@ namespace FlyShelf
                                     }
                                 }
                                 catch { } // Best-effort: failure is acceptable
+
+                                // Sync PremiumHeaderButtonStyle's internal resources with the
+                                // now-loaded theme Color values (fixes startup flash + theme switch)
+                                SyncHeaderButtonStyleResources();
                             }
                         });
                     };
@@ -1840,6 +1844,46 @@ namespace FlyShelf
             {
                 Classes.Logger.LogAction("COMPANION_STATE_ERR", ex.ToString());
             }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // HEADER BUTTON STYLE — Sync internal resources with active theme
+        // ═══════════════════════════════════════════════════════════════
+        /// <summary>
+        /// WPF-UI's Button template reads ButtonBackground/ButtonBackgroundPointerOver etc. from
+        /// Style.Resources for hover/pressed visual states. DynamicResource on Color inside
+        /// Style.Resources is unreliable during early startup (causes accent-color flash).
+        /// This method reads the now-loaded theme Color values and patches the style resources.
+        /// </summary>
+        private void SyncHeaderButtonStyleResources()
+        {
+            try
+            {
+                if (Resources["PremiumHeaderButtonStyle"] is not Style style) return;
+
+                var colorMap = new (string resourceKey, string colorKey)[]
+                {
+                    ("ButtonBackground",              "ThemeHeaderBtnBgColor"),
+                    ("ButtonBorderBrush",              "ThemeHeaderBtnBorderColor"),
+                    ("ButtonBackgroundPointerOver",    "ThemeHeaderBtnBgHoverColor"),
+                    ("ButtonBorderBrushPointerOver",   "ThemeHeaderBtnBorderHoverColor"),
+                    ("ButtonForegroundPointerOver",    "ThemeHeaderBtnFgHoverColor"),
+                    ("ButtonBackgroundPressed",        "ThemeHeaderBtnBgPressedColor"),
+                    ("ButtonBorderBrushPressed",       "ThemeHeaderBtnBorderPressedColor"),
+                    ("ButtonForegroundPressed",        "ThemeHeaderBtnFgPressedColor"),
+                };
+
+                foreach (var (resourceKey, colorKey) in colorMap)
+                {
+                    if (TryFindResource(colorKey) is Color color)
+                    {
+                        var brush = new SolidColorBrush(color);
+                        brush.Freeze();
+                        style.Resources[resourceKey] = brush;
+                    }
+                }
+            }
+            catch { } // Best-effort: failure is acceptable
         }
     }
 }

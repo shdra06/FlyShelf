@@ -655,5 +655,70 @@ namespace FlyShelf.Windows
             };
             return badge;
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // Ctrl+Drag Path Mode Visual Indicator
+        // ═══════════════════════════════════════════════════════════════
+
+        private Border _pathModeBadge;
+
+        /// <summary>
+        /// Toggles path mode visual indicator on the drag preview.
+        /// When path mode is active, shows a "📋 Path" badge on the card
+        /// and tints the border to indicate the drag payload is the file path.
+        /// </summary>
+        public void SetPathMode(bool isPathMode)
+        {
+            if (_isClosed) return;
+
+            try
+            {
+                if (isPathMode)
+                {
+                    // Tint border to indicate path mode
+                    _rootCard.BorderBrush = new SolidColorBrush(Color.FromArgb(160, 137, 180, 250)); // Accent blue
+                    _rootCard.BorderThickness = new Thickness(1.5);
+
+                    // Add path mode badge if not already present
+                    if (_pathModeBadge == null && _rootCard.Child is Panel panel)
+                    {
+                        _pathModeBadge = new Border
+                        {
+                            Background = new SolidColorBrush(Color.FromArgb(220, 137, 180, 250)),
+                            CornerRadius = new CornerRadius(4),
+                            Padding = new Thickness(5, 2, 5, 2),
+                            HorizontalAlignment = HorizontalAlignment.Left,
+                            VerticalAlignment = VerticalAlignment.Bottom,
+                            Margin = new Thickness(4, 0, 0, 4),
+                            Child = new TextBlock
+                            {
+                                Text = "📋 Path",
+                                FontSize = 9,
+                                FontWeight = FontWeights.SemiBold,
+                                Foreground = new SolidColorBrush(Color.FromRgb(20, 20, 28))
+                            }
+                        };
+                        panel.Children.Add(_pathModeBadge);
+                    }
+                    else if (_pathModeBadge != null)
+                    {
+                        _pathModeBadge.Visibility = Visibility.Visible;
+                    }
+                }
+                else
+                {
+                    // Revert border
+                    _rootCard.BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255));
+                    _rootCard.BorderThickness = new Thickness(0.5);
+
+                    // Hide path mode badge
+                    if (_pathModeBadge != null)
+                    {
+                        _pathModeBadge.Visibility = Visibility.Collapsed;
+                    }
+                }
+            }
+            catch { } // Best-effort: visual feedback is non-critical
+        }
     }
 }

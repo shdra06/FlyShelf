@@ -27,6 +27,25 @@ const isPrivateIp = (host: string): boolean => {
   );
 };
 
+/** Fetch with one automatic retry on network error (handles transient WiFi drops) */
+export const fetchWithRetry = async (
+  url: string,
+  options: any = {},
+  timeoutMs = 2500,
+  retries = 1
+): Promise<Response> => {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fetchWithTimeout(url, options, timeoutMs);
+    } catch (err) {
+      if (attempt === retries) throw err;
+      // Brief pause before retry to let transient network recover
+      await new Promise(r => setTimeout(r, 300));
+    }
+  }
+  throw new Error('fetchWithRetry exhausted');
+};
+
 /** Validate device URLs to prevent SSRF and external injections */
 export const isValidDeviceUrl = (urlStr: string | null | undefined): boolean => {
   if (!urlStr) return false;
@@ -150,7 +169,7 @@ export const connectionColors: Record<string, string> = {
  * Normalize a raw IP/URL into a clean http:// URL with port.
  * Default port set to 3000 to match FlyShelf PC default.
  */
-export const normalizeUrl = (raw: string, defaultPort = 3000): string => {
+export const normalizeUrl = (raw: string, defaultPort = 8999): string => {
   let url = raw.trim();
   if (!url) return '';
   // Check if this is a Cloudflare tunnel URL by parsing the hostname properly
@@ -237,7 +256,7 @@ export const resolveBestPcUrl = (pairedDevices: any[], manualIp?: string): strin
     const trimmed = manualIp.trim();
     if (!trimmed) return null;
     if (trimmed.startsWith('http')) return trimmed.replace(/\/$/, '');
-    const withPort = trimmed.includes(':') ? trimmed : `${trimmed}:3000`;
+    const withPort = trimmed.includes(':') ? trimmed : `${trimmed}:8999`;
     return `http://${withPort}`;
   }
 
@@ -291,8 +310,8 @@ export const scanSubnetForPc = async (myIp: string): Promise<string[]> => {
   const subnet = getSubnet(myIp);
   if (!subnet) return [];
   
-  const ports = [3000, 8080, 8999];
-  const PROBE_TIMEOUT = 200; // LAN latency is <5ms, 200ms is generous
+  const ports = [8999, 8080, 3000]; // 8999 is the FlyShelf PC default
+  const PROBE_TIMEOUT = 150; // LAN latency is <5ms, 150ms is generous
   
   // Fast path: probe last known IP first
   if (_lastDiscoveredPcIp && _lastDiscoveredPcIp.startsWith(subnet)) {
@@ -306,27 +325,57 @@ export const scanSubnetForPc = async (myIp: string): Promise<string[]> => {
     _lastDiscoveredPcIp = null; // Stale — clear and do full scan
   }
   
+  // Priority IPs: common DHCP-assigned ranges first for faster discovery
+  const priorityIds = [
+    1,                                                      // Gateway
+    ...Array.from({ length: 9 }, (_, i) => i + 2),          // .2-.10
+    ...Array.from({ length: 16 }, (_, i) => i + 100),       // .100-.115
+    ...Array.from({ length: 11 }, (_, i) => i + 200),       // .200-.210
+  ];
+  
+  // Phase 1: Probe priority IPs
+  try {
+    const found = await Promise.any(priorityIds.flatMap(nodeId => {
+      const targetIp = `${subnet}${nodeId}`;
+      return ports.map(async port => {
+        const url = `http://${targetIp}:${port}`;
+        const res = await fetchWithTimeout(`${url}/api/health`, { method: 'GET' }, PROBE_TIMEOUT);
+        if (res.ok) {
+          _lastDiscoveredPcIp = targetIp;
+          return url;
+        }
+        throw new Error();
+      });
+    }));
+    return [found];
+  } catch {
+    // No PC in priority range — continue to full sweep
+  }
+  
+  // Phase 2: Full subnet sweep (skip already-probed IPs)
+  const prioritySet = new Set(priorityIds);
   const CHUNK_SIZE = 50;
   const discovered: string[] = [];
   
   for (let i = 1; i <= 254; i += CHUNK_SIZE) {
-    const chunk = Array.from({ length: Math.min(CHUNK_SIZE, 255 - i) }, (_, j) => i + j);
+    const chunk = Array.from({ length: Math.min(CHUNK_SIZE, 255 - i) }, (_, j) => i + j)
+      .filter(id => !prioritySet.has(id));
+    if (chunk.length === 0) continue;
     try {
-      // Use Promise.any to return as soon as first PC found in this chunk
       const found = await Promise.any(chunk.flatMap(nodeId => {
         const targetIp = `${subnet}${nodeId}`;
         return ports.map(async port => {
           const url = `http://${targetIp}:${port}`;
           const res = await fetchWithTimeout(`${url}/api/health`, { method: 'GET' }, PROBE_TIMEOUT);
           if (res.ok) {
-            _lastDiscoveredPcIp = targetIp; // Cache for next time
+            _lastDiscoveredPcIp = targetIp;
             return url;
           }
           throw new Error();
         });
       }));
       discovered.push(found);
-      break; // Found one, stop scanning
+      break;
     } catch {
       // No PC in this chunk, continue to next
     }
@@ -393,7 +442,7 @@ export const resolveUrlWithFallbacks = async (
     const rawParts = manualIp.split(',').map(s => s.trim()).filter(Boolean);
     if (rawParts.length > 0) {
       const raw = rawParts[0];
-      return raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':3000'}`;
+      return raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
     }
   }
   

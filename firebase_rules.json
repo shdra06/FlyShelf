@@ -51,10 +51,6 @@
       ".write": false
     },
     "forced_sync": {
-      "$deviceId": {
-        ".read": "auth != null && data.child('uid').val() === auth.uid",
-        ".write": "auth != null && newData.child('uid').val() === auth.uid"
-      },
       ".read": false,
       ".write": false
     },
@@ -83,13 +79,13 @@
     "licenses": {
       "revoked": {
         "$keyId": {
-          ".read": "auth != null",
+          ".read": false,
           ".write": false
         }
       },
       "activations": {
         "$keyId": {
-          ".read": "auth != null",
+          ".read": false,
           "$deviceId": {
             ".write": false,
             ".validate": "newData.hasChildren(['deviceId', 'activatedAt', 'uid']) && newData.child('uid').val() === auth.uid"

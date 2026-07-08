@@ -37,54 +37,79 @@ namespace FlyShelf.Classes
             return pdfPath;
         }
 
-        /// <summary>Converts a DOC/DOCX file to PDF using Word COM via PowerShell. Returns the output path or null.</summary>
+        /// <summary>Converts a DOC/DOCX file to PDF using Word COM via dynamic late-binding. Eliminates PowerShell overhead.</summary>
         public static async Task<string> ConvertDocToPdfAsync(string docPath)
         {
+            var results = await ConvertDocsToPdfsAsync(new[] { docPath });
+            return results.Length > 0 ? results[0] : null;
+        }
+
+        /// <summary>Batch converts multiple DOC/DOCX files to PDF. Reuses a single Word instance for maximum speed and zero lag.</summary>
+        public static async Task<string[]> ConvertDocsToPdfsAsync(string[] docPaths)
+        {
 #if MSIX_STORE
-            await Task.CompletedTask; // suppress async warning
-            return null; // PowerShell-based conversion not available in Store version
+            await Task.CompletedTask;
+            return Array.Empty<string>();
 #else
-            string outputDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "Downloads", "FlyShelf", "Converted");
-            Directory.CreateDirectory(outputDir);
+            if (docPaths == null || docPaths.Length == 0) return Array.Empty<string>();
 
-            string pdfPath = Path.Combine(outputDir,
-                Path.GetFileNameWithoutExtension(docPath) + ".pdf");
-
-            bool success = await Task.Run(() =>
+            return await Task.Run(() =>
             {
+                object word = null;
+                var convertedPaths = new System.Collections.Generic.List<string>();
+                
                 try
                 {
-                    // wdFormatPDF = 17
-                    string script = $@"
-$word = New-Object -ComObject Word.Application
-$word.Visible = $false
-$doc = $word.Documents.Open('{docPath.Replace("'", "''")}')
-$doc.SaveAs([ref]'{pdfPath.Replace("'", "''")}', [ref]17)
-$doc.Close()
-$word.Quit()
-[System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null
-";
-                    var psi = new System.Diagnostics.ProcessStartInfo
+                    Type wordType = Type.GetTypeFromProgID("Word.Application");
+                    if (wordType == null) throw new Exception("Microsoft Word not found. Please install Word to enable DOCX to PDF conversion.");
+                    
+                    word = Activator.CreateInstance(wordType);
+                    dynamic dynamicWord = word;
+                    dynamicWord.Visible = false;
+                    dynamicWord.DisplayAlerts = 0; // wdAlertsNone
+
+                    string outputDir = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                        "Downloads", "FlyShelf", "Converted");
+                    Directory.CreateDirectory(outputDir);
+
+                    foreach (string docPath in docPaths)
                     {
-                        FileName = "powershell.exe",
-                        Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -Command \"{script}\"",
-                        CreateNoWindow = true,
-                        UseShellExecute = false
-                    };
-                    var proc = Process.Start(psi);
-                    proc?.WaitForExit(120000); // 2 min timeout
-                    return proc?.ExitCode == 0;
+                        if (!File.Exists(docPath)) continue;
+
+                        try
+                        {
+                            string pdfPath = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(docPath) + "_" + Guid.NewGuid().ToString()[..4] + ".pdf");
+                            
+                            // wdOpenFormatAuto = 0, wdFormatPDF = 17
+                            dynamic doc = dynamicWord.Documents.Open(docPath, false, true); // FileName, ConfirmConversions, ReadOnly
+                            doc.SaveAs2(pdfPath, 17); // FileFormat: wdFormatPDF
+                            doc.Close(false); // wdDoNotSaveChanges = 0
+                            
+                            if (File.Exists(pdfPath)) convertedPaths.Add(pdfPath);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogAction("DOC2PDF_BATCH_ERR", $"Failed to convert {Path.GetFileName(docPath)}: {ex.Message}");
+                        }
+                    }
+
+                    dynamicWord.Quit();
                 }
                 catch (Exception ex)
                 {
-                    Logger.LogAction("DOC2PDF", $"Conversion error: {ex.Message}");
-                    return false;
+                    Logger.LogAction("DOC2PDF_FATAL", $"Fatal Word Interop error: {ex.Message}");
                 }
-            });
+                finally
+                {
+                    if (word != null)
+                    {
+                        try { System.Runtime.InteropServices.Marshal.ReleaseComObject(word); } catch { }
+                    }
+                }
 
-            return (success && File.Exists(pdfPath)) ? pdfPath : null;
+                return convertedPaths.ToArray();
+            });
 #endif
         }
 

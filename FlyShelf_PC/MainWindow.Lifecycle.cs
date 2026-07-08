@@ -704,12 +704,13 @@ namespace FlyShelf
                     RootContent.RenderTransform = _cachedSlideTransform;
 
                 // Reset scroll
+                // STABILITY FIX: Cache GetShelfScrollViewer() — same race fix as summon path.
                 try
                 {
-                    Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
+                    var sv = GetShelfScrollViewer();
+                    Classes.SmoothScroll.ResetScrollState(sv);
                     if (ShelfListView.Items.Count > 0)
                         ShelfListView.SelectedIndex = 0;
-                    var sv = GetShelfScrollViewer();
                     if (sv != null && sv.VerticalOffset > 0)
                     {
                         sv.ScrollToVerticalOffset(0);

@@ -50,6 +50,11 @@ import { usePcUrlResolver } from '../../hooks/usePcUrlResolver';
 import OnboardingWizard from '../../components/OnboardingWizard';
 import { ActiveDevice } from '../../components/DeviceHub';
 import { mergePdfs as localMergePdfs, convertImageToPdf as localConvertImageToPdf } from '../../utils/pdfUtils';
+import { useDownloadQueue, DownloadQueueItem } from '../../features/clipboard/useDownloadQueue';
+import { useImageSweep } from '../../features/clipboard/useImageSweep';
+import { useFirebaseSync } from '../../features/sync/useFirebaseSync';
+import { useDeviceSync } from '../../features/sync/useDeviceSync';
+
 
 const { AdvanceOverlay } = NativeModules;
 
@@ -105,11 +110,20 @@ export default function SyncScreen() {
   type FeedCategory = 'All' | 'Text' | 'Images' | 'Docs';
   const [feedCategory, setFeedCategory] = useState<FeedCategory>('All');
   const [feedSearch, setFeedSearch] = useState('');
-  // Scroll feed to top — called after any setClips that prepends a new item
+  // ─── New Items Pill (Change 2) ───
+  const [newItemCount, setNewItemCount] = useState(0);
+  const isScrolledDownRef = useRef(false);
+  const appStateRef = useRef<string>('active');
+  // Scroll feed to top — only auto-scrolls if user is near top; otherwise increments pill counter
   const scrollToTop = useCallback(() => {
-    setTimeout(() => {
-      try { feedListRef.current?.scrollToOffset({ offset: 0, animated: true }); } catch {}
-    }, 300);
+    if (isScrolledDownRef.current) {
+      // User is scrolled down — show "New Items" pill instead of jumping
+      setNewItemCount(c => c + 1);
+    } else {
+      setTimeout(() => {
+        try { feedListRef.current?.scrollToOffset({ offset: 0, animated: true }); } catch {}
+      }, 300);
+    }
   }, []);
   const hasLoadedOnceRef = useRef<boolean>(false);
   // Trigger states for background download effects (fixes stale [] deps)
@@ -246,204 +260,8 @@ export default function SyncScreen() {
     })();
   }, []);
 
-  // ─── Download Queue: Sequential file download processor ───
-  interface DownloadQueueItem {
-    id: string;
-    title: string;
-    type: string;
-    fileUrl: string;
-    destPath: string;
-    source: string;
-    sourceDevice: string;
-    retryCount?: number;
-    timestamp?: number;
-  }
-  const downloadQueueRef = useRef<DownloadQueueItem[]>([]);
-  const isDownloadingRef = useRef<boolean>(false);
-  const processedDownloadsRef = useRef<Set<string>>(new Set());
-
-  const enqueueDownload = useCallback((item: DownloadQueueItem) => {
-    // Dedup: don't re-enqueue already-processed or already-queued items
-    const dedupKey = `${item.title}::${item.timestamp || item.fileUrl}`;
-    if (processedDownloadsRef.current.has(dedupKey)) return;
-    if (downloadQueueRef.current.some(q => `${q.title}::${q.timestamp || q.fileUrl}` === dedupKey)) return;
-    downloadQueueRef.current.push(item);
-    processDownloadQueue();
-  }, []);
-
-  const processDownloadQueue = useCallback(async () => {
-    if (isDownloadingRef.current) return; // Already processing
-    if (downloadQueueRef.current.length === 0) return;
-    isDownloadingRef.current = true;
-
-    while (downloadQueueRef.current.length > 0) {
-      const item = downloadQueueRef.current.shift()!;
-      const dedupKey = `${item.title}::${item.timestamp || item.fileUrl}`;
-      if (processedDownloadsRef.current.has(dedupKey)) continue;
-
-      const progressId = `dl_queue_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
-      try {
-        // Check if already downloaded
-        const existing = await FileSystem.getInfoAsync(item.destPath);
-        if (existing.exists && (existing as any).size > 100) {
-          syncLog('DL-QUEUE', `Skip (exists): ${item.title}`);
-          setDownloadedItems(prev => { const n = new Set(prev); n.add(item.id || item.title); return n; });
-          // Update clip with CachedUri
-          setClips(prev => prev.map(c =>
-            (c.id === item.id || c.Title === item.title) ? { ...c, CachedUri: item.destPath } : c
-          ));
-          continue;
-        }
-
-        // Show progress card
-        setClips(prev => [{
-          id: progressId, Title: `⬇️ ${item.title}`, Type: 'Text',
-          Raw: `Downloading from ${item.sourceDevice} via ${item.source}...`,
-          Time: new Date().toLocaleTimeString(),
-        }, ...prev]);
-
-        syncLog('DL-QUEUE', `Downloading: ${item.title} via ${item.source}`);
-        const dlHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
-        if (pairingKeyRef.current) dlHeaders['X-Pairing-Key'] = pairingKeyRef.current;
-
-        // Retry loop: 2 attempts with URL re-resolution on failure
-        let queueDlSuccess = false;
-        let currentFileUrl = item.fileUrl;
-        for (let queueAttempt = 0; queueAttempt < 2 && !queueDlSuccess; queueAttempt++) {
-          try {
-            // Re-resolve URL on retry (tunnel URL may have changed)
-            if (queueAttempt > 0 && currentFileUrl.includes('trycloudflare.com')) {
-              try {
-                const freshBase = await getCachedPcUrl();
-                if (freshBase && currentFileUrl.includes('?')) {
-                  const queryPart = currentFileUrl.substring(currentFileUrl.indexOf('?'));
-                  currentFileUrl = `${freshBase}/download${queryPart}`;
-                } else if (freshBase) {
-                  currentFileUrl = freshBase;
-                }
-              } catch (e) { console.warn('DL-Queue URL resolve: error', (e as any)?.message || e); }
-              syncLog('DL-QUEUE', `Retry #${queueAttempt}: ${currentFileUrl.substring(0, 80)}`);
-            }
-            // 60s timeout prevents stalled downloads from blocking the entire queue forever
-            const dlResult = await Promise.race([
-              FileSystem.downloadAsync(currentFileUrl, item.destPath, { headers: dlHeaders }),
-              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Download timeout (60s)')), 60000)),
-            ]);
-
-            if (dlResult && dlResult.status === 200) {
-              queueDlSuccess = true;
-            } else {
-              throw new Error(`HTTP ${dlResult?.status}`);
-            }
-          } catch (retryErr: any) {
-            if (queueAttempt >= 1) {
-              syncLog('DL-QUEUE', `❌ ${item.title} failed after 2 attempts: ${retryErr?.message || retryErr}`);
-            }
-          }
-        }
-
-        // Remove progress card
-        setClips(prev => prev.filter(c => c.id !== progressId));
-
-        if (queueDlSuccess) {
-          processedDownloadsRef.current.add(dedupKey);
-          syncLog('DL-QUEUE', `✅ ${item.title} saved via ${item.source}`);
-          setDownloadedItems(prev => { const n = new Set(prev); n.add(item.id || item.title); return n; });
-          // Update clip with CachedUri
-          setClips(prev => prev.map(c =>
-            (c.id === item.id || c.Title === item.title) ? { ...c, CachedUri: item.destPath } : c
-          ));
-          if (Platform.OS === 'android') ToastAndroid.show(`✅ ${item.title} saved`, ToastAndroid.SHORT);
-          Notifications.scheduleNotificationAsync({
-            content: { title: '📁 File Downloaded', body: `${item.title} saved successfully` },
-            trigger: null,
-          }).catch(() => {});
-          if (item.id) { try { await markFileDownloaded(item.id); } catch {} }
-        } else {
-          const retries = item.retryCount || 0;
-          if (retries < 3) {
-            // Exponential backoff: 2s, 5s, 10s
-            const backoffDelays = [2000, 5000, 10000];
-            const delay = backoffDelays[retries] || 10000;
-            syncLog('DL-QUEUE', `⏳ ${item.title} failed attempt ${retries + 1}/3, retrying in ${delay / 1000}s...`);
-            await new Promise(r => setTimeout(r, delay));
-            item.retryCount = retries + 1;
-            downloadQueueRef.current.push(item);
-          } else {
-            syncLog('DL-QUEUE', `❌ ${item.title} permanently failed after 3 retries`);
-          }
-          await FileSystem.deleteAsync(item.destPath, { idempotent: true }).catch(() => {});
-        }
-      } catch (err: any) {
-        syncLog('DL-QUEUE', `❌ ${item.title} error: ${err?.message || err}`);
-        setClips(prev => prev.filter(c => c.id !== progressId));
-        await FileSystem.deleteAsync(item.destPath, { idempotent: true }).catch(() => {});
-      }
-    }
-    isDownloadingRef.current = false;
-    // Cap processed set using sliding slice eviction to prevent unbounded memory growth while keeping history
-    if (processedDownloadsRef.current.size > 500) {
-      const items = Array.from(processedDownloadsRef.current);
-      processedDownloadsRef.current = new Set(items.slice(-200));
-    }
-  }, []);
-
-  // ─── downloadedBy Tracking: Mark file as downloaded by this device ───
-  const markFileDownloaded = async (entryId: string) => {
-    try {
-      const pk = pairingKeyRef.current;
-      if (!pk || !entryId) return;
-      const myDeviceId = `Mobile_${(deviceName || 'phone').replace(/\s/g, '_')}`;
-
-      // Step 1: Mark this device as downloaded
-      await set(ref(database, `clipboard/${pk}/${entryId}/downloadedBy/${myDeviceId}`), NetworkClock.now());
-
-      // Step 2: Read the full entry to check targets
-      const snap = await get(ref(database, `clipboard/${pk}/${entryId}`));
-      if (!snap.exists()) return;
-      const data = snap.val();
-
-      const targets: string[] = data.targetDevices || [];
-      const downloaded = Object.keys(data.downloadedBy || {});
-
-      if (targets.length === 0) {
-        // Legacy entry or no targets — just delete
-        await set(ref(database, `clipboard/${pk}/${entryId}`), null);
-        return;
-      }
-
-      // Step 3: Check which remaining targets are offline → mark them done
-      const remaining = targets.filter((t: string) => !downloaded.includes(t));
-      if (remaining.length > 0) {
-        try {
-          const devSnap = await get(ref(database, `active_devices/${pk}`));
-          if (devSnap.exists()) {
-            const devices = devSnap.val();
-            const now = NetworkClock.now();
-            const onlineIds = new Set<string>();
-            Object.values(devices).forEach((dev: any) => {
-              if (dev.IsOnline && (now - (dev.Timestamp || 0)) < 300000) {
-                onlineIds.add(dev.DeviceId || '');
-              }
-            });
-            // Mark offline devices as done
-            for (const offId of remaining.filter((r: string) => !onlineIds.has(r))) {
-              await set(ref(database, `clipboard/${pk}/${entryId}/downloadedBy/${offId}`), -1);
-              downloaded.push(offId);
-            }
-          }
-        } catch (e) { console.warn('Firebase download tracking: error', (e as any)?.message || e); }
-      }
-
-      // Step 4: If all targets downloaded → delete entry
-      if (targets.every((t: string) => downloaded.includes(t))) {
-        await set(ref(database, `clipboard/${pk}/${entryId}`), null);
-        syncLog(`[SYNC_CLEANUP] All ${targets.length} devices done — entry deleted`);
-      } else {
-        syncLog(`[SYNC_TRACK] ${downloaded.length}/${targets.length} devices done`);
-      }
-    } catch (e) { syncLog(`[SYNC_TRACK] markFileDownloaded error: ${e}`); }
-  };
+  // ─── Download Queue + markFileDownloaded ───
+  // (extracted to features/clipboard/useDownloadQueue — wired below after pairingKeyRef)
 
   // Scoped Clipboard (only paired devices see each other)
   const pairingKeyRef = useRef<string>('');
@@ -590,6 +408,14 @@ export default function SyncScreen() {
   const [uploadProgress, setUploadProgress] = useState<{ name: string; progress: number; speedMBps?: number } | null>(null);
   const [connectionInfo, setConnectionInfo] = useState<{ url: string; latencyMs: number; type: 'LAN' | 'Cloud' } | null>(null);
   const [downloadedItems, setDownloadedItems] = useState<Set<string>>(new Set());
+  // ─── Download Queue (extracted to useDownloadQueue hook) ─────────────────
+  const { enqueueDownload, markFileDownloaded } = useDownloadQueue({
+    pairingKeyRef,
+    deviceName,
+    getCachedPcUrl,
+    setClips,
+    setDownloadedItems,
+  });
   // [REMOVED] downloadProgress — was dead state (never read)
   const [incomingTransferProgress, setIncomingTransferProgress] = useState<{[key: string]: number}>({});
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -662,1007 +488,50 @@ export default function SyncScreen() {
   const getMediaUrlForItem = useCallback((item: any) => getMediaUrl(item, activeDevices, pcLocalIp), [activeDevices, pcLocalIp]);
 
 
-  // ─── Firebase Listeners (LAZY — Phase 1 Optimization) ───
-  // The clipboard listener is now LAZY: it only activates after 30s of the PC
-  // being unreachable via direct connection (LAN/Cloudflare). This eliminates
-  // the persistent WebSocket that was hitting the 200-connection Firebase limit.
-  const firebaseFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const firebaseUnsubFeedRef = useRef<(() => void) | null>(null);
-  const firebaseUnsubNodesRef = useRef<(() => void) | null>(null);
-  const lastSuccessfulPollRef = useRef<number>(NetworkClock.now());
+  // ─── Firebase Sync (device discovery + clipboard fallback) ─────────────────
+  // Extracted to useFirebaseSync: active_devices listener, lazy Firebase fallback,
+  // markPcReachable/Unreachable, lastWorkingPcUrlRef, lastSuccessfulPollRef.
+  const {
+    markPcReachable,
+    markPcUnreachable,
+    lastWorkingPcUrlRef,
+    lastSuccessfulPollRef,
+  } = useFirebaseSync({
+    isGlobalSyncEnabled,
+    contextPairingKey,
+    pairedDevices,
+    pairingKeyRef,
+    deviceName,
+    pairingTimestampRef,
+    processedEventsRef,
+    recentSyncFingerprintsRef,
+    localScreenshotsRef,
+    enqueueDownload,
+    setClips,
+    setActiveDevices,
+    setImageDownloadTrigger,
+    setRichMediaDownloadTrigger,
+    cachedPcUrlRef,
+    cachedPcUrlTimestampRef,
+    updateDeviceStatus,
+    updatePairedDeviceLicensing,
+    pcLocalIp,
+    scrollToTop,
+    isFloatingBallEnabled,
+  });
 
-  // Called by LAN/Cloudflare poller on every successful /api/sync response
-  const markPcReachable = () => {
-    lastSuccessfulPollRef.current = NetworkClock.now();
-    // PC is reachable directly — disconnect Firebase listener if active
-    if (firebaseUnsubFeedRef.current) {
-      firebaseUnsubFeedRef.current();
-      firebaseUnsubFeedRef.current = null;
-      syncLog('FIREBASE', '🔌 Disconnected Firebase listener — PC reachable directly');
-    }
-    if (firebaseFallbackTimerRef.current) {
-      clearTimeout(firebaseFallbackTimerRef.current);
-      firebaseFallbackTimerRef.current = null;
-    }
-    // Update paired device status to online
-    pairedDevices.filter(d => d.deviceType === 'PC').forEach(d => {
-      updateDeviceStatus(d.deviceId, { isOnline: true, lastSeen: NetworkClock.now() });
-    });
-  };
-
-  // Called by LAN/Cloudflare poller when poll fails — starts the 30s countdown
-  const markPcUnreachable = () => {
-    // M-6: Expire lastWorkingPcUrlRef when PC is unreachable
-    lastWorkingPcUrlRef.current = null;
-    // Update paired device status to offline
-    pairedDevices.filter(d => d.deviceType === 'PC').forEach(d => {
-      updateDeviceStatus(d.deviceId, { isOnline: false });
-    });
-    if (firebaseFallbackTimerRef.current) return; // Already counting down
-    if (firebaseUnsubFeedRef.current) return; // Already connected to Firebase
-    if (!isGlobalSyncEnabled) return;
-    const pk = pairingKeyRef.current;
-    if (!isValidPairingKey(pk)) return;
-    firebaseFallbackTimerRef.current = setTimeout(() => {
-      firebaseFallbackTimerRef.current = null;
-      // Only activate if PC is STILL unreachable after 30s
-      if (NetworkClock.now() - lastSuccessfulPollRef.current < 25_000) return;
-      syncLog('FIREBASE', '🔥 PC unreachable for 30s — activating Firebase fallback listener');
-      connectFirebaseClipboardListener(pk);
-    }, 30_000);
-  };
-
-  // Connects the Firebase clipboard listener (only called when PC is unreachable)
-  const connectFirebaseClipboardListener = (pk: string) => {
-    if (firebaseUnsubFeedRef.current) return; // Already connected
-    const clipsRef = query(ref(database, `clipboard/${pk}`), orderByChild('Timestamp'), limitToLast(10));
-    firebaseUnsubFeedRef.current = onValue(clipsRef, async (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        const allRaw: ClipItem[] = Object.keys(data).map(k => ({ id: k, ...data[k] } as ClipItem)).reverse();
-        // AES-256-GCM decryption: decrypt Encrypted items from other devices
-        const allParsed: ClipItem[] = [];
-        for (const item of allRaw) {
-          if ((item as any).Encrypted === true) {
-            try {
-              const decTitle = await aesDecrypt(item.Title || '');
-              const decRaw = await aesDecrypt(item.Raw || '');
-              if (decTitle !== null) item.Title = decTitle;
-              if (decRaw !== null) item.Raw = decRaw;
-              if ((item as any).DownloadUrl) {
-                const decDl = await aesDecrypt((item as any).DownloadUrl);
-                if (decDl !== null) (item as any).DownloadUrl = decDl;
-              }
-              if ((item as any).PreviewUrl) {
-                const decPv = await aesDecrypt((item as any).PreviewUrl);
-                if (decPv !== null) (item as any).PreviewUrl = decPv;
-              }
-            } catch (e: any) { syncLog('SYNC_CRYPTO', `Decryption failed: ${e?.message}`); }
-          }
-          allParsed.push(item);
-        }
-        // Filter out items sent by THIS device to prevent echo loops
-        // Also filter pre-pairing items to prevent initial history dump
-        const myName = deviceName || '';
-        const pairingTs = pairingTimestampRef.current;
-        const parsed = allParsed.filter(c => {
-          // Skip items from before this device paired
-          if (pairingTs > 0 && c.Timestamp && c.Timestamp < pairingTs) {
-            syncLog('FIREBASE', `Skipped pre-pairing item: ${(c.Title || '').substring(0, 40)}`);
-            return false;
-          }
-          if (c.SourceDeviceType === 'Mobile' && myName && c.SourceDeviceName === myName) {
-            syncLog('FIREBASE', `Filtered own item: ${(c.Title || '').substring(0, 40)}`);
-            return false;
-          }
-          if ((c as any).EventId && processedEventsRef.current.has((c as any).EventId)) {
-            syncLog('FIREBASE', `Filtered by EventId: ${(c as any).EventId}`);
-            return false;
-          }
-          if ((c as any).EventId) processedEventsRef.current.set((c as any).EventId, NetworkClock.now());
-          return true;
-        });
-        syncLog('FIREBASE', `Feed: ${allParsed.length} total, ${parsed.length} after self-filter`);
-        const now = NetworkClock.now();
-        recentSyncFingerprintsRef.current.forEach((ts, fp) => { if (now - ts > 30_000) recentSyncFingerprintsRef.current.delete(fp); });
-
-        // Push text/url items to floating ball overlay
-        if (Platform.OS === 'android' && AdvanceOverlay) {
-          parsed.slice(0, 5).forEach((c: any) => {
-            const fp = `${c.Type}::${(c.Raw || '').substring(0, 150)}`;
-            if (recentSyncFingerprintsRef.current.has(fp)) return;
-            if ((c.Type === 'Text' || c.Type === 'Url' || c.Type === 'Pdf' || c.Type === 'Document') && c.Raw) {
-              let rawData = c.Raw;
-              if (c.Type === 'Pdf' || c.Type === 'Document') { rawData = DOWNLOAD_BASE + c.Title.replace(/[^a-zA-Z0-9.-]/g, '_'); }
-              AdvanceOverlay.pushClipToNativeDB(rawData, c.SourceDeviceName || 'Cloud');
-              recentSyncFingerprintsRef.current.set(fp, NetworkClock.now());
-            }
-          });
-        }
-
-        // ─── Process ALL items from Firebase: dedup against ALL clips, move dup to top ───
-        if (parsed.length > 0) {
-          setClips(prev => {
-            let updated = [...prev];
-            let changed = false;
-            for (const p of parsed) {
-              // Check ALL existing clips for duplicate by Raw content or Title
-              const dupIdx = updated.findIndex(c =>
-                (c.id && p.id && c.id === p.id) ||
-                (c.Title && p.Title && c.Title === p.Title) ||
-                (c.Raw && p.Raw && c.Raw.substring(0, 200) === p.Raw.substring(0, 200))
-              );
-              if (dupIdx >= 0) {
-                // Duplicate found — remove from old position, put at top with updated timestamp
-                const existing = updated.splice(dupIdx, 1)[0];
-                updated.unshift({ ...existing, Timestamp: NetworkClock.now() });
-                changed = true;
-              } else {
-                // Genuinely new — add to top
-                updated.unshift(p);
-                changed = true;
-              }
-            }
-            // Also merge local screenshots
-            const screenshots = localScreenshotsRef.current.filter(ls =>
-              !updated.some(p => p.Title === ls.Title) && !parsed.some(p => p.Title === ls.Title)
-            );
-            if (screenshots.length > 0) {
-              updated = [...screenshots, ...updated];
-              changed = true;
-            }
-            if (!changed) return prev;
-            scrollToTop();
-            return updated;
-          });
-          // Trigger background download effects for new image/rich media items
-          setImageDownloadTrigger(t => t + 1);
-          setRichMediaDownloadTrigger(t => t + 1);
-        }
-
-        // Background: queue ALL file items for download
-        if (Platform.OS === 'android') {
-          const fileItems = parsed.filter(c =>
-            c.Raw?.startsWith('http') && ['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation'].includes(c.Type || '')
-          );
-          for (const fileItem of fileItems) {
-            const fileDedupKey = `filedl::${fileItem.Title || ''}::${fileItem.Timestamp || ''}`;
-            if (recentSyncFingerprintsRef.current.has(fileDedupKey)) continue;
-            recentSyncFingerprintsRef.current.set(fileDedupKey, NetworkClock.now());
-            try {
-              const subfolder = fileItem.Type === 'Pdf' ? 'PDFs' : fileItem.Type === 'Video' ? 'Videos' : 'Documents';
-              const safeName = (fileItem.Title || `file_${NetworkClock.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
-              const destPath = await getDownloadPath(subfolder, safeName);
-              enqueueDownload({
-                id: fileItem.id || '', title: fileItem.Title || safeName, type: fileItem.Type || 'File',
-                fileUrl: fileItem.Raw!, destPath, source: 'Firebase',
-                sourceDevice: fileItem.SourceDeviceName || 'Cloud',
-              });
-            } catch (e) { syncLog('FIREBASE', `File download queue error: ${(e as any)?.message || e}`); }
-          }
-        }
-      }
-    });
-  };
-
-  useEffect(() => {
-    if (!isGlobalSyncEnabled) return;
-    const pk = contextPairingKey || pairingKeyRef.current;
-    if (!pk || !isValidPairingKey(pk)) { syncLog('FIREBASE', 'No pairing key yet or invalid key format — waiting for context to load...'); return; }
-    pairingKeyRef.current = pk;
-
-    // ─── Startup Cleanup: Purge stale entries older than 1 hour (one-time) ───
-    (async () => {
-      try {
-        const allSnap = await get(ref(database, `clipboard/${pk}`));
-        if (allSnap.exists()) {
-          const allData = allSnap.val();
-          const now = NetworkClock.now();
-          const ONE_HOUR = 60 * 60 * 1000;
-          let purged = 0;
-          for (const key of Object.keys(allData)) {
-            const entry = allData[key];
-            if (entry.Timestamp && (now - entry.Timestamp) > ONE_HOUR) {
-              await set(ref(database, `clipboard/${pk}/${key}`), null);
-              purged++;
-            }
-          }
-          if (purged > 0) syncLog('CLEANUP', `Purged ${purged} stale Firebase entries (>1hr old)`);
-        }
-      } catch (e) { syncLog('CLEANUP', `Startup cleanup error: ${e}`); }
-    })();
-
-    // ─── Active Devices: REAL-TIME onValue listener ───
-    // Catches PC URLs the instant they appear — critical because
-    // v5 PC auto-deletes its URL from Firebase after 5 seconds.
-    // The listener caches URLs locally so they survive deletion.
-    const peerDevicesRef = ref(database, `active_devices/${pk}`);
-    const unsubscribeDevices = onValue(peerDevicesRef, async (snapshot) => {
-      try {
-        // Issue #6: Skip expensive LAN probing if PC is already reachable via direct polling
-        const pcAlreadyReachable = lastWorkingPcUrlRef.current && (NetworkClock.now() - lastSuccessfulPollRef.current) < 10_000;
-        if (!snapshot.exists()) {
-          // Firebase entry was auto-deleted — keep using cached URLs, don't clear them
-          return;
-        }
-        let rawDevices: any[] = [];
-        const data = snapshot.val();
-        const now = NetworkClock.now();
-        const filtered = Object.keys(data).map(k => ({ ...data[k], _key: k })).filter(d => d.IsOnline && d.Timestamp && (now - d.Timestamp) < 600_000);
-        rawDevices = await decryptDeviceList(filtered);
-        // Probe LAN reachability for each PC device
-        for (let i = 0; i < rawDevices.length; i++) {
-          const dev = rawDevices[i];
-          if (dev.DeviceType === 'PC' && dev.LocalIp && !dev._lanVerified) {
-            // Issue #6: Skip LAN probing if PC already reachable — saves ~1.5s per callback
-            if (pcAlreadyReachable && lastWorkingPcUrlRef.current && !lastWorkingPcUrlRef.current.includes('trycloudflare.com')) {
-              rawDevices[i] = { ...dev, _lanVerified: true, _lanUrl: lastWorkingPcUrlRef.current };
-              continue;
-            }
-            const parts = dev.LocalIp.split(',');
-            for (const part of parts) {
-              const trimmed = part.trim();
-              if (!trimmed) continue;
-              try {
-                const lanUrl = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
-                const res = await fetch(`${lanUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk }, signal: createTimeoutSignal(1500) });
-                if (res.ok) {
-                  rawDevices[i] = { ...dev, _lanVerified: true, _lanUrl: lanUrl };
-                  break;
-                }
-              } catch (e) { syncLog('LAN-PROBE', `Health check failed for ${trimmed}: ${(e as any)?.message || e}`); }
-            }
-          }
-          // Prefer TLS URL over plain HTTP — encrypts pairing key in transit
-          if (dev.DeviceType === 'PC' && dev.TlsUrl && dev.TlsUrl.startsWith('https://') && rawDevices[i]._lanVerified) {
-            try {
-              const tlsUrl = dev.TlsUrl.replace(/\/$/, '');
-              const tlsRes = await fetch(`${tlsUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk }, signal: createTimeoutSignal(2000) });
-              if (tlsRes.ok) {
-                rawDevices[i] = { ...rawDevices[i], _lanVerified: true, _lanUrl: tlsUrl };
-                setSecureItem('pairedTlsUrl', tlsUrl).catch(() => {});
-                syncLog('LAN-PROBE', `✅ TLS URL preferred: ${tlsUrl.substring(0, 50)}`);
-              }
-            } catch (e) { syncLog('LAN-PROBE', `TLS probe failed for ${dev.TlsUrl}: ${(e as any)?.message || e}`); }
-          }
-          // Cache TLS URL if available (even if probe skipped — save for getCachedPcUrl)
-          if (dev.DeviceType === 'PC' && dev.TlsUrl && dev.TlsUrl.startsWith('https://')) {
-            setSecureItem('pairedTlsUrl', dev.TlsUrl.replace(/\/$/, '')).catch(() => {});
-          }
-          // Cache Cloudflare URL locally — survives the 5-second Firebase auto-delete
-          if (dev.DeviceType === 'PC' && dev.GlobalUrl && dev.GlobalUrl.includes('trycloudflare.com')) {
-            setSecureItem('lastCloudflareUrl', dev.GlobalUrl).catch(() => {});
-            setSecureItem('pairedGlobalUrl', dev.GlobalUrl).catch(() => {});
-            // Also update the in-memory PC URL cache immediately
-            cachedPcUrlRef.current = dev.GlobalUrl;
-            cachedPcUrlTimestampRef.current = NetworkClock.now();
-            syncLog('PEER SSE', `⚡ PC URL cached: ${dev.GlobalUrl.substring(0, 50)}`);
-          }
-          // Cache LAN URL if available
-          if (dev.DeviceType === 'PC' && dev.LocalIp) {
-            const parts = dev.LocalIp.split(',');
-            const normalizedParts = parts.map((part: string) => {
-              const trimmed = part.trim();
-              if (!trimmed) return '';
-              return trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
-            }).filter(Boolean);
-            if (normalizedParts.length > 0) {
-              setSecureItem('pairedLocalUrl', normalizedParts.join(',')).catch(() => {});
-            }
-          }
-        }
-        // Fallback: probe manual IP from Settings
-        const hasPc = rawDevices.some(d => d.DeviceType === 'PC');
-        if (!hasPc && pcLocalIp) {
-          const parts = pcLocalIp.split(',');
-          for (const part of parts) {
-            const trimmed = part.trim();
-            if (!trimmed) continue;
-            try {
-              const probeUrl = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed.split(':')[0] + ':8999'}`;
-              const res = await fetch(`${probeUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk }, signal: createTimeoutSignal(2000) });
-              if (res.ok) {
-                rawDevices.push({ DeviceName: 'PC (LAN)', DeviceType: 'PC', IsOnline: true, Url: probeUrl, LocalIp: probeUrl, _key: 'local_direct', _lanVerified: true, _lanUrl: probeUrl, Timestamp: NetworkClock.now() });
-                break;
-              }
-            } catch (e) { /* LAN probe — expected to fail for unreachable IPs */ }
-          }
-        } else if (hasPc && pcLocalIp) {
-          const parts = pcLocalIp.split(',');
-          for (const part of parts) {
-            const trimmed = part.trim();
-            if (!trimmed) continue;
-            const manualUrl = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
-            const existingLan = rawDevices.some(d => d._lanUrl === manualUrl);
-            if (!existingLan) {
-              try {
-                const res = await fetch(`${manualUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk }, signal: createTimeoutSignal(1500) });
-                if (res.ok) {
-                  const pcIdx = rawDevices.findIndex(d => d.DeviceType === 'PC');
-                  if (pcIdx >= 0) rawDevices[pcIdx] = { ...rawDevices[pcIdx], _lanVerified: true, _lanUrl: manualUrl, LocalIp: manualUrl };
-                  break;
-                }
-              } catch (e) { syncLog('LAN-PROBE', `Manual IP health check failed for ${manualUrl}: ${(e as any)?.message || e}`); }
-            }
-          }
-        }
-        setActiveDevices(rawDevices);
-        // Build typed ActiveDevice list for DeviceHub
-        const typedList: ActiveDevice[] = rawDevices.map((d: any) => ({
-          deviceId: d._key || d.DeviceId || '',
-          deviceName: d.DeviceName || 'Unknown',
-          deviceType: (d.DeviceType === 'PC' ? 'PC' : d.DeviceType === 'Mobile' ? 'Mobile' : 'Browser') as ActiveDevice['deviceType'],
-          isOnline: !!d.IsOnline,
-          connectionType: (d._lanVerified ? 'LAN' : d.GlobalUrl ? 'Cloud' : 'Offline') as ActiveDevice['connectionType'],
-          latencyMs: undefined,
-          localUrl: d._lanUrl || d.LocalIp || undefined,
-          globalUrl: d.GlobalUrl || undefined,
-          isPro: !!d.IsPro,
-          licenseKey: d.LicenseKey || undefined,
-          lastSeen: d.Timestamp || undefined,
-        }));
-        // [REMOVED] setActiveDevicesList — dead state removed
-        // Propagate discovery results to global SettingsContext so other tabs (Todo/Notes) benefit
-        typedList.forEach(d => {
-          updateDeviceStatus(d.deviceId, {
-            isOnline: d.isOnline,
-            connectionType: d.connectionType,
-            localUrl: d.localUrl,
-            globalUrl: d.globalUrl,
-            lastSeen: d.lastSeen
-          });
-        });
-        const activePc = rawDevices.find(d => d.DeviceType === 'PC');
-        if (activePc) {
-          const isPro = !!activePc.IsPro;
-          const licenseKey = activePc.LicenseKey || '';
-          const pcPair = pairedDevices.find(d => d.deviceType === 'PC');
-          if (pcPair) {
-            updatePairedDeviceLicensing(pcPair.deviceId, isPro, licenseKey);
-          }
-        }
-        // If no PC found at all, immediately try Firebase clipboard listener
-        if (!rawDevices.some(d => d.DeviceType === 'PC')) {
-          syncLog('FIREBASE', 'No PC found — activating Firebase clipboard listener immediately');
-          connectFirebaseClipboardListener(pk);
-        }
-      } catch (e) { syncLog('FIREBASE', `Active devices listener error: ${e}`); }
-    });
-
-    return () => {
-      unsubscribeDevices();
-      if (firebaseUnsubFeedRef.current) { firebaseUnsubFeedRef.current(); firebaseUnsubFeedRef.current = null; }
-      if (firebaseFallbackTimerRef.current) { clearTimeout(firebaseFallbackTimerRef.current); firebaseFallbackTimerRef.current = null; }
-    };
-  }, [isGlobalSyncEnabled, contextPairingKey, JSON.stringify((pairedDevices || []).map((d: any) => d.deviceId || d.DeviceId).sort())]);
-
-  // ─── Last proven-working PC URL (set by poll on successful /api/sync) ───
-  const lastWorkingPcUrlRef = useRef<string | null>('');
-
-  // ─── Background image download sweep ───
-  // Watches clips for image items that need downloading (added by LAN poll or Firebase)
-  // Decouples detection from download — any path can add images, this path downloads them
-  const downloadingRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    // Use ref to read clips without depending on clips (prevents infinite loop)
-    const currentClips = clipsStateRef.current;
-    const needsDownload = currentClips.filter(c =>
-      (c.Type === 'Image' || c.Type === 'ImageLink') &&
-      !c.CachedUri &&
-      c.id &&
-      !downloadingRef.current.has(c.id) &&
-      // Has some URL to download from
-      (c.Raw?.startsWith('http') || (c as any).DownloadUrl || (c as any).PreviewUrl || (c as any)._needsDownload)
-    );
-    if (needsDownload.length === 0) return;
-
-    (async () => {
-      for (const imgItem of needsDownload) {
-        if (!imgItem.id || downloadingRef.current.has(imgItem.id)) continue;
-        downloadingRef.current.add(imgItem.id);
-        try {
-          await FileSystem.makeDirectoryAsync(SYNC_CACHE_BASE, { intermediates: true }).catch(() => {});
-          const localUri = `${SYNC_CACHE_BASE}fb_img_${imgItem.id}.png`;
-          const existing = await FileSystem.getInfoAsync(localUri);
-          if (existing.exists && (existing as any).size > 100) {
-            setClips(prev => prev.map(c =>
-              c.id === imgItem.id ? { ...c, Raw: localUri, CachedUri: localUri, _needsDownload: undefined } : c
-            ));
-            if (imgItem === needsDownload[0]) {
-              try {
-                const b64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
-                await Clipboard.setImageAsync(b64);
-              } catch (e) { console.warn('Clipboard setImage from cache: error', (e as any)?.message || e); }
-            }
-            continue;
-          }
-
-          // Resolve the best download URL — prefer DownloadUrl, then Raw
-          const itemAny = imgItem as any;
-          const dlUrl = itemAny.DownloadUrl || itemAny.PreviewUrl || '';
-          const rawUrl = imgItem.Raw || '';
-          // Extract the ?path= portion for smart URL building
-          const sourceUrl = dlUrl || rawUrl;
-          let downloadUrl = rawUrl.startsWith('http') ? rawUrl : '';
-          let downloadSource = 'Cloud';
-
-          // FAST PATH: If the source URL is already a full HTTP URL, use it directly
-          if (sourceUrl.startsWith('http') && !sourceUrl.includes('trycloudflare.com')) {
-            downloadUrl = sourceUrl;
-            downloadSource = 'LAN';
-          } else if (sourceUrl.includes('?path=') || sourceUrl.includes('/download')) {
-            const pathPart = sourceUrl.includes('?path=') ? sourceUrl.substring(sourceUrl.indexOf('?path=')) : '';
-            // Use the last URL that the LAN poll PROVED works (no redundant health check needed)
-            let baseUrl = lastWorkingPcUrlRef.current || '';
-            if (!baseUrl) {
-              try { baseUrl = await getCachedPcUrl() || ''; } catch {}
-            }
-            if (!baseUrl) {
-              const pcDev = activeDevicesRef.current.find((d: any) => d.DeviceType === 'PC');
-              if (pcDev) {
-                if (pcDev._lanVerified && pcDev._lanUrl) baseUrl = pcDev._lanUrl;
-                else if (pcDev.GlobalUrl) baseUrl = pcDev.GlobalUrl.replace(/\/$/, '');
-              }
-            }
-            if (baseUrl && pathPart) {
-              downloadUrl = `${baseUrl}/download${pathPart}`;
-              downloadSource = baseUrl.includes('trycloudflare.com') ? 'Cloud' : 'LAN';
-            }
-            // If no base URL available, try the original URL as-is (last resort)
-            if (!downloadUrl && sourceUrl.startsWith('http')) {
-              downloadUrl = sourceUrl;
-            }
-          }
-
-          if (!downloadUrl) {
-            syncLog('IMG-DL', `✗ ${imgItem.Title}: no download URL resolved (raw=${rawUrl.substring(0,30)} src=${sourceUrl.substring(0,30)} dl=${dlUrl.substring(0,30)})`);
-            downloadingRef.current.delete(imgItem.id!);
-            continue;
-          }
-
-          syncLog('IMG-DL', `${imgItem.Title} → ${downloadSource}: ${downloadUrl.substring(0, 80)}`);
-          const dlHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
-          if (pairingKeyRef.current) dlHeaders['X-Pairing-Key'] = pairingKeyRef.current;
-
-          // Download with 30s timeout + 1 retry with URL re-resolution
-          let dlAttempt = 0;
-          let dlSuccess = false;
-          while (dlAttempt < 2 && !dlSuccess) {
-            try {
-              // Re-resolve URL on retry (tunnel URL may have changed)
-              if (dlAttempt > 0 && downloadUrl.includes('trycloudflare.com')) {
-                try {
-                  const freshBase = await getCachedPcUrl();
-                  if (freshBase && downloadUrl.includes('?path=')) {
-                    const pathPart = downloadUrl.substring(downloadUrl.indexOf('?path='));
-                    downloadUrl = `${freshBase}/download${pathPart}`;
-                  } else if (freshBase) {
-                    downloadUrl = freshBase;
-                  }
-                } catch (e) { syncLog('IMG-DL', `URL re-resolution failed: ${(e as any)?.message || e}`); }
-                syncLog('IMG-DL', `Retry #${dlAttempt}: ${downloadUrl.substring(0, 80)}`);
-              }
-              const dlResult = await Promise.race([
-                FileSystem.downloadAsync(downloadUrl, localUri, { headers: dlHeaders }),
-                new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Download timeout (30s)')), 30000)),
-              ]);
-              const { uri, status } = dlResult as { uri: string; status: number };
-
-              if (status === 200) {
-                const info = await FileSystem.getInfoAsync(uri);
-                if (info.exists && (info as any).size > 100) {
-                  setClips(prev => prev.map(c =>
-                    c.id === imgItem.id ? { ...c, Raw: uri, CachedUri: uri, _needsDownload: undefined } : c
-                  ));
-                  syncLog('IMG-DL', `✓ ${imgItem.Title} via ${downloadSource}`);
-                  if (imgItem === needsDownload[0]) {
-                    try {
-                      const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-                      await Clipboard.setImageAsync(b64);
-                    } catch (e) { console.warn('Clipboard setImage after download: error', (e as any)?.message || e); }
-                  }
-                  if (AdvanceOverlay && isFloatingBallEnabled) {
-                    try { AdvanceOverlay.pushClipToNativeDB(uri, imgItem.SourceDeviceName || 'PC'); } catch (e) { console.warn('Overlay pushClip after download: error', (e as any)?.message || e); }
-                  }
-                  if (Platform.OS === 'android') ToastAndroid.show(`🖼️ Screenshot synced from PC!`, ToastAndroid.SHORT);
-                }
-                dlSuccess = true;
-              } else {
-                throw new Error(`HTTP ${status}`);
-              }
-            } catch (dlErr: any) {
-              dlAttempt++;
-              if (dlAttempt >= 2) {
-                syncLog('IMG-DL', `✗ ${imgItem.Title} after ${dlAttempt} attempts: ${dlErr?.message || dlErr}`);
-                try { await FileSystem.deleteAsync(localUri, { idempotent: true }); } catch {}
-              }
-            }
-          }
-        } catch (err: any) {
-          syncLog('IMG-DL', `✗ ${imgItem.Title}: ${err?.message || err}`);
-        }
-        downloadingRef.current.delete(imgItem.id!);
-      }
-    })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageDownloadTrigger]);
-
-  // ─── Local PC Polling ───
-  const pollLockRef = useRef(false); // Prevents concurrent pollFn from timer + long-poll
-  useEffect(() => {
-    const pollFn = async () => {
-      if (pollLockRef.current) return; // Already running — skip this invocation
-      pollLockRef.current = true;
-      try {
-      // Gate: check if any paired device has clipboard sync enabled
-      const anySyncEnabled = pairedDevices.length === 0 || pairedDevices.some(d => getSyncPrefsForDevice(d.deviceId).clipboard);
-      if (!anySyncEnabled) { pollLockRef.current = false; return; }
-      const targetUrl = await getCachedPcUrl().catch(() => '');
-      if (Platform.OS === 'android' && AdvanceOverlay && targetUrl) {
-        try { AdvanceOverlay.setPcUrl(targetUrl); } catch(e) {}
-        try { if (deviceName) AdvanceOverlay.setDeviceName(deviceName); } catch(e) {}
-      }
-      try {
-        const timeout = targetUrl.includes('trycloudflare.com') ? 5000 : 2000;
-        const syncHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
-        if (pairingKeyRef.current) syncHeaders['X-Pairing-Key'] = pairingKeyRef.current;
-        const pollStart = performance.now();
-        const response = await fetchWithTimeout(`${targetUrl}/api/sync`, { headers: syncHeaders }, timeout);
-        if (!response.ok) {
-          cachedPcUrlRef.current = null;
-          // Track Cloudflare failures for forced re-resolution (Issue #7)
-          if (targetUrl.includes('trycloudflare.com')) {
-            if (recordCloudflareFailure()) {
-              removeSecureItem('lastCloudflareUrl').catch(() => {});
-              removeSecureItem('pairedGlobalUrl').catch(() => {});
-            }
-          }
-          markPcUnreachable();
-          return;
-        }
-        {
-          // Phase 1: PC is reachable — disconnect Firebase listener if active
-          markPcReachable();
-          resetCloudflareFailCount();
-          // H-3: Connection quality indicator
-          const pollLatency = Math.round(performance.now() - pollStart);
-          setConnectionInfo({ url: targetUrl, latencyMs: pollLatency, type: targetUrl.includes('trycloudflare.com') ? 'Cloud' : 'LAN' });
-          // Update paired device status with connection type & latency
-          const connType = targetUrl.includes('trycloudflare.com') ? 'Cloud' as const : 'LAN' as const;
-          pairedDevices.filter(d => d.deviceType === 'PC').forEach(d => {
-            updateDeviceStatus(d.deviceId, { isOnline: true, connectionType: connType, latencyMs: pollLatency, lastSeen: NetworkClock.now() });
-          });
-          // Mark this URL as proven-working for the image sweep to use
-          lastWorkingPcUrlRef.current = targetUrl;
-          // Phase 4: Read X-Global-Url header — PC sends its current Cloudflare URL in every response
-          try {
-            const globalUrl = response.headers.get('X-Global-Url');
-            if (globalUrl && globalUrl.includes('trycloudflare.com')) {
-              // Only persist if different from current cache (avoid redundant writes)
-              const currentCached = cachedPcUrlRef.current;
-              if (!currentCached || !currentCached.includes(globalUrl.split('//')[1]?.split('/')[0] || '')) {
-                setSecureItem('lastCloudflareUrl', globalUrl).catch(() => {});
-              }
-            }
-          } catch (e) { syncLog('PC-POLL', `Failed to read X-Global-Url header: ${(e as any)?.message || e}`); }
-          const data = await response.json();
-          if (Array.isArray(data) && data.length > 0) {
-            const latest = data[0];
-            // ═══ GUARD: Skip items from BEFORE this device paired ═══
-            if (pairingTimestampRef.current > 0 && latest.Timestamp && latest.Timestamp < (pairingTimestampRef.current - 5000)) {
-              return; // Pre-pairing item — don't sync to Android
-            }
-            const contentKey = `${latest.Type}_${latest.Title}_${latest.Timestamp}`;
-            if (contentKey !== lastSyncedContentRef.current) {
-              lastSyncedContentRef.current = contentKey;
-              // EventId dedup for LAN poll
-              const lanEventId = latest.EventId || '';
-              if (lanEventId && processedEventsRef.current.has(lanEventId)) return;
-              if (lanEventId) processedEventsRef.current.set(lanEventId, NetworkClock.now());
-
-              const crossFp = `${latest.Type}::${(latest.Raw || '').substring(0, 150)}`;
-              recentSyncFingerprintsRef.current.set(crossFp, NetworkClock.now());
-              const isOwnEcho = (latest.SourceDeviceName && deviceName && latest.SourceDeviceName === deviceName) || (latest.SourceDeviceType === 'Mobile' && (!latest.SourceDeviceName || latest.SourceDeviceName === deviceName));
-
-              if (!isOwnEcho) {
-                lastActivityRef.current = NetworkClock.now(); // Keep adaptive polling at high frequency
-                syncLog('PC-POLL', `New from PC: ${latest.Type} - ${(latest.Title || '').substring(0, 50)}`);
-                if (latest.Type === 'Text' || latest.Type === 'Code' || latest.Type === 'Url') {
-                  const latestRaw = latest.Raw;
-                  if (latestRaw) {
-                    const currentContent = await Clipboard.getStringAsync();
-                    const normCurrent = normalizeTextForFingerprint(currentContent);
-                    const normLatest = normalizeTextForFingerprint(latestRaw);
-                    if (normCurrent !== normLatest) {
-                      if (Platform.OS === 'android' && AdvanceOverlay) {
-                        try { AdvanceOverlay.setClipboardSuppressed(latestRaw); } catch(e) { await Clipboard.setStringAsync(latestRaw); }
-                      } else { await Clipboard.setStringAsync(latestRaw); }
-                      setLastCopiedText(latestRaw);
-                      lastCopiedRef.current = latestRaw;
-                      if (Platform.OS === 'android') ToastAndroid.show(`📋 ${latestRaw.substring(0, 40)}...`, ToastAndroid.SHORT);
-                      Notifications.scheduleNotificationAsync({
-                        content: { title: '📋 Clipboard Synced', body: latestRaw?.substring(0, 80) || 'New content from PC' },
-                        trigger: null,
-                      }).catch(() => {});
-                    }
-                  }
-                } else if (latest.Type === 'Image' || latest.Type === 'ImageLink' || latest.Type === 'QRCode') {
-                  // Add image to feed immediately with FULL LAN URLs resolved
-                  // Use the currently-connected targetUrl for immediate download
-                  const resolvedItem = { ...latest };
-                  if (resolvedItem.PreviewUrl?.startsWith('/')) resolvedItem.PreviewUrl = `${targetUrl}${resolvedItem.PreviewUrl}`;
-                  if (resolvedItem.DownloadUrl?.startsWith('/')) resolvedItem.DownloadUrl = `${targetUrl}${resolvedItem.DownloadUrl}`;
-                  if (resolvedItem.Raw?.startsWith('/')) resolvedItem.Raw = `${targetUrl}${resolvedItem.Raw}`;
-                  setClips(prev => {
-                    // Check ALL clips for duplicate by id, title, or raw content
-                    const dupIdx = prev.findIndex(c =>
-                      (c.id && latest.id && c.id === latest.id) ||
-                      (c.Title && latest.Title && c.Title === latest.Title) ||
-                      (c.Raw && latest.Raw && c.Raw.substring(0, 200) === latest.Raw.substring(0, 200))
-                    );
-                    if (dupIdx >= 0) {
-                      // Dup found — remove from old position, put at top
-                      const updated = [...prev];
-                      const existing = updated.splice(dupIdx, 1)[0];
-                      scrollToTop();
-                      return [{ ...existing, ...resolvedItem, _needsDownload: !existing.CachedUri, Timestamp: NetworkClock.now() }, ...updated];
-                    }
-                    scrollToTop();
-                    return [{ ...resolvedItem, _needsDownload: true, _receivedVia: 'LAN' as const } as any, ...prev];
-                  });
-                } else if (['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation'].includes(latest.Type)) {
-                  // Dedup by filename+timestamp (same key used by Firebase listener path)
-                  const fileDedupKey = `filedl::${latest.Title || ''}::${latest.Timestamp || ''}`;
-                  if (recentSyncFingerprintsRef.current.has(fileDedupKey)) {
-                    // Already handled by Firebase path — skip
-                  } else {
-                    recentSyncFingerprintsRef.current.set(fileDedupKey, NetworkClock.now());
-                    try {
-                      // ── Smart URL resolution: extract path, probe LAN, fallback to Cloudflare ──
-                      const dlPath = latest.DownloadUrl || latest.Raw || '';
-                      const pathPart = dlPath.includes('?path=') ? dlPath.substring(dlPath.indexOf('?path=')) : '';
-                      let fileUrl = '';
-                      let dlSource = 'Cloud';
-
-                      if (pathPart) {
-                        // Try LAN first (fast) — check multiple known LAN endpoints
-                        let lanBase = '';
-                        const lanCandidates = [
-                          ...(targetUrl && !targetUrl.includes('trycloudflare.com') ? [targetUrl] : []),
-                          ...(lastWorkingPcUrlRef.current && !lastWorkingPcUrlRef.current.includes('trycloudflare.com') ? [lastWorkingPcUrlRef.current] : []),
-                          ...(pcLocalIp ? pcLocalIp.split(',').map(s => s.trim()).filter(Boolean).map(ip => ip.startsWith('http') ? ip.replace(/\/$/, '') : `http://${ip.includes(':') ? ip : ip + ':8999'}`) : []),
-                        ].filter((v, i, a) => a.indexOf(v) === i); // deduplicate
-
-                        for (const candidate of lanCandidates) {
-                          try {
-                            const ctrl = new AbortController();
-                            const timer = setTimeout(() => ctrl.abort(), 3000);
-                            const h = await fetch(`${candidate}/api/health`, {
-                              headers: { 
-                                'X-FlyShelf-Client': 'MobileCompanion',
-                                'X-Pairing-Key': pairingKeyRef.current || ''
-                              },
-                              signal: ctrl.signal,
-                            });
-                            clearTimeout(timer);
-                            if (h.ok) { lanBase = candidate; break; }
-                          } catch (e) { syncLog('FILE-DL', `LAN health probe failed for ${candidate}: ${(e as any)?.message || e}`); }
-                        }
-                        if (lanBase) {
-                          fileUrl = `${lanBase}/download${pathPart}`;
-                          dlSource = 'LAN';
-                        } else {
-                          // Cloudflare fallback — find from active devices
-                          try {
-                            const pk = pairingKeyRef.current;
-                            if (pk) {
-                              const devSnap = await get(ref(database, `active_devices/${pk}`));
-                              if (devSnap.exists()) {
-                                const devs = devSnap.val();
-                                for (const dk of Object.keys(devs)) {
-                                  const d = await decryptDevice(devs[dk]);
-                                  if (d.GlobalUrl?.includes('trycloudflare.com') && d.DeviceType === 'PC') {
-                                    fileUrl = `${d.GlobalUrl.replace(/\/$/, '')}/download${pathPart}`;
-                                    break;
-                                  }
-                                }
-                              }
-                            }
-                          } catch (e) { syncLog('FILE-DL', `Cloudflare device lookup failed: ${(e as any)?.message || e}`); }
-                          // Also try if targetUrl itself is Cloudflare
-                          if (!fileUrl && targetUrl?.includes('trycloudflare.com')) {
-                            fileUrl = `${targetUrl}/download${pathPart}`;
-                          }
-                        }
-                      } else if (dlPath.startsWith('http')) {
-                        // Full absolute URL — use as-is (already has host)
-                        fileUrl = dlPath;
-                      }
-
-                      syncLog('PC-POLL', `File DL: ${latest.Title} → ${dlSource}: ${fileUrl.substring(0, 80)}`);
-                      if (fileUrl) {
-                        const subfolder = latest.Type === 'Pdf' ? 'PDFs' : latest.Type === 'Video' ? 'Videos' : latest.Type === 'Audio' ? 'Audio' : 'Documents';
-                        const safeName = (latest.Title || `file_${NetworkClock.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
-                        const destPath = await getDownloadPath(subfolder, safeName);
-                        enqueueDownload({
-                          id: latest.id || '', title: latest.Title || safeName, type: latest.Type,
-                          fileUrl, destPath, source: dlSource,
-                          sourceDevice: latest.SourceDeviceName || 'PC',
-                        });
-                      } else {
-                        syncLog('PC-POLL', `File DL: ${latest.Title} — no download URL resolved`);
-                      }
-                    } catch (dlErr: any) {
-                      syncLog('PC-POLL', `File DL error: ${latest.Title} — ${dlErr?.message || dlErr}`);
-                    }
-                  }
-                  // Add file entry to feed so the user sees it (show filename, not URL)
-                  setClips(prev => {
-                    // Check ALL clips for duplicate by id, title, or raw content
-                    const dupIdx = prev.findIndex(c =>
-                      (c.id && latest.id && c.id === latest.id) ||
-                      (c.Title && latest.Title && c.Title === latest.Title) ||
-                      (c.Raw && latest.Raw && c.Raw.substring(0, 100) === latest.Raw.substring(0, 100))
-                    );
-                    if (dupIdx >= 0) {
-                      // Dup found — remove from old position, put at top with fresh timestamp
-                      const updated = [...prev];
-                      const existing = updated.splice(dupIdx, 1)[0];
-                      scrollToTop();
-                      return [{ ...existing, Raw: existing.Title || existing.Raw, Timestamp: NetworkClock.now() }, ...updated];
-                    }
-                    scrollToTop();
-                    return [{ ...latest, Raw: latest.Title || latest.Raw, Timestamp: NetworkClock.now(), _receivedVia: 'LAN' as const } as any, ...prev];
-                  });
-                  // If this file was previously deleted by the user, un-delete it so it reappears
-                  if (latest.id && localDeletedIds.has(latest.id)) {
-                    setLocalDeletedIds(prev => {
-                      const n = new Set(prev);
-                      n.delete(latest.id);
-                      AsyncStorage.getItem('localDeletedIds').then(val => {
-                        try {
-                          const ids: string[] = val ? JSON.parse(val) : [];
-                          AsyncStorage.setItem('localDeletedIds', JSON.stringify(ids.filter(id => id !== latest.id))).catch(() => {});
-                        } catch {}
-                      });
-                      return n;
-                    });
-                  }
-                }
-                if (Platform.OS === 'android' && AdvanceOverlay && isFloatingBallEnabled) {
-                  try {
-                    if (latest.Type === 'Image' || latest.Type === 'ImageLink' || latest.Type === 'QRCode') {
-                      const imgRaw = latest.PreviewUrl?.startsWith('/') ? `${targetUrl}${latest.PreviewUrl}` : latest.DownloadUrl?.startsWith('/') ? `${targetUrl}${latest.DownloadUrl}` : latest.Raw?.startsWith('http') ? latest.Raw : '';
-                      if (imgRaw) AdvanceOverlay.pushClipToNativeDB(imgRaw, 'PC');
-                    } else {
-                      const rawForOverlay = latest.Raw || latest.Title || '';
-                      if (rawForOverlay) AdvanceOverlay.pushClipToNativeDB(rawForOverlay, 'PC');
-                    }
-                  } catch(e: any) { console.warn('Overlay pushClip for sync item: error', e?.message || e); }
-                }
-              }
-            }
-          }
-          // ── Sweep ALL items for file downloads (not just data[0]) ──
-          // The data[0] path above only handles the latest item. Files (PDFs, docs, etc.)
-          // that aren't the top item would otherwise be missed entirely.
-          // Uses the download queue for sequential, non-blocking processing.
-          for (const item of data) {
-            if (!['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation'].includes(item.Type)) continue;
-            const isOwnEcho = (item.SourceDeviceName && deviceName && item.SourceDeviceName === deviceName) || (item.SourceDeviceType === 'Mobile' && (!item.SourceDeviceName || item.SourceDeviceName === deviceName));
-            if (isOwnEcho) continue;
-            const fileDedupKey = `filedl::${item.Title || ''}::${item.Timestamp || ''}`;
-            if (recentSyncFingerprintsRef.current.has(fileDedupKey)) continue;
-            recentSyncFingerprintsRef.current.set(fileDedupKey, NetworkClock.now());
-
-            // Smart URL resolution
-            try {
-              const dlPath = item.DownloadUrl || item.Raw || '';
-              const pathPart = dlPath.includes('?path=') ? dlPath.substring(dlPath.indexOf('?path=')) : '';
-              let fileUrl = '';
-              let dlSource = 'Cloud';
-
-              if (pathPart) {
-                let lanBase = '';
-                const lanCandidates = [
-                  ...(targetUrl && !targetUrl.includes('trycloudflare.com') ? [targetUrl] : []),
-                  ...(lastWorkingPcUrlRef.current && !lastWorkingPcUrlRef.current.includes('trycloudflare.com') ? [lastWorkingPcUrlRef.current] : []),
-                          ...(pcLocalIp ? pcLocalIp.split(',').map(s => s.trim()).filter(Boolean).map(ip => ip.startsWith('http') ? ip.replace(/\/$/, '') : `http://${ip.includes(':') ? ip : ip + ':8999'}`) : []),
-                ].filter((v, i, a) => a.indexOf(v) === i);
-
-                for (const candidate of lanCandidates) {
-                  try {
-                    const ctrl = new AbortController();
-                    const timer = setTimeout(() => ctrl.abort(), 3000);
-                    const h = await fetch(`${candidate}/api/health`, {
-                      headers: { 
-                        'X-FlyShelf-Client': 'MobileCompanion',
-                        'X-Pairing-Key': pairingKeyRef.current || ''
-                      },
-                      signal: ctrl.signal,
-                    });
-                    clearTimeout(timer);
-                    if (h.ok) { lanBase = candidate; break; }
-                  } catch (e) { syncLog('FILE-DL', `LAN probe failed for ${candidate}: ${(e as any)?.message || e}`); }
-                }
-                if (lanBase) {
-                  fileUrl = `${lanBase}/download${pathPart}`;
-                  dlSource = 'LAN';
-                } else {
-                  try {
-                    const pk = pairingKeyRef.current;
-                    if (pk) {
-                      const devSnap = await get(ref(database, `active_devices/${pk}`));
-                      if (devSnap.exists()) {
-                        const devs = devSnap.val();
-                        for (const dk of Object.keys(devs)) {
-                          const d = await decryptDevice(devs[dk]);
-                          if (d.GlobalUrl?.includes('trycloudflare.com') && d.DeviceType === 'PC') {
-                            fileUrl = `${d.GlobalUrl.replace(/\/$/, '')}/download${pathPart}`;
-                            break;
-                          }
-                        }
-                      }
-                    }
-                  } catch (e) { syncLog('FILE-DL', `Firebase device lookup failed: ${(e as any)?.message || e}`); }
-                  if (!fileUrl && targetUrl?.includes('trycloudflare.com')) {
-                    fileUrl = `${targetUrl}/download${pathPart}`;
-                  }
-                }
-              } else if (dlPath.startsWith('http')) {
-                fileUrl = dlPath;
-              }
-
-              if (fileUrl) {
-                const subfolder = item.Type === 'Pdf' ? 'PDFs' : item.Type === 'Video' ? 'Videos' : item.Type === 'Audio' ? 'Audio' : 'Documents';
-                const safeName = (item.Title || `file_${NetworkClock.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
-                const destPath = await getDownloadPath(subfolder, safeName);
-                syncLog('PC-POLL', `File sweep → queue: ${item.Title} via ${dlSource}`);
-                enqueueDownload({
-                  id: item.id || '', title: item.Title || safeName, type: item.Type,
-                  fileUrl, destPath, source: dlSource,
-                  sourceDevice: item.SourceDeviceName || 'PC',
-                });
-              }
-            } catch (dlErr: any) {
-              syncLog('PC-POLL', `File sweep error: ${item.Title} — ${dlErr?.message || dlErr}`);
-            }
-          }
-          setClips(current => {
-            let merged = [...current];
-            let changed = false;
-            data.forEach((localItem: any) => {
-              // Skip image items — background sweep handles feed entry + local download
-              if (localItem.Type === 'Image' || localItem.Type === 'ImageLink' || localItem.Type === 'QRCode') return;
-              // File types: show title instead of download URL
-              if (['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation'].includes(localItem.Type)) {
-                localItem = { ...localItem, Raw: localItem.Title || localItem.Raw };
-              }
-              // Check ALL clips for duplicate by id, title, or raw content
-              const dupIdx = merged.findIndex(m =>
-                (m.id && localItem.id && m.id === localItem.id) ||
-                (m.Title && localItem.Title && m.Title === localItem.Title) ||
-                (m.Raw && localItem.Raw && m.Raw.substring(0, 100) === localItem.Raw.substring(0, 100))
-              );
-              if (dupIdx >= 0) {
-                // Dup found — remove from old position, put at top
-                const existing = merged.splice(dupIdx, 1)[0];
-                merged.unshift({ ...existing, Timestamp: NetworkClock.now() });
-                changed = true;
-              } else {
-                // New — add to top
-                merged.unshift({ ...localItem, _receivedVia: 'Cloud' });
-                changed = true;
-              }
-            });
-            if (!changed) return current;
-            scrollToTop();
-            return merged;
-          });
-          // Trigger background download effects for new clips from LAN poll
-          setImageDownloadTrigger(t => t + 1);
-          setRichMediaDownloadTrigger(t => t + 1);
-        }
-      } catch (e) {
-        syncLog('PC-POLL', `Poll failed: ${(e as any)?.message || e}`);
-        // Track Cloudflare failures for forced re-resolution (Issue #7)
-        const failUrl = cachedPcUrlRef.current || '';
-        cachedPcUrlRef.current = null;
-        if (failUrl.includes('trycloudflare.com')) {
-          if (recordCloudflareFailure()) {
-            removeSecureItem('lastCloudflareUrl').catch(() => {});
-            removeSecureItem('pairedGlobalUrl').catch(() => {});
-          }
-        }
-        markPcUnreachable();
-      }
-      } finally { pollLockRef.current = false; }
-    };
-    // Adaptive polling: 2s (LAN active) → 5s (Cloud) → 10s (idle/no PC) → re-evaluate every cycle
-    lastActivityRef.current = NetworkClock.now();
-    const getAdaptiveInterval = () => {
-      const url = cachedPcUrlRef.current || '';
-      const idleSecs = (NetworkClock.now() - lastActivityRef.current) / 1000;
-      if (!url) return 10000; // No PC found — slow poll
-      if (url.includes('trycloudflare')) return idleSecs > 120 ? 10000 : 5000; // Cloud: 5s active, 10s idle
-      return idleSecs > 120 ? 5000 : 2000; // LAN: 2s active, 5s idle
-    };
-    // Initial poll
-    pollFn();
-    let pollTimer: ReturnType<typeof setTimeout> | null = null;
-    const schedulePoll = () => {
-      pollTimer = setTimeout(async () => {
-        await pollFn();
-        if (pollTimer !== null) schedulePoll(); // Re-evaluate interval each cycle
-      }, getAdaptiveInterval());
-    };
-    schedulePoll();
-
-    // ─── Long-Poll for instant notifications ───
-    // /api/events blocks for up to 30s until clipboard changes on PC
-    // When it returns 200, immediately fetch the new data via pollFn()
-    let longPollActive = true;
-    let currentLongPollController: AbortController | null = null;
-    let longPollBackoff = 0;
-    const runLongPoll = async () => {
-      // Wait for first successful poll to establish cachedPcUrlRef
-      await new Promise(r => setTimeout(r, 3000));
-      syncLog('LONG-POLL', 'Starting long-poll loop');
-      while (longPollActive) {
-        try {
-          // Always resolve fresh URL (don't rely on potentially stale ref)
-          const url = cachedPcUrlRef.current || (await getCachedPcUrl());
-          if (!url) {
-            syncLog('LONG-POLL', 'No PC URL — waiting 5s');
-            await new Promise(r => setTimeout(r, 5000));
-            continue;
-          }
-          try {
-            const pairingKey = pairingKeyRef.current;
-            const lpHeaders: any = { 'X-FlyShelf-Client': 'MobileCompanion' };
-            if (pairingKey) lpHeaders['X-Pairing-Key'] = pairingKey;
-            const controller = new AbortController();
-            currentLongPollController = controller;
-            const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout (server blocks 30s)
-            const res = await fetch(`${url}/api/events`, { headers: lpHeaders, signal: controller.signal });
-            clearTimeout(timeoutId);
-            longPollBackoff = 0; // Reset backoff on success
-            if (res.status === 200) {
-              // Clipboard changed! Fetch the new data immediately
-              lastActivityRef.current = NetworkClock.now();
-              syncLog('LONG-POLL', '⚡ Instant notification — fetching now');
-              await pollFn();
-            }
-            // 204 = timeout, no new events — loop again immediately
-          } catch (innerErr: any) {
-            if (!longPollActive) break;
-            // Invalidate stale Cloudflare URL on long-poll failure
-            if (url && url.includes('trycloudflare.com')) {
-              removeSecureItem('lastCloudflareUrl').catch(() => {});
-            }
-            // Backoff on errors: 1s, 2s, 4s... max 10s (reduced from 30s)
-            longPollBackoff = Math.min(longPollBackoff + 1, 4);
-            const delay = Math.min(1000 * Math.pow(2, longPollBackoff), 10000);
-            syncLog('LONG-POLL', `Error: ${innerErr?.message || innerErr} — retry in ${delay}ms`);
-            await new Promise(r => setTimeout(r, delay));
-          }
-        } catch (outerErr: any) {
-          // Top-level catch — NEVER let the loop die
-          if (!longPollActive) break; // H-1 fix: prevent zombie loops on unmount
-          syncLog('LONG-POLL', `Loop crash prevented: ${outerErr?.message || outerErr}`);
-          await new Promise(r => setTimeout(r, 5000));
-        }
-      }
-    };
-    runLongPoll(); // Fire and forget — runs in background
-
-    return () => {
-      if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; }
-      longPollActive = false; // Stop long-poll loop
-      if (currentLongPollController) currentLongPollController.abort();
-    };
-  }, [isGlobalSyncEnabled, pcLocalIp, deviceName]);
+  // ─── Background image download sweep (extracted to feature hook) ───────────
+  // downloadingRef lives inside useImageSweep
+  useImageSweep({
+    imageDownloadTrigger,
+    clipsStateRef,
+    pairingKeyRef,
+    lastWorkingPcUrlRef,
+    activeDevicesRef,
+    getCachedPcUrl,
+    isFloatingBallEnabled,
+    setClips,
+  });
 
   // ─── Device Self-Registration ───
   useEffect(() => {
@@ -1724,6 +593,47 @@ export default function SyncScreen() {
   // ─── Clipboard & Media Foreground Checks ───
   const lastCopiedRef = React.useRef(lastCopiedText);
   useEffect(() => { lastCopiedRef.current = lastCopiedText; }, [lastCopiedText]);
+
+  // ─── Local PC Polling (extracted to useDeviceSync hook) ──────────────────
+  useDeviceSync({
+    isGlobalSyncEnabled,
+    pcLocalIp,
+    deviceName,
+    pairingKeyRef,
+    clipsStateRef,
+    pairedDevices,
+    getSyncPrefsForDevice,
+    getCachedPcUrl,
+    cachedPcUrlRef,
+    cachedPcUrlTimestampRef,
+    lastWorkingPcUrlRef,
+    recordCloudflareFailure,
+    resetCloudflareFailCount,
+    invalidatePcUrlCache,
+    markPcReachable,
+    markPcUnreachable,
+    activeDevicesRef,
+    lastActivityRef,
+    lastSyncedContentRef,
+    processedEventsRef,
+    recentSyncFingerprintsRef,
+    sentContentFingerprintsRef,
+    pairingTimestampRef,
+    enqueueDownload,
+    normalizeTextForFingerprint,
+    setClips,
+    setConnectionInfo,
+    setLastCopiedText,
+    lastCopiedRef,
+    setImageDownloadTrigger,
+    setRichMediaDownloadTrigger,
+    updateDeviceStatus,
+    isFloatingBallEnabled,
+    scrollToTop,
+    localDeletedIds,
+    setLocalDeletedIds,
+  });
+
 
   const handleForegroundClipboardCheck = async () => {
     if (Platform.OS === 'web') return;
@@ -2107,6 +1017,10 @@ export default function SyncScreen() {
       const txEventId = generateEventId();
       processedEventsRef.current.set(txEventId, NetworkClock.now());
       let localSuccess = false;
+      // Only attempt LAN transmit if we have a valid URL
+      if (!targetUrl || !targetUrl.startsWith('http')) {
+        syncLog('SYNC', 'No valid PC URL — skipping LAN transmit, going to Firebase');
+      } else
       try {
         const pairingKey = await getSecureItem('pairingKey');
         const hdrs: any = { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion', 'X-Source-Device': deviceName || 'Mobile' };
@@ -3007,8 +1921,10 @@ export default function SyncScreen() {
   const clipFilter = (c: ClipItem) => {
     // File types (PDF, Document, etc.): always show if they have a Title — they are continuously re-synced from PC
     if (['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation'].includes(c.Type) && c.Title) {
-      // Still respect wipe timestamp
+      // Respect wipe timestamp
       if (!((c.Timestamp || 0) >= localWipeTimestamp || c.IsPinned)) return false;
+      // Respect local deletion — this was previously missing, causing delete button to not work for files
+      if (c.id && localDeletedIds.has(c.id)) return false;
     } else {
       const isVisible = (c.IsPinned || (c.Timestamp || 0) >= localWipeTimestamp) && (!c.id || !localDeletedIds.has(c.id)) && (c.Raw || c.Title);
       if (!isVisible) return false;
@@ -3018,7 +1934,7 @@ export default function SyncScreen() {
     if (/^[A-Z]:\\/.test(rawStr)) return false;
     if (rawStr.startsWith('file:///') && /^file:\/\/\/[A-Z]:/.test(rawStr)) return false;
     // Filter out stale download progress cards
-    if (rawStr.startsWith('Downloading from ') && rawStr.endsWith('...')) return false;
+    if ((rawStr.startsWith('Downloading from ') || rawStr.startsWith('⏳ Downloading from ')) && rawStr.endsWith('...')) return false;
     // Filter out stale image clips with expired PC server URLs (no local cache)
     if ((c.Type === 'Image' || c.Type === 'ImageLink' || c.Type === 'QRCode') && !c.CachedUri) {
       if (rawStr.startsWith('file:///') && !(/^file:\/\/\/[A-Z]:/.test(rawStr))) { /* keep */ }
@@ -3170,50 +2086,15 @@ export default function SyncScreen() {
       </AnimatedCard>
         {activeOptionsId === (item.id || `idx_${itemIndex}`) && !(isIncomingTransfer && isHeavyFile) && (
           <View style={{ position: 'absolute', right: 10, top: 10, flexDirection: 'row', backgroundColor: 'rgba(20,24,36,0.95)', borderRadius: 12, padding: 8, gap: 8, zIndex: 50 }}>
-            {['Image', 'ImageLink'].includes(item.Type) && (
-              <TouchableOpacity onPress={() => { handleConvertImageToPdf(item); setActiveOptionsId(null); }} style={[styles.actionBtnIcon, {backgroundColor: '#EF444433'}]}>
-                <Ionicons name="document-outline" size={18} color={colors.accent.error} />
-              </TouchableOpacity>
-            )}
-            {['Text', 'Code', 'Url'].includes(item.Type) && (
-              <TouchableOpacity onPress={() => {
-                const query = item.Raw || item.Title || '';
-                if (query) {
-                  Linking.openURL(`https://www.google.com/search?q=${encodeURIComponent(query)}`).catch(() => {});
-                }
-                setActiveOptionsId(null);
-              }} style={[styles.actionBtnIcon, {backgroundColor: '#10B98133'}]}>
-                <Ionicons name="search" size={18} color={colors.accent.success} />
-              </TouchableOpacity>
-            )}
+            {/* ═══ OPEN — universal for all types ═══ */}
             <TouchableOpacity onPress={async () => {
               try {
-                if (!item.id) { if (Platform.OS === 'android') ToastAndroid.show("Pinning is restricted to Cloud Hub payloads.", ToastAndroid.SHORT); return; }
-                await update(ref(database, `${clipboardPath()}/${item.id}`), { IsPinned: !item.IsPinned });
-                setClips(prev => prev.map(c => c.id === item.id ? {...c, IsPinned: !c.IsPinned} : c));
-                if (Platform.OS === 'android') ToastAndroid.show(item.IsPinned ? "Unpinned" : "Pinned!", ToastAndroid.SHORT);
-              } catch(e: any) { syncLog('PIN', `Pin/unpin failed: ${e?.message || e}`); }
-              setActiveOptionsId(null);
-            }} style={[styles.actionBtnIcon, {backgroundColor: item.IsPinned ? '#F59E0B33' : '#2A2F3A'}]}>
-              <Ionicons name={item.IsPinned ? "pin" : "pin-outline"} size={18} color={item.IsPinned ? colors.accent.warning : colors.text.tertiary} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={async () => {
-              const contentStr = item.Raw || item.Title || '';
-              if (item.Type === 'Image' || item.Type === 'ImageLink') {
-                try { const src = item.CachedUri || mediaUrl || item.Raw; if (src) { if (src.startsWith('file://') || src.startsWith('/')) { const b64 = await FileSystem.readAsStringAsync(src.startsWith('file://') ? src : `file://${src}`, { encoding: FileSystem.EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } else { const localUri = `${SYNC_CACHE_BASE}copy_${Date.now()}.png`; const dl = await FileSystem.downloadAsync(src, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }); const b64 = await FileSystem.readAsStringAsync(dl.uri, { encoding: FileSystem.EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } if (Platform.OS === 'android') ToastAndroid.show("Image Copied", ToastAndroid.SHORT); } } catch(e) { await Clipboard.setStringAsync(contentStr); if (Platform.OS === 'android') ToastAndroid.show("URL Copied", ToastAndroid.SHORT); }
-              } else { await Clipboard.setStringAsync(contentStr); if (Platform.OS === 'android') ToastAndroid.show("Copied!", ToastAndroid.SHORT); }
-              setActiveOptionsId(null);
-            }} style={[styles.actionBtnIcon, {backgroundColor: '#4A62EB33'}]}>
-              <Ionicons name="copy-outline" size={18} color={colors.accent.primary} />
-            </TouchableOpacity>
-            {(item.Type === 'Url' || (item.Raw && item.Raw.startsWith('http'))) && (
-              <TouchableOpacity onPress={() => { Linking.openURL(item.Raw).catch(() => {}); setActiveOptionsId(null); }} style={[styles.actionBtnIcon, {backgroundColor: '#0EA5E933'}]}>
-                <Ionicons name="open-outline" size={18} color={colors.accent.info} />
-              </TouchableOpacity>
-            )}
-            {['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation'].includes(item.Type) && (
-              <TouchableOpacity onPress={async () => {
-                try {
+                if (item.Type === 'Image' || item.Type === 'ImageLink') {
+                  const imgUri = mediaUrl || item.CachedUri || item.Raw || '';
+                  if (imgUri) setExpandedImage(imgUri);
+                } else if (item.Type === 'Url' || (item.Raw && item.Raw.startsWith('http'))) {
+                  Linking.openURL(item.Raw).catch(() => {});
+                } else if (['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation'].includes(item.Type)) {
                   const safeName = (item.Title || '').replace(/[^a-zA-Z0-9._-]/g, '_');
                   const subfolder = item.Type === 'Pdf' ? 'PDFs' : item.Type === 'Video' ? 'Videos' : item.Type === 'Audio' ? 'Audio' : 'Documents';
                   const filePath = item.CachedUri || `${DOWNLOAD_BASE}${subfolder}/${safeName}`;
@@ -3235,39 +2116,83 @@ export default function SyncScreen() {
                     const fileUri = filePath.startsWith('file://') ? filePath : `file://${filePath}`;
                     const contentUri = await FileSystem.getContentUriAsync(fileUri);
                     await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-                      data: contentUri,
-                      flags: 1,
-                      type: mimeType,
+                      data: contentUri, flags: 1, type: mimeType,
                     });
                   } else {
                     if (Platform.OS === 'android') ToastAndroid.show('File not yet downloaded — syncing...', ToastAndroid.SHORT);
                   }
-                } catch (e: any) {
-                  try {
-                    const safeName = (item.Title || '').replace(/[^a-zA-Z0-9._-]/g, '_');
-                    const subfolder = item.Type === 'Pdf' ? 'PDFs' : item.Type === 'Video' ? 'Videos' : item.Type === 'Audio' ? 'Audio' : 'Documents';
-                    const filePath = item.CachedUri || `${DOWNLOAD_BASE}${subfolder}/${safeName}`;
-                    if (await Sharing.isAvailableAsync()) {
-                      await Sharing.shareAsync(filePath, { dialogTitle: `Open ${item.Title}` });
-                    } else {
-                      if (Platform.OS === 'android') ToastAndroid.show(`No app found to open this file`, ToastAndroid.SHORT);
-                    }
-                  } catch (shareErr: any) {
-                    if (Platform.OS === 'android') ToastAndroid.show(`Cannot open: ${shareErr?.message || 'unknown error'}`, ToastAndroid.SHORT);
-                  }
+                } else {
+                  // Text: search on Google
+                  const query = item.Raw || item.Title || '';
+                  if (query) Linking.openURL(`https://www.google.com/search?q=${encodeURIComponent(query)}`).catch(() => {});
                 }
-                setActiveOptionsId(null);
-              }} style={[styles.actionBtnIcon, {backgroundColor: '#6366F133'}]}>
-                <Ionicons name="scan-outline" size={18} color={colors.accent.primary} />
+              } catch (e: any) {
+                if (Platform.OS === 'android') ToastAndroid.show(`Cannot open: ${e?.message || 'error'}`, ToastAndroid.SHORT);
+              }
+              setActiveOptionsId(null);
+            }} style={[styles.actionBtnIcon, {backgroundColor: '#0EA5E933'}]}>
+              <Ionicons name="open-outline" size={18} color={colors.accent.info} />
+            </TouchableOpacity>
+
+            {/* ═══ COPY — universal for all types ═══ */}
+            <TouchableOpacity onPress={async () => {
+              const contentStr = item.Raw || item.Title || '';
+              if (item.Type === 'Image' || item.Type === 'ImageLink') {
+                try { const src = item.CachedUri || mediaUrl || item.Raw; if (src) { if (src.startsWith('file://') || src.startsWith('/')) { const b64 = await FileSystem.readAsStringAsync(src.startsWith('file://') ? src : `file://${src}`, { encoding: FileSystem.EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } else { const localUri = `${SYNC_CACHE_BASE}copy_${Date.now()}.png`; const dl = await FileSystem.downloadAsync(src, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }); const b64 = await FileSystem.readAsStringAsync(dl.uri, { encoding: FileSystem.EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } if (Platform.OS === 'android') ToastAndroid.show("Image Copied", ToastAndroid.SHORT); } } catch(e) { await Clipboard.setStringAsync(contentStr); if (Platform.OS === 'android') ToastAndroid.show("URL Copied", ToastAndroid.SHORT); }
+              } else { await Clipboard.setStringAsync(contentStr); if (Platform.OS === 'android') ToastAndroid.show("Copied!", ToastAndroid.SHORT); }
+              setActiveOptionsId(null);
+            }} style={[styles.actionBtnIcon, {backgroundColor: '#4A62EB33'}]}>
+              <Ionicons name="copy-outline" size={18} color={colors.accent.primary} />
+            </TouchableOpacity>
+
+            {/* ═══ EDIT — PDF only, opens PDF editor tab ═══ */}
+            {item.Type === 'Pdf' && (
+              <TouchableOpacity onPress={() => { handleConvertImageToPdf(item); setActiveOptionsId(null); }} style={[styles.actionBtnIcon, {backgroundColor: '#F59E0B33'}]}>
+                <Ionicons name="create-outline" size={18} color={colors.accent.warning} />
               </TouchableOpacity>
             )}
+
+            {/* ═══ PIN — universal ═══ */}
             <TouchableOpacity onPress={async () => {
+              try {
+                if (!item.id) {
+                  // For local-only items, toggle pin in state
+                  setClips(prev => prev.map(c => (c.Title === item.Title && c.Raw === item.Raw) ? {...c, IsPinned: !c.IsPinned} : c));
+                  if (Platform.OS === 'android') ToastAndroid.show(item.IsPinned ? "Unpinned" : "Pinned!", ToastAndroid.SHORT);
+                } else {
+                  await update(ref(database, `${clipboardPath()}/${item.id}`), { IsPinned: !item.IsPinned });
+                  setClips(prev => prev.map(c => c.id === item.id ? {...c, IsPinned: !c.IsPinned} : c));
+                  if (Platform.OS === 'android') ToastAndroid.show(item.IsPinned ? "Unpinned" : "Pinned!", ToastAndroid.SHORT);
+                }
+              } catch(e: any) { syncLog('PIN', `Pin/unpin failed: ${e?.message || e}`); }
+              setActiveOptionsId(null);
+            }} style={[styles.actionBtnIcon, {backgroundColor: item.IsPinned ? '#F59E0B33' : '#2A2F3A'}]}>
+              <Ionicons name={item.IsPinned ? "pin" : "pin-outline"} size={18} color={item.IsPinned ? colors.accent.warning : colors.text.tertiary} />
+            </TouchableOpacity>
+
+            {/* ═══ DELETE — universal, actually deletes files ═══ */}
+            <TouchableOpacity onPress={async () => {
+              // Delete cached file from disk
+              if (item.CachedUri) {
+                FileSystem.deleteAsync(item.CachedUri, { idempotent: true }).catch(() => {});
+              }
+              // Also try to delete from known download paths
+              if (item.Title && ['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation'].includes(item.Type)) {
+                const safeName = (item.Title || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+                const subfolder = item.Type === 'Pdf' ? 'PDFs' : item.Type === 'Video' ? 'Videos' : item.Type === 'Audio' ? 'Audio' : 'Documents';
+                FileSystem.deleteAsync(`${DOWNLOAD_BASE}${subfolder}/${safeName}`, { idempotent: true }).catch(() => {});
+              }
+              // Add to localDeletedIds for sync dedup
               if (item.id) {
                 setLocalDeletedIds(prev => { const n = new Set(prev); n.add(item.id!); AsyncStorage.setItem('localDeletedIds', JSON.stringify([...n])).catch(() => {}); return n; });
                 if (isGlobalSyncEnabled && pairingKeyRef.current) { try { await remove(ref(database, `${clipboardPath()}/${item.id}`)); } catch(e) {} }
-              } else {
-                setClips(prev => prev.filter(c => !(c.Title === item.Title && c.Raw === item.Raw && c.Timestamp === item.Timestamp)));
               }
+              // Remove from clips array entirely
+              setClips(prev => prev.filter(c => {
+                if (item.id && c.id === item.id) return false;
+                if (c.Title === item.Title && c.Raw === item.Raw && c.Timestamp === item.Timestamp) return false;
+                return true;
+              }));
               setActiveOptionsId(null);
               if (Platform.OS === 'android') ToastAndroid.show("Deleted", ToastAndroid.SHORT);
             }} style={[styles.actionBtnIcon, {backgroundColor: '#EF444433'}]}>
@@ -3582,9 +2507,42 @@ export default function SyncScreen() {
               drawDistance={300}
               estimatedItemSize={120}
               contentContainerStyle={{ paddingBottom: 110 }}
-
+              onScroll={(e: any) => {
+                const offsetY = e?.nativeEvent?.contentOffset?.y || 0;
+                isScrolledDownRef.current = offsetY > 200;
+                // If user scrolled back to top, reset pill
+                if (offsetY < 50 && newItemCount > 0) setNewItemCount(0);
+              }}
+              scrollEventThrottle={100}
               renderItem={renderClipItem}
             />
+          )}
+
+          {/* ═══ New Items Pill (Change 2) ═══ */}
+          {newItemCount > 0 && (
+            <TouchableOpacity
+              onPress={() => {
+                setNewItemCount(0);
+                isScrolledDownRef.current = false;
+                setTimeout(() => {
+                  try { feedListRef.current?.scrollToOffset({ offset: 0, animated: true }); } catch {}
+                }, 50);
+              }}
+              activeOpacity={0.85}
+              style={{
+                position: 'absolute', top: 180, alignSelf: 'center', zIndex: 100,
+                backgroundColor: colors.accent.primary, borderRadius: 20,
+                paddingHorizontal: 16, paddingVertical: 10,
+                flexDirection: 'row', alignItems: 'center', gap: 6,
+                shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+                elevation: 10,
+              }}
+            >
+              <Ionicons name="arrow-up" size={16} color="#FFF" />
+              <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '800' }}>
+                {newItemCount} New Item{newItemCount > 1 ? 's' : ''} ↑
+              </Text>
+            </TouchableOpacity>
           )}
         </View>
 
