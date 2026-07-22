@@ -59,7 +59,7 @@
                 </ui:Button>
 
                 <!-- Count pill -->
-                <Border CornerRadius="20" Padding="14,6" VerticalAlignment="Center">
+                <Border CornerRadius="16" Padding="14,6" VerticalAlignment="Center">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                             <GradientStop Color="#0A8B5CF6" Offset="0"/>
@@ -72,7 +72,7 @@
         </Grid>
 
         <!-- ═══ Info Banner ═══ -->
-        <Border Grid.Row="1" CornerRadius="10" Padding="14,8" Margin="0,0,0,12"
+        <Border Grid.Row="1" CornerRadius="12" Padding="14,8" Margin="0,0,0,12"
                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
             <StackPanel Orientation="Horizontal">
@@ -98,7 +98,7 @@
                     <ItemsControl x:Name="ShortcutsList">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type classes:TextShortcut}">
-                                <Border Margin="2,2" CornerRadius="10" Padding="10,8"
+                                <Border Margin="2,2" CornerRadius="12" Padding="10,8"
                                         Background="Transparent" BorderBrush="Transparent" BorderThickness="1">
                                     <Border.Style>
                                         <Style TargetType="Border">
@@ -207,7 +207,7 @@
 
         <!-- ═══ Bottom: Add New Shortcut Bar ═══ -->
         <Grid x:Name="AddShortcutPanel" Grid.Row="3" Margin="0,10,0,0" Visibility="Collapsed">
-            <Border CornerRadius="10" Padding="12,8"
+            <Border CornerRadius="12" Padding="12,8"
                     Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
                     BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                 <StackPanel>

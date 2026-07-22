@@ -13,7 +13,7 @@ call npx expo prebuild --platform android --clean
 echo.
 echo Restoring SDK Routes...
 cd android
-echo sdk.dir=C\:\\Users\\Shivendra\\AppData\\Local\\Android\\Sdk>local.properties
+echo sdk.dir=%LOCALAPPDATA:\=\\%\\Android\\Sdk>local.properties
 
 echo.
 echo Appending performance configs to gradle.properties...

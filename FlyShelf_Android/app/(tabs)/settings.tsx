@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import AppErrorBoundary from '../../components/AppErrorBoundary';
 import * as Haptics from 'expo-haptics';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Switch, NativeModules, ScrollView, ActivityIndicator, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,7 +25,7 @@ const VERSION_URL = 'https://raw.githubusercontent.com/shdra06/FlyShelf/main/ver
 
 // StepSlider extracted to components/StepSlider.tsx
 
-export default function SettingsScreen() {
+function SettingsScreenInner() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { pcLocalIp, setPcLocalIp, isGlobalSyncEnabled, setGlobalSyncEnabled, deviceName, setDeviceName, isFloatingBallEnabled, setFloatingBallEnabled, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, syncPreferences, setSyncPreference, getSyncPrefsForDevice } = useSettings();
@@ -702,3 +703,10 @@ const createStyles = (c: Record<string, any>) => StyleSheet.create({
   },
 });
 
+export default function SettingsScreen() {
+  return (
+    <AppErrorBoundary fallbackTitle="Settings screen crashed">
+      <SettingsScreenInner />
+    </AppErrorBoundary>
+  );
+}

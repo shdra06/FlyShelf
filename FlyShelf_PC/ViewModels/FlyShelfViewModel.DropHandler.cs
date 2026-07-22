@@ -36,6 +36,7 @@ namespace FlyShelf.ViewModels
             string? text = null;
             BitmapSource? bitmap = null;
 
+            // ═══ PHASE 1: Extract file paths (cheap COM calls) ═══
             try
             {
                 if (data.GetDataPresent(DataFormats.FileDrop))
@@ -57,7 +58,17 @@ namespace FlyShelf.ViewModels
                         foreach (var l in lines)
                         {
                             string p = l.Trim();
-                            if (p.StartsWith("file:///", StringComparison.Ordinal)) p = new Uri(p).LocalPath;
+                            if (p.StartsWith("file:///", StringComparison.Ordinal))
+                            {
+                                try
+                                {
+                                    p = new Uri(p).LocalPath;
+                                    // FIX: percent-encoded colon (%3A) → "/c:/path" instead of "C:\path"
+                                    if (p.Length >= 3 && p[0] == '/' && char.IsLetter(p[1]) && p[2] == ':')
+                                        p = p.Substring(1);
+                                }
+                                catch { continue; }
+                            }
                             if (File.Exists(p) || Directory.Exists(p)) parsedPaths.Add(p);
                         }
                         if (parsedPaths.Count > 0) files = parsedPaths.ToArray();
@@ -66,19 +77,38 @@ namespace FlyShelf.ViewModels
             }
             catch { } // Best-effort: failure is acceptable
 
+            // ═══ PHASE 2: Check for bitmap data presence (cheap) ═══
+            // Only check GetDataPresent (lightweight COM probe) on UI thread.
+            // Defer the expensive GetData (full bitmap decode) to background if files are empty.
+            bool hasBitmapData = false;
             try
             {
-                if (data.GetDataPresent(DataFormats.Bitmap))
-                    bitmap = data.GetData(DataFormats.Bitmap) as BitmapSource;
-                if (bitmap == null && data.GetDataPresent(typeof(BitmapSource)))
-                    bitmap = data.GetData(typeof(BitmapSource)) as BitmapSource;
-                if (bitmap == null && data.GetDataPresent(DataFormats.Dib))
-                    bitmap = data.GetData(DataFormats.Bitmap) as BitmapSource;
-
-                if (bitmap != null && bitmap.CanFreeze && !bitmap.IsFrozen)
-                    bitmap.Freeze(); // Frozen to be safe for background threads
+                hasBitmapData = data.GetDataPresent(DataFormats.Bitmap) ||
+                                data.GetDataPresent(typeof(BitmapSource)) ||
+                                data.GetDataPresent(DataFormats.Dib);
             }
-            catch { } // Best-effort: failure is acceptable
+            catch (Exception ex) { Logger.LogAction("DROP", $"Non-critical: {ex.Message}"); }
+
+            // If we have files, skip the expensive bitmap extraction entirely —
+            // file-based images will be loaded from disk (much faster than OLE decode).
+            if (hasBitmapData && (files == null || files.Length == 0))
+            {
+                // Must extract bitmap on STA thread (OLE COM requirement),
+                // but do it ONLY when there are no file paths available.
+                try
+                {
+                    if (data.GetDataPresent(DataFormats.Bitmap))
+                        bitmap = data.GetData(DataFormats.Bitmap) as BitmapSource;
+                    if (bitmap == null && data.GetDataPresent(typeof(BitmapSource)))
+                        bitmap = data.GetData(typeof(BitmapSource)) as BitmapSource;
+                    if (bitmap == null && data.GetDataPresent(DataFormats.Dib))
+                        bitmap = data.GetData(DataFormats.Bitmap) as BitmapSource;
+
+                    if (bitmap != null && bitmap.CanFreeze && !bitmap.IsFrozen)
+                        bitmap.Freeze(); // Frozen to be safe for background threads
+                }
+                catch { } // Best-effort: failure is acceptable
+            }
 
             if (bitmap == null && (files == null || files.Length == 0))
             {
@@ -99,6 +129,10 @@ namespace FlyShelf.ViewModels
 
         internal void HandleDropInternal(string[]? files, BitmapSource? bitmap, string? text, bool forceClipboardSync, bool skipCloudSync, string? sourceDevice = null, string? sourceDeviceType = null, string? transferMethod = null, string? sourceAppName = null, BitmapSource? sourceAppIcon = null)
         {
+            // H-04/H-06: Freeze sourceAppIcon at entry so it's thread-safe for all downstream usage
+            if (sourceAppIcon != null && sourceAppIcon.CanFreeze && !sourceAppIcon.IsFrozen)
+                sourceAppIcon.Freeze();
+
             if (files != null && files.Length > 0)
             {
                 // ═══ THEME IMPORT: Intercept .flyshelf-theme files ═══
@@ -498,6 +532,7 @@ namespace FlyShelf.ViewModels
                             int checkCount = Math.Min(10, DroppedItems.Count);
                             for (int i = 1; i < checkCount; i++) // Start at index 1 because current item is at index 0
                             {
+                                if (i >= DroppedItems.Count) break; // Bounds safety: collection may have been mutated
                                 var existing = DroppedItems[i];
                                 if (existing != null && existing.ItemType == ClipboardItemType.Image)
                                 {
@@ -618,7 +653,19 @@ namespace FlyShelf.ViewModels
                         if (possiblePath.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
                         {
                             wasQuoted = false; // Override: file:// URIs are always file references
-                            try { possiblePath = new Uri(possiblePath).LocalPath; } catch { } // Best-effort: failure is acceptable
+                            try
+                            {
+                                possiblePath = new Uri(possiblePath).LocalPath;
+                                // FIX: When colon is percent-encoded (file:///c%3A/path),
+                                // Uri.LocalPath returns "/c:/path" instead of "C:\path".
+                                // Strip the leading slash for drive-letter paths.
+                                if (possiblePath.Length >= 3 && possiblePath[0] == '/' &&
+                                    char.IsLetter(possiblePath[1]) && possiblePath[2] == ':')
+                                {
+                                    possiblePath = possiblePath.Substring(1);
+                                }
+                            }
+                            catch { } // Best-effort: failure is acceptable
                         }
 
                         // Only resolve as a file if the text was NOT quoted
@@ -630,7 +677,12 @@ namespace FlyShelf.ViewModels
                             // Trim trailing whitespace/newlines that may sneak in from drag payloads
                             possiblePath = possiblePath.TrimEnd();
                             
-                            if (File.Exists(possiblePath))
+                            // Skip UNC paths to avoid 30-second SMB timeout on File.Exists
+                            if (possiblePath.StartsWith(@"\\", StringComparison.Ordinal))
+                            {
+                                // UNC path — treat as plain text rather than risk network hang
+                            }
+                            else if (File.Exists(possiblePath))
                             {
                                 // ═══ CONTENT vs DEV FILE DISTINCTION ═══
                                 // When a path is copied as TEXT (not dragged from Explorer), only
@@ -950,23 +1002,7 @@ namespace FlyShelf.ViewModels
             }
         }
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-        public struct SHFILEINFO
-        {
-            public IntPtr hIcon;
-            public int iIcon;
-            public uint dwAttributes;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
-            public string szDisplayName;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
-            public string szTypeName;
-        };
-
-        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
-        public static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbSizeFileInfo, uint uFlags);
-        [DllImport("user32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        static extern bool DestroyIcon(IntPtr hIcon);
+        // P/Invoke declarations and SHFILEINFO struct centralized in NativeMethods.cs
 
         /// <summary>
         /// Reliably loads an image file as a thumbnail BitmapImage of specified decodeWidth.
@@ -980,23 +1016,24 @@ namespace FlyShelf.ViewModels
             try
             {
                 var fi = new FileInfo(filePath);
-                if (fi.Length > 100_000_000)
+                if (fi.Length > 10_000_000) // 10 MB cap — thumbnails don't need 100 MB files
                 {
                     System.Diagnostics.Debug.WriteLine($"[DROP] Skipped thumbnail — file too large ({fi.Length} bytes): {filePath}");
                     return null;
                 }
-                byte[] fileBytes = File.ReadAllBytes(filePath);
+                // PERF: Use FileStream instead of ReadAllBytes to avoid LOH allocation.
+                // CacheOption.OnLoad ensures the stream is fully consumed before disposal.
                 var bmp = new BitmapImage();
-                using (var ms = new MemoryStream(fileBytes))
+                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                 {
                     bmp.BeginInit();
                     bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
+                    bmp.StreamSource = fs;
                     bmp.CacheOption = BitmapCacheOption.OnLoad;
                     if (decodeWidth > 0)
                     {
                         bmp.DecodePixelWidth = decodeWidth;
                     }
-                    bmp.StreamSource = ms;
                     bmp.EndInit();
                 }
                 bmp.Freeze();
@@ -1031,8 +1068,8 @@ namespace FlyShelf.ViewModels
             {
                 try
                 {
-                    SHFILEINFO shinfo = new SHFILEINFO();
-                    IntPtr res = SHGetFileInfo(filePath, 0, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON);
+                    var shinfo = new NativeMethods.SHFILEINFO();
+                    IntPtr res = NativeMethods.SHGetFileInfo(filePath, 0, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON);
 
                     if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
                     {
@@ -1048,7 +1085,7 @@ namespace FlyShelf.ViewModels
                         }
                         finally
                         {
-                            DestroyIcon(shinfo.hIcon);
+                            NativeMethods.DestroyIcon(shinfo.hIcon);
                         }
                     }
                 }
@@ -1060,8 +1097,8 @@ namespace FlyShelf.ViewModels
             // on whichever app is registered as the default handler for this extension.
             try
             {
-                SHFILEINFO shinfo = new SHFILEINFO();
-                IntPtr res = SHGetFileInfo(filePath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
+                var shinfo = new NativeMethods.SHFILEINFO();
+                IntPtr res = NativeMethods.SHGetFileInfo(filePath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
 
                 if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
                 {
@@ -1077,11 +1114,11 @@ namespace FlyShelf.ViewModels
                     }
                     finally
                     {
-                        DestroyIcon(shinfo.hIcon);
+                        NativeMethods.DestroyIcon(shinfo.hIcon);
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { Logger.LogAction("DROP", $"Non-critical: {ex.Message}"); }
 
             // LAST RESORT: If SHGetFileInfo failed even with SHGFI_USEFILEATTRIBUTES
             // (e.g. malformed path, null bytes, very long path), retry with a clean
@@ -1092,8 +1129,8 @@ namespace FlyShelf.ViewModels
                 try
                 {
                     string dummyPath = "file" + ext; // e.g. "file.pdf"
-                    SHFILEINFO shinfo = new SHFILEINFO();
-                    IntPtr res = SHGetFileInfo(dummyPath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
+                    var shinfo = new NativeMethods.SHFILEINFO();
+                    IntPtr res = NativeMethods.SHGetFileInfo(dummyPath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
 
                     if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
                     {
@@ -1109,7 +1146,7 @@ namespace FlyShelf.ViewModels
                         }
                         finally
                         {
-                            DestroyIcon(shinfo.hIcon);
+                            NativeMethods.DestroyIcon(shinfo.hIcon);
                         }
                     }
                 }
@@ -1145,6 +1182,10 @@ namespace FlyShelf.ViewModels
             // Activate code classification ONLY when the sample meets a minimum length (e.g. 15 characters)
             if (text.Length < 15) return false;
 
+            // Guard: skip expensive regex classification for extremely large text (> 50 KB)
+            // to avoid catastrophic backtracking in _rxCode's 60+ alternation pattern
+            if (text.Length > 50000) return false;
+
             // 2. 1st Priority: Strong Entry Points & Function Calling / Signature Detections
             // If the text contains these explicit identifiers, we prioritize marking it as code immediately.
             bool hasEntryPoint = text.Contains("int main", StringComparison.Ordinal) || 
@@ -1165,7 +1206,7 @@ namespace FlyShelf.ViewModels
             {
                 if (_rxFunction.IsMatch(text)) return true;
             }
-            catch { }
+            catch (Exception ex) { Logger.LogAction("DROP", $"Non-critical: {ex.Message}"); }
 
             // 3. Fallback: Structural & Punctuation Constraints
             var lines = text.Split(NewLineChars, StringSplitOptions.RemoveEmptyEntries);

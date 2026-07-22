@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
-import { fetchWithTimeout } from './networkHelpers';
+import { fetchWithTimeout, getSubnet } from './networkHelpers'; // Audit Task 2: getSubnet imported from canonical source
 import { syncLog } from './debugLog';
 
 const LAN_CACHE_KEY = '@flyshelf_lan_cache';
@@ -111,11 +111,7 @@ export const discoverPcOnLan = async (myIp?: string): Promise<DiscoveryResult | 
   // ── Phase 2 & 3: Subnet scan ──
   if (!myIp) return null;
 
-  const getSubnet = (ip: string): string => {
-    const clean = ip.replace(/^https?:\/\//, '').split(':')[0];
-    const parts = clean.split('.');
-    return parts.length >= 3 ? `${parts[0]}.${parts[1]}.${parts[2]}.` : '';
-  };
+  // Audit Task 2: getSubnet now imported from networkHelpers.ts (canonical source)
 
   const subnet = getSubnet(myIp);
   if (!subnet) return null;

@@ -23,7 +23,7 @@ namespace FlyShelf.Classes
 {
     public partial class NetworkSyncServer
     {
-        private void ServeHtml(HttpListenerResponse res)
+        private async Task ServeHtml(HttpListenerResponse res)
         {
             try
             {
@@ -31,7 +31,7 @@ namespace FlyShelf.Classes
                 Logger.LogAction("HTML", $"Serving from: {path} (exists: {File.Exists(path)})");
                 if (File.Exists(path))
                 {
-                    byte[] buffer = File.ReadAllBytes(path);
+                    byte[] buffer = await File.ReadAllBytesAsync(path);
                     res.ContentType = "text/html; charset=utf-8";
                     res.ContentLength64 = buffer.Length;
                     res.OutputStream.Write(buffer, 0, buffer.Length);
@@ -49,25 +49,26 @@ namespace FlyShelf.Classes
         }
 
         // ═ ═ ═ RESPONSE CACHE: Avoid re-serializing on rapid polls ═ ═ ═
-        private volatile byte[]? _cachedSyncJson = null;
-        private long _cachedSyncTimestamp = 0;
-        private int _cachedItemCount = 0;
+        // Sealed record class for atomic reference swap — ensures json/timestamp/count are always consistent
+        private sealed record SyncCacheEntry(byte[] Json, long Timestamp, int ItemCount);
+        private volatile SyncCacheEntry? _syncCache = null;
         private const int SYNC_CACHE_TTL_MS = 500; // Cache for 500ms — fast invalidation for real-time sync
 
-        private void ServeClipboardData(HttpListenerResponse res)
+        // [FIX H-05]: Changed from async void to async Task — async void crashes the process on exception
+        private async Task ServeClipboardData(HttpListenerResponse res)
         {
             try
             {
                 long now = Environment.TickCount64;
                 int currentCount = 0;
 
-                // Use cached response if still fresh — check count via the cached value to avoid dispatcher roundtrip
-                var cached = _cachedSyncJson; // Capture reference to avoid TOCTOU race
-                if (cached != null && (now - _cachedSyncTimestamp) < SYNC_CACHE_TTL_MS)
+                // Use cached response if still fresh — atomic reference read ensures consistency
+                var cached = _syncCache;
+                if (cached != null && (now - cached.Timestamp) < SYNC_CACHE_TTL_MS)
                 {
                     res.ContentType = "application/json; charset=utf-8";
-                    res.ContentLength64 = cached.Length;
-                    try { res.OutputStream.Write(cached, 0, cached.Length); } catch { } // Best-effort: failure is acceptable
+                    res.ContentLength64 = cached.Json.Length;
+                    try { res.OutputStream.Write(cached.Json, 0, cached.Json.Length); } catch { } // Best-effort: failure is acceptable
                     res.Close();
                     return;
                 }
@@ -78,7 +79,9 @@ namespace FlyShelf.Classes
                 List<(string? rawContent, string? fileName, string? filePath, string? extension,
                       ClipboardItemType itemType, DateTime dateCopied, bool isPassword)>? snapshot = null;
                 string deviceId = "";
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher == null) { res.Close(); return; }
+                await dispatcher.InvokeAsync(() =>
                 {
                     currentCount = _viewModel.DroppedItems.Count;
                     deviceId = SettingsManager.Current.DeviceId ?? "PC";
@@ -87,7 +90,7 @@ namespace FlyShelf.Classes
                         .Take(15)
                         .Select(x => (x.RawContent, x.FileName, x.FilePath, x.Extension, x.ItemType, x.DateCopied, x.IsPassword))
                         .ToList();
-                }, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(2));
+                }, System.Windows.Threading.DispatcherPriority.Normal);
 
                 // Build payload + serialize on the background thread (not UI thread)
                 if (snapshot != null)
@@ -121,12 +124,12 @@ namespace FlyShelf.Classes
                     });
 
                     string json = JsonSerializer.Serialize(payload);
-                    _cachedSyncJson = Encoding.UTF8.GetBytes(json);
-                    _cachedSyncTimestamp = now;
-                    _cachedItemCount = currentCount;
+                    var jsonBytes = Encoding.UTF8.GetBytes(json);
+                    _syncCache = new SyncCacheEntry(jsonBytes, now, currentCount);
                 }
 
-                var freshCache = _cachedSyncJson!; // Capture reference after Dispatcher.Invoke
+                var freshCache = _syncCache?.Json;
+                if (freshCache == null) { res.Close(); return; }
                 res.ContentType = "application/json; charset=utf-8";
                 res.ContentLength64 = freshCache.Length;
                 try { res.OutputStream.Write(freshCache, 0, freshCache.Length); } catch { } // Best-effort: failure is acceptable
@@ -254,7 +257,7 @@ namespace FlyShelf.Classes
             res.Close();
 
             // Invalidate sync cache so next poll picks up the new item
-            _cachedSyncJson = null;
+            _syncCache = null;
 
             // Process asynchronously on UI thread (fire-and-forget)
             string capturedText = text;
@@ -353,8 +356,8 @@ namespace FlyShelf.Classes
                 _viewModel.InsertWithDedup(clip);
                 if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
 
-                // Persist history so the synced text survives app restarts
-                _viewModel.PersistHistoryPublic();
+                // PERF: throttled — network sync is non-critical
+                _viewModel.SchedulePersistHistoryPublic();
                 
                 // ECHO PREVENTION: Mark this text as cloud-sourced so the clipboard monitor
                 // doesn't re-push it to Firebase when we set the Windows clipboard below.
@@ -781,8 +784,8 @@ namespace FlyShelf.Classes
                             _viewModel.InsertWithDedup(clip);
                             if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
 
-                            // Persist history so the synced archive item survives app restarts
-                            _viewModel.PersistHistoryPublic();
+                            // PERF: throttled — network sync is non-critical
+                            _viewModel.SchedulePersistHistoryPublic();
                         }
                         catch (Exception ex) { Logger.LogAction("ARCHIVE", $"Clipboard set failed: {ex.Message}"); }
                     });
@@ -994,8 +997,113 @@ namespace FlyShelf.Classes
         }
 
         // ═══════════════════════════════════════════════════════════
+        // NETWORK DASHBOARD API
+        // ═══════════════════════════════════════════════════════════
+
+        private static readonly DateTime _serverStartTime = DateTime.UtcNow;
+
+        private void ServeNetworkDashboard(HttpListenerResponse res)
+        {
+            try
+            {
+                // Build peers array
+                var peersArray = new List<object>();
+                var peerMgr = PeerManager.Instance;
+                if (peerMgr != null)
+                {
+                    foreach (var kvp in peerMgr.ConnectedPeers)
+                    {
+                        var p = kvp.Value;
+                        peersArray.Add(new
+                        {
+                            deviceId = p.DeviceId,
+                            deviceName = p.DeviceName,
+                            transport = p.Transport,
+                            isAlive = p.IsAlive,
+                            lastSeen = p.LastSeen.ToString("o", System.Globalization.CultureInfo.InvariantCulture),
+                            transferPort = p.TransferPort
+                        });
+                    }
+                }
+
+                // Cloudflare status
+                string cfStatus = "Inactive";
+                try
+                {
+                    string cfUrl = _cfDaemon?.GlobalUrl ?? "";
+                    if (!string.IsNullOrEmpty(cfUrl) && cfUrl.Contains("trycloudflare.com", StringComparison.Ordinal))
+                        cfStatus = "Active";
+                }
+                catch { /* Best-effort */ }
+
+                // Total transfers
+                int totalTransfers = TransferHistory.Instance?.Entries?.Count ?? 0;
+
+                // Uptime
+                double uptimeMinutes = (DateTime.UtcNow - _serverStartTime).TotalMinutes;
+
+                var dashboard = new
+                {
+                    peers = peersArray,
+                    serverStatus = "Online",
+                    cloudflareStatus = cfStatus,
+                    totalTransfers = totalTransfers,
+                    uptimeMinutes = (int)uptimeMinutes
+                };
+
+                string json = JsonSerializer.Serialize(dashboard);
+                byte[] data = Encoding.UTF8.GetBytes(json);
+
+                res.ContentType = "application/json; charset=utf-8";
+                res.ContentLength64 = data.Length;
+                try { res.OutputStream.Write(data, 0, data.Length); } catch { } // Best-effort
+                res.Close();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("DASHBOARD", $"ServeNetworkDashboard failed: {ex.Message}");
+                try { res.StatusCode = 500; } catch { }
+                try { res.Close(); } catch { }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // SPEED TEST RECEIVER — accepts payload from LanSpeedTest clients
+        // ═══════════════════════════════════════════════════════════
+
+        private async Task HandleSpeedTest(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            try
+            {
+                // Consume the payload (discard) — the client is measuring upload throughput
+                byte[] buffer = new byte[65536];
+                long totalRead = 0;
+                int read;
+                while ((read = await req.InputStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    totalRead += read;
+                    if (totalRead > 5_000_000) break; // Safety cap at 5MB
+                }
+
+                byte[] ok = Encoding.UTF8.GetBytes($"{{\"received\":{totalRead}}}");
+                res.StatusCode = 200;
+                res.ContentType = "application/json";
+                res.ContentLength64 = ok.Length;
+                res.OutputStream.Write(ok, 0, ok.Length);
+                res.Close();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("SPEEDTEST", $"HandleSpeedTest failed: {ex.Message}");
+                try { res.StatusCode = 500; } catch { }
+                try { res.Close(); } catch { }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
         // NOTES & TODOS SYNC
         // ═══════════════════════════════════════════════════════════
+
 
         private byte[]? _cachedNotesJson = null;
         private long _cachedNotesTimestamp = 0;

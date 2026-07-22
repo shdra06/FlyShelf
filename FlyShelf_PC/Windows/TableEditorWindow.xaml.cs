@@ -80,6 +80,7 @@ namespace FlyShelf.Windows
                 bitmap.BeginInit();
                 bitmap.UriSource = new Uri(_imagePath, UriKind.Absolute);
                 bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.DecodePixelWidth = 2048;
                 bitmap.EndInit();
                 bitmap.Freeze();
                 SourceImage.Source = bitmap;
@@ -132,10 +133,11 @@ namespace FlyShelf.Windows
             {
                 e.Handled = true;
                 double scale = e.Delta > 0 ? 1.15 : 0.87;
-                var transform = SourceImage.LayoutTransform as ScaleTransform ?? new ScaleTransform(1, 1);
+                // [FIX ANIM-9]: Use RenderTransform instead of LayoutTransform to skip layout passes during zoom
+                var transform = SourceImage.RenderTransform as ScaleTransform ?? new ScaleTransform(1, 1);
                 double newScaleX = Math.Clamp(transform.ScaleX * scale, 0.2, 5.0);
                 double newScaleY = Math.Clamp(transform.ScaleY * scale, 0.2, 5.0);
-                SourceImage.LayoutTransform = new ScaleTransform(newScaleX, newScaleY);
+                SourceImage.RenderTransform = new ScaleTransform(newScaleX, newScaleY);
             }
         }
 

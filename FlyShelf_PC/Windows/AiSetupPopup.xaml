@@ -46,7 +46,7 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="btnBorder"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="10"
+                                CornerRadius="12"
                                 Padding="{TemplateBinding Padding}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 BorderBrush="{TemplateBinding BorderBrush}">
@@ -224,7 +224,7 @@
                                         <Border Background="{TemplateBinding Background}"
                                                 BorderBrush="{TemplateBinding BorderBrush}"
                                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                                CornerRadius="10,0,0,10"
+                                                CornerRadius="12,0,0,12"
                                                 Padding="{TemplateBinding Padding}">
                                             <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"/>
                                         </Border>
@@ -243,7 +243,7 @@
                                         <Border Background="{TemplateBinding Background}"
                                                 BorderBrush="{TemplateBinding BorderBrush}"
                                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                                CornerRadius="10,0,0,10"
+                                                CornerRadius="12,0,0,12"
                                                 Padding="{TemplateBinding Padding}">
                                             <Grid>
                                                 <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"/>
@@ -278,7 +278,7 @@
                                     <ControlTemplate TargetType="Button">
                                         <Border x:Name="eyeBorder" Background="#0F1D32"
                                                 BorderBrush="#1E293B" BorderThickness="1.5,1.5,1.5,1.5"
-                                                CornerRadius="0,10,10,0" Cursor="Hand">
+                                                CornerRadius="0,12,12,0" Cursor="Hand">
                                             <TextBlock Text="{TemplateBinding Content}" FontSize="14"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
@@ -312,7 +312,7 @@
                                     <Border Background="{TemplateBinding Background}"
                                             BorderBrush="{TemplateBinding BorderBrush}"
                                             BorderThickness="{TemplateBinding BorderThickness}"
-                                            CornerRadius="10"
+                                            CornerRadius="12"
                                             Padding="{TemplateBinding Padding}">
                                         <Grid>
                                             <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"/>

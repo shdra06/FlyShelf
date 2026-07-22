@@ -106,6 +106,38 @@ namespace FlyShelf.Classes
             return false;
         }
 
+        /// <summary>Uses pre-computed lowercase text to avoid allocating ToLowerInvariant per call.</summary>
+        internal static bool IsMatchWithLower(string query, string text, string precomputedLower)
+        {
+            if (string.IsNullOrEmpty(query) || string.IsNullOrEmpty(text)) return false;
+            string q = query.Trim();
+            if (q.Length == 0) return true;
+            // Fast path: exact substring match
+            if (precomputedLower.Contains(q.ToLowerInvariant(), StringComparison.Ordinal)) return true;
+            // Fuzzy path
+            string[] queryWords = SplitWords(q);
+            if (queryWords.Length == 0) return true;
+            // Check all words present
+            bool allPresent = true;
+            foreach (var w in queryWords)
+            {
+                if (!precomputedLower.Contains(w, StringComparison.Ordinal)) { allPresent = false; break; }
+            }
+            if (allPresent) return true;
+            // Trigram fuzzy fallback
+            string[] textWords = SplitWords(text);
+            foreach (var qw in queryWords)
+            {
+                bool found = false;
+                foreach (var tw in textWords)
+                {
+                    if (TrigramSimilarity(qw, tw) > 0.3) { found = true; break; }
+                }
+                if (!found) return false;
+            }
+            return true;
+        }
+
         /// <summary>
         /// Returns a relevance score (0.0 to 1.0) indicating how well <paramref name="text"/>
         /// matches <paramref name="query"/>. Higher = better match.
@@ -177,6 +209,43 @@ namespace FlyShelf.Classes
             return 0.0;
         }
 
+        internal static double ScoreWithLower(string query, string text, string precomputedLower)
+        {
+            if (string.IsNullOrEmpty(query) || string.IsNullOrEmpty(text)) return 0;
+            string q = query.Trim();
+            if (q.Length == 0) return 1.0;
+            double score = 0;
+            string qLower = q.ToLowerInvariant();
+            // Exact match bonus
+            int idx = precomputedLower.IndexOf(qLower, StringComparison.Ordinal);
+            if (idx >= 0)
+            {
+                score = 1.0;
+                if (idx == 0) score += 0.5;
+                double ratio = (double)q.Length / text.Length;
+                score += ratio * 0.3;
+                return score;
+            }
+            // Word match scoring
+            string[] queryWords = SplitWords(q);
+            if (queryWords.Length == 0) return 1.0;
+            int matchCount = 0;
+            double simSum = 0;
+            string[] textWords = SplitWords(text);
+            foreach (var qw in queryWords)
+            {
+                double bestSim = 0;
+                foreach (var tw in textWords)
+                {
+                    double sim = TrigramSimilarity(qw, tw);
+                    if (sim > bestSim) bestSim = sim;
+                }
+                if (bestSim > 0.3) { matchCount++; simSum += bestSim; }
+            }
+            if (matchCount > 0) score = (simSum / queryWords.Length) * 0.8;
+            return score;
+        }
+
         /// <summary>
         /// Checks if any of the given texts match the query. Convenience overload.
         /// </summary>
@@ -188,6 +257,11 @@ namespace FlyShelf.Classes
                     return true;
             }
             return false;
+        }
+
+        public static bool IsMatchAny(string query, string lowerFileName, string lowerContent, string rawFileName, string rawContent)
+        {
+            return IsMatchWithLower(query, rawFileName, lowerFileName) || IsMatchWithLower(query, rawContent, lowerContent);
         }
 
         /// <summary>
@@ -205,6 +279,14 @@ namespace FlyShelf.Classes
                 }
             }
             return best;
+        }
+
+        public static double ScoreBest(string query, string lowerFileName, string lowerContent, string rawFileName, string rawContent)
+        {
+            return Math.Max(
+                ScoreWithLower(query, rawFileName, lowerFileName),
+                ScoreWithLower(query, rawContent, lowerContent)
+            );
         }
 
         // ═══════════════════════════════════════════════════════════

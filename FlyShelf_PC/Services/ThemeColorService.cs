@@ -6,6 +6,7 @@
 using System;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FlyShelf.Helpers;
 
 namespace FlyShelf.Services
 {
@@ -52,7 +53,7 @@ namespace FlyShelf.Services
             }
             catch { } // Best-effort: failure is acceptable
 
-            return Color.FromRgb(99, 102, 241); // Fallback indigo
+            return ThemeColors.IndigoAccent; // Fallback indigo
         }
 
         /// <summary>Converts an RGB color to HSL components.</summary>

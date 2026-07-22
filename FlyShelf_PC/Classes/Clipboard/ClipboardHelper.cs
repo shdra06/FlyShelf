@@ -40,6 +40,8 @@ namespace FlyShelf.Classes
                         {
                             // M1 FIX: Reduced from 15ms to 5ms. Can't use async here because
                             // callers go through Dispatcher.Invoke which requires synchronous execution.
+                            // [FIX M-20]: 5ms sleep on UI thread is acceptable — async Task.Delay is
+                            // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
                             System.Threading.Thread.Sleep(5);
                         }
                     }
@@ -85,6 +87,8 @@ namespace FlyShelf.Classes
                         {
                             // M1 FIX: Reduced from 15ms to 5ms. Can't use async here because
                             // callers go through Dispatcher.Invoke which requires synchronous execution.
+                            // [FIX M-20]: 5ms sleep on UI thread is acceptable — async Task.Delay is
+                            // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
                             System.Threading.Thread.Sleep(5);
                         }
                     }
@@ -118,6 +122,8 @@ namespace FlyShelf.Classes
                         {
                             // M1 FIX: Reduced from 15ms to 5ms. Can't use async here because
                             // callers go through Dispatcher.Invoke which requires synchronous execution.
+                            // [FIX M-20]: 5ms sleep on UI thread is acceptable — async Task.Delay is
+                            // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
                             System.Threading.Thread.Sleep(5);
                         }
                     }
@@ -157,6 +163,8 @@ namespace FlyShelf.Classes
                         {
                             // M1 FIX: Reduced from 15ms to 5ms. Can't use async here because
                             // callers go through Dispatcher.Invoke which requires synchronous execution.
+                            // [FIX M-20]: 5ms sleep on UI thread is acceptable — async Task.Delay is
+                            // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
                             System.Threading.Thread.Sleep(5);
                         }
                     }
@@ -196,6 +204,8 @@ namespace FlyShelf.Classes
                         {
                             // M1 FIX: Reduced from 15ms to 5ms. Can't use async here because
                             // callers go through Dispatcher.Invoke which requires synchronous execution.
+                            // [FIX M-20]: 5ms sleep on UI thread is acceptable — async Task.Delay is
+                            // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
                             System.Threading.Thread.Sleep(5);
                         }
                     }
@@ -210,6 +220,14 @@ namespace FlyShelf.Classes
             });
         }
 
+        // [NOTE BTN-11]: Dispatcher.Invoke (synchronous) is intentional and MUST NOT be changed
+        // to InvokeAsync. Reasons:
+        // 1. All callers (SafeSetText, SafeSetImage, etc.) return T from the dispatched action —
+        //    InvokeAsync would require all callers to become async, cascading through the call chain.
+        // 2. Clipboard operations use COM OLE APIs that require STA thread marshaling —
+        //    asynchronous dispatch risks COM threading violations and clipboard data corruption.
+        // 3. The 5ms retry sleep inside dispatched actions is acceptable on the UI thread (see M-20).
+        // [FIX STABLE-2]: Added timeout to prevent indefinite hang if UI thread is blocked
         private static T ExecuteOnDispatcher<T>(Func<T> action)
         {
             var app = Application.Current;
@@ -222,9 +240,20 @@ namespace FlyShelf.Classes
             {
                 return action();
             }
-            else
+
+            try
             {
-                return app.Dispatcher.Invoke(action);
+                return app.Dispatcher.Invoke(action, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(3));
+            }
+            catch (TimeoutException)
+            {
+                System.Diagnostics.Debug.WriteLine("ClipboardHelper: Dispatcher.Invoke timed out after 3s");
+                return default!;
+            }
+            catch (System.Threading.Tasks.TaskCanceledException)
+            {
+                // App is shutting down
+                return default!;
             }
         }
 
@@ -236,7 +265,10 @@ namespace FlyShelf.Classes
             }
             else
             {
-                Task.Delay(delayMs).ContinueWith(_ => FlyShelf.MainWindow.SetWritingClipboard(false));
+                // [FIX H-01]: Route back to UI thread — SetWritingClipboard may touch UI state
+                _ = Task.Delay(delayMs).ContinueWith(_ => 
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(
+                        () => FlyShelf.MainWindow.SetWritingClipboard(false)));
             }
         }
     }

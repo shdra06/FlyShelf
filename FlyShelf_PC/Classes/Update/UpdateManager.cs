@@ -18,7 +18,8 @@ namespace FlyShelf.Classes
         private const string RELEASES_API = "https://api.github.com/repos/shdra06/FlyShelf/releases/latest";
         private const string VERSION_URL = "https://raw.githubusercontent.com/shdra06/FlyShelf/main/version.json";
 
-        private static readonly HttpClient _client = new HttpClient() { Timeout = TimeSpan.FromSeconds(15) };
+        // AUDIT Task 5: Use shared pool instance instead of per-class HttpClient (prevents socket exhaustion)
+        private static HttpClient _client => HttpClientPool.Default;
         private static readonly HttpClient _downloadClient = new HttpClient(new HttpClientHandler
         {
             AllowAutoRedirect = true,
@@ -682,16 +683,16 @@ namespace FlyShelf.Classes
                 Process.Start(psi);
 
                 // Exit current app — the new EXE is watching our PID
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
                 {
-                    System.Windows.Application.Current.Shutdown();
+                    System.Windows.Application.Current?.Shutdown();
                 });
             }
             catch (Exception ex)
             {
                 Logger.LogAction("UPDATE", $"Failed to launch self-updater: {ex.Message}");
                 StatusChanged?.Invoke("Update failed — could not launch updater.");
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                 {
                     FlyShelf.Windows.ToastWindow.ShowToast("Update failed — could not launch updater. Please try again.");
                 });

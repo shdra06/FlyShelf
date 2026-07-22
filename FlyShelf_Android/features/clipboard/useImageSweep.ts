@@ -56,7 +56,7 @@ export function useImageSweep(params: {
           await FileSystem.makeDirectoryAsync(SYNC_CACHE_BASE, { intermediates: true }).catch(() => {});
           const localUri = `${SYNC_CACHE_BASE}fb_img_${imgItem.id}.png`;
           const existing = await FileSystem.getInfoAsync(localUri);
-          if (existing.exists && (existing as any).size > 100) {
+          if (existing.exists && ('size' in existing && typeof (existing as any).size === 'number' && (existing as any).size > 100)) {
             setClips(prev => prev.map(c =>
               c.id === imgItem.id ? { ...c, Raw: localUri, CachedUri: localUri, _needsDownload: undefined } : c
             ));
@@ -142,7 +142,7 @@ export function useImageSweep(params: {
 
               if (status === 200) {
                 const info = await FileSystem.getInfoAsync(uri);
-                if (info.exists && (info as any).size > 100) {
+                if (info.exists && ('size' in info && typeof (info as any).size === 'number' && (info as any).size > 100)) {
                   setClips(prev => prev.map(c =>
                     c.id === imgItem.id ? { ...c, Raw: uri, CachedUri: uri, _needsDownload: undefined } : c
                   ));

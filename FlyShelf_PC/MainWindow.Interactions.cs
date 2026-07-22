@@ -32,19 +32,23 @@ namespace FlyShelf
         /// preventing race conditions where the clipboard monitor fires inside
         /// the OLE drag-drop message pump.
         /// </summary>
-        internal static bool _isDragging = false;
+        internal static volatile bool _isDragging = false;
 
         // ═══ Ctrl+Drag Path Mode State ═══
-        // When Ctrl is held during drag-out, the drag payload is swapped from
-        // the actual file to its file path as text. Releasing Ctrl reverts.
-        private DataObject _activeDragDataObj;
-        private string[] _dragOriginalFilePaths;
-        private string _dragOriginalText;
-        private string _dragFilePath;
+        // Both file data and path text are always prepared at drag start.
+        // Pressing Ctrl during drag live-swaps the DataObject from file→path.
+        // Releasing Ctrl reverts. No drag cancellation needed.
+        private DataObject? _activeDragDataObj;
+        private string[]? _dragOriginalFilePaths;
+        private string? _dragOriginalText;
+        private string? _dragFilePath;        // Always populated with the item's path
         private bool _dragCtrlPathMode = false;
+        private string? _dragCtrlPendingPath; // Path text for fallback paste (text-only items)
 
         private async void ShelfListView_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
+            try
+            {
             if (_justDeletedAnItem)
             {
                 _justDeletedAnItem = false;
@@ -121,6 +125,11 @@ namespace FlyShelf
                     if (clipboardObj != null)
                     {
                         await CopyItemAndPaste(clipboardObj, hideWindow: true);
+
+                        // ═══ Contextual Tip: Double-click to open ═══
+                        if (!string.IsNullOrEmpty(clipboardObj.FilePath))
+                            Windows.TipBadge.Show("doubleclick_hint", "🖱️ Double-click to open files directly");
+
                         e.Handled = true;
                     }
                 }
@@ -128,6 +137,11 @@ namespace FlyShelf
             catch (Exception ex)
             {
                 Classes.Logger.LogAction("PASTE_ERROR", ex.Message);
+            }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("MOUSEUP_FAULT", $"Unhandled: {ex.Message}");
             }
         }
 
@@ -149,9 +163,11 @@ namespace FlyShelf
                     var dropList = new System.Collections.Specialized.StringCollection();
                     dropList.Add(clipboardObj.FilePath);
                     dataObj.SetFileDropList(dropList);
-                    // For executable/script files (.bat, .cmd, .ps1, .exe), text fields should receive
-                    // the file PATH, not the script content — that's what users expect when pasting.
+                    // For Image items, ALWAYS use file path as text — never OCR text.
+                    // OCR text in RawContent would cause text fields to receive the OCR result
+                    // instead of the image file, which is almost never what the user wants.
                     bool shouldPastePath = clipboardObj.IsTerminalPreview ||
+                        clipboardObj.ItemType == ClipboardItemType.Image ||
                         (!string.IsNullOrEmpty(clipboardObj.Extension) && (
                             clipboardObj.Extension == ".EXE" || clipboardObj.Extension == ".MSI" ||
                             clipboardObj.Extension == ".LNK"));
@@ -179,7 +195,8 @@ namespace FlyShelf
                                 var bytes = System.IO.File.ReadAllBytes(clipboardObj.FilePath);
                                 var bi = new BitmapImage();
                                 bi.BeginInit();
-                                bi.StreamSource = new System.IO.MemoryStream(bytes);
+                                using var ms = new System.IO.MemoryStream(bytes); // PERF: dispose after OnLoad decode
+                                bi.StreamSource = ms;
                                 bi.CacheOption = BitmapCacheOption.OnLoad;
                                 bi.DecodePixelWidth = 1024; // Cap decode size to reduce UI thread stall
                                 bi.EndInit();
@@ -276,19 +293,9 @@ namespace FlyShelf
                 keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
             }
 
-            // PERF FIX: Defer MoveItemToTop to Background priority so it never blocks
-            // the paste-and-dismiss flow. ObservableCollection.Move() triggers expensive
-            // WPF VirtualizingStackPanel re-layout (de-virtualizing all containers between
-            // oldIndex and 0). By running it after the window is hidden and Ctrl+V has fired,
-            // the user sees zero lag — the collection mutation happens invisibly.
-            Dispatcher.InvokeAsync(() =>
-            {
-                try
-                {
-                    _viewModel.MoveItemToTop(clipboardObj);
-                }
-                catch (Exception ex) { Classes.Logger.LogAction("MOVE_TO_TOP_ERROR", ex.Message); }
-            }, System.Windows.Threading.DispatcherPriority.Background);
+            // NOTE: Intentionally NOT calling MoveItemToTop() here.
+            // Items should stay in their original position after being pasted/dragged out.
+            // Moving to top was disorienting and caused expensive VirtualizingStackPanel re-layout.
         }
 
         private void ShelfListView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -385,6 +392,10 @@ namespace FlyShelf
 
         private async void ShelfListView_MouseMove(object sender, MouseEventArgs e)
         {
+            // [FIX H-2]: Top-level guard for async void — a COM exception from DoDragDrop
+            // would otherwise crash the app since there's no caller to catch it.
+            try
+            {
             // --- Physical mouse movement detection for scroll hover optimization ---
             Point currentPos = e.GetPosition(this);
             if (Math.Abs(currentPos.X - _lastPhysicalMousePosition.X) > 0.5 ||
@@ -423,7 +434,44 @@ namespace FlyShelf
                         var firstItem = listView.SelectedItems.Cast<ClipboardItem>().FirstOrDefault();
                         if (firstItem == null) return;
 
+                        // STABILITY: Set drag flag EARLY to suppress clipboard events during
+                        // the entire drag preparation (DataObject build, wait-for-FilePath, etc.)
+                        // This prevents race conditions where new items are inserted mid-drag.
+                        _isDragging = true;
+
                         DataObject dataObj = new DataObject();
+                        
+                        // ═══ FIX: Wait for async PNG save to complete for bitmap-only clipboard items ═══
+                        // When copying an image from an app (Photos, browser, etc.), only a bitmap
+                        // is on the clipboard — no file. FlyShelf saves it to PNG in the background,
+                        // but FilePath is empty until that completes. Wait briefly for it.
+                        if (string.IsNullOrEmpty(firstItem.FilePath) && firstItem.ItemType == ClipboardItemType.Image)
+                        {
+                            // [FIX DD-4]: Reduced max pre-drag wait from 2s to 1s for faster drag start
+                            for (int waitLoop = 0; waitLoop < 10 && string.IsNullOrEmpty(firstItem.FilePath); waitLoop++)
+                                await System.Threading.Tasks.Task.Delay(100); // Wait up to 1 second total
+                            
+                            // If FilePath is STILL empty but we have an in-memory thumbnail, save it now
+                            if (string.IsNullOrEmpty(firstItem.FilePath) && firstItem.Icon is BitmapSource iconBmp)
+                            {
+                                try
+                                {
+                                    string tempPath = Classes.ClipboardHistoryManager.GetPersistentImagePath();
+                                    var frozenBmp = iconBmp.IsFrozen ? iconBmp : (BitmapSource)iconBmp.GetAsFrozen();
+                                    await System.Threading.Tasks.Task.Run(() =>
+                                    {
+                                        using var fs = new System.IO.FileStream(tempPath, System.IO.FileMode.Create);
+                                        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                                        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(frozenBmp));
+                                        encoder.Save(fs);
+                                    });
+                                    firstItem.FilePath = tempPath;
+                                    Classes.Logger.LogAction("DRAG_FIX", $"Saved thumbnail as fallback: {tempPath}");
+                                }
+                                catch (Exception saveEx) { Classes.Logger.LogAction("DRAG_SAVE_ERR", saveEx.Message); }
+                            }
+                        }
+
                         if (!string.IsNullOrEmpty(firstItem.FilePath))
                         {
                             // Always provide FileDrop for items with a path
@@ -433,7 +481,8 @@ namespace FlyShelf
                             try { dataObj.SetData("text/uri-list", "file:///" + firstItem.FilePath.Replace("\\", "/")); } catch (Exception ex) { Classes.Logger.LogAction("DRAG_URI_LIST_ERROR", ex.Message); }
 
                             // If we also have text content (Markdown, Code, Txt), provide it as well for text-only drop targets
-                            if (!string.IsNullOrEmpty(firstItem.RawContent))
+                            // For Image items, DON'T set OCR text — it would override the file drop in text targets
+                            if (!string.IsNullOrEmpty(firstItem.RawContent) && firstItem.ItemType != ClipboardItemType.Image)
                             {
                                 dataObj.SetData(DataFormats.UnicodeText, firstItem.RawContent);
                                 dataObj.SetData(DataFormats.Text, firstItem.RawContent);
@@ -444,27 +493,50 @@ namespace FlyShelf
                             {
                                 try
                                 {
-                                    // Load a tiny thumbnail instead of full image — avoids 1-2s freeze on large files
+                                    // Load a tiny thumbnail for the OLE bitmap format.
+                                    // Uses FileShare.ReadWrite to handle files still being written by the save pipeline.
                                     var bmp = await System.Threading.Tasks.Task.Run(() =>
                                     {
-                                        var bytes = System.IO.File.ReadAllBytes(firstItem.FilePath);
+                                        byte[] bytes;
+                                        using (var readFs = new System.IO.FileStream(firstItem.FilePath, 
+                                            System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite))
+                                        {
+                                            bytes = new byte[readFs.Length];
+                                            readFs.Read(bytes, 0, bytes.Length);
+                                        }
                                         var bi = new BitmapImage();
                                         bi.BeginInit();
-                                        bi.StreamSource = new System.IO.MemoryStream(bytes);
+                                        using var ms = new System.IO.MemoryStream(bytes);
+                                        bi.StreamSource = ms;
                                         bi.CacheOption = BitmapCacheOption.OnLoad;
                                         bi.DecodePixelWidth = 128; // Lightweight thumbnail for drag preview
                                         bi.EndInit();
                                         bi.Freeze();
                                         return bi;
                                     });
-                                    dataObj.SetImage(bmp);
+
+                                    // ═══ FIX: SetImage can crash on transparent PNGs ═══
+                                    // WPF DataObject.SetImage() internally creates an HBITMAP which
+                                    // doesn't support alpha channels. This can throw COMException or
+                                    // OutOfMemoryException with transparent images. Wrap safely.
+                                    try
+                                    {
+                                        dataObj.SetImage(bmp);
+                                    }
+                                    catch (Exception setImgEx)
+                                    {
+                                        // SetImage failed (likely transparent PNG) — skip bitmap format.
+                                        // FileDrop is already set, so the drag will still work for file targets.
+                                        Classes.Logger.LogAction("DRAG_IMAGE", $"SetImage skipped (transparent?): {setImgEx.Message}");
+                                    }
                                 }
                                 catch (Exception ex) { Classes.Logger.LogAction("DRAG_IMAGE_ERROR", ex.Message); }
                             }
 
                             // Explicit Win32 Shell 'Copy' Effect override (Required for Windows Explorer Drag Drop)
                             byte[] moveEffect = new byte[] { 5, 0, 0, 0 }; // DragDropEffects.Copy
-                            var dropEffect = new System.IO.MemoryStream();
+                            // [FIX DD-6]: Added 'using' to prevent MemoryStream leak on every drag
+                            using var dropEffect = new System.IO.MemoryStream();
                             dropEffect.Write(moveEffect, 0, moveEffect.Length);
                             dataObj.SetData("Preferred DropEffect", dropEffect);
                         }
@@ -520,6 +592,13 @@ namespace FlyShelf
                             }
                             if (dragSourceContainer != null)
                                 dragSourceContainer.Opacity = 0.35;
+
+                            // ═══ Contextual Tip: Ctrl+Drag path mode ═══
+                            // Only show for items with a file path (not text-only), and only the first 3 times
+                            if (!string.IsNullOrEmpty(firstItem.FilePath) && _dragPreviewWindow != null)
+                            {
+                                Windows.TipBadge.ShowLimited("ctrl_drag_path", "💡 Hold Ctrl to paste file path instead", 3, _dragPreviewWindow);
+                            }
                         }
                         catch (Exception previewEx)
                         {
@@ -533,26 +612,48 @@ namespace FlyShelf
                             dragDropEffect = dataObj.GetData("Preferred DropEffect") as System.IO.MemoryStream;
 
                             // ═══ Ctrl+Drag Path Mode: store originals for live swap ═══
+                            // Both file and path are always ready. Ctrl toggles which is active.
                             _activeDragDataObj = dataObj;
                             _dragCtrlPathMode = false;
-                            _dragFilePath = firstItem.FilePath;
+                            _dragFilePath = firstItem.FilePath ?? firstItem.RawContent;
                             _dragOriginalFilePaths = dataObj.GetDataPresent(DataFormats.FileDrop)
                                 ? dataObj.GetData(DataFormats.FileDrop) as string[]
                                 : null;
                             _dragOriginalText = dataObj.GetDataPresent(DataFormats.UnicodeText)
                                 ? dataObj.GetData(DataFormats.UnicodeText) as string
                                 : null;
+                            // Pre-compute the path text so it's instant when Ctrl is pressed
+                            _dragCtrlPendingPath = !string.IsNullOrEmpty(firstItem.FilePath)
+                                ? firstItem.FilePath
+                                : null;
 
                             // Record cursor position BEFORE drag starts — we'll use it for fallback paste
-                            _isDragging = true;
-                            DragDropEffects result = DragDrop.DoDragDrop(listView, dataObj, DragDropEffects.Copy | DragDropEffects.Move);
+                            DragDropEffects result;
+                            try
+                            {
+                                result = DragDrop.DoDragDrop(listView, dataObj, DragDropEffects.Copy | DragDropEffects.Move);
+                            }
+                            catch (System.Runtime.InteropServices.COMException comEx)
+                            {
+                                // OLE drag-drop can throw COMException (e.g. 0x8004005E) when
+                                // the target rejects the drop or the bitmap format conversion fails
+                                // inside the OLE subsystem. Treat as a cancelled drop.
+                                Classes.Logger.LogAction("DRAG_COM", $"OLE COMException: 0x{comEx.ErrorCode:X8} — {comEx.Message}");
+                                result = DragDropEffects.None;
+                            }
+                            // ═══ POST-DRAG PASTE ═══
+                            // Two scenarios:
+                            // 1. Ctrl+Drag PATH MODE: Always paste the file path as text via
+                            //    clipboard+Ctrl+V, regardless of OLE result. OLE DataObject mutation
+                            //    doesn't work reliably mid-drag (targets cache formats at DragEnter).
+                            // 2. Normal mode, OLE rejected (result == None): Fall back to pasting
+                            //    text content via clipboard, covering text fields and browsers.
+                            bool shouldPastePath = _dragCtrlPathMode && !string.IsNullOrEmpty(_dragCtrlPendingPath);
+                            string fallbackText = shouldPastePath
+                                ? _dragCtrlPendingPath!
+                                : (result == DragDropEffects.None ? firstItem.RawContent : null);
                             
-                            // ═══ FALLBACK PASTE ═══
-                            // When the OLE drop is rejected by the target (result == None), fall back
-                            // to clipboard paste: copy text to clipboard → focus the window under cursor
-                            // → Ctrl+V. This makes drag-and-drop work like Windows clipboard, even on
-                            // targets that don't support OLE drops (browser text fields, Electron apps, etc.)
-                            if (result == DragDropEffects.None && !string.IsNullOrEmpty(firstItem.RawContent))
+                            if (!string.IsNullOrEmpty(fallbackText))
                             {
                                 // Get the window under the current cursor position
                                 if (Classes.NativeMethods.GetCursorPos(out var dropPt))
@@ -569,7 +670,7 @@ namespace FlyShelf
                                         if (rootHwnd != selfHwnd)
                                         {
                                             // Copy text to clipboard
-                                            Classes.ClipboardHelper.SafeSetText(firstItem.RawContent, suppressEcho: true, echoDelayMs: 2000);
+                                            Classes.ClipboardHelper.SafeSetText(fallbackText, suppressEcho: true, echoDelayMs: 2000);
                                             
                                             // Click the target to focus the text field, then paste
                                             SetForegroundWindow(rootHwnd);
@@ -600,7 +701,15 @@ namespace FlyShelf
                         finally
                         {
                             _isInternalDragSource = false;
-                            _isDragging = false;
+
+                            // ═══ POST-DRAG COOLDOWN ═══
+                            // Keep WM_CLIPBOARDUPDATE guard active for 500ms after drag completes
+                            // to suppress self-capture from target app clipboard writes.
+                            _ = Dispatcher.InvokeAsync(async () =>
+                            {
+                                await System.Threading.Tasks.Task.Delay(500);
+                                _isDragging = false;
+                            });
                             dragDropEffect?.Dispose();
 
                             // ═══ Deselect after drag-out ═══
@@ -614,6 +723,7 @@ namespace FlyShelf
                             _dragOriginalText = null;
                             _dragFilePath = null;
                             _dragCtrlPathMode = false;
+                            _dragCtrlPendingPath = null;
 
                             // ═══ Cleanup Drag Preview ═══
                             listView.GiveFeedback -= DragPreview_GiveFeedback;
@@ -632,6 +742,12 @@ namespace FlyShelf
                     }
                 }
             }
+            }
+            catch (Exception ex)
+            {
+                _isDragging = false; // Safety reset: inner finally may not have executed
+                Classes.Logger.LogAction("MOUSEMOVE_FAULT", $"Unhandled exception in ShelfListView_MouseMove: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -640,11 +756,15 @@ namespace FlyShelf
         /// </summary>
         private void DragPreview_GiveFeedback(object sender, GiveFeedbackEventArgs e)
         {
-            if (_dragPreviewWindow != null &&
-                Classes.NativeMethods.GetCursorPos(out var pt))
+            try
             {
-                _dragPreviewWindow.UpdatePosition(pt.X, pt.Y);
+                if (_dragPreviewWindow != null &&
+                    Classes.NativeMethods.GetCursorPos(out var pt))
+                {
+                    _dragPreviewWindow.UpdatePosition(pt.X, pt.Y);
+                }
             }
+            catch { } // STABILITY: Exceptions in GiveFeedback crash the OLE message loop
 
             // Keep the default system cursors (copy/move arrows, no-drop circle)
             e.UseDefaultCursors = true;
@@ -654,8 +774,9 @@ namespace FlyShelf
         /// <summary>
         /// QueryContinueDrag handler — fires continuously when drag state changes.
         /// - Cancel/Drop: close the preview immediately.
-        /// - Ctrl held: swap drag payload from file → file path text (live, no cancel).
-        /// - Ctrl released: revert drag payload back to file.
+        /// - Ctrl held: live-swap DataObject from file → path text (no drag cancel).
+        /// - Ctrl released: revert DataObject back to file data.
+        /// Both sides are always prepared at drag start — Ctrl just toggles which is active.
         /// </summary>
         private void DragPreview_QueryContinueDrag(object sender, QueryContinueDragEventArgs e)
         {
@@ -674,7 +795,9 @@ namespace FlyShelf
 
             if (ctrlPressed && !_dragCtrlPathMode)
             {
-                // ═══ CTRL PRESSED: swap file → path text ═══
+                // ═══ CTRL PRESSED: Live-swap to path mode ═══
+                // Replace DataObject content with path text. The OLE drag continues
+                // uninterrupted — the target app receives path text on drop.
                 _dragCtrlPathMode = true;
 
                 string pathText = !string.IsNullOrEmpty(_dragFilePath)
@@ -683,45 +806,58 @@ namespace FlyShelf
 
                 try
                 {
-                    // Remove file data — set to empty array so drop targets see text only
-                    _activeDragDataObj.SetData(DataFormats.FileDrop, Array.Empty<string>());
-                    _activeDragDataObj.SetData("FileNameW", Array.Empty<string>());
-                    _activeDragDataObj.SetData("FileName", Array.Empty<string>());
+                    // Clear file drop data so target app gets text, not a file.
+                    // NOTE: SetData(null) doesn't remove the format from WPF DataObject —
+                    // target apps still see FileDrop and prefer it. Use empty array instead.
+                    _activeDragDataObj.SetData(DataFormats.FileDrop, new string[0]);
+                    _activeDragDataObj.SetData("Preferred DropEffect", null);
+                    // Also clear bitmap data — some apps prefer bitmap over text
+                    _activeDragDataObj.SetData(DataFormats.Bitmap, (object)null);
+                    _activeDragDataObj.SetData("FileNameW", new string[0]);
+                    _activeDragDataObj.SetData("FileName", new string[0]);
 
-                    // Set all text formats to the file path
+                    // Set all text formats to the path
                     _activeDragDataObj.SetData(DataFormats.UnicodeText, pathText);
                     _activeDragDataObj.SetData(DataFormats.Text, pathText);
                     _activeDragDataObj.SetData(DataFormats.StringFormat, pathText);
                 }
-                catch { } // Best-effort: DataObject modification during drag
+                catch { } // Best-effort: if swap fails, drag continues with original data
 
                 // Update drag preview to show path mode indicator
                 try { _dragPreviewWindow?.SetPathMode(true); } catch { }
             }
             else if (!ctrlPressed && _dragCtrlPathMode)
             {
-                // ═══ CTRL RELEASED: revert to original file data ═══
+                // ═══ CTRL RELEASED: Revert to file mode ═══
+                // Restore original DataObject content — seamless toggle back.
                 _dragCtrlPathMode = false;
 
                 try
                 {
-                    // Restore original file drop data
-                    if (_dragOriginalFilePaths != null && _dragOriginalFilePaths.Length > 0)
+                    // Restore file drop data
+                    if (_dragOriginalFilePaths != null)
                     {
                         _activeDragDataObj.SetData(DataFormats.FileDrop, _dragOriginalFilePaths);
                         _activeDragDataObj.SetData("FileNameW", _dragOriginalFilePaths);
                         _activeDragDataObj.SetData("FileName", _dragOriginalFilePaths);
+                        // Restore copy effect
+                        byte[] copyEffect = new byte[] { 5, 0, 0, 0 };
+                        using var effectStream = new System.IO.MemoryStream();
+                        effectStream.Write(copyEffect, 0, copyEffect.Length);
+                        _activeDragDataObj.SetData("Preferred DropEffect", effectStream);
                     }
 
-                    // Restore original text data
-                    string restoreText = _dragOriginalText ?? "";
-                    _activeDragDataObj.SetData(DataFormats.UnicodeText, restoreText);
-                    _activeDragDataObj.SetData(DataFormats.Text, restoreText);
-                    _activeDragDataObj.SetData(DataFormats.StringFormat, restoreText);
+                    // Restore original text
+                    if (_dragOriginalText != null)
+                    {
+                        _activeDragDataObj.SetData(DataFormats.UnicodeText, _dragOriginalText);
+                        _activeDragDataObj.SetData(DataFormats.Text, _dragOriginalText);
+                        _activeDragDataObj.SetData(DataFormats.StringFormat, _dragOriginalText);
+                    }
                 }
-                catch { } // Best-effort: DataObject modification during drag
+                catch { } // Best-effort: if revert fails, drag continues with path data
 
-                // Revert drag preview to normal mode
+                // Revert drag preview
                 try { _dragPreviewWindow?.SetPathMode(false); } catch { }
             }
         }
@@ -953,7 +1089,7 @@ namespace FlyShelf
                 _hubWindowInstance.Hide();
                 return;
             }
-            OpenApp_Click(null, null);
+            OpenApp_Click(this, new RoutedEventArgs());
         }
 
         private void OpenApp_Click(object sender, RoutedEventArgs e)
@@ -967,8 +1103,66 @@ namespace FlyShelf
                 if (_isCurrentlySummoned && !_isAnimatingHide)
                 {
                     _isCurrentlySummoned = false;
-                    this.Hide();
+                    _isShowAnimating = false;
+
+                    // ═══ FULL CLEANUP: Mirror AnimateAndHide() — PC-1 bug fix ═══
+                    // Previously this path only did this.Hide() with no cleanup.
+                    // Missing cleanup caused: keyboard hooks intercepting keys globally,
+                    // timers firing on hidden windows, stale panel/search/merge state.
+
+                    UninstallKeyboardHook(); // Release arrow-key hook so keys return to other apps
+                    StopDragActiveDismissTimer();
+                    StopPanelAutoRevertTimer();
+                    _mascotDelayTimer?.Stop();
+
+                    // Save panel state so it can restore on re-summon
+                    if (_isNotesActive || _isTodoActive || _isResearchActive)
+                    {
+                        _lastPanelBeforeDismiss = _isNotesActive ? "notes" : _isTodoActive ? "todo" : "research";
+                        if (_isNotesActive) CloseNotesPanel(immediate: true);
+                        if (_isTodoActive) CloseTodoPanel(immediate: true);
+                        if (_isResearchActive) CloseResearchPanel(immediate: true);
+                    }
+
+                    DismissMergeState();      // PC-4: Clear PDF merge bar
+                    CloseSearch();            // Clear search state
+                    if (_isFilterBarActive) ToggleFilterBar(false); // PC-5: Clear filter bar
+
+                    // PC-8: Reset drag hover indicator
+                    IsDragHovering = false;
+
+                    // PC-9: Reset scroll/hover state so hover buttons work on re-summon
+                    _viewModel.IsScrolling = false;
+                    _viewModel.AllowHover = true;
+
+                    // PC-2/PC-3: Stop background timers that shouldn't fire on hidden window
+                    _evictionBackgroundTimer?.Stop();
+                    _scrollLiveLoadTimer?.Stop();
+
+                    // Grey-box fix: Reset scroll engine state
+                    try
+                    {
+                        var sv = GetShelfScrollViewer();
+                        Classes.SmoothScroll.ResetScrollState(sv);
+                    }
+                    catch { }
                 }
+
+                // ═══ ALWAYS hide clipboard before Hub — prevents black-shape ghost ═══
+                // Even if the clipboard wasn't _isCurrentlySummoned, the DWM surface may
+                // still be alive (SW_HIDE keeps it warm). The Hub's Topmost toggle can
+                // cause the OS to briefly make the clipboard visible as a dark rectangle.
+                // Force opacity=0 + SW_HIDE to guarantee it stays invisible.
+                this.Opacity = 0;
+                this.BeginAnimation(OpacityProperty, null);
+                try
+                {
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                        Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
+                }
+                catch { }
+
 
                 CloseEmojiPicker();
                 if (_hubWindowInstance != null && _hubWindowInstance.IsLoaded)
@@ -1031,6 +1225,20 @@ namespace FlyShelf
         {
             try
             {
+                // ═══ ALWAYS hide clipboard before Hub — prevents ghost clipboard ═══
+                // Same as OpenApp_Click: force opacity=0 + SW_HIDE to guarantee it stays invisible.
+                _isCurrentlySummoned = false;
+                _isShowAnimating = false;
+                this.Opacity = 0;
+                this.BeginAnimation(OpacityProperty, null);
+                try
+                {
+                    var mainHwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (mainHwnd != IntPtr.Zero)
+                        Classes.NativeMethods.ShowWindow(mainHwnd, 0 /*SW_HIDE*/);
+                }
+                catch { }
+
                 CloseEmojiPicker();
                 if (_hubWindowInstance != null && _hubWindowInstance.IsLoaded)
                 {
@@ -1132,7 +1340,7 @@ namespace FlyShelf
             System.Threading.Tasks.Task.Run(() =>
             {
                 _viewModel.SavePinnedItems();
-                _viewModel.PersistHistoryPublic();
+                _viewModel.SchedulePersistHistoryPublic(); // PERF: throttled — unpin is non-critical
             });
             
             UnpinSelectedBtn.Visibility = Visibility.Collapsed;

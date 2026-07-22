@@ -1,0 +1,28 @@
+<UserControl x:Class="FlyShelf.Controls.ConnectionQualityPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <!-- ═══ Connection Quality Panel — Per-device quality cards ═══ -->
+    <StackPanel>
+        <!-- Section header -->
+        <StackPanel Orientation="Horizontal" Margin="2,0,0,8">
+            <ui:SymbolIcon Symbol="SignalStrength24" FontSize="12" Foreground="#64748B" Margin="0,0,6,0"/>
+            <TextBlock Text="CONNECTION QUALITY" FontSize="10" Foreground="#475569" FontWeight="Bold"
+                       VerticalAlignment="Center"/>
+        </StackPanel>
+
+        <!-- Quality cards container -->
+        <ItemsControl x:Name="QualityCardsList">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+        </ItemsControl>
+
+        <!-- Empty state -->
+        <TextBlock x:Name="EmptyStateText" Text="No connected devices to monitor"
+                   FontSize="11" Foreground="#475569" Margin="4,4,0,0"
+                   Visibility="Collapsed"/>
+    </StackPanel>
+</UserControl>

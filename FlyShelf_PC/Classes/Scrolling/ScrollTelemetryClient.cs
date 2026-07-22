@@ -91,6 +91,10 @@ namespace FlyShelf.Classes
                             double prevY = y;
                             lock (_prevCardPositions)
                             {
+                                // [FIX M-46]: Cap _prevCardPositions to prevent unbounded growth
+                                if (_prevCardPositions.Count > 500)
+                                    _prevCardPositions.Clear();
+
                                 if (_prevCardPositions.TryGetValue(idx, out double py))
                                 {
                                     prevY = py;
@@ -247,6 +251,18 @@ namespace FlyShelf.Classes
                 return FindVisualChild<Panel>(presenter);
             }
             return FindVisualChild<Panel>(parent);
+        }
+
+        /// <summary>
+        /// [FIX M-44, M-45]: Disposes the UdpClient and CSV flush timer.
+        /// Should be called on application exit.
+        /// </summary>
+        public static void Cleanup()
+        {
+            _csvFlushTimer?.Dispose();
+            _csvFlushTimer = null;
+            _udpClient?.Dispose();
+            _udpClient = null;
         }
     }
 }

@@ -19,6 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { font, space, component } from '../styles/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ScreenHeaderProps {
   title: string;
@@ -50,6 +51,7 @@ export default function ScreenHeader({
   colorOverrides,
 }: ScreenHeaderProps) {
   const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
 
   const bgColor = colorOverrides?.background ?? colors.bg.base;
   const titleColor = colorOverrides?.title ?? colors.text.primary;
@@ -77,7 +79,7 @@ export default function ScreenHeader({
   });
 
   return (
-    <View style={[styles.container, { backgroundColor: bgColor }]}>
+    <View style={[styles.container, { backgroundColor: bgColor, paddingTop: Math.max(insets.top, component.safeTop) }]}>
       <View style={styles.content}>
         {leftAction && <View style={styles.leftAction}>{leftAction}</View>}
         <View style={styles.titleArea}>

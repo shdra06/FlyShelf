@@ -85,7 +85,8 @@ namespace FlyShelf.ViewModels
                         using (var stream = File.OpenRead(FilePath))
                         {
                             var decoder = await global::Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream.AsRandomAccessStream());
-                            var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
+                            // [FIX H-20]: Dispose softwareBitmap to release native memory
+                            using var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
 
                             var ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(
                                 new global::Windows.Globalization.Language("en-US"));
@@ -500,7 +501,8 @@ namespace FlyShelf.ViewModels
                 byte[] imageBytes = await Task.Run(() =>
                 {
                     var fi = new System.IO.FileInfo(FilePath!);
-                    if (fi.Length > 100_000_000)
+                    // [FIX H-14]: Reduced from 100MB to 10MB to prevent OOM during OCR processing
+                    if (fi.Length > 10_000_000)
                         throw new InvalidOperationException($"File too large for table extraction ({fi.Length} bytes): {FilePath}");
                     return File.ReadAllBytes(FilePath);
                 });

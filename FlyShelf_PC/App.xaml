@@ -19,10 +19,11 @@
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/FlyShelfColorPalette.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Resources/Themes/Theme.Midnight.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Styles/AltClipboardStyles.xaml"/>
+                <ResourceDictionary Source="pack://application:,,,/Resources/Styles/TypeRamp.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <!-- Default app fallback icon -->
-            <BitmapImage x:Key="ThemeLogoIcon" UriSource="pack://application:,,,/Resources/FlyShelfIcon.png" />
+            <BitmapImage x:Key="ThemeLogoIcon" UriSource="pack://application:,,,/Resources/FlyShelfIcon.png" DecodePixelWidth="64" />
 
             <!-- Premium WPF-UI Accent Overrides -->
             <Color x:Key="SystemAccentColor">#6366F1</Color>
@@ -116,6 +117,19 @@
             <!-- Expand/collapse chevron -->
             <SolidColorBrush x:Key="ChevronBg"                 Color="#CC202024"/>
             <SolidColorBrush x:Key="ChevronBorder"             Color="#33FFFFFF"/>
+
+            <!-- Custom keyboard focus visual — rounded accent border -->
+            <Style x:Key="FlyShelfFocusVisual">
+                <Setter Property="Control.Template">
+                    <Setter.Value>
+                        <ControlTemplate>
+                            <Border BorderBrush="{DynamicResource MicaWPF.Brushes.SystemFillColorAttention}" 
+                                    BorderThickness="1.5" CornerRadius="4" Margin="-2" Opacity="0.7"
+                                    SnapsToDevicePixels="True"/>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
 
             <!-- Unified Hover Elevation Card Animation Template -->
             <Style x:Key="DashboardCardStyle" TargetType="Border">

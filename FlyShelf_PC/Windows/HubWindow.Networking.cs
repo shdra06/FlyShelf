@@ -292,11 +292,14 @@ namespace FlyShelf.Windows
 
         private async void SendQueueItemToAll_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is StagedFile file)
+            await SafeAsyncHandler.RunAsync(async () =>
             {
-                await (NetworkFileQueue.Instance?.SendFileToAll(file) ?? System.Threading.Tasks.Task.CompletedTask);
-                RefreshNetworkQueueDisplay();
-            }
+                if (sender is FrameworkElement fe && fe.DataContext is StagedFile file)
+                {
+                    await (NetworkFileQueue.Instance?.SendFileToAll(file) ?? System.Threading.Tasks.Task.CompletedTask);
+                    RefreshNetworkQueueDisplay();
+                }
+            });
         }
 
         private void OpenQueueItemFile_Click(object sender, RoutedEventArgs e)
@@ -387,7 +390,7 @@ namespace FlyShelf.Windows
             {
                 try
                 {
-                    Clipboard.SetText(url);
+                    ClipboardHelper.SafeSetText(url);
                     ToastWindow.ShowToast("📋 IP copied to clipboard");
                 }
                 catch { } // Best-effort: failure is acceptable
@@ -511,16 +514,20 @@ namespace FlyShelf.Windows
 
         private async void RetryTransfer_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is TransferHistoryEntry entry)
+            await SafeAsyncHandler.RunAsync(async () =>
             {
-                // Re-stage the file and send
-                if (!string.IsNullOrEmpty(entry.FileName))
+                if (sender is FrameworkElement fe && fe.DataContext is TransferHistoryEntry entry)
                 {
-                    // Try to find the file — history entries may not have the full path
-                    // so we show a toast indicating retry
-                    ToastWindow.ShowToast($"🔄 Retry not available yet — re-send via File Queue");
+                    // Re-stage the file and send
+                    if (!string.IsNullOrEmpty(entry.FileName))
+                    {
+                        // Try to find the file — history entries may not have the full path
+                        // so we show a toast indicating retry
+                        ToastWindow.ShowToast($"🔄 Retry not available yet — re-send via File Queue");
+                    }
                 }
-            }
+                await System.Threading.Tasks.Task.CompletedTask;
+            });
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -632,9 +639,9 @@ namespace FlyShelf.Windows
 
         private async void PairNearbyDevice_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is NearbyDeviceInfo device)
+            await SafeAsyncHandler.RunAsync(async () =>
             {
-                try
+                if (sender is FrameworkElement fe && fe.DataContext is NearbyDeviceInfo device)
                 {
                     ToastWindow.ShowToast($"🔗 Sending pair request to {device.DeviceName}...");
 
@@ -654,12 +661,13 @@ namespace FlyShelf.Windows
                     };
 
                     string url = $"http://{device.IpAddress}:{device.HttpPort}/api/lan/pair-request";
-                    using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(60) }; // 60s for user to accept
+                    var http = HttpClientPool.Download; // Use Download (10min timeout) — 60s CTS limits actual wait
                     var content = new System.Net.Http.StringContent(
                         System.Text.Json.JsonSerializer.Serialize(pairRequest),
                         System.Text.Encoding.UTF8, "application/json");
 
-                    var response = await http.PostAsync(url, content);
+                    using var pairCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(60)); // 60s for user to accept
+                    var response = await http.PostAsync(url, content, pairCts.Token);
                     string responseBody = await response.Content.ReadAsStringAsync();
 
                     using var doc = System.Text.Json.JsonDocument.Parse(responseBody);
@@ -694,16 +702,7 @@ namespace FlyShelf.Windows
                         ToastWindow.ShowToast($"❌ {device.DeviceName} rejected the pair request");
                     }
                 }
-                catch (TaskCanceledException)
-                {
-                    ToastWindow.ShowToast($"⏱️ Pair request timed out — {device.DeviceName} didn't respond");
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogAction("NETWORK_HUB", $"LAN pair error: {ex.Message}");
-                    ToastWindow.ShowToast($"❌ Pair failed: {ex.Message}");
-                }
-            }
+            });
         }
 
         // ═══════════════════════════════════════════════════════════════

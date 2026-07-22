@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
+using FlyShelf.Helpers;
 
 namespace FlyShelf;
 
@@ -42,36 +43,14 @@ public partial class App : Application
     private const long SHAKE_IDLE_THRESHOLD_MS = 30_000; // 30 seconds
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int x;
-        public int y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
     private struct MSLLHOOKSTRUCT
     {
-        public POINT pt;
+        public Classes.NativeMethods.POINT pt;
         public uint mouseData;
         public uint flags;
         public uint time;
         public IntPtr dwExtraInfo;
     }
-
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int vKey);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr WindowFromPoint(POINT Point);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-
-    [DllImport("kernel32.dll")]
-    private static extern bool AttachConsole(int dwProcessId);
-
-    [DllImport("kernel32.dll")]
-    private static extern IntPtr GetConsoleWindow();
 
     private const int ATTACH_PARENT_PROCESS = -1;
 
@@ -99,6 +78,52 @@ public partial class App : Application
         // Clean up leftover temp update files from successful previous updates
         FlyShelf.Classes.UpdateManager.CleanupTempDir();
 
+            // ═══ GLOBAL CRASH HANDLERS — Prevent silent crashes ═══
+            DispatcherUnhandledException += (s, args) =>
+            {
+                args.Handled = true; // Prevent app crash
+                try
+                {
+                    var crashDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "crash_reports");
+                    System.IO.Directory.CreateDirectory(crashDir);
+                    var crashFile = System.IO.Path.Combine(crashDir, $"crash_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
+                    System.IO.File.WriteAllText(crashFile, $"[DispatcherUnhandledException] {DateTime.Now}\n{args.Exception}");
+                    FlyShelf.Classes.Logger.LogAction("CRASH", $"UI thread exception caught: {args.Exception.Message}");
+                }
+                catch { }
+            };
+
+            AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+            {
+                try
+                {
+                    var crashDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "crash_reports");
+                    System.IO.Directory.CreateDirectory(crashDir);
+                    var crashFile = System.IO.Path.Combine(crashDir, $"crash_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
+                    if (args.ExceptionObject is Exception ex)
+                    {
+                        System.IO.File.WriteAllText(crashFile, $"[AppDomain.UnhandledException] {DateTime.Now}\n{ex}");
+                    }
+                    else
+                    {
+                        // Handle non-Exception objects (e.g. COM interop, native throws)
+                        string message = args.ExceptionObject?.ToString() ?? "Unknown unmanaged exception";
+                        System.IO.File.WriteAllText(crashFile, $"[AppDomain.UnhandledException] {DateTime.Now}\n{message}");
+                    }
+                }
+                catch { }
+            };
+
+            TaskScheduler.UnobservedTaskException += (s, args) =>
+            {
+                args.SetObserved();
+                try
+                {
+                    FlyShelf.Classes.Logger.LogAction("TASK_ERROR", $"Unobserved task exception: {args.Exception?.InnerException?.Message ?? args.Exception?.Message}");
+                }
+                catch { }
+            };
+
         // ═══ LOCAL AI TEST HANDLER ═══
         bool isTestAi = false;
         int consolePid = -1;
@@ -121,11 +146,11 @@ public partial class App : Application
         {
             if (consolePid != -1)
             {
-                AttachConsole(consolePid);
+                Classes.NativeMethods.AttachConsole(consolePid);
             }
             else
             {
-                AttachConsole(ATTACH_PARENT_PROCESS);
+                Classes.NativeMethods.AttachConsole(ATTACH_PARENT_PROCESS);
             }
 
             try
@@ -141,11 +166,11 @@ public partial class App : Application
             int activeConsolePid = -1;
             try
             {
-                IntPtr hwnd = GetConsoleWindow();
+                IntPtr hwnd = Classes.NativeMethods.GetConsoleWindow();
                 if (hwnd != IntPtr.Zero)
                 {
                     uint pid;
-                    GetWindowThreadProcessId(hwnd, out pid);
+                    Classes.NativeMethods.GetWindowThreadProcessId(hwnd, out pid);
                     activeConsolePid = (int)pid;
                 }
             }
@@ -240,7 +265,7 @@ public partial class App : Application
                 "FlyShelf — Dual Installation Detected",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
-            try { _mutex.ReleaseMutex(); _mutex.Dispose(); } catch { }
+            try { _mutex.ReleaseMutex(); _mutex.Dispose(); } catch { } // Best-effort: mutex release failure is acceptable on shutdown
             _mutex = null;
             Application.Current.Shutdown();
             return;
@@ -276,7 +301,7 @@ public partial class App : Application
                 "FlyShelf — Version Conflict",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
-            try { _mutex.ReleaseMutex(); _mutex.Dispose(); } catch { }
+            try { _mutex.ReleaseMutex(); _mutex.Dispose(); } catch { } // Best-effort: mutex release failure is acceptable on shutdown
             _mutex = null;
             Application.Current.Shutdown();
             return;
@@ -485,7 +510,7 @@ public partial class App : Application
                 var rootGrid = new System.Windows.Controls.Grid();
 
                 var outerBorder = new System.Windows.Controls.Border {
-                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 25, 25)),
+                    Background = new System.Windows.Media.SolidColorBrush(FlyShelf.Helpers.ThemeColors.DarkGray25),
                     BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(45, 45, 45)),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(12)
@@ -519,7 +544,7 @@ public partial class App : Application
                 
                 var inputBorder = new System.Windows.Controls.Border {
                     Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(15, 15, 15)),
-                    BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60)),
+                    BorderBrush = new System.Windows.Media.SolidColorBrush(FlyShelf.Helpers.ThemeColors.DarkGray60),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(6)
                 };
@@ -538,7 +563,7 @@ public partial class App : Application
                 stack.Children.Add(inputBorder);
                 
                 var btnBorder = new System.Windows.Controls.Border {
-                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(16, 185, 129)), // Emerald-500
+                    Background = new System.Windows.Media.SolidColorBrush(FlyShelf.Helpers.ThemeColors.SuccessGreen), // Emerald-500
                     CornerRadius = new CornerRadius(6),
                     Padding = new Thickness(24, 10, 24, 10),
                     Margin = new Thickness(0, 24, 0, 0),
@@ -556,7 +581,7 @@ public partial class App : Application
                 btnBorder.Child = btnText;
                 
                 btnBorder.MouseEnter += (s, ev) => btnBorder.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(5, 150, 105));
-                btnBorder.MouseLeave += (s, ev) => btnBorder.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(16, 185, 129));
+                btnBorder.MouseLeave += (s, ev) => btnBorder.Background = new System.Windows.Media.SolidColorBrush(FlyShelf.Helpers.ThemeColors.SuccessGreen);
                 
                 // H-06: Sanitize device name — strip characters that break Firebase paths or JSON
                 btnBorder.MouseLeftButtonDown += (s, ev) => {
@@ -595,7 +620,7 @@ public partial class App : Application
                     VerticalAlignment = VerticalAlignment.Center
                 };
                 closeBtnBorder.Child = closeText;
-                closeBtnBorder.MouseEnter += (s, ev) => closeBtnBorder.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60));
+                closeBtnBorder.MouseEnter += (s, ev) => closeBtnBorder.Background = new System.Windows.Media.SolidColorBrush(FlyShelf.Helpers.ThemeColors.DarkGray60);
                 closeBtnBorder.MouseLeave += (s, ev) => closeBtnBorder.Background = System.Windows.Media.Brushes.Transparent;
                 closeBtnBorder.MouseLeftButtonDown += (s, ev) => {
                     // Default to machine name when closed without input
@@ -816,15 +841,15 @@ public partial class App : Application
                 // ═══ ADAPTIVE THROTTLING ═══
                 // Track mouse position to detect idle state. When the mouse hasn't moved for
                 // 30 seconds, slow polling from 40ms to 150ms to save CPU. Restore on movement.
-                POINT idlePt;
-                if (GetCursorPos(out idlePt))
+                Classes.NativeMethods.POINT idlePt;
+                if (Classes.NativeMethods.GetCursorPos(out idlePt))
                 {
                     long now = Environment.TickCount64;
-                    bool mouseMoved = (idlePt.x != _lastIdleMouseX || idlePt.y != _lastIdleMouseY);
+                    bool mouseMoved = (idlePt.X != _lastIdleMouseX || idlePt.Y != _lastIdleMouseY);
                     if (mouseMoved)
                     {
-                        _lastIdleMouseX = idlePt.x;
-                        _lastIdleMouseY = idlePt.y;
+                        _lastIdleMouseX = idlePt.X;
+                        _lastIdleMouseY = idlePt.Y;
                         _lastMouseMoveTime = now;
                         // Mouse just moved — ensure we're at fast rate
                         _shakeTimer?.Change(0, SHAKE_FAST_MS);
@@ -853,10 +878,10 @@ public partial class App : Application
                 }
 
                 // Check if Left Mouse Button is held down
-                if ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0)
+                if ((Classes.NativeMethods.GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0)
                 {
-                    POINT pt;
-                    if (GetCursorPos(out pt))
+                    Classes.NativeMethods.POINT pt;
+                    if (Classes.NativeMethods.GetCursorPos(out pt))
                     {
                         if (Environment.TickCount64 - System.Threading.Interlocked.Read(ref _lastClipboardLaunchTime) < 1500)
                         {
@@ -864,8 +889,8 @@ public partial class App : Application
                             return;
                         }
 
-                        int currentX = pt.x;
-                        int currentY = pt.y;
+                        int currentX = pt.X;
+                        int currentY = pt.Y;
                         long currentTime = Environment.TickCount64;
 
                         if (_shakeCount == 0)
@@ -980,6 +1005,13 @@ public partial class App : Application
                                             if (ActiveMergeWindow != null && ActiveMergeWindow.IsActive)
                                             {
                                                 FlyShelf.Classes.Logger.LogAction("SHAKE", "❌ Rejected: PDF Merger window is active.");
+                                                return;
+                                            }
+                                            // Don't shake-spawn clipboard while the Hub is open — the user's mouse
+                                            // movement to click the Hub button can trigger false shake detection.
+                                            if (_mainWinInstance != null && _mainWinInstance.IsHubWindowOpen)
+                                            {
+                                                FlyShelf.Classes.Logger.LogAction("SHAKE", "❌ Rejected: Hub window is open.");
                                                 return;
                                             }
                                             _instance.LaunchClipboardManager(triggerX, triggerY, false, 0, false);
@@ -1111,14 +1143,6 @@ public partial class App : Application
         _mainWinInstance.ShowNearPosition(logicalX, logicalY, mode, isPersistent, stealFocus);
     }
 
-    [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out POINT lpPoint);
-
-    [DllImport("user32.dll")]
-    private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
-
-    [DllImport("user32.dll")]
-    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     private static void LogAndPrint(string msg)
     {

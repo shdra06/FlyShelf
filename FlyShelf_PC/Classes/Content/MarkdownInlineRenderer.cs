@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using FlyShelf.Helpers;
 
 namespace FlyShelf.Classes
 {
@@ -36,7 +37,7 @@ namespace FlyShelf.Classes
         // THEME COLORS (adapts to dark/light mode via hardcoded dark palette)
         // ═══════════════════════════════════════════════════════════
 
-        private static readonly Brush HeadingBrush = new SolidColorBrush(Color.FromRgb(0xCD, 0xD6, 0xF4)); // Catppuccin text
+        private static readonly Brush HeadingBrush = new SolidColorBrush(ThemeColors.CatppuccinText); // Catppuccin text
         private static readonly Brush BodyBrush = new SolidColorBrush(Color.FromRgb(0xBA, 0xC2, 0xDE));    // Catppuccin subtext
         private static readonly Brush CodeBrush = new SolidColorBrush(Color.FromRgb(0xF3, 0x8B, 0xA8));    // Catppuccin pink
         private static readonly Brush CodeBgBrush = new SolidColorBrush(Color.FromArgb(0x30, 0x80, 0x80, 0x80)); // Subtle bg
@@ -70,13 +71,24 @@ namespace FlyShelf.Classes
             DimBrush.Freeze(); BulletBrush.Freeze(); StrikeBrush.Freeze();
         }
 
-        // ═══════════════════════════════════════════════════════════
-        // ENTRY POINT
-        // ═══════════════════════════════════════════════════════════
+        // ═══ SCROLL-AWARE DEBOUNCING (Fix 3) ═══
+        // During active scrolling, container recycling triggers OnMarkdownTextChanged
+        // hundreds of times. Each call clears all Inlines and rebuilds them via regex
+        // parsing + Run object creation — the heaviest per-recycle work. Deferring the
+        // full render during scroll and showing raw text eliminates this overhead.
+        // A static flag is set by SmoothScroll when scrolling starts/stops.
+        internal static bool IsScrollingActive;
 
         private static void OnMarkdownTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is not TextBlock textBlock) return;
+
+            // During scroll: SKIP ENTIRELY — zero allocations, zero layout work
+            // v3.0.7 didn't have MarkdownInlineRenderer at all, so this matches proven behavior.
+            // The existing recycled text stays visible which is fine during fast scroll.
+            // Full render happens when scroll stops (IsScrollingActive → false triggers re-bind).
+            if (IsScrollingActive)
+                return;
 
             textBlock.Inlines.Clear();
             var markdown = e.NewValue as string;

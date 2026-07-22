@@ -31,6 +31,7 @@ LogBox.ignoreLogs([
 
 import { SettingsProvider } from '../context/SettingsContext';
 import ErrorBoundary from '../components/ErrorBoundary';
+import { evictImageCache, evictConvertedPdfs } from '../components/CachedImage';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -151,6 +152,12 @@ export default function RootLayout() {
            }
          }).catch(console.warn);
      }
+  }, []);
+
+  // Startup: evict stale image cache + converted PDFs (runs once, non-blocking)
+  useEffect(() => {
+    evictImageCache().catch(() => {});
+    evictConvertedPdfs().catch(() => {});
   }, []);
 
   useEffect(() => {

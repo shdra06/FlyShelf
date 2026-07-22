@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FlyShelf.ViewModels;
+using FlyShelf.Classes;
 
 namespace FlyShelf.Windows
 {
@@ -81,7 +82,7 @@ namespace FlyShelf.Windows
                             item.FileName = cleanUrl;
                             
                             FlyShelf.Classes.ClipboardHelper.SafeSetText(cleanUrl, suppressEcho: true, echoDelayMs: 500);
-                            _viewModel.PersistHistoryPublic();
+                            _viewModel.SchedulePersistHistoryPublic(); // PERF: throttled
                             FlyShelf.Windows.ToastWindow.ShowToast("URL Sanitized & Copied! 🛡️");
                             FlyShelf.Classes.Logger.LogAction("URL_SANITY", $"Successfully stripped tracking metrics from URL. Result: {cleanUrl}");
                         }
@@ -112,7 +113,7 @@ namespace FlyShelf.Windows
                 item.GeneratePasswordIcon();
                 FlyShelf.Windows.ToastWindow.ShowToast("Locked as password card! 🔒");
 
-                _viewModel.PersistHistoryPublic();
+                _viewModel.SchedulePersistHistoryPublic(); // PERF: throttled
             }
         }
 
@@ -160,6 +161,8 @@ namespace FlyShelf.Windows
 
         internal async void RotateImageSpecific_Click(object sender, MouseButtonEventArgs e)
         {
+            await SafeAsyncHandler.RunAsync(async () =>
+            {
             if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
             {
                 e.Handled = true;
@@ -246,6 +249,7 @@ namespace FlyShelf.Windows
                     FlyShelf.Classes.Logger.LogAction("ROTATE", "Failed: " + ex.Message);
                 }
             }
+            });
         }
 
         internal void QuickLookSpecific_Click(object sender, MouseButtonEventArgs e)

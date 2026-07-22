@@ -5,6 +5,7 @@
 // Split from MainWindow.xaml.cs for modularity
 // ---------------------------------------------------------------
 using FlyShelf.ViewModels;
+using FlyShelf.Classes;
 using System;
 using System.Linq;
 using System.Windows;
@@ -21,7 +22,7 @@ namespace FlyShelf
         private System.Windows.Threading.DispatcherTimer? _searchDebounceTimer;
         private System.Windows.Threading.DispatcherTimer? _notesSearchDebounce;
         private System.Windows.Threading.DispatcherTimer? _todoSearchDebounce;
-        private Action<bool>? _incognitoStateChangedHandler; // TODO: Unsubscribe in OnClosed()
+        private Action<bool>? _incognitoStateChangedHandler; // Unsubscribed in MainWindow.OnClosed()
 
         private void Window_PreviewDrop(object sender, DragEventArgs e)
         {
@@ -61,26 +62,12 @@ namespace FlyShelf
 
         private void Window_DragEnter(object sender, DragEventArgs e)
         {
+            // [FIX DD-1]: Accept all drag formats unconditionally — COM queries can stall 50-135ms.
+            // The drop handler validates format presence anyway.
             _isDragHovering = true;
-            // Only show the green drop arrow indicator in clipboard mode, not in notes/todo
             IsDragHovering = !_isNotesActive && !_isTodoActive;
-            if (e.Data.GetDataPresent(DataFormats.FileDrop) || 
-                e.Data.GetDataPresent("FileNameW") ||
-                e.Data.GetDataPresent("FileName") ||
-                e.Data.GetDataPresent("text/uri-list") ||
-                e.Data.GetDataPresent("application/vnd.code.tree.workspaceFiles") ||
-                e.Data.GetDataPresent(DataFormats.Bitmap) || 
-                e.Data.GetDataPresent(DataFormats.Dib) ||
-                e.Data.GetDataPresent(DataFormats.UnicodeText) || 
-                e.Data.GetDataPresent(DataFormats.StringFormat) ||
-                e.Data.GetDataPresent(DataFormats.Text))
-            {
-                e.Effects = DragDropEffects.Copy;
-            }
-            else
-            {
-                e.Effects = DragDropEffects.None;
-            }
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
         }
 
         private void Window_PreviewDragOver(object sender, DragEventArgs e)
@@ -674,9 +661,15 @@ namespace FlyShelf
                     foreach (var tuple in containersToAnimate)
                     {
                         var container = tuple.Item1;
-                        container.BeginAnimation(ListViewItem.HeightProperty, null);
+                        // [FIX ANIM-3]: Clear ScaleY animation and reset transform for recycling
+                        if (container.RenderTransform is ScaleTransform st)
+                        {
+                            st.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+                        }
                         container.BeginAnimation(ListViewItem.OpacityProperty, null);
+                        container.RenderTransform = null;
                         container.Height = 0;
+                        container.Visibility = Visibility.Collapsed;
                         container.Opacity = 1.0;
                         container.IsHitTestVisible = true;
                     }
@@ -719,14 +712,18 @@ namespace FlyShelf
 
                 container.IsHitTestVisible = false;
 
-                // Animate height from actual height down to 0
-                var hAnim = new DoubleAnimation(actualHeight, 0, duration) { EasingFunction = ease };
+                // [FIX ANIM-3]: Use ScaleTransform.ScaleY instead of Height to avoid layout thrashing
+                var scaleTransform = new ScaleTransform(1, 1);
+                container.RenderTransform = scaleTransform;
+                container.RenderTransformOrigin = new Point(0.5, 0);
+
+                var scaleAnim = new DoubleAnimation(1, 0, duration) { EasingFunction = ease };
                 // Smoothly fade out opacity
                 var oAnim = new DoubleAnimation(1.0, 0.0, duration) { EasingFunction = ease };
 
-                hAnim.Completed += (s, e) => onAnimationCompleted();
+                scaleAnim.Completed += (s, e) => onAnimationCompleted();
 
-                container.BeginAnimation(ListViewItem.HeightProperty, hAnim);
+                scaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty, scaleAnim);
                 container.BeginAnimation(ListViewItem.OpacityProperty, oAnim);
             }
         }
@@ -863,22 +860,28 @@ namespace FlyShelf
         {
             if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
-                try
-                {
-                    if (!string.IsNullOrEmpty(item.FilePath) && System.IO.File.Exists(item.FilePath))
-                    {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.FilePath) { UseShellExecute = true });
-                    }
-                    else if (item.ItemType == FlyShelf.ViewModels.ClipboardItemType.Url && !string.IsNullOrEmpty(item.RawContent))
-                    {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.RawContent) { UseShellExecute = true });
-                    }
-                }
-                catch (Exception)
-                {
-                    FlyShelf.Windows.ToastWindow.ShowToast("Could not open file");
-                }
                 e.Handled = true;
+                var filePath = item.FilePath;
+                var rawContent = item.RawContent;
+                var itemType = item.ItemType;
+                _ = System.Threading.Tasks.Task.Run(() =>
+                {
+                    try
+                    {
+                        if (!string.IsNullOrEmpty(filePath) && System.IO.File.Exists(filePath))
+                        {
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(filePath) { UseShellExecute = true });
+                        }
+                        else if (itemType == FlyShelf.ViewModels.ClipboardItemType.Url && !string.IsNullOrEmpty(rawContent))
+                        {
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(rawContent) { UseShellExecute = true });
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast("Could not open file"));
+                    }
+                });
             }
         }
 
@@ -908,7 +911,7 @@ namespace FlyShelf
             // (both are Topmost, so re-show ensures the shelf isn't hidden)
             Dispatcher.InvokeAsync(() =>
             {
-                try { this.Show(); } catch { } // Best-effort: failure is acceptable
+                try { if (_isCurrentlySummoned) this.Show(); } catch { } // Best-effort: failure is acceptable
             }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
@@ -931,6 +934,8 @@ namespace FlyShelf
         }
         private async void RotateImageSpecific_Click(object sender, MouseButtonEventArgs e)
         {
+            await SafeAsyncHandler.RunAsync(async () =>
+            {
             if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
                 e.Handled = true;
@@ -1013,16 +1018,21 @@ namespace FlyShelf
                         System.Diagnostics.Debug.WriteLine($"[ROTATE] Skipped reload — file too large ({_fi2.Length} bytes): {filePath}");
                         return;
                     }
-                    byte[] freshBytes = await System.Threading.Tasks.Task.Run(() => System.IO.File.ReadAllBytes(filePath));
-                    var freshBitmap = new System.Windows.Media.Imaging.BitmapImage();
-                    using (var ms = new System.IO.MemoryStream(freshBytes))
+                    // PERF [FIX 4]: Decode BitmapImage on background thread (Freeze makes it cross-thread safe)
+                    var freshBitmap = await System.Threading.Tasks.Task.Run(() =>
                     {
-                        freshBitmap.BeginInit();
-                        freshBitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                        freshBitmap.StreamSource = ms;
-                        freshBitmap.EndInit();
-                        freshBitmap.Freeze();
-                    }
+                        byte[] freshBytes = System.IO.File.ReadAllBytes(filePath);
+                        var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                        using (var ms = new System.IO.MemoryStream(freshBytes))
+                        {
+                            bmp.BeginInit();
+                            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                            bmp.StreamSource = ms;
+                            bmp.EndInit();
+                            bmp.Freeze();
+                        }
+                        return bmp;
+                    });
 
                     // Reset the rotation transform on the image
                     if (targetImage != null)
@@ -1043,6 +1053,7 @@ namespace FlyShelf
                     FlyShelf.Classes.Logger.LogAction("ROTATE", "Failed: " + ex.Message);
                 }
             }
+            });
         }
 
                 private void RunTerminalSpecific_Click(object sender, MouseButtonEventArgs e)
@@ -1069,12 +1080,12 @@ namespace FlyShelf
                 else if (item.SmartActionType == "OpenPDF" || item.SmartActionType == "JoinMeeting" || item.SmartActionType == "OpenBrowser")
                 {
                     string target = item.SmartActionType == "OpenPDF" ? item.FilePath : item.RawContent;
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { } // Best-effort: failure is acceptable
+                    _ = System.Threading.Tasks.Task.Run(() => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { } }); // Best-effort: failure is acceptable
                 }
                 else if (item.SmartActionType == "OpenMap")
                 {
                     string target = "https://www.google.com/maps/search/?api=1&query=" + Uri.EscapeDataString(item.RawContent);
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { } // Best-effort: failure is acceptable
+                    _ = System.Threading.Tasks.Task.Run(() => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { } }); // Best-effort: failure is acceptable
                 }
                 else if (item.SmartActionType == "ConvertToPdf")
                 {
@@ -1131,7 +1142,7 @@ namespace FlyShelf
                             Classes.ClipboardHelper.SafeSetText(cleanUrl, suppressEcho: true, echoDelayMs: 500);
 
                             // 2. Persist updated history to disk
-                            _viewModel.PersistHistoryPublic();
+                            _viewModel.SchedulePersistHistoryPublic(); // PERF: throttled — settings change is non-critical
 
                             // 3. Show a premium visual toast
                             FlyShelf.Windows.ToastWindow.ShowToast("URL Sanitized & Copied! 🛡️");
@@ -1288,9 +1299,8 @@ namespace FlyShelf
                 }, System.Windows.Threading.DispatcherPriority.Input);
                 e.Handled = true;
             }
+
         }
-
-
 
         private void NotifyIconQuit_Click(object sender, RoutedEventArgs e)
         {
@@ -1491,6 +1501,33 @@ namespace FlyShelf
             {
                 Classes.IncognitoManager.DisableIncognito();
                 Windows.ToastWindow.ShowToast("👁 Clipboard monitoring resumed");
+            }
+        }
+
+        // [FIX ANIM-8]: Pause GIF animations when items are recycled off-screen by VirtualizingStackPanel
+        private void GifItemIcon_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Image img)
+            {
+                try
+                {
+                    var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(img);
+                    animator?.Play();
+                }
+                catch { } // Best-effort: GIF may not be loaded yet
+            }
+        }
+
+        private void GifItemIcon_Unloaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Image img)
+            {
+                try
+                {
+                    var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(img);
+                    animator?.Pause();
+                }
+                catch { } // Best-effort
             }
         }
 

@@ -46,7 +46,7 @@
             </StackPanel>
 
             <!-- Summary pill -->
-            <Border Grid.Column="2" CornerRadius="20" Padding="14,6" VerticalAlignment="Center">
+            <Border Grid.Column="2" CornerRadius="16" Padding="14,6" VerticalAlignment="Center">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                         <GradientStop Color="#0AEF4444" Offset="0"/>
@@ -58,7 +58,7 @@
         </Grid>
 
         <!-- ═══ Output Filename ═══ -->
-        <Border Grid.Row="1" CornerRadius="10" Padding="14,8" Margin="0,0,0,12"
+        <Border Grid.Row="1" CornerRadius="12" Padding="14,8" Margin="0,0,0,12"
                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
             <Grid>
@@ -90,6 +90,9 @@
                 </StackPanel>
 
                 <ListBox x:Name="PdfItemsList" Background="Transparent" BorderThickness="0" Margin="2"
+                         VirtualizingStackPanel.IsVirtualizing="True"
+                         VirtualizingStackPanel.VirtualizationMode="Recycling"
+                         ScrollViewer.CanContentScroll="True"
                          ScrollViewer.VerticalScrollBarVisibility="Auto" AllowDrop="True"
                          PreviewMouseLeftButtonDown="PdfList_PreviewMouseDown"
                          PreviewMouseMove="PdfList_PreviewMouseMove"
@@ -110,7 +113,7 @@
                             <Setter Property="Template">
                                 <Setter.Value>
                                     <ControlTemplate TargetType="{x:Type ListBoxItem}">
-                                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderThickness="1" BorderBrush="Transparent" CornerRadius="10" Padding="0">
+                                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderThickness="1" BorderBrush="Transparent" CornerRadius="12" Padding="0">
                                             <ContentPresenter />
                                         </Border>
                                         <ControlTemplate.Triggers>
@@ -185,7 +188,7 @@
                                         <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="{DynamicResource DangerColor}" FontSize="17" />
                                     </Border>
                                     <!-- Page count badge -->
-                                    <Border CornerRadius="7" HorizontalAlignment="Right" VerticalAlignment="Bottom" 
+                                    <Border CornerRadius="8" HorizontalAlignment="Right" VerticalAlignment="Bottom" 
                                             Margin="0,0,-2,-2" Padding="4,1" MinWidth="17">
                                         <Border.Background>
                                             <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">

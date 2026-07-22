@@ -112,7 +112,7 @@
                                         <DataTrigger Binding="{Binding HasActiveTransfers}" Value="True">
                                             <DataTrigger.EnterActions>
                                                 <BeginStoryboard>
-                                                    <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                    <Storyboard RepeatBehavior="Forever" AutoReverse="True" Storyboard.DesiredFrameRate="20">
                                                         <DoubleAnimation Storyboard.TargetProperty="Opacity"
                                                                          From="1" To="0.3" Duration="0:0:0.8" />
                                                     </Storyboard>

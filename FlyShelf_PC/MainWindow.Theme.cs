@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Media;
+using FlyShelf.Helpers;
 
 namespace FlyShelf
 {
@@ -181,8 +182,11 @@ namespace FlyShelf
         /// heavy software blur to simulate the frosted glass look without DWM compositor.
         /// Falls back to solid dark if no desktop wallpaper is available.
         /// </summary>
-        private void ApplyPopupBackground(bool skipSoftwareBlur = false)
+        private async void ApplyPopupBackground(bool skipSoftwareBlur = false)
         {
+            // [FIX BTN-1]: Outer try/catch — async void must not throw unhandled exceptions.
+            try
+            {
             // Read the theme-aware fallback color; defaults to neutral dark grey (#242424)
             SolidColorBrush fallback;
             try
@@ -211,13 +215,19 @@ namespace FlyShelf
             try
             {
                 // Load the desktop wallpaper at reduced resolution for fast blurring
-                var bmp = new System.Windows.Media.Imaging.BitmapImage();
-                bmp.BeginInit();
-                bmp.UriSource = new Uri(desktopWp, UriKind.Absolute);
-                bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                bmp.DecodePixelWidth = 400; // Low-res for performance (panel is max 850px, blurred = 400 is plenty)
-                bmp.EndInit();
-                bmp.Freeze();
+                // PERF: BitmapImage.EndInit with UriSource performs synchronous file read —
+                // offload to background thread and freeze so result is cross-thread safe.
+                var bmp = await System.Threading.Tasks.Task.Run(() =>
+                {
+                    var b = new System.Windows.Media.Imaging.BitmapImage();
+                    b.BeginInit();
+                    b.UriSource = new Uri(desktopWp, UriKind.Absolute);
+                    b.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                    b.DecodePixelWidth = 400; // Low-res for performance (panel is max 850px, blurred = 400 is plenty)
+                    b.EndInit();
+                    b.Freeze();
+                    return b;
+                });
 
                 // Show the desktop wallpaper as background
                 WallpaperBg.Source = bmp;
@@ -266,6 +276,11 @@ namespace FlyShelf
             catch (Exception ex)
             {
                 Classes.Logger.LogAction("THEME", $"Software blur fallback failed: {ex.Message}");
+            }
+            } // end outer try
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ApplyPopupBackground failed: {ex.Message}");
             }
         }
 
@@ -359,6 +374,8 @@ namespace FlyShelf
         #region ═══ Desktop Wallpaper Registry ═══
 
         /// <summary>Gets current Windows desktop wallpaper path from registry (cached).</summary>
+        // [FIX M-57]: TODO: Consider consolidating with ThemeColorService.GetDesktopWallpaperPath
+        // (this version includes caching via _cachedDesktopWallpaperPath field)
         private static string GetDesktopWallpaperPath()
         {
             if (_cachedDesktopWallpaperPath != null)
@@ -383,8 +400,11 @@ namespace FlyShelf
 
         #region ═══ Wallpaper Application (Static + Animated GIF) ═══
 
-        private void ApplyWallpaper()
+        private async void ApplyWallpaper()
         {
+            // [FIX BTN-2]: Outer try/catch — async void must not throw unhandled exceptions.
+            try
+            {
             string path = Classes.SettingsManager.Current.ClipboardWallpaperPath;
 
             // If no wallpaper path set, clear all layers
@@ -456,13 +476,19 @@ namespace FlyShelf
                     catch { } // Best-effort: failure is acceptable
                     XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null); // Clear any GIF
 
-                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
-                    bmp.BeginInit();
-                    bmp.UriSource = new Uri(path, UriKind.Absolute);
-                    bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                    bmp.DecodePixelWidth = 800; // Panel is max 850px — 800px is plenty for a background image
-                    bmp.EndInit();
-                    bmp.Freeze();
+                    // PERF: BitmapImage.EndInit with UriSource performs synchronous file read —
+                    // offload to background thread and freeze so result is cross-thread safe.
+                    var bmp = await System.Threading.Tasks.Task.Run(() =>
+                    {
+                        var b = new System.Windows.Media.Imaging.BitmapImage();
+                        b.BeginInit();
+                        b.UriSource = new Uri(path, UriKind.Absolute);
+                        b.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                        b.DecodePixelWidth = 800; // Panel is max 850px — 800px is plenty for a background image
+                        b.EndInit();
+                        b.Freeze();
+                        return b;
+                    });
 
                     // Show container layers immediately with unblurred preview to prevent flash
                     WallpaperBg.Source = bmp;
@@ -517,7 +543,7 @@ namespace FlyShelf
                         }
                         catch
                         {
-                            return Color.FromRgb(99, 102, 241); // Fallback indigo
+                            return ThemeColors.IndigoAccent; // Fallback indigo
                         }
                     }).ContinueWith(t =>
                     {
@@ -562,87 +588,27 @@ namespace FlyShelf
                 WallpaperThemeOverlay.Visibility = Visibility.Collapsed;
                 WallpaperFrostHeader.Visibility = Visibility.Collapsed;
             }
+            } // end outer try
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ApplyWallpaper failed: {ex.Message}");
+            }
         }
 
         /// <summary>
         /// Quick dominant color extraction by sampling a few pixels from the center.
         /// </summary>
+        // [FIX M-55]: Delegated to shared ThemeColorService
         private static Color ExtractDominantColor(System.Windows.Media.Imaging.BitmapImage bmp)
-        {
-            try
-            {
-                var formatted = new System.Windows.Media.Imaging.FormatConvertedBitmap(bmp, PixelFormats.Bgra32, null, 0);
-                formatted.Freeze();
-                int w = formatted.PixelWidth;
-                int h = formatted.PixelHeight;
-
-                // Sample 9 points in center region — read only the needed pixels, not the entire buffer
-                int totalR = 0, totalG = 0, totalB = 0, count = 0;
-                int[] xs = { w / 4, w / 2, 3 * w / 4 };
-                int[] ys = { h / 4, h / 2, 3 * h / 4 };
-                byte[] singlePixel = new byte[4]; // Reusable 4-byte buffer for one BGRA pixel
-
-                foreach (int x in xs)
-                    foreach (int y in ys)
-                    {
-                        if (x >= 0 && x < w && y >= 0 && y < h)
-                        {
-                            formatted.CopyPixels(
-                                new System.Windows.Int32Rect(x, y, 1, 1),
-                                singlePixel, 4 /* stride for 1 pixel */, 0);
-                            totalB += singlePixel[0];
-                            totalG += singlePixel[1];
-                            totalR += singlePixel[2];
-                            count++;
-                        }
-                    }
-
-                if (count > 0)
-                    return Color.FromRgb((byte)(totalR / count), (byte)(totalG / count), (byte)(totalB / count));
-            }
-            catch { } // Best-effort: failure is acceptable
-
-            return Color.FromRgb(99, 102, 241); // Fallback indigo
-        }
+            => Services.ThemeColorService.ExtractDominantColor(bmp);
 
         #endregion
 
         #region ═══ Color Conversion Utilities ═══
 
+        // [FIX M-56]: Delegated to shared ThemeColorService
         private static void RgbToHsl(Color rgb, out double h, out double s, out double l)
-        {
-            double r = rgb.R / 255.0;
-            double g = rgb.G / 255.0;
-            double b = rgb.B / 255.0;
-
-            double max = Math.Max(r, Math.Max(g, b));
-            double min = Math.Min(r, Math.Min(g, b));
-
-            h = 0;
-            s = 0;
-            l = (max + min) / 2.0;
-
-            if (max != min)
-            {
-                double d = max - min;
-                s = l > 0.5 ? d / (2.0 - max - min) : d / (max + min);
-
-                if (max == r)
-                {
-                    h = (g - b) / d + (g < b ? 6 : 0);
-                }
-                else if (max == g)
-                {
-                    h = (b - r) / d + 2;
-                }
-                else if (max == b)
-                {
-                    h = (r - g) / d + 4;
-                }
-
-                h /= 6.0;
-            }
-        }
+            => Services.ThemeColorService.RgbToHsl(rgb, out h, out s, out l);
 
         private static Color HslToRgb(double h, double s, double l)
         {

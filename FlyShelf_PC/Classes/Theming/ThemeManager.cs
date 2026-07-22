@@ -14,13 +14,15 @@ namespace FlyShelf.Classes
 {
     public class ThemeManager : IDisposable
     {
-        // ═══ Singleton ═══
-        private static ThemeManager? _instance;
-        public static ThemeManager Instance => _instance ??= new ThemeManager();
+        // [FIX M-05]: Thread-safe singleton via Lazy<T>
+        private static readonly Lazy<ThemeManager> _lazy = new(() => new ThemeManager());
+        public static ThemeManager Instance => _lazy.Value;
 
         // ═══ State ═══
         private readonly string _themesDir;
         private FileSystemWatcher? _watcher;
+        private System.Timers.Timer? _fswDebounceTimer; // [FIX M-42]: Stored as field for disposal
+        private readonly object _fswLock = new();       // [FIX M-06]: Guards debounce timer operations
         private ThemePackage? _activeTheme;
 
         /// <summary>All discovered themes on disk.</summary>
@@ -299,7 +301,27 @@ namespace FlyShelf.Classes
 
                 // Extract — handle both flat zips and zips with a root folder
                 Directory.CreateDirectory(targetDir);
-                ZipFile.ExtractToDirectory(zipPath, targetDir, overwriteFiles: true);
+                // [FIX H-21]: Manual extraction to prevent Zip Slip directory traversal attack
+                using (var archive = ZipFile.OpenRead(zipPath))
+                {
+                    string normalizedTarget = Path.GetFullPath(targetDir);
+                    foreach (var entry in archive.Entries)
+                    {
+                        string destPath = Path.GetFullPath(Path.Combine(targetDir, entry.FullName));
+                        if (!destPath.StartsWith(normalizedTarget, StringComparison.OrdinalIgnoreCase))
+                        {
+                            Logger.LogAction("THEME", $"Zip Slip blocked: {entry.FullName}");
+                            continue;
+                        }
+                        if (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'))
+                        {
+                            Directory.CreateDirectory(destPath);
+                            continue;
+                        }
+                        Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
+                        entry.ExtractToFile(destPath, overwrite: true);
+                    }
+                }
 
                 // Check if the zip had a single root folder (common pattern)
                 var subDirs = Directory.GetDirectories(targetDir);
@@ -791,7 +813,7 @@ namespace FlyShelf.Classes
                         {
                             // DWMWA_USE_IMMERSIVE_DARK_MODE = 20
                             int useDarkMode = toLight ? 0 : 1;
-                            DwmSetWindowAttribute(hwnd, 20, ref useDarkMode, sizeof(int));
+                            NativeMethods.DwmSetWindowAttribute(hwnd, 20, ref useDarkMode, sizeof(int));
                         }
                     }
                 }
@@ -805,8 +827,7 @@ namespace FlyShelf.Classes
             }
         }
 
-        [System.Runtime.InteropServices.DllImport("dwmapi.dll", PreserveSig = true)]
-        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
 
         /// <summary>
         /// Removes the current color theme ResourceDictionary from the app's merged dictionaries.
@@ -1171,9 +1192,9 @@ namespace FlyShelf.Classes
                     EnableRaisingEvents = true
                 };
 
-                // Debounce: only refresh after 500ms of no changes
-                System.Timers.Timer debounce = new(500) { AutoReset = false };
-                debounce.Elapsed += (s, e) =>
+                // [FIX M-42]: Store debounce timer as field for proper disposal
+                _fswDebounceTimer = new System.Timers.Timer(500) { AutoReset = false };
+                _fswDebounceTimer.Elapsed += (s, e) =>
                 {
                     try
                     {
@@ -1196,10 +1217,11 @@ namespace FlyShelf.Classes
                     catch { } // Best-effort: failure is acceptable
                 };
 
-                _watcher.Changed += (s, e) => { debounce.Stop(); debounce.Start(); };
-                _watcher.Created += (s, e) => { debounce.Stop(); debounce.Start(); };
-                _watcher.Deleted += (s, e) => { debounce.Stop(); debounce.Start(); };
-                _watcher.Renamed += (s, e) => { debounce.Stop(); debounce.Start(); };
+                // [FIX M-06]: Lock around timer operations to prevent FSW race
+                _watcher.Changed += (s, e) => { lock (_fswLock) { _fswDebounceTimer.Stop(); _fswDebounceTimer.Start(); } };
+                _watcher.Created += (s, e) => { lock (_fswLock) { _fswDebounceTimer.Stop(); _fswDebounceTimer.Start(); } };
+                _watcher.Deleted += (s, e) => { lock (_fswLock) { _fswDebounceTimer.Stop(); _fswDebounceTimer.Start(); } };
+                _watcher.Renamed += (s, e) => { lock (_fswLock) { _fswDebounceTimer.Stop(); _fswDebounceTimer.Start(); } };
 
                 Logger.LogAction("THEME", "FileSystemWatcher active — themes hot-reload enabled");
             }
@@ -1313,6 +1335,7 @@ namespace FlyShelf.Classes
         public void Dispose()
         {
             _watcher?.Dispose();
+            _fswDebounceTimer?.Dispose(); // [FIX M-42]: Dispose debounce timer
         }
     }
 }

@@ -48,7 +48,7 @@ namespace FlyShelf.Classes
     /// 2. UDP multicast on 239.255.88.42 (broader reach)
     /// 3. Manual IP entry (user types IP for different network)
     /// </summary>
-    public class NearbyDiscovery
+    public class NearbyDiscovery : IDisposable
     {
         public static NearbyDiscovery? Instance { get; private set; }
 
@@ -59,7 +59,8 @@ namespace FlyShelf.Classes
         private UdpClient? _listener;
         private CancellationTokenSource? _cts;
         private readonly ConcurrentDictionary<string, NearbyDeviceInfo> _discovered = new();
-        private static readonly System.Net.Http.HttpClient _latencyClient = new() { Timeout = TimeSpan.FromSeconds(3) };
+        // AUDIT: Migrated to HttpClientPool.Quick (5s timeout) to prevent socket exhaustion
+        private static System.Net.Http.HttpClient _latencyClient => HttpClientPool.Quick;
 
         public IReadOnlyCollection<NearbyDeviceInfo> DiscoveredDevices =>
             _discovered.Values.OrderByDescending(d => d.DiscoveredAt).ToList();
@@ -79,7 +80,8 @@ namespace FlyShelf.Classes
         private void StartListener()
         {
             _cts = new CancellationTokenSource();
-            _ = Task.Run(() => ListenLoop(_cts.Token));
+            // PERF: LongRunning — infinite loop should not occupy a ThreadPool thread
+            _ = Task.Factory.StartNew(() => ListenLoop(_cts.Token), TaskCreationOptions.LongRunning);
             Logger.LogAction("NEARBY", $"Nearby discovery listener started on port {NEARBY_PORT}");
         }
 
@@ -89,7 +91,8 @@ namespace FlyShelf.Classes
         /// </summary>
         private void StartBroadcastLoop()
         {
-            _ = Task.Run(async () =>
+            // PERF: LongRunning — continuous broadcast loop should not occupy a ThreadPool thread
+            _ = Task.Factory.StartNew(async () =>
             {
                 try
                 {
@@ -185,14 +188,19 @@ namespace FlyShelf.Classes
                     catch { /* Some interfaces may fail — that's OK */ }
                 }
 
-                // 2. Multicast probe
-                try
+                // 2. Multicast probe (retry once — first UDP packet often lost on wakeup)
+                for (int attempt = 0; attempt < 2; attempt++)
                 {
-                    using var mcast = new UdpClient();
-                    mcast.JoinMulticastGroup(IPAddress.Parse(NEARBY_MULTICAST));
-                    await mcast.SendAsync(data, data.Length, new IPEndPoint(IPAddress.Parse(NEARBY_MULTICAST), NEARBY_PORT));
+                    try
+                    {
+                        using var mcast = new UdpClient();
+                        mcast.JoinMulticastGroup(IPAddress.Parse(NEARBY_MULTICAST));
+                        await mcast.SendAsync(data, data.Length, new IPEndPoint(IPAddress.Parse(NEARBY_MULTICAST), NEARBY_PORT));
+                        if (attempt > 0) break; // Success on retry
+                        await Task.Delay(200); // Brief gap before retry
+                    }
+                    catch { } // Best-effort: failure is acceptable
                 }
-                catch { } // Best-effort: failure is acceptable
 
                 Logger.LogAction("NEARBY", $"Broadcast probe sent on {interfaces.Count} interface(s)");
             }
@@ -439,6 +447,26 @@ namespace FlyShelf.Classes
         {
             string expected = ComputeProbeHmac(deviceId, pairingKey);
             return string.Equals(expected, hmacStr, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // ═══ IDisposable ═══
+        // AUDIT: Deterministic cleanup of _listener (UdpClient) and _cts (CancellationTokenSource).
+        // Static _latencyClient is backed by HttpClientPool and intentionally NOT disposed here.
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            try { _cts?.Cancel(); } catch { }
+            try { _cts?.Dispose(); } catch { }
+            try { _listener?.Close(); } catch { }
+            try { _listener?.Dispose(); } catch { }
+            _listener = null;
+            if (Instance == this) Instance = null;
+
+            GC.SuppressFinalize(this);
         }
     }
 }

@@ -79,6 +79,8 @@ export function useFirebaseSync(params: {
 
   // AC-5+AC-6: Flag to suppress Firebase listener during startup purge
   const isPurgingRef = useRef<boolean>(false);
+  // Reconnect backoff counter for Firebase onValue errors
+  const fbReconnectAttemptsRef = useRef(0);
 
   // AC-3: Stable stringified key for pairedDevices dependency — avoids re-creating JSON.stringify on every render
   const pairedDeviceKeysStable = useMemo(
@@ -132,6 +134,7 @@ export function useFirebaseSync(params: {
     if (firebaseUnsubFeedRef.current) return; // Already connected
     const clipsRef = query(ref(database, `clipboard/${pk}`), orderByChild('Timestamp'), limitToLast(10));
     firebaseUnsubFeedRef.current = onValue(clipsRef, async (snapshot) => {
+      fbReconnectAttemptsRef.current = 0; // Reset backoff on successful data
       if (snapshot.exists()) {
         const data = snapshot.val();
         const allRaw: ClipItem[] = Object.keys(data).map(k => ({ id: k, ...data[k] } as ClipItem)).reverse();
@@ -259,6 +262,23 @@ export function useFirebaseSync(params: {
           }
         }
       }
+    }, (error) => {
+      syncLog('FIREBASE', `onValue error: ${error?.message || error}`);
+      // Disconnect current listener
+      if (firebaseUnsubFeedRef.current) {
+        firebaseUnsubFeedRef.current();
+        firebaseUnsubFeedRef.current = null;
+      }
+      // Reconnect after exponential backoff
+      const delay = Math.min(5000 * Math.pow(2, fbReconnectAttemptsRef.current), 60000);
+      fbReconnectAttemptsRef.current++;
+      setTimeout(() => {
+        const currentPk = pairingKeyRef.current;
+        if (currentPk && isValidPairingKey(currentPk)) {
+          syncLog('FIREBASE', `Reconnecting Firebase listener after ${delay}ms backoff`);
+          connectFirebaseClipboardListener(currentPk);
+        }
+      }, delay);
     });
   };
 

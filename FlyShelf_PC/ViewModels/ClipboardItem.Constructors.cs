@@ -10,12 +10,13 @@ using System.ComponentModel;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
+using FlyShelf.Helpers;
+using FlyShelf.Classes;
 
 namespace FlyShelf.ViewModels
 {
     public partial class ClipboardItem
     {
-        private static readonly string[] s_byteSuffixes = { "B", "KB", "MB", "GB", "TB" };
         private static readonly System.Text.RegularExpressions.Regex _rxCppCheck = new System.Text.RegularExpressions.Regex(
             @"#include\s*<[a-z.]+>|int\s+main\s*\(", System.Text.RegularExpressions.RegexOptions.Compiled);
         
@@ -30,6 +31,27 @@ namespace FlyShelf.ViewModels
         
         private static readonly System.Text.RegularExpressions.Regex _rxAddressCheck = new System.Text.RegularExpressions.Regex(
             @"\d{1,5}\s+\w+\s+(st|street|ave|avenue|blvd|boulevard|rd|road|dr|drive|lane|ln)\b", System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        // ── Frozen brushes & pens for icon generation (Fix 6: avoid per-call GC pressure) ──
+        private static readonly System.Windows.Media.SolidColorBrush _iconShadowDark = BrushHelper.Frozen(System.Windows.Media.Color.FromArgb(38, 0, 0, 0));
+        private static readonly System.Windows.Media.SolidColorBrush _iconShadowLight = BrushHelper.Frozen(System.Windows.Media.Color.FromArgb(15, 0, 0, 0));
+        private static readonly System.Windows.Media.SolidColorBrush _iconShadow30 = BrushHelper.Frozen(System.Windows.Media.Color.FromArgb(30, 0, 0, 0));
+        private static readonly System.Windows.Media.SolidColorBrush _iconShadow10 = BrushHelper.Frozen(System.Windows.Media.Color.FromArgb(10, 0, 0, 0));
+        private static readonly System.Windows.Media.SolidColorBrush _iconBorderGray = BrushHelper.Frozen(System.Windows.Media.Color.FromRgb(225, 225, 225));
+        private static readonly System.Windows.Media.Pen _iconBorderGrayPen = CreateFrozenPen(_iconBorderGray, 1.0);
+        private static readonly System.Windows.Media.SolidColorBrush _iconDarkBg = BrushHelper.Frozen(System.Windows.Media.Color.FromRgb(30, 30, 30));
+        private static readonly System.Windows.Media.SolidColorBrush _iconDarkBg28 = BrushHelper.Frozen(System.Windows.Media.Color.FromRgb(28, 28, 28));
+        private static readonly System.Windows.Media.SolidColorBrush _iconCyanBlue = BrushHelper.Frozen(System.Windows.Media.Color.FromRgb(14, 165, 233));
+        private static readonly System.Windows.Media.SolidColorBrush _iconShackleGray = BrushHelper.Frozen(System.Windows.Media.Color.FromRgb(200, 200, 200));
+        private static readonly System.Windows.Media.SolidColorBrush _iconHighlightYellow = BrushHelper.Frozen(System.Windows.Media.Color.FromRgb(250, 204, 21));
+        private static readonly System.Windows.Media.SolidColorBrush _iconDarkAmber = BrushHelper.Frozen(System.Windows.Media.Color.FromRgb(202, 138, 4));
+
+        private static System.Windows.Media.Pen CreateFrozenPen(System.Windows.Media.Brush brush, double thickness)
+        {
+            var pen = new System.Windows.Media.Pen(brush, thickness);
+            pen.Freeze();
+            return pen;
+        }
 
         /// <summary>Parameterless constructor for object initializer syntax and JSON deserialization.</summary>
         public ClipboardItem() { }
@@ -145,6 +167,7 @@ namespace FlyShelf.ViewModels
 
             // Dynamically calculate total size in background thread to prevent UI freezing
             string[] capturedFiles = files;
+            // NOTE: Task captures 'this' — OK because Dispose cleans up backing resources
             System.Threading.Tasks.Task.Run(() =>
             {
                 long totalSize = 0;
@@ -239,10 +262,20 @@ namespace FlyShelf.ViewModels
                         var fi = new System.IO.FileInfo(path);
                         if (fi.Exists && fi.Length < 1024 * 1024) // 1MB limit for in-memory preview content
                         {
-                            RawContent = System.IO.File.ReadAllText(path);
+                            // Defer file reading off UI thread to prevent blocking during paste/drop
+                            var readPath = path;
+                            _ = System.Threading.Tasks.Task.Run(() =>
+                            {
+                                try
+                                {
+                                    var content = System.IO.File.ReadAllText(readPath);
+                                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => RawContent = content);
+                                }
+                                catch (Exception ex) { Logger.LogAction("ITEM_INIT", $"Non-critical error: {ex.Message}"); }
+                            });
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { Logger.LogAction("ITEM_INIT", $"Non-critical error: {ex.Message}"); }
                 }
             }
             else if (ext == ".cpp" || ext == ".c" || ext == ".bat" || ext == ".cmd" || ext == ".ps1" || ext == ".js" || ext == ".py" || ext == ".cs")
@@ -308,7 +341,8 @@ namespace FlyShelf.ViewModels
 
                     if (exists)
                     {
-                        FormattedSize = FormatBytes(length);
+                        string sizeStr = FormatBytes(length);
+                        Application.Current?.Dispatcher?.InvokeAsync(() => FormattedSize = sizeStr);
                         string lowExt = capturedExt.ToLowerInvariant();
 
                         if (lowExt == ".zip" || lowExt == ".apk")
@@ -333,7 +367,7 @@ namespace FlyShelf.ViewModels
                                 if (totalEntryCount > 50)
                                     listing.AppendLine(CultureInfo.InvariantCulture, $"  ... and {totalEntryCount - 50} more");
                                 listing.AppendLine(CultureInfo.InvariantCulture, $"\nTotal uncompressed: {FormatBytes(totalSize)}");
-                                RawContent = listing.ToString();
+                                Application.Current?.Dispatcher?.InvokeAsync(() => RawContent = listing.ToString());
                             }
                             catch { } // Best-effort: failure is acceptable
                         }
@@ -341,9 +375,12 @@ namespace FlyShelf.ViewModels
                         // Explicitly read plain text in background thread
                         bool isPlainText = lowExt == ".txt" || lowExt == ".json" || lowExt == ".md" || lowExt == ".csv" || lowExt == ".xml" || preliminaryType == ClipboardItemType.Code;
                         if (isPlainText && length < 1000000)
-                        {
-                            try { RawContent = File.ReadAllText(capturedPath); } catch { } // Best-effort: failure is acceptable
-                        }
+                            try
+                            {
+                                string content = File.ReadAllText(capturedPath);
+                                Application.Current?.Dispatcher?.InvokeAsync(() => RawContent = content);
+                            }
+                            catch { } // Best-effort: failure is acceptable
 
                         // Trigger QR code and OCR parsing in the background
                         if (preliminaryType == ClipboardItemType.Image)
@@ -354,17 +391,22 @@ namespace FlyShelf.ViewModels
                     }
                     else if (isDir)
                     {
-                        // Folder copied — process content enumeration and zipping in background
-                        ItemType = ClipboardItemType.Folder;
-                        Extension = "FOLDER";
+                        // [FIX C-01]: Wrap bound property mutations in Dispatcher to prevent cross-thread crash
+                        Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        {
+                            ItemType = ClipboardItemType.Folder;
+                            Extension = "FOLDER";
+                        });
                         GenerateFolderIcon();
                         
                         try
                         {
-                            var allFiles = Directory.GetFiles(capturedPath, "*", SearchOption.AllDirectories);
-                            var allDirs = Directory.GetDirectories(capturedPath, "*", SearchOption.AllDirectories);
+                            // [FIX H-22]: Use EnumerateFiles with Take cap to prevent hangs on junction loops
+                            var allFiles = Directory.EnumerateFiles(capturedPath, "*", SearchOption.AllDirectories).Take(5000).ToArray();
+                            var allDirs = Directory.EnumerateDirectories(capturedPath, "*", SearchOption.AllDirectories).Take(1000).ToArray();
                             long folderSize = allFiles.Sum(f => { try { return new FileInfo(f).Length; } catch { return 0L; } });
-                            FormattedSize = string.Create(CultureInfo.InvariantCulture, $"{FormatBytes(folderSize)} • {allFiles.Length} files");
+                            string fmtSize = string.Create(CultureInfo.InvariantCulture, $"{FormatBytes(folderSize)} • {allFiles.Length} files");
+                            Application.Current?.Dispatcher?.InvokeAsync(() => FormattedSize = fmtSize);
                             
                             // Build contents listing
                             var listing = new System.Text.StringBuilder();
@@ -372,7 +414,9 @@ namespace FlyShelf.ViewModels
                             listing.AppendLine(CultureInfo.InvariantCulture, $"   {allFiles.Length} file(s), {allDirs.Length} subfolder(s)");
                             listing.AppendLine();
                             
-                            var topItems = Directory.GetFileSystemEntries(capturedPath).Take(30).ToArray();
+                            // [FIX M-15]: Reuse topItems array for count check instead of calling GetFileSystemEntries again
+                            var allTopItems = Directory.GetFileSystemEntries(capturedPath);
+                            var topItems = allTopItems.Take(30).ToArray();
                             foreach (var entry in topItems)
                             {
                                 bool entryIsDir = Directory.Exists(entry);
@@ -390,10 +434,11 @@ namespace FlyShelf.ViewModels
                                     listing.AppendLine(CultureInfo.InvariantCulture, $"  📄 {name} ({FormatBytes(fSize)})");
                                 }
                             }
-                            if (Directory.GetFileSystemEntries(capturedPath).Length > 30)
+                            if (allTopItems.Length > 30)
                                 listing.AppendLine("  ... and more");
                             
-                            RawContent = listing.ToString();
+                            string folderContent = listing.ToString();
+                            Application.Current?.Dispatcher?.InvokeAsync(() => RawContent = folderContent);
                             
                             Application.Current?.Dispatcher?.InvokeAsync(() =>
                             {
@@ -403,30 +448,31 @@ namespace FlyShelf.ViewModels
                         catch (Exception ex)
                         {
                             Classes.Logger.LogAction("FOLDER ZIP", $"Failed: {ex.Message}");
-                            FormattedSize = "Folder";
+                            Application.Current?.Dispatcher?.InvokeAsync(() => FormattedSize = "Folder");
                         }
                     }
                     else
                     {
                         // Fallback for non-existent / remote / offline files
-                        FormattedSize = "Offline / Remote";
+                        Application.Current?.Dispatcher?.InvokeAsync(() => FormattedSize = "Offline / Remote");
                         if (preliminaryType == ClipboardItemType.Image)
                         {
                             // Avoid layout breaking for offline image thumbnails by classifying as general file
-                            ItemType = ClipboardItemType.File;
+                            Application.Current?.Dispatcher?.InvokeAsync(() => ItemType = ClipboardItemType.File);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    FormattedSize = "Unknown";
+                    FormattedSize = "Unknown";  // OK: item might not be in visual tree yet
                     Classes.Logger.LogAction("CLIPBOARD_ITEM_INIT_ERR", ex.Message);
                 }
 
-                // Final properties synchronization to update the UI
-                EvaluateSmartActions();
+                // [FIX C-06]: EvaluateSmartActions fires PropertyChanged — must run on UI thread
+                // Move inside Dispatcher.InvokeAsync block instead of calling from background
                 Application.Current?.Dispatcher?.InvokeAsync(() =>
                 {
+                    EvaluateSmartActions();
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ItemType)));
@@ -494,36 +540,11 @@ namespace FlyShelf.ViewModels
             catch { } // Best-effort: failure is acceptable
         }
 
-        private static string FormatBytes(long bytes)
-        {
-            string[] suffixes = s_byteSuffixes;
-            int i;
-            double dblSByte = bytes;
-            for (i = 0; i < suffixes.Length && bytes >= 1024; i++, bytes /= 1024)
-            {
-                dblSByte = bytes / 1024.0;
-            }
-            return string.Create(CultureInfo.InvariantCulture, $"{dblSByte:0.##} {suffixes[i]}");
-        }
+        // [FIX M-58]: Delegated to shared FormatHelper
+        private static string FormatBytes(long bytes) => Classes.FormatHelper.FormatBytes(bytes);
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-        private struct SHFILEINFO
-        {
-            public IntPtr hIcon;
-            public int iIcon;
-            public uint dwAttributes;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
-            public string szDisplayName;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
-            public string szTypeName;
-        };
-
-        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
-        private static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbSizeFileInfo, uint uFlags);
-        [DllImport("user32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool DestroyIcon(IntPtr hIcon);
-
+        // NOTE (M-14): SHGetFileInfo is safe here — callers invoke this on the UI Dispatcher thread
+        // via GenerateStackedGroupIcon's InvokeAsync, so no background-thread concern.
         private static BitmapSource GetShellIconForStacking(string filePath)
         {
             try
@@ -533,8 +554,8 @@ namespace FlyShelf.ViewModels
                 const uint SHGFI_USEFILEATTRIBUTES = 0x10;
                 const uint FILE_ATTRIBUTE_NORMAL = 0x80;
 
-                SHFILEINFO shinfo = new SHFILEINFO();
-                IntPtr res = SHGetFileInfo(filePath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
+                var shinfo = new NativeMethods.SHFILEINFO();
+                IntPtr res = NativeMethods.SHGetFileInfo(filePath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
 
                 if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
                 {
@@ -549,7 +570,7 @@ namespace FlyShelf.ViewModels
                     }
                     finally
                     {
-                        DestroyIcon(shinfo.hIcon);
+                        NativeMethods.DestroyIcon(shinfo.hIcon);
                     }
                 }
             }
@@ -596,12 +617,11 @@ namespace FlyShelf.ViewModels
                             double y = startY - (icons.Count - 1 - i) * step;
 
                             // 1. Soft drop shadow
-                            dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(30, 0, 0, 0)), null, new Rect(x + 1.5, y + 2.5, 56, 56), 8, 8);
-                            dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(10, 0, 0, 0)), null, new Rect(x + 3, y + 4, 56, 56), 8, 8);
+                            dc.DrawRoundedRectangle(_iconShadow30, null, new Rect(x + 1.5, y + 2.5, 56, 56), 8, 8);
+                            dc.DrawRoundedRectangle(_iconShadow10, null, new Rect(x + 3, y + 4, 56, 56), 8, 8);
 
                             // 2. White card background with subtle light-grey border
-                            var borderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(225, 225, 225));
-                            dc.DrawRoundedRectangle(System.Windows.Media.Brushes.White, new System.Windows.Media.Pen(borderBrush, 1.0), new Rect(x, y, 56, 56), 8, 8);
+                            dc.DrawRoundedRectangle(System.Windows.Media.Brushes.White, _iconBorderGrayPen, new Rect(x, y, 56, 56), 8, 8);
 
                             // 3. Center shell icon inside the card
                             dc.DrawImage(icon, new Rect(x + 12, y + 12, 32, 32));
@@ -642,13 +662,12 @@ namespace FlyShelf.ViewModels
                     using (var dc = visual.RenderOpen())
                     {
                         // 1. Draw soft drop shadow behind the card
-                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(38, 0, 0, 0)), null, new Rect(14, 14, 68, 68), 12, 12);
-                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(15, 0, 0, 0)), null, new Rect(16, 16, 68, 68), 12, 12);
+                        dc.DrawRoundedRectangle(_iconShadowDark, null, new Rect(14, 14, 68, 68), 12, 12);
+                        dc.DrawRoundedRectangle(_iconShadowLight, null, new Rect(16, 16, 68, 68), 12, 12);
 
                         // 2. Draw card background (Fluent Dark Grey)
-                        var bgBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 30, 30));
-                        var borderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60));
-                        dc.DrawRoundedRectangle(bgBrush, new System.Windows.Media.Pen(borderBrush, 1.5), new Rect(12, 12, 68, 68), 12, 12);
+                        var borderBrush = BrushHelper.Frozen(FlyShelf.Helpers.ThemeColors.DarkGray60);
+                        dc.DrawRoundedRectangle(_iconDarkBg, CreateFrozenPen(borderBrush, 1.5), new Rect(12, 12, 68, 68), 12, 12);
 
                         // 3. Draw text elements ("M" and "↓")
                         var typeface = new System.Windows.Media.Typeface(new System.Windows.Media.FontFamily("Consolas, Segoe UI, Arial"), System.Windows.FontStyles.Normal, System.Windows.FontWeights.Bold, System.Windows.FontStretches.Normal);
@@ -668,7 +687,7 @@ namespace FlyShelf.ViewModels
                             System.Windows.FlowDirection.LeftToRight,
                             typeface,
                             28,
-                            new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(14, 165, 233)), // Fluent Cyan/Blue
+                            _iconCyanBlue, // Fluent Cyan/Blue
                             1.0); // 1.0 pixelsPerDip
 
                         dc.DrawText(formattedM, new Point(24, 28));
@@ -697,23 +716,24 @@ namespace FlyShelf.ViewModels
                     using (var dc = visual.RenderOpen())
                     {
                         // 1. Draw soft drop shadow behind the card
-                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(38, 0, 0, 0)), null, new Rect(14, 14, 68, 68), 12, 12);
-                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(15, 0, 0, 0)), null, new Rect(16, 16, 68, 68), 12, 12);
+                        dc.DrawRoundedRectangle(_iconShadowDark, null, new Rect(14, 14, 68, 68), 12, 12);
+                        dc.DrawRoundedRectangle(_iconShadowLight, null, new Rect(16, 16, 68, 68), 12, 12);
 
                         // 2. Draw card background (Fluent Charcoal)
-                        var bgBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 25, 25));
-                        var borderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8)); // Gold yellow border
-                        dc.DrawRoundedRectangle(bgBrush, new System.Windows.Media.Pen(borderBrush, 1.5), new Rect(12, 12, 68, 68), 12, 12);
+                        var bgBrush = BrushHelper.Frozen(FlyShelf.Helpers.ThemeColors.DarkGray25);
+                        var borderBrush = BrushHelper.Frozen(FlyShelf.Helpers.ThemeColors.AmberYellow); // Gold yellow border
+                        dc.DrawRoundedRectangle(bgBrush, CreateFrozenPen(borderBrush, 1.5), new Rect(12, 12, 68, 68), 12, 12);
 
                         // 3. Draw a modern lock shape!
                         // Lock base: rounded rect at the bottom
-                        var lockBodyBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8)); // Yellow/Amber
+                        var lockBodyBrush = BrushHelper.Frozen(FlyShelf.Helpers.ThemeColors.AmberYellow); // Yellow/Amber
                         dc.DrawRoundedRectangle(lockBodyBrush, null, new Rect(28, 44, 36, 26), 6, 6);
 
                         // Lock shackle
-                        var shacklePen = new System.Windows.Media.Pen(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(200, 200, 200)), 4.5);
+                        var shacklePen = new System.Windows.Media.Pen(_iconShackleGray, 4.5);
                         shacklePen.StartLineCap = System.Windows.Media.PenLineCap.Round;
                         shacklePen.EndLineCap = System.Windows.Media.PenLineCap.Round;
+                        shacklePen.Freeze(); // [FIX M-26]: Freeze to avoid cross-thread issues
                         
                         var pathGeometry = new System.Windows.Media.PathGeometry();
                         var pathFigure = new System.Windows.Media.PathFigure();
@@ -722,11 +742,12 @@ namespace FlyShelf.ViewModels
                         pathFigure.Segments.Add(new System.Windows.Media.ArcSegment(new Point(56, 33), new Size(10, 10), 0, false, System.Windows.Media.SweepDirection.Clockwise, true));
                         pathFigure.Segments.Add(new System.Windows.Media.LineSegment(new Point(56, 44), true));
                         pathGeometry.Figures.Add(pathFigure);
+                        pathGeometry.Freeze(); // [FIX M-27]: Freeze geometry for thread safety
                         dc.DrawGeometry(null, shacklePen, pathGeometry);
 
-                        // Lock keyhole
-                        dc.DrawEllipse(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 25, 25)), null, new Point(46, 52), 3, 3);
-                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 25, 25)), null, new Rect(44.5, 53, 3, 7), 1, 1);
+                        var darkBrush25 = BrushHelper.Frozen(FlyShelf.Helpers.ThemeColors.DarkGray25);
+                        dc.DrawEllipse(darkBrush25, null, new Point(46, 52), 3, 3);
+                        dc.DrawRoundedRectangle(darkBrush25, null, new Rect(44.5, 53, 3, 7), 1, 1);
                     }
 
                     var rtb = new RenderTargetBitmap(96, 96, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
@@ -751,19 +772,17 @@ namespace FlyShelf.ViewModels
                     using (var dc = visual.RenderOpen())
                     {
                         // 1. Draw soft drop shadow behind the card
-                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(38, 0, 0, 0)), null, new Rect(14, 14, 68, 68), 12, 12);
-                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(15, 0, 0, 0)), null, new Rect(16, 16, 68, 68), 12, 12);
+                        dc.DrawRoundedRectangle(_iconShadowDark, null, new Rect(14, 14, 68, 68), 12, 12);
+                        dc.DrawRoundedRectangle(_iconShadowLight, null, new Rect(16, 16, 68, 68), 12, 12);
 
                         // 2. Draw card background (Fluent Dark Grey / Charcoal)
-                        var bgBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(28, 28, 28));
-                        var borderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8)); // Gold yellow border
-                        dc.DrawRoundedRectangle(bgBrush, new System.Windows.Media.Pen(borderBrush, 1.5), new Rect(12, 12, 68, 68), 12, 12);
+                        var borderBrush = BrushHelper.Frozen(FlyShelf.Helpers.ThemeColors.AmberYellow); // Gold yellow border
+                        dc.DrawRoundedRectangle(_iconDarkBg28, CreateFrozenPen(borderBrush, 1.5), new Rect(12, 12, 68, 68), 12, 12);
 
                         // 3. Draw a modern Fluent folder shape inside the card!
                         // Yellow folder body colors
-                        var backFolderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(202, 138, 4)); // Darker yellow/amber
-                        var frontFolderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8)); // Main bright yellow/amber
-                        var folderPen = new System.Windows.Media.Pen(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(250, 204, 21)), 1.0); // Highlight yellow
+                        var frontFolderBrush = BrushHelper.Frozen(FlyShelf.Helpers.ThemeColors.AmberYellow); // Main bright yellow/amber
+                        var folderPen = CreateFrozenPen(_iconHighlightYellow, 1.0); // Highlight yellow
 
                         // Draw Folder Back Flap with Tab
                         var backGeometry = new System.Windows.Media.PathGeometry();
@@ -776,7 +795,7 @@ namespace FlyShelf.ViewModels
                         backFigure.Segments.Add(new System.Windows.Media.LineSegment(new Point(68, 62), true)); // Right-bottom
                         backFigure.IsClosed = true;
                         backGeometry.Figures.Add(backFigure);
-                        dc.DrawGeometry(backFolderBrush, null, backGeometry);
+                        dc.DrawGeometry(_iconDarkAmber, null, backGeometry);
 
                         // Draw Folder Front Flap (slightly smaller, overlapping)
                         dc.DrawRoundedRectangle(frontFolderBrush, folderPen, new Rect(24, 40, 44, 22), 4, 4);
@@ -799,7 +818,7 @@ namespace FlyShelf.ViewModels
             // 1. Try VS Code (usually registered in PATH as 'code')
             try
             {
-                var p = Process.Start(new ProcessStartInfo
+                using var p = Process.Start(new ProcessStartInfo
                 {
                     FileName = "code",
                     Arguments = $"\"{filePath}\"",
@@ -808,7 +827,7 @@ namespace FlyShelf.ViewModels
                 });
                 if (p != null) return true;
             }
-            catch { }
+            catch (Exception ex) { Logger.LogAction("ITEM_INIT", $"Non-critical error: {ex.Message}"); }
 
             // 2. Try Notepad++ (standard 64-bit location)
             string npp64 = @"C:\Program Files\Notepad++\notepad++.exe";
@@ -816,7 +835,7 @@ namespace FlyShelf.ViewModels
             {
                 try
                 {
-                    Process.Start(npp64, $"\"{filePath}\"");
+                    using (var p = Process.Start(npp64, $"\"{filePath}\"")) { } // Dispose native handle
                     return true;
                 }
                 catch { } // Best-effort: failure is acceptable
@@ -828,7 +847,7 @@ namespace FlyShelf.ViewModels
             {
                 try
                 {
-                    Process.Start(npp32, $"\"{filePath}\"");
+                    using (var p = Process.Start(npp32, $"\"{filePath}\"")) { } // Dispose native handle
                     return true;
                 }
                 catch { } // Best-effort: failure is acceptable
@@ -840,7 +859,7 @@ namespace FlyShelf.ViewModels
             {
                 try
                 {
-                    Process.Start(sublime, $"\"{filePath}\"");
+                    using (var p = Process.Start(sublime, $"\"{filePath}\"")) { } // Dispose native handle
                     return true;
                 }
                 catch { } // Best-effort: failure is acceptable
@@ -849,7 +868,7 @@ namespace FlyShelf.ViewModels
             // 5. Fallback to Notepad (present on all Windows systems)
             try
             {
-                Process.Start("notepad.exe", $"\"{filePath}\"");
+                using (var p = Process.Start("notepad.exe", $"\"{filePath}\"")) { } // Dispose native handle
                 return true;
             }
             catch { } // Best-effort: failure is acceptable

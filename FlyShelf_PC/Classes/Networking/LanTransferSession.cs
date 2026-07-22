@@ -442,21 +442,10 @@ namespace FlyShelf.Classes
         public LanTransferSession(TransferDirection direction) : this(Guid.NewGuid(), direction) { }
 
         // ═══ Formatting Helpers ═══
-        public static string FormatBytes(long bytes)
-        {
-            if (bytes < 1024) return $"{bytes} B";
-            if (bytes < 1_048_576) return $"{bytes / 1024.0:F1} KB";
-            if (bytes < 1_073_741_824) return $"{bytes / 1_048_576.0:F1} MB";
-            return $"{bytes / 1_073_741_824.0:F2} GB";
-        }
+        // [FIX M-58]: Delegated to shared FormatHelper
+        public static string FormatBytes(long bytes) => Classes.FormatHelper.FormatBytes(bytes);
 
-        public static string FormatSpeed(double bytesPerSecond)
-        {
-            if (bytesPerSecond <= 0) return "—";
-            if (bytesPerSecond < 1_048_576) return $"{bytesPerSecond / 1024.0:F0} KB/s";
-            if (bytesPerSecond < 1_073_741_824) return $"{bytesPerSecond / 1_048_576.0:F1} MB/s";
-            return $"{bytesPerSecond / 1_073_741_824.0:F2} GB/s";
-        }
+        public static string FormatSpeed(double bytesPerSecond) => Classes.FormatHelper.FormatSpeed(bytesPerSecond);
 
         // ═══ INotifyPropertyChanged ═══
         protected void OnPropertyChanged([CallerMemberName] string? name = null)

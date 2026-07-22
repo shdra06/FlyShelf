@@ -73,7 +73,8 @@
                         <Trigger Property="IsDragging" Value="True">
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
-                                    <Storyboard>
+                                    <!-- [FIX ANIM-7]: Cap ColorAnimation frame rate -->
+                                    <Storyboard Storyboard.DesiredFrameRate="30">
                                         <DoubleAnimation Storyboard.TargetName="Pill"
                                                          Storyboard.TargetProperty="Opacity"
                                                          To="0.6" Duration="0:0:0.08">
@@ -89,7 +90,8 @@
                             </Trigger.EnterActions>
                             <Trigger.ExitActions>
                                 <BeginStoryboard>
-                                    <Storyboard>
+                                    <!-- [FIX ANIM-7]: Cap ColorAnimation frame rate -->
+                                    <Storyboard Storyboard.DesiredFrameRate="30">
                                         <DoubleAnimation Storyboard.TargetName="Pill"
                                                          Storyboard.TargetProperty="Opacity"
                                                          To="0.25" Duration="0:0:0.5">
@@ -155,7 +157,8 @@
                         <Trigger Property="IsDragging" Value="True">
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
-                                    <Storyboard>
+                                    <!-- [FIX ANIM-7]: Cap ColorAnimation frame rate -->
+                                    <Storyboard Storyboard.DesiredFrameRate="30">
                                         <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"
                                                          To="0.6" Duration="0:0:0.08">
                                             <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
@@ -170,7 +173,8 @@
                             </Trigger.EnterActions>
                             <Trigger.ExitActions>
                                 <BeginStoryboard>
-                                    <Storyboard>
+                                    <!-- [FIX ANIM-7]: Cap ColorAnimation frame rate -->
+                                    <Storyboard Storyboard.DesiredFrameRate="30">
                                         <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"
                                                          To="0.25" Duration="0:0:0.5">
                                             <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>

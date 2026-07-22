@@ -281,7 +281,12 @@ export function useArchiveSync() {
     const sessionId = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
     const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
 
-    for (let i = 0; i < totalChunks; i++) {
+    // ── Resumable uploads: check for saved progress from a previous interrupted upload ──
+    const progressKey = `@upload_progress_${sessionId}`;
+    const savedProgress = await AsyncStorage.getItem(progressKey);
+    const startChunk = savedProgress ? parseInt(savedProgress, 10) : 0;
+
+    for (let i = startChunk; i < totalChunks; i++) {
       if (isCancelledRef.current) throw new Error('Cancelled');
       while (isPausedRef.current) {
         if (isCancelledRef.current) throw new Error('Cancelled');
@@ -333,6 +338,9 @@ export function useArchiveSync() {
       // Clean up temp chunk file
       try { await FileSystem.deleteAsync(chunkTempUri, { idempotent: true }); } catch {}
 
+      // ── Resumable: save progress after each successful chunk ──
+      await AsyncStorage.setItem(progressKey, (i + 1).toString());
+
       // Update progress text
       setUploadProgress(prev => ({ ...prev, [asset.id]: `chunk ${i + 1}/${totalChunks}` }));
     }
@@ -357,9 +365,12 @@ export function useArchiveSync() {
         else if (finAttempt === 2) throw new Error(`Finalize failed after 3 attempts: ${finRes.status}`);
       } catch (finErr) {
         if (finAttempt === 2) throw finErr;
-        await new Promise(r => setTimeout(r, 2000)); // Wait 2s before retry
+        await new Promise(r => setTimeout(r, 2000));
       }
     }
+
+    // ── Resumable: clean up progress key after successful finalization ──
+    await AsyncStorage.removeItem(progressKey);
   }, [pairingKey, pairedDevices]);
 
   /**

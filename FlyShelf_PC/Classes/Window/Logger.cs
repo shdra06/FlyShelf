@@ -328,7 +328,7 @@ namespace FlyShelf.Classes
                 // timeout, .GetAwaiter().GetResult() would block indefinitely on a dead network.
                 try
                 {
-                    using var client = new System.Net.Http.HttpClient() { Timeout = TimeSpan.FromSeconds(5) };
+                    var client = HttpClientPool.Quick;
                     var firebaseTask = Task.Run(async () =>
                     {
                         var authUrl = await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/.json?shallow=true").ConfigureAwait(false);
@@ -351,7 +351,7 @@ namespace FlyShelf.Classes
                 {
                     try
                     {
-                        using var client = new System.Net.Http.HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
+                        var client = HttpClientPool.Quick;
                         var cfTask = Task.Run(async () => await client.GetAsync($"{CloudDiscoveryManager.CachedGlobalUrl}/api/health").ConfigureAwait(false));
                         if (cfTask.Wait(TimeSpan.FromSeconds(10)))
                         {

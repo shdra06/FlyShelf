@@ -246,10 +246,8 @@ namespace FlyShelf.Classes
                 
                 string device = doc.RootElement.TryGetProperty("device", out var dv) ? dv.GetString() ?? "Unknown" : "Unknown";
                 
-                if (!_remoteDeviceLogs.ContainsKey(device))
-                    _remoteDeviceLogs[device] = new ConcurrentQueue<RemoteLogEntry>();
-
-                var queue = _remoteDeviceLogs[device];
+                // [FIX H-3]: Use atomic GetOrAdd to eliminate TOCTOU race on ConcurrentDictionary
+                var queue = _remoteDeviceLogs.GetOrAdd(device, _ => new ConcurrentQueue<RemoteLogEntry>());
 
                 if (doc.RootElement.TryGetProperty("logs", out var logsArr) && logsArr.ValueKind == JsonValueKind.Array)
                 {
@@ -465,11 +463,11 @@ fetch('/api/logs?lines=200')
                                     logs = newLines
                                 });
 
-                                using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                                var client = HttpClientPool.Quick;
                                 var content = new System.Net.Http.StringContent(payload, Encoding.UTF8, "application/json");
                                 await client.PostAsync($"{peer.ActiveUrl.TrimEnd('/')}/api/logs", content);
                             }
-                            catch { } // Best-effort: failure is acceptable — Don't fail if a peer is unreachable
+                            catch { } // Best-effort: failure is acceptable ï¿½ Don't fail if a peer is unreachable
                         }
                     }
                 }

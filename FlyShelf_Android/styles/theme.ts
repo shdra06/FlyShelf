@@ -247,7 +247,9 @@ export const component = {
   tabBarHeight: Platform.OS === 'ios' ? 88 : 72,
   /** Tab bar content padding bottom */
   tabBarPaddingBottom: Platform.OS === 'ios' ? 24 : 10,
-  /** Safe area top padding */
+  /** Safe area top padding — FALLBACK value only.
+   *  Components should prefer useSafeAreaInsets().top from react-native-safe-area-context
+   *  for dynamic safe area support across all Android notch/punch-hole variants. */
   safeTop: Platform.OS === 'ios' ? 54 : 44,
   /** Card standard padding */
   cardPadding: space.lg,

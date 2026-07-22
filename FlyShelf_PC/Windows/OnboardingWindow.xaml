@@ -11,7 +11,7 @@
 
     <Grid Margin="20">
         <!-- ═══ Outer Shell with DropShadow ═══ -->
-        <Border CornerRadius="20" BorderThickness="1" BorderBrush="#2A2B3F">
+        <Border CornerRadius="16" BorderThickness="1" BorderBrush="#2A2B3F">
             <Border.Background>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                     <GradientStop Color="#1A1B2E" Offset="0"/>

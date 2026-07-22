@@ -82,7 +82,7 @@
         </Border>
 
         <!-- ═══ Log Content ═══ -->
-        <Border Grid.Row="2" Background="{DynamicResource ThemeCodePreviewBg}" Margin="4,2,4,0" CornerRadius="6">
+        <Border Grid.Row="2" Background="{DynamicResource ThemeCodePreviewBg}" Margin="4,2,4,0" CornerRadius="8">
             <ScrollViewer x:Name="LogScroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           Padding="6,4" ScrollChanged="LogScroller_ScrollChanged">
                 <ItemsControl x:Name="LogItems">

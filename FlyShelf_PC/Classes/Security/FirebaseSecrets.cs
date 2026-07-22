@@ -61,35 +61,5 @@ namespace FlyShelf.Classes
             return System.Text.Encoding.UTF8.GetString(result);
         }
 
-#if false
-        // ═══ HELPER: Run this once to generate obfuscated byte arrays for new keys ═══
-        // Uncomment, call from a test, copy the output into the arrays above.
-        public static void GenerateObfuscated()
-        {
-            string apiKey = "YOUR_API_KEY_HERE";
-            string dbUrl = "YOUR_DATABASE_URL_HERE";
-
-            Console.WriteLine("API Key bytes:");
-            PrintObfuscated(apiKey);
-            Console.WriteLine("\nDB URL bytes:");
-            PrintObfuscated(dbUrl);
-        }
-
-        private static void PrintObfuscated(string plaintext)
-        {
-            byte[] key = System.Text.Encoding.UTF8.GetBytes("FlyShelf_2026_Desktop");
-            byte[] plain = System.Text.Encoding.UTF8.GetBytes(plaintext);
-            var sb = new System.Text.StringBuilder("new byte[] { ");
-            for (int i = 0; i < plain.Length; i++)
-            {
-                byte encoded = (byte)(plain[i] ^ key[i % key.Length]);
-                sb.Append($"0x{encoded:X2}");
-                if (i < plain.Length - 1) sb.Append(", ");
-                if ((i + 1) % 10 == 0) sb.Append("\n            ");
-            }
-            sb.Append(" };");
-            Console.WriteLine(sb.ToString());
-        }
-#endif
     }
 }

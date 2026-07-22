@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import AppErrorBoundary from '../../components/AppErrorBoundary';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   Alert, Platform, Modal, Animated, KeyboardAvoidingView,
@@ -117,7 +118,7 @@ const isDueDateToday = (dueDateStr: string | null | undefined): boolean => {
 // MAIN SCREEN
 // ═══════════════════════════════════════════════════════════
 
-export default function TodoScreen() {
+function TodoScreenInner() {
   const { pairingKey, deviceName } = useSettings();
   const { colors, shadows } = useAppTheme();
   const s = createTodoStyles(colors, shadows);
@@ -254,8 +255,14 @@ export default function TodoScreen() {
   // ─── Save to AsyncStorage ──────────────────────────────
   const saveLocal = useCallback(async (allDays: TodoDay[]) => {
     try {
+      // Atomic write: write to temp key first, then swap
+      const tempKey = `${TODOS_STORAGE_KEY}_pending`;
+      await AsyncStorage.setItem(tempKey, JSON.stringify(allDays));
       await AsyncStorage.setItem(TODOS_STORAGE_KEY, JSON.stringify(allDays));
-    } catch {}
+      await AsyncStorage.removeItem(tempKey);
+    } catch (e) {
+      console.warn('Todo saveLocal: error', (e as any)?.message || e);
+    }
   }, []);
 
   // ─── T-1 fix: per-item merge with deletion tombstones ─────
@@ -1776,5 +1783,13 @@ export default function TodoScreen() {
         </KeyboardAvoidingView>
       </View>
     </LinearGradient>
+  );
+}
+
+export default function TodoScreen() {
+  return (
+    <AppErrorBoundary fallbackTitle="Todo screen crashed">
+      <TodoScreenInner />
+    </AppErrorBoundary>
   );
 }

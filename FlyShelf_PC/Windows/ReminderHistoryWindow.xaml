@@ -51,7 +51,7 @@
             </StackPanel>
 
             <!-- Count pill -->
-            <Border Grid.Column="2" CornerRadius="20" Padding="14,6" VerticalAlignment="Center">
+            <Border Grid.Column="2" CornerRadius="16" Padding="14,6" VerticalAlignment="Center">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                         <GradientStop Color="#0AF59E0B" Offset="0"/>
@@ -125,7 +125,7 @@
         </StackPanel>
 
         <!-- ═══ NEW REMINDER BUTTON (inline bar) ═══ -->
-        <Border Grid.Row="2" CornerRadius="10" Padding="10,8" Margin="0,0,0,12" Cursor="Hand"
+        <Border Grid.Row="2" CornerRadius="12" Padding="10,8" Margin="0,0,0,12" Cursor="Hand"
                 MouseLeftButtonDown="NewReminder_Click">
             <Border.Style>
                 <Style TargetType="Border">
@@ -166,7 +166,7 @@
                     <ItemsControl x:Name="RemindersList">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type classes:ReminderItem}">
-                                <Border Margin="2,2" CornerRadius="10" Padding="10,10"
+                                <Border Margin="2,2" CornerRadius="12" Padding="10,10"
                                         Background="Transparent" BorderBrush="Transparent" BorderThickness="1">
                                     <Border.Style>
                                         <Style TargetType="Border">

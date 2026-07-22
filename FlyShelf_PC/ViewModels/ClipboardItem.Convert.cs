@@ -19,21 +19,18 @@ namespace FlyShelf.ViewModels
     public partial class ClipboardItem
     {
 
-        // ── Cached LibreOffice path (null = not found, "" = not yet checked) ──
-        private static string? _cachedLibreOfficePath = "";
-        private static string? GetLibreOfficePath()
+        // [FIX M-33]: Use Lazy<T> for thread-safe, once-only resolution
+        private static readonly Lazy<string?> _cachedLibreOfficePath = new(() =>
         {
-            if (_cachedLibreOfficePath != "")
-                return _cachedLibreOfficePath; // null means "not installed"
             string[] paths =
             {
                 @"C:\Program Files\LibreOffice\program\soffice.exe",
                 @"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "LibreOffice", "program", "soffice.exe")
             };
-            _cachedLibreOfficePath = paths.FirstOrDefault(File.Exists); // null if none found
-            return _cachedLibreOfficePath;
-        }
+            return paths.FirstOrDefault(File.Exists); // null if none found
+        });
+        private static string? GetLibreOfficePath() => _cachedLibreOfficePath.Value;
 
         public void ConvertDocumentTask()
         {
@@ -108,7 +105,7 @@ namespace FlyShelf.ViewModels
                         if (ext == ".DOCX" || ext == ".DOC" || ext == ".RTF")
                         {
                             if (Type.GetTypeFromProgID("Word.Application") != null)
-                                converted = TryWordComConvert(workFilePath, targetPdf);
+                                converted = await TryWordComConvertStaAsync(workFilePath, targetPdf);
                         }
 
                         // ═══════════════════════════════════════════════════════
@@ -277,14 +274,30 @@ namespace FlyShelf.ViewModels
             }
         }
 
-        private static string EscapePdfString(string s)
+        // [FIX M-50]: Handle non-ASCII/Unicode/CJK/emoji via octal escaping for valid PDF strings
+        private static string EscapePdfString(string input)
         {
-            if (string.IsNullOrEmpty(s)) return "";
-            return s
-                .Replace("\\", "\\\\")
-                .Replace("(", "\\(")
-                .Replace(")", "\\)")
-                .Replace("\t", "    ");
+            if (string.IsNullOrEmpty(input)) return "";
+            var sb = new StringBuilder(input.Length + 10);
+            foreach (char c in input)
+            {
+                switch (c)
+                {
+                    case '\\': sb.Append(@"\\"); break;
+                    case '(': sb.Append(@"\("); break;
+                    case ')': sb.Append(@"\)"); break;
+                    case '\r': sb.Append(@"\r"); break;
+                    case '\n': sb.Append(@"\n"); break;
+                    case '\t': sb.Append("    "); break;
+                    default:
+                        if (c > 0x7E)
+                            sb.Append($"\\{((int)c):D3}"); // Octal-style escape for non-ASCII
+                        else
+                            sb.Append(c);
+                        break;
+                }
+            }
+            return sb.ToString();
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -347,9 +360,31 @@ namespace FlyShelf.ViewModels
 
         // ═══════════════════════════════════════════════════════════════
         // WORD COM — Full dialog suppression + cancellation support
+        // [FIX H-12]: Run Word COM on an explicit STA thread to avoid
+        // MTA hangs — COM automation requires STA apartment state.
         // ═══════════════════════════════════════════════════════════════
-        private static bool TryWordComConvert(string inputPath, string outputPdf,
-            System.Threading.CancellationToken ct = default)
+        private static Task<bool> TryWordComConvertStaAsync(string inputPath, string outputPdf)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            var staThread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    bool result = TryWordComConvertCore(inputPath, outputPdf);
+                    tcs.SetResult(result);
+                }
+                catch (Exception ex)
+                {
+                    tcs.SetException(ex);
+                }
+            });
+            staThread.SetApartmentState(System.Threading.ApartmentState.STA);
+            staThread.IsBackground = true;
+            staThread.Start();
+            return tcs.Task;
+        }
+
+        private static bool TryWordComConvertCore(string inputPath, string outputPdf)
         {
             dynamic? wordApp = null;
             dynamic? doc = null;
@@ -373,13 +408,13 @@ namespace FlyShelf.ViewModels
                 {
                     wordApp.Options.WarnBeforeSavingPrintOrMailMerge = false;
                 }
-                catch { } // Best-effort: failure is acceptable
+                catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("CONVERT", $"Non-critical: {ex.Message}"); } // Best-effort: failure is acceptable
                 try
                 {
                     // Disable Protected View triggers
                     var protView = wordApp.Application.ProtectedViewWindows;
                 }
-                catch { }
+                catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("CONVERT", $"Non-critical: {ex.Message}"); }
 
                 // Track the Word process for timeout kill
                 try
@@ -393,76 +428,54 @@ namespace FlyShelf.ViewModels
                             .FirstOrDefault();
                     }
                 }
-                catch { }
+                catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("CONVERT", $"Non-critical: {ex.Message}"); }
 
                 // Open document with all dialog-triggering options disabled
-                var openTask = Task.Run(() =>
-                {
-                    doc = wordApp.Documents.Open(
-                        inputPath,              // FileName
-                        false,                  // ConfirmConversions — NO conversion dialog
-                        true,                   // ReadOnly
-                        false,                  // AddToRecentFiles
-                        "",                     // PasswordDocument — empty string, not Missing
-                        "",                     // PasswordTemplate
-                        true,                   // Revert (don't ask to revert)
-                        "",                     // WritePasswordDocument
-                        "",                     // WritePasswordTemplate
-                        Type.Missing,           // Format
-                        Type.Missing,           // Encoding
-                        false,                  // Visible
-                        false,                  // OpenAndRepair
-                        Type.Missing,           // DocumentDirection
-                        true,                   // NoEncodingDialog — suppress encoding dialog
-                        Type.Missing            // XMLTransform
-                    );
-                }, ct);
-
-                // Wait with timeout — if Word shows a dialog, it blocks
-                if (ct.IsCancellationRequested) return false;
-                if (!openTask.Wait(TimeSpan.FromSeconds(20)))
-                {
-                    FlyShelf.Classes.Logger.LogAction("CONVERT", "Word open timed out (likely dialog)");
-                    ForceKillWord(wordProcess);
-                    return false;
-                }
+                doc = wordApp.Documents.Open(
+                    inputPath,              // FileName
+                    false,                  // ConfirmConversions — NO conversion dialog
+                    true,                   // ReadOnly
+                    false,                  // AddToRecentFiles
+                    "",                     // PasswordDocument — empty string, not Missing
+                    "",                     // PasswordTemplate
+                    true,                   // Revert (don't ask to revert)
+                    "",                     // WritePasswordDocument
+                    "",                     // WritePasswordTemplate
+                    Type.Missing,           // Format
+                    Type.Missing,           // Encoding
+                    false,                  // Visible
+                    false,                  // OpenAndRepair
+                    Type.Missing,           // DocumentDirection
+                    true,                   // NoEncodingDialog — suppress encoding dialog
+                    Type.Missing            // XMLTransform
+                );
 
                 if (doc == null) return false;
 
-                // Export to PDF with timeout
-                var exportTask = Task.Run(() =>
-                {
-                    doc.ExportAsFixedFormat(
-                        outputPdf,              // OutputFileName
-                        17,                     // wdExportFormatPDF
-                        false,                  // OpenAfterExport
-                        0,                      // OptimizeFor: wdExportOptimizeForPrint
-                        0,                      // Range: wdExportAllDocument
-                        1,                      // From
-                        1,                      // To
-                        0,                      // Item: wdExportDocumentContent
-                        true,                   // IncludeDocProps
-                        true,                   // KeepIRM
-                        0,                      // CreateBookmarks: wdExportCreateNoBookmarks
-                        true,                   // DocStructureTags
-                        true,                   // BitmapMissingFonts
-                        false                   // UseISO19005_1 (PDF/A)
-                    );
-                });
-
-                if (ct.IsCancellationRequested) return false;
-                if (!exportTask.Wait(TimeSpan.FromSeconds(30)))
-                {
-                    FlyShelf.Classes.Logger.LogAction("CONVERT", "Word export timed out (likely dialog)");
-                    ForceKillWord(wordProcess);
-                    return false;
-                }
+                // Export to PDF
+                doc.ExportAsFixedFormat(
+                    outputPdf,              // OutputFileName
+                    17,                     // wdExportFormatPDF
+                    false,                  // OpenAfterExport
+                    0,                      // OptimizeFor: wdExportOptimizeForPrint
+                    0,                      // Range: wdExportAllDocument
+                    1,                      // From
+                    1,                      // To
+                    0,                      // Item: wdExportDocumentContent
+                    true,                   // IncludeDocProps
+                    true,                   // KeepIRM
+                    0,                      // CreateBookmarks: wdExportCreateNoBookmarks
+                    true,                   // DocStructureTags
+                    true,                   // BitmapMissingFonts
+                    false                   // UseISO19005_1 (PDF/A)
+                );
 
                 return File.Exists(outputPdf) && new FileInfo(outputPdf).Length > 0;
             }
             catch (Exception ex)
             {
                 FlyShelf.Classes.Logger.LogAction("CONVERT", $"Word COM failed: {ex.Message}");
+                ForceKillWord(wordProcess);
                 return false;
             }
             finally
@@ -525,8 +538,10 @@ namespace FlyShelf.ViewModels
                     byte[] jpegBytes;
                     int imgWidth, imgHeight;
 
+                    // [FIX M-21]: Use FileStream with ReadWrite share to avoid locking the source file
+                    using var imgFs = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                     var dec = System.Windows.Media.Imaging.BitmapDecoder.Create(
-                        new Uri(FilePath, UriKind.Absolute),
+                        imgFs,
                         System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,
                         System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
 
@@ -669,8 +684,10 @@ namespace FlyShelf.ViewModels
                         Path.GetFileNameWithoutExtension(FilePath) + $"_{DateTime.Now:yyyyMMdd_HHmmss}.{ext}");
 
                     // Load image using WPF's decoder (thread-safe on background threads)
+                    // [FIX M-21]: Use FileStream with ReadWrite share to avoid locking the source file
+                    using var imgFs = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                     var dec = System.Windows.Media.Imaging.BitmapDecoder.Create(
-                        new Uri(FilePath, UriKind.Absolute),
+                        imgFs,
                         System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,
                         System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
 

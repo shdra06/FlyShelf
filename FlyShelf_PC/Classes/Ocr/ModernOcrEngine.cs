@@ -47,19 +47,8 @@ namespace FlyShelf.Classes
     public static class ModernOcrEngine
     {
         // ═══════════════════════════════════════════════════════════════
-        //  P/Invoke declarations for WinRT COM activation
+        //  P/Invoke declarations moved to NativeMethods.cs (combase.dll)
         // ═══════════════════════════════════════════════════════════════
-
-        [DllImport("combase.dll", PreserveSig = false)]
-        private static extern void RoGetActivationFactory(
-            [MarshalAs(UnmanagedType.HString)] string activatableClassId,
-            [In] ref Guid iid,
-            out IntPtr factory);
-
-        [DllImport("combase.dll", PreserveSig = false)]
-        private static extern void RoActivateInstance(
-            [MarshalAs(UnmanagedType.HString)] string activatableClassId,
-            out IntPtr instance);
 
         // IInspectable IID — base interface for all WinRT objects
         private static readonly Guid IID_IInspectable = new("AF86E2E0-B12D-4c6a-9C5A-D7AA65101E90");
@@ -115,7 +104,7 @@ namespace FlyShelf.Classes
                 try
                 {
                     var iid = IID_IInspectable;
-                    RoGetActivationFactory("Microsoft.Windows.AI.Imaging.TextRecognizer", ref iid, out factoryPtr);
+                    NativeMethods.RoGetActivationFactory("Microsoft.Windows.AI.Imaging.TextRecognizer", ref iid, out factoryPtr);
                 }
                 catch (Exception ex)
                 {
@@ -387,7 +376,7 @@ namespace FlyShelf.Classes
             try
             {
                 var iid = IID_IInspectable;
-                RoGetActivationFactory(runtimeClassName, ref iid, out IntPtr factoryPtr);
+                NativeMethods.RoGetActivationFactory(runtimeClassName, ref iid, out IntPtr factoryPtr);
 
                 if (factoryPtr == IntPtr.Zero)
                     return null;

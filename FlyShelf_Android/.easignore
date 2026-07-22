@@ -1,0 +1,7 @@
+.git
+.vscode
+.idea
+dist
+__tests__
+*.md
+*.bat

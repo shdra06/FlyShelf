@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace FlyShelf.Classes
 {
@@ -17,45 +18,25 @@ namespace FlyShelf.Classes
     // DATA MODEL
     // ═══════════════════════════════════════════════════════════
 
-    public class TextShortcut : INotifyPropertyChanged
+    public partial class TextShortcut : ObservableObject
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
 
+        [ObservableProperty]
         private string _trigger = "";
-        public string Trigger
-        {
-            get => _trigger;
-            set { if (_trigger != value) { _trigger = value; OnPropertyChanged(nameof(Trigger)); } }
-        }
 
+        [ObservableProperty]
         private string _label = "";
-        public string Label
-        {
-            get => _label;
-            set { if (_label != value) { _label = value; OnPropertyChanged(nameof(Label)); } }
-        }
 
+        [ObservableProperty]
         private string _expansion = "";
-        public string Expansion
-        {
-            get => _expansion;
-            set { if (_expansion != value) { _expansion = value; OnPropertyChanged(nameof(Expansion)); } }
-        }
 
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
         // UI-only property for inline editing — not serialized
+        [ObservableProperty]
+        [property: JsonIgnore]
         private bool _isEditing;
-        [JsonIgnore]
-        public bool IsEditing
-        {
-            get => _isEditing;
-            set { if (_isEditing != value) { _isEditing = value; OnPropertyChanged(nameof(IsEditing)); } }
-        }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-        protected void OnPropertyChanged(string name) =>
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 
     // ═══════════════════════════════════════════════════════════

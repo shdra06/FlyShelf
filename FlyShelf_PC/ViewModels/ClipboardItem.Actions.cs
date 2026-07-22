@@ -155,7 +155,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                Process.Start(startInfo);
+                _ = Task.Run(() => { try { Process.Start(startInfo); } catch { } });
 
 
 
@@ -353,7 +353,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                    Process.Start(startInfo);
+                    _ = Task.Run(() => { try { Process.Start(startInfo); } catch { } });
 
 
 
@@ -410,7 +410,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                    Process.Start(new ProcessStartInfo { FileName = RawContent, UseShellExecute = true });
+                    _ = Task.Run(() => { try { Process.Start(new ProcessStartInfo { FileName = RawContent, UseShellExecute = true }); } catch { } });
 
 
 
@@ -482,7 +482,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                Process.Start(startInfo);
+                _ = Task.Run(() => { try { Process.Start(startInfo); } catch { } });
 
 
 
@@ -593,7 +593,7 @@ namespace FlyShelf.ViewModels
                     CreateNoWindow = false
                 };
 
-                Process.Start(startInfo);
+                _ = Task.Run(() => { try { Process.Start(startInfo); } catch { } });
                 // Note: .bat cleanup is fire-and-forget; cmd.exe holds the file open while running
 
 

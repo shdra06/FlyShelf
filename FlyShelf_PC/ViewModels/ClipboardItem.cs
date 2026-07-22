@@ -8,6 +8,7 @@ using System.Windows.Media.Imaging;
 using System.Diagnostics;
 using System.ComponentModel;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 
@@ -33,6 +34,15 @@ namespace FlyShelf.ViewModels
 
     public partial class ClipboardItem : INotifyPropertyChanged, IDisposable
     {
+        // ═══ Named Constants ═══
+        private const int DisplayTextTruncationLimit = 150;
+        private const int LargeTextSpillThreshold = 10_000_000;
+        private const int SpillPreviewLength = 200;
+        private const int LongTextThreshold = 260;
+        private const int MaxCollapsedLines = 4;
+        private const double CollapsedMaxHeightLong = 100.0;
+        private const double CollapsedMaxHeightShort = 57.0;
+
         public DateTime DateCopied { get; set; } = DateTime.Now;
         public string FilePath { get; set; } = string.Empty;
         
@@ -71,12 +81,63 @@ namespace FlyShelf.ViewModels
                 if (_fileName != value)
                 {
                     _fileName = value;
+                    _lowerFileName = null; // invalidate cache
+                    _displayText = null;   // invalidate display cache
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FileName)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayText)));
                 }
             }
         }
 
-        public string Extension { get; set; } = string.Empty;
+        /// <summary>
+        /// Truncated display text for the card preview. Caps at 300 chars when collapsed
+        /// to prevent WPF TextBlock.MeasureOverride from processing thousands of characters
+        /// for wrap computation — the #1 source of scroll jitter on text-heavy items.
+        /// Full text only shown when user expands the card.
+        /// </summary>
+        private string? _displayText;
+        [JsonIgnore]
+        public string DisplayText
+        {
+            get
+            {
+                if (IsExpanded) return _fileName;
+                if (_displayText != null) return _displayText;
+                if (_fileName.Length <= DisplayTextTruncationLimit)
+                {
+                    _displayText = _fileName;
+                }
+                else
+                {
+                    _displayText = string.Concat(_fileName.AsSpan(0, DisplayTextTruncationLimit), "…");
+                }
+                return _displayText;
+            }
+        }
+
+        /// <summary>Cached lowercase FileName — avoids per-search ToLowerInvariant allocations.</summary>
+        private string? _lowerFileName;
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string LowerFileName => _lowerFileName ??= (FileName ?? string.Empty).ToLowerInvariant();
+
+        private string _extension = string.Empty;
+        public string Extension
+        {
+            get => _extension;
+            set
+            {
+                if (_extension != value)
+                {
+                    _extension = value;
+                    if (_suppressPropertyNotifications) return;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Extension)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowSemanticIcon)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SemanticIconGlyph)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasPreviewImage)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CardSubtitle)));
+                }
+            }
+        }
         
         public string AssociatedContextTitle { get; set; } = string.Empty;
 
@@ -135,6 +196,10 @@ namespace FlyShelf.ViewModels
                 SourceDeviceType = this.SourceDeviceType,
                 TransferMethod = this.TransferMethod,
                 SourceAppName = this.SourceAppName,
+                // [FIX M-29]: Include properties needed by remote device
+                IsPinned = this.IsPinned,
+                IsPassword = this.IsPassword,
+                _detectedColor = this._detectedColor,
             };
         }
 
@@ -213,6 +278,7 @@ namespace FlyShelf.ViewModels
         }
 
         // PERF: Suppress notifications during construction — item isn't in visual tree yet
+        // TODO [L-16]: Consider renaming to SuppressPropertyNotifications (property pattern for internal access)
         [JsonIgnore]
         internal bool _suppressPropertyNotifications = false;
 
@@ -226,35 +292,44 @@ namespace FlyShelf.ViewModels
                 {
                     _itemType = value;
                     if (_suppressPropertyNotifications) return;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ItemType)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLongText)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExpandToggleText)));
+                    // [FIX M-30]: Use SafeNotify so one bad subscriber doesn't skip the rest
+                    SafeNotify(nameof(ItemType));
+                    SafeNotify(nameof(IsLongText));
+                    SafeNotify(nameof(CollapsedMaxHeight));
+                    SafeNotify(nameof(ExpandToggleText));
                     
                     // Notify all visual preview triggers to re-evaluate dynamically
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsImagePreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsStaticImagePreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsGifPreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDocPreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPdfPreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsUrlPreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsCodePreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsGroupPreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsQRCodePreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsVideoPreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsArchivePreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsFolderPreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsTextPreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsAudioPreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPresentationPreview)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsFilePreview)));
+                    SafeNotify(nameof(IsImagePreview));
+                    SafeNotify(nameof(IsStaticImagePreview));
+                    SafeNotify(nameof(IsGifPreview));
+                    SafeNotify(nameof(IsDocPreview));
+                    SafeNotify(nameof(IsPdfPreview));
+                    SafeNotify(nameof(IsUrlPreview));
+                    SafeNotify(nameof(IsCodePreview));
+                    SafeNotify(nameof(IsGroupPreview));
+                    SafeNotify(nameof(IsQRCodePreview));
+                    SafeNotify(nameof(IsVideoPreview));
+                    SafeNotify(nameof(IsArchivePreview));
+                    SafeNotify(nameof(IsFolderPreview));
+                    SafeNotify(nameof(IsTextPreview));
+                    SafeNotify(nameof(IsAudioPreview));
+                    SafeNotify(nameof(IsPresentationPreview));
+                    SafeNotify(nameof(IsFilePreview));
+
+                    // Trigger-consolidation computed properties
+                    SafeNotify(nameof(ShowSemanticIcon));
+                    SafeNotify(nameof(SemanticIconGlyph));
+                    SafeNotify(nameof(HasPreviewImage));
+                    SafeNotify(nameof(CardSubtitle));
                 }
             }
         }
 
         private string _rawContent = string.Empty;
-        private string _rawContentBackingFile = null; // For very large texts spilled to disk
-        private volatile bool _isLoadingSpilledContent; // Guard for async spill reload
+        private string? _rawContentBackingFile = null; // For very large texts spilled to disk
+        // [FIX M-03]: Use int + Interlocked for atomic check-and-set instead of volatile bool
+        private int _isLoadingSpilledContentFlag; // 0 = idle, 1 = loading
+        private bool _backingFileVerified; // PERF [FIX 2]: Cache File.Exists result for backing file
 
         /// <summary>
         /// Full raw text content. No character limit — unlimited text is supported.
@@ -269,11 +344,11 @@ namespace FlyShelf.ViewModels
                 // PERF: Previously did synchronous File.ReadAllText here, which blocked the UI thread
                 // when WPF evaluated bindings during scroll/virtualization.
                 if (_rawContent == null && !string.IsNullOrEmpty(_rawContentBackingFile)
-                    && System.IO.File.Exists(_rawContentBackingFile))
+                    && (_backingFileVerified || System.IO.File.Exists(_rawContentBackingFile)))
                 {
-                    if (!_isLoadingSpilledContent)
+                    // [FIX M-03]: Atomic check-and-set — prevents double file reads
+                    if (Interlocked.CompareExchange(ref _isLoadingSpilledContentFlag, 1, 0) == 0)
                     {
-                        _isLoadingSpilledContent = true;
                         string backingFile = _rawContentBackingFile;
                         System.Threading.Tasks.Task.Run(() =>
                         {
@@ -283,14 +358,14 @@ namespace FlyShelf.ViewModels
                                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                                 {
                                     _rawContent = loaded;
-                                    _isLoadingSpilledContent = false;
+                                    Interlocked.Exchange(ref _isLoadingSpilledContentFlag, 0);
                                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));
                                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLongText)));
                                 });
                             }
                             catch
                             {
-                                _isLoadingSpilledContent = false;
+                                Interlocked.Exchange(ref _isLoadingSpilledContentFlag, 0);
                             }
                         });
                     }
@@ -305,7 +380,7 @@ namespace FlyShelf.ViewModels
 
                 // For very large texts (>10M), spill to backing file to prevent OOM
                 // but keep a truncated preview in memory for UI responsiveness
-                if (newValue.Length > 10_000_000)
+                if (newValue.Length > LargeTextSpillThreshold)
                 {
                     try
                     {
@@ -318,22 +393,54 @@ namespace FlyShelf.ViewModels
                         System.IO.Directory.CreateDirectory(spillDir);
                         _rawContentBackingFile = System.IO.Path.Combine(spillDir,
                             $"spill_{DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture)}_{Guid.NewGuid().ToString().Substring(0, 6)}.txt");
-                        _ = System.Threading.Tasks.Task.Run(() => System.IO.File.WriteAllText(_rawContentBackingFile, newValue));
+                        _backingFileVerified = true; // PERF [FIX 2]: Mark backing file as valid
+                        // [FIX C-03]: Keep truncated preview in memory until write completes.
+                        // Previously set _rawContent = null immediately, causing getter to read partially-written file.
+                        string backingPath = _rawContentBackingFile;
+                        _rawContent = newValue.Length > SpillPreviewLength ? newValue[..SpillPreviewLength] + "…" : newValue;
+                        _ = System.Threading.Tasks.Task.Run(() =>
+                        {
+                            System.IO.File.WriteAllText(backingPath, newValue);
+                            // Only null out _rawContent after write completes successfully
+                            _rawContent = null;
+                        });
+                        _lowerContent = null; // invalidate cache
 
-                        // [FIX M-26]: Release the in-memory copy now that it's persisted to disk
-                        _rawContent = null;
+                        // [FIX C-1]: Raise PropertyChanged and return early so the fall-through
+                        // below doesn't re-assign the huge string back into _rawContent.
+                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));
+                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLongText)));
+                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
+                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExpandToggleText)));
                     }
                     catch { /* If spill fails, keep in memory anyway */ }
+
+                    return;
                 }
 
                 if (!ReferenceEquals(_rawContent, newValue) && _rawContent != newValue)
                 {
                     _rawContent = newValue;
+                    _lowerContent = null; // invalidate cache
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLongText)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExpandToggleText)));
                 }
+            }
+        }
+
+        /// <summary>Cached lowercase RawContent — avoids per-search ToLowerInvariant allocations.</summary>
+        private string? _lowerContent;
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string LowerContent
+        {
+            get
+            {
+                var raw = RawContent ?? string.Empty;
+                // [FIX H-11]: Don't cache when spill is still loading — would permanently cache empty string
+                if (_isLoadingSpilledContentFlag != 0) return raw.ToLowerInvariant();
+                return _lowerContent ??= raw.ToLowerInvariant();
             }
         }
 
@@ -350,6 +457,7 @@ namespace FlyShelf.ViewModels
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsExpanded)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExpandToggleText)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayText)));
                 }
             }
         }
@@ -364,7 +472,7 @@ namespace FlyShelf.ViewModels
                 if (string.IsNullOrEmpty(RawContent))
                     return false;
                 
-                if (RawContent.Length > 260)
+                if (RawContent.Length > LongTextThreshold)
                     return true;
                 
                 int lineCount = 0;
@@ -373,7 +481,7 @@ namespace FlyShelf.ViewModels
                 {
                     lineCount++;
                     index++;
-                    if (lineCount > 4)
+                    if (lineCount > MaxCollapsedLines)
                         return true;
                 }
                 return false;
@@ -381,7 +489,7 @@ namespace FlyShelf.ViewModels
         }
 
         [JsonIgnore]
-        public double CollapsedMaxHeight => IsLongText ? (IsExpanded ? double.PositiveInfinity : 100.0) : 57.0;
+        public double CollapsedMaxHeight => IsLongText ? (IsExpanded ? double.PositiveInfinity : CollapsedMaxHeightLong) : CollapsedMaxHeightShort;
 
         [JsonIgnore]
         public string ExpandToggleText => IsExpanded ? "▴" : "▾";
@@ -601,7 +709,23 @@ namespace FlyShelf.ViewModels
         private static readonly System.Windows.Media.SolidColorBrush _transparentBrush = System.Windows.Media.Brushes.Transparent;
         private System.Windows.Media.SolidColorBrush _cachedDetectedColorBrush;
         [JsonIgnore]
-        public System.Windows.Media.SolidColorBrush DetectedColorBrush { get { if (!HasDetectedColor) return _transparentBrush; return _cachedDetectedColorBrush ??= FlyShelf.Classes.ColorHelper.ToBrush(_detectedColor); } }        // --- PASSWORD MANAGEMENT PROPERTIES ---
+        public System.Windows.Media.SolidColorBrush DetectedColorBrush
+        {
+            get
+            {
+                if (!HasDetectedColor) return _transparentBrush;
+                if (_cachedDetectedColorBrush == null)
+                {
+                    var brush = FlyShelf.Classes.ColorHelper.ToBrush(_detectedColor);
+                    // [FIX C-02]: Freeze brush to prevent cross-thread crash during scroll
+                    if (brush.CanFreeze) brush.Freeze();
+                    _cachedDetectedColorBrush = brush;
+                }
+                return _cachedDetectedColorBrush;
+            }
+        }
+
+        // --- PASSWORD MANAGEMENT PROPERTIES ---
         private bool _isPassword;
         public bool IsPassword
         {
@@ -628,8 +752,16 @@ namespace FlyShelf.ViewModels
                 string trimmed = RawContent.Trim();
                 if (trimmed.Length == 0) return false;
                 
-                int words = trimmed.Split(' ', '\r', '\n', '\t').Length;
-                return words >= 1 && words <= 2;
+                // [FIX M-53]: Count words without allocating a string array
+                int wordCount = 1;
+                bool inSep = false;
+                foreach (char c in trimmed)
+                {
+                    bool isSep = c == ' ' || c == '\r' || c == '\n' || c == '\t';
+                    if (isSep && !inSep) wordCount++;
+                    inSep = isSep;
+                }
+                return wordCount >= 1 && wordCount <= 2;
             }
         }
 
@@ -667,7 +799,68 @@ namespace FlyShelf.ViewModels
         [JsonIgnore]
         public DateTime? LeftViewportTime { get; set; }
 
+        // ═══ COMPUTED PROPERTIES FOR TRIGGER CONSOLIDATION ═══
+        // These replace 100+ XAML DataTriggers with single bindings.
+        // Phase 1: Add properties. Phase 2 (later): Update XAML bindings.
+
+        /// <summary>Whether the semantic type icon should be visible (replaces 11 MultiDataTriggers).</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool ShowSemanticIcon => ItemType != ClipboardItemType.Text || !string.IsNullOrEmpty(FileName);
+
+        /// <summary>Icon glyph name based on item type + extension (replaces 12 DataTriggers).</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string SemanticIconGlyph
+        {
+            get
+            {
+                return ItemType switch
+                {
+                    ClipboardItemType.Image => "Image24",
+                    ClipboardItemType.File => (Extension?.ToLowerInvariant()) switch
+                    {
+                        ".pdf" => "DocumentPdf24",
+                        ".doc" or ".docx" => "Document24",
+                        ".xls" or ".xlsx" => "Table24",
+                        ".ppt" or ".pptx" => "SlideLayout24",
+                        ".zip" or ".rar" or ".7z" or ".tar" or ".gz" => "FolderZip24",
+                        ".mp3" or ".wav" or ".flac" or ".aac" => "MusicNote224",
+                        ".mp4" or ".avi" or ".mkv" or ".mov" => "Video24",
+                        ".exe" or ".msi" => "AppGeneric24",
+                        _ => "Document24"
+                    },
+                    ClipboardItemType.Url => "Link24",
+                    _ => "ClipboardText24"
+                };
+            }
+        }
+
+        /// <summary>Whether this item has a preview image to show.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool HasPreviewImage => ItemType == ClipboardItemType.Image || ItemType == ClipboardItemType.File;
+
+        /// <summary>Summary display text for the card subtitle area.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string CardSubtitle
+        {
+            get
+            {
+                if (ItemType == ClipboardItemType.Image) return "Image";
+                if (ItemType == ClipboardItemType.Url) return "Link";
+                if (ItemType == ClipboardItemType.File) return Extension?.ToUpperInvariant()?.TrimStart('.') ?? "File";
+                // Text: show character count
+                var len = RawContent?.Length ?? 0;
+                return len > 0 ? $"{len:N0} chars" : "Empty";
+            }
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
+
+        // [FIX M-30]: Isolate each PropertyChanged invocation so one bad subscriber
+        // doesn't prevent the remaining notifications from firing.
+        private void SafeNotify(string propertyName)
+        {
+            try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName)); } catch { }
+        }
 
         // ═══ IDisposable — release BitmapSource refs and large strings ═══
         private bool _disposed;
@@ -677,6 +870,10 @@ namespace FlyShelf.ViewModels
             if (_disposed) return;
             _disposed = true;
 
+            // [FIX M-40]: Cancel any pending background tasks
+            try { _disposeCts?.Cancel(); _disposeCts?.Dispose(); } catch { }
+            _disposeCts = null;
+
             Icon = null;
             SourceAppIcon = null;
             _rawContent = string.Empty;
@@ -685,10 +882,20 @@ namespace FlyShelf.ViewModels
             // [SECURITY FIX v2.1.0]: Clean up spilled large-text backing file on dispose (H-04)
             if (!string.IsNullOrEmpty(_rawContentBackingFile))
             {
+                // [FIX BTN-9]: Removed blocking spin-wait that could stall UI for 500ms during collection clear.
+                // If spilled content is still loading, just let GC handle cleanup.
+                if (Interlocked.CompareExchange(ref _isLoadingSpilledContentFlag, 0, 0) != 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"ClipboardItem.Dispose: spill-load still active for {FileName}");
+                }
                 try { System.IO.File.Delete(_rawContentBackingFile); } catch { }
                 _rawContentBackingFile = null;
+                _backingFileVerified = false;
             }
         }
+
+        /// <summary>Cancellation source for background tasks. Cancelled in Dispose().</summary>
+        private CancellationTokenSource? _disposeCts = new();
         
     }
 }

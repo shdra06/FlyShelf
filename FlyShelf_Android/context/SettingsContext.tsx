@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { clearKeyCache } from '../utils/syncCrypto';
@@ -332,8 +332,24 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   }, []);
 
+  const providerValue = useMemo(() => ({
+    pcLocalIp, setPcLocalIp, deviceName, setDeviceName, deviceId, isLoading,
+    isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, setFloatingBallEnabled,
+    defaultTargetDeviceName, setDefaultTargetDeviceName, floatingBallSize, setFloatingBallSize,
+    floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, addPairedDevice, removePairedDevice,
+    updatePairedDeviceLicensing, updateDeviceStatus, pairingKey, regeneratePairingKey,
+    syncPreferences, setSyncPreference, getSyncPrefsForDevice, setAllSyncPrefsForDevice,
+  }), [
+    pcLocalIp, setPcLocalIp, deviceName, setDeviceName, deviceId, isLoading,
+    isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, setFloatingBallEnabled,
+    defaultTargetDeviceName, setDefaultTargetDeviceName, floatingBallSize, setFloatingBallSize,
+    floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, addPairedDevice, removePairedDevice,
+    updatePairedDeviceLicensing, updateDeviceStatus, pairingKey, regeneratePairingKey,
+    syncPreferences, setSyncPreference, getSyncPrefsForDevice, setAllSyncPrefsForDevice,
+  ]);
+
   return (
-    <SettingsContext.Provider value={{ pcLocalIp, setPcLocalIp, deviceName, setDeviceName, deviceId, isLoading, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, setFloatingBallEnabled, defaultTargetDeviceName, setDefaultTargetDeviceName, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, addPairedDevice, removePairedDevice, updatePairedDeviceLicensing, updateDeviceStatus, pairingKey, regeneratePairingKey, syncPreferences, setSyncPreference, getSyncPrefsForDevice, setAllSyncPrefsForDevice }}>
+    <SettingsContext.Provider value={providerValue}>
       {children}
     </SettingsContext.Provider>
   );

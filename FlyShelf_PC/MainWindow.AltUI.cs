@@ -17,6 +17,7 @@ namespace FlyShelf
     {
         private bool _isAltUIActive = false;
         private bool _isAltSearchActive = false;
+        private System.Windows.Threading.DispatcherTimer? _altSearchDebounce;
 
         /// <summary>
         /// Applies the correct UI mode based on UseAlternateClipboardUI setting.
@@ -85,25 +86,36 @@ namespace FlyShelf
         {
             if (AltShelfListView?.ItemsSource == null || AltSearchTextBox == null) return;
 
-            string query = AltSearchTextBox.Text?.Trim() ?? "";
-            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(AltShelfListView.ItemsSource);
-            if (view == null) return;
+            _altSearchDebounce?.Stop();
+            _altSearchDebounce = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(150)
+            };
+            _altSearchDebounce.Tick += (_, __) =>
+            {
+                _altSearchDebounce.Stop();
 
-            if (string.IsNullOrEmpty(query))
-            {
-                view.Filter = null;
-            }
-            else
-            {
-                view.Filter = obj =>
+                string query = AltSearchTextBox.Text?.Trim() ?? "";
+                var view = System.Windows.Data.CollectionViewSource.GetDefaultView(AltShelfListView.ItemsSource);
+                if (view == null) return;
+
+                if (string.IsNullOrEmpty(query))
                 {
-                    if (obj is ViewModels.ClipboardItem item)
+                    view.Filter = null;
+                }
+                else
+                {
+                    view.Filter = obj =>
                     {
-                        return Classes.FuzzyMatcher.IsMatchAny(query, item.FileName, item.RawContent);
-                    }
-                    return false;
-                };
-            }
+                        if (obj is ViewModels.ClipboardItem item)
+                        {
+                            return Classes.FuzzyMatcher.IsMatchAny(query, item.LowerFileName, item.LowerContent, item.FileName, item.RawContent);
+                        }
+                        return false;
+                    };
+                }
+            };
+            _altSearchDebounce.Start();
         }
 
         // ═══ Alt UI Settings ═══
@@ -528,14 +540,8 @@ namespace FlyShelf
                                                     var img = FindVisualChild<System.Windows.Controls.Image>(element, "ItemIcon");
                                                     if (img != null)
                                                     {
-                                                        var anim = new System.Windows.Media.Animation.DoubleAnimation
-                                                        {
-                                                            From = 0.2,
-                                                            To = 1.0,
-                                                            Duration = TimeSpan.FromMilliseconds(150),
-                                                            EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-                                                        };
-                                                        img.BeginAnimation(UIElement.OpacityProperty, anim);
+                                                        // [FIX ANIM-10]: Use cached frozen animation
+                                                        img.BeginAnimation(UIElement.OpacityProperty, s_iconFadeIn);
                                                     }
                                                 }
                                             }, System.Windows.Threading.DispatcherPriority.Normal);

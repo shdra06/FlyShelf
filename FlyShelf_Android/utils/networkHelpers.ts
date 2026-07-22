@@ -3,6 +3,7 @@
 import { decrypt as aesDecrypt } from './syncCrypto';
 // @ts-ignore — export names differ between type definitions and runtime API
 import { decode as quickDecode, encode as quickEncode } from 'react-native-quick-base64';
+import { ActiveDeviceInfo, PairedDevice, MediaClipItem } from './deviceTypes';
 
 /** Validate if a pairing key is exactly 32-character hex string */
 export const isValidPairingKey = (key: string | null | undefined): boolean => {
@@ -30,7 +31,7 @@ const isPrivateIp = (host: string): boolean => {
 /** Fetch with one automatic retry on network error (handles transient WiFi drops) */
 export const fetchWithRetry = async (
   url: string,
-  options: any = {},
+  options: RequestInit = {},
   timeoutMs = 2500,
   retries = 1
 ): Promise<Response> => {
@@ -69,7 +70,7 @@ export const isValidDeviceUrl = (urlStr: string | null | undefined): boolean => 
 };
 
 /** Decrypt device URLs if they were encrypted by the PC */
-export const decryptDevice = async (device: any): Promise<any> => {
+export const decryptDevice = async (device: ActiveDeviceInfo): Promise<ActiveDeviceInfo> => {
   if (!device) return device;
   if (device.DeviceType === 'PC' && device.UrlsEncrypted) {
     const decrypted = { ...device };
@@ -103,9 +104,9 @@ export const decryptDevice = async (device: any): Promise<any> => {
 };
 
 /** Decrypt a list/array of devices */
-export const decryptDeviceList = async (devices: any[]): Promise<any[]> => {
+export const decryptDeviceList = async (devices: ActiveDeviceInfo[]): Promise<ActiveDeviceInfo[]> => {
   if (!devices || !Array.isArray(devices)) return devices || [];
-  const decryptedList: any[] = [];
+  const decryptedList: ActiveDeviceInfo[] = [];
   for (const d of devices) {
     decryptedList.push(await decryptDevice(d));
   }
@@ -113,7 +114,7 @@ export const decryptDeviceList = async (devices: any[]): Promise<any[]> => {
 };
 
 /** Fetch with configurable timeout and abort safety */
-export const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 2500) => {
+export const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs = 2500) => {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   // Merge caller's signal with the timeout signal so external aborts are honoured
@@ -148,7 +149,7 @@ export const getSubnet = (ip: string): string => {
 };
 
 /** Determine connection type for a device relative to this phone */
-export const getConnectionType = (device: any, myLocalIp: string): 'LAN' | 'Cloud' | 'Offline' => {
+export const getConnectionType = (device: ActiveDeviceInfo, myLocalIp: string): 'LAN' | 'Cloud' | 'Offline' => {
   if (device._isOffline) return 'Offline';
   const deviceIp = device.LocalIp || device.Url || '';
   const mySubnet = getSubnet(myLocalIp);
@@ -203,7 +204,7 @@ export const base64ToUint8Array = (base64: string): Uint8Array => {
 /**
  * Get ordered list of URLs to try for a device.
  */
-export const getDeviceUrls = (device: any): string[] => {
+export const getDeviceUrls = (device: ActiveDeviceInfo | null | undefined): string[] => {
   if (!device) return [];
   const urls: string[] = [];
   const seen = new Set<string>();
@@ -234,7 +235,7 @@ export const getDeviceUrls = (device: any): string[] => {
  * Centrally resolve the best PC URL from the global pairedDevices state.
  * This ensures consistency across all app tabs (Sync, Todo, Notes).
  */
-export const resolveBestPcUrl = (pairedDevices: any[], manualIp?: string): string | null => {
+export const resolveBestPcUrl = (pairedDevices: PairedDevice[], manualIp?: string): string | null => {
   // 1. Look for a PC in the paired list that is currently online
   const pc = pairedDevices.find(d => d.deviceType === 'PC' && d.isOnline);
   if (pc) {
@@ -268,11 +269,14 @@ export const resolveBestPcUrl = (pairedDevices: any[], manualIp?: string): strin
  * LAN is prioritized by staggering Cloudflare.
  */
 export const resolveOptimalUrl = async (
-  device: any,
+  device: ActiveDeviceInfo | string | null,
   fetchFn = fetchWithTimeout,
   pairingKey?: string
 ): Promise<string | null> => {
   if (!device || device === 'Global') return null;
+
+  // If device is a plain string (e.g. a raw URL), it's not a structured device — bail
+  if (typeof device === 'string') return null;
 
   const urls = getDeviceUrls(device);
   if (urls.length === 0) return null;
@@ -385,7 +389,7 @@ export const scanSubnetForPc = async (myIp: string): Promise<string[]> => {
 };
 
 /** Build absolute media URL from a clip item */
-export const getMediaUrl = (item: any, activeDevices: any[], pcLocalIp: string): string => {
+export const getMediaUrl = (item: MediaClipItem, activeDevices: ActiveDeviceInfo[], pcLocalIp: string): string => {
   if (item.CachedUri && (item.CachedUri.startsWith('file://') || item.CachedUri.startsWith('/'))) return item.CachedUri;
   if (item.Raw && item.Raw.startsWith('http')) return item.Raw;
   if (item.DownloadUrl && item.DownloadUrl.startsWith('http')) return item.DownloadUrl;
@@ -394,7 +398,7 @@ export const getMediaUrl = (item: any, activeDevices: any[], pcLocalIp: string):
   const relUrl = item.PreviewUrl || item.DownloadUrl || item.Raw || '';
   if (!relUrl) return '';
 
-  const pcNode = activeDevices.find((d: any) => d.DeviceType === 'PC');
+  const pcNode = activeDevices.find((d) => d.DeviceType === 'PC');
   if (pcNode) {
     const urls = getDeviceUrls(pcNode);
     if (urls.length > 0) {
@@ -415,7 +419,7 @@ export const getMediaUrl = (item: any, activeDevices: any[], pcLocalIp: string):
  * Consolidates duplicate resolution logic from index.tsx.
  */
 export const resolveUrlWithFallbacks = async (
-  device: any,
+  device: ActiveDeviceInfo | string | null,
   lastWorkingUrl: string | null,
   manualIp: string | undefined,
   getCachedUrl?: () => Promise<string>,
@@ -448,3 +452,13 @@ export const resolveUrlWithFallbacks = async (
   
   return null;
 };
+
+/** Fetch JSON with body-size guard — rejects responses > maxBodyBytes (default 10MB) */
+export async function safeFetchJson<T = any>(url: string, options?: RequestInit & { timeout?: number }, maxBodyBytes: number = 10 * 1024 * 1024): Promise<T> {
+  const response = await fetchWithTimeout(url, options, options?.timeout);
+  const contentLength = parseInt(response.headers.get('Content-Length') || '0', 10);
+  if (contentLength > maxBodyBytes) throw new Error(`Response too large: ${contentLength} bytes (max ${maxBodyBytes})`);
+  const text = await response.text();
+  if (text.length > maxBodyBytes) throw new Error(`Response body too large: ${text.length} chars`);
+  return JSON.parse(text) as T;
+}

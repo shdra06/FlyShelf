@@ -12,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
 using System.Threading.Tasks;
 using FlyShelf.ViewModels;
 
@@ -20,10 +21,8 @@ namespace FlyShelf.Classes
     /// <summary>
     /// A file staged for network transfer with progress tracking.
     /// </summary>
-    public class StagedFile : INotifyPropertyChanged
+    public partial class StagedFile : ObservableObject
     {
-        public event PropertyChangedEventHandler? PropertyChanged;
-
         public string Id { get; } = Guid.NewGuid().ToString();
         public string FileName { get; set; } = "";
         public string FilePath { get; set; } = "";
@@ -45,29 +44,17 @@ namespace FlyShelf.Classes
             }
         }
 
-        private string? _targetDeviceId;
         /// <summary>
         /// Target device ID. Null means "send to all alive peers".
         /// </summary>
-        public string? TargetDeviceId
-        {
-            get => _targetDeviceId;
-            set { _targetDeviceId = value; OnPropertyChanged(); }
-        }
+        [ObservableProperty]
+        private string? _targetDeviceId;
 
+        [ObservableProperty]
         private string? _targetDeviceName;
-        public string? TargetDeviceName
-        {
-            get => _targetDeviceName;
-            set { _targetDeviceName = value; OnPropertyChanged(); }
-        }
 
+        [ObservableProperty]
         private string? _errorMessage;
-        public string? ErrorMessage
-        {
-            get => _errorMessage;
-            set { _errorMessage = value; OnPropertyChanged(); }
-        }
 
         private double _progress;
         /// <summary>
@@ -116,18 +103,8 @@ namespace FlyShelf.Classes
 
         // ═══ Helpers ═══
 
-        private static string FormatBytes(long bytes)
-        {
-            if (bytes < 1024) return $"{bytes} B";
-            if (bytes < 1_048_576) return $"{bytes / 1024.0:F1} KB";
-            if (bytes < 1_073_741_824) return $"{bytes / 1_048_576.0:F1} MB";
-            return $"{bytes / 1_073_741_824.0:F2} GB";
-        }
-
-        protected void OnPropertyChanged([CallerMemberName] string? name = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-        }
+        // [FIX M-58]: Delegated to shared FormatHelper
+        private static string FormatBytes(long bytes) => Classes.FormatHelper.FormatBytes(bytes);
     }
 
     /// <summary>

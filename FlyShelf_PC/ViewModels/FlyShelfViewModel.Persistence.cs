@@ -22,7 +22,8 @@ namespace FlyShelf.ViewModels
         // PERF: Debounce ShelfVisibility notification during rapid deletes
         private System.Windows.Threading.DispatcherTimer? _shelfVisibilityDebounce;
 
-        // PERF: Cached unpinned item count — avoids O(n) LINQ scans in PruneOldItems
+        // PERF [FIX 5]: Cached unpinned item count with incremental updates
+        // Avoids O(n) LINQ scans on every CollectionChanged — only recounts on Reset
         private int _cachedUnpinnedCount = -1;
 
         private int CachedUnpinnedCount
@@ -34,7 +35,31 @@ namespace FlyShelf.ViewModels
                 return _cachedUnpinnedCount;
             }
         }
-        private void InvalidateUnpinnedCount() => _cachedUnpinnedCount = -1;
+        private void InvalidateUnpinnedCount(System.Collections.Specialized.NotifyCollectionChangedEventArgs e = null)
+        {
+            if (e == null || _cachedUnpinnedCount < 0)
+            {
+                _cachedUnpinnedCount = -1; // Force full recount on next access
+                return;
+            }
+
+            switch (e.Action)
+            {
+                case System.Collections.Specialized.NotifyCollectionChangedAction.Add:
+                    if (e.NewItems != null)
+                        foreach (ClipboardItem item in e.NewItems)
+                            if (!item.IsPinned) _cachedUnpinnedCount++;
+                    break;
+                case System.Collections.Specialized.NotifyCollectionChangedAction.Remove:
+                    if (e.OldItems != null)
+                        foreach (ClipboardItem item in e.OldItems)
+                            if (!item.IsPinned) _cachedUnpinnedCount--;
+                    break;
+                default:
+                    _cachedUnpinnedCount = -1; // Move, Replace, Reset — full recount
+                    break;
+            }
+        }
 
         public void RemoveItem(ClipboardItem item)
         {
@@ -182,6 +207,10 @@ namespace FlyShelf.ViewModels
                 
                 SavePinnedItems();
                 PersistHistory();
+
+                // ═══ Contextual Tip: First pin ═══
+                if (item.IsPinned)
+                    FlyShelf.Windows.TipBadge.Show("pin_first_use", "📌 Pinned items stay at the top");
                 
                 // Pinned items stay wherever they are — no sorting
             }
@@ -563,8 +592,7 @@ namespace FlyShelf.ViewModels
                             if (delivered > 0)
                             {
                                 lanSuccess = true;
-                                Application.Current?.Dispatcher?.InvokeAsync(() =>
-                                    FlyShelf.Windows.ToastWindow.ShowToast($"{label} ({FormatFileSize(fSize)}) synced directly via LAN! \ud83d\udce1"));
+                                // Silenced — sync toasts on every capture are too spammy
                             }
                             else
                             {
@@ -582,8 +610,7 @@ namespace FlyShelf.ViewModels
                     {
                         FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"'{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) placed on local server for companion app pulling");
                         lanSuccess = true;
-                        Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            FlyShelf.Windows.ToastWindow.ShowToast($"Synced via LAN! \u26a1 (Available for companion app pulling)"));
+                        // Silenced — sync toasts on every capture are too spammy
                     }
                 }
 
@@ -599,15 +626,13 @@ namespace FlyShelf.ViewModels
                     FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"Sending '{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) via Cloudflare P2P");
                     var syncItem = item.CloneForSync(downloadUrl);
                     await FlyShelf.Classes.CloudDiscoveryManager.PushToCloudHub(syncItem);
-                    Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowToast($"{label} ({FormatFileSize(fSize)}) synced via P2P \ud83c\udf10"));
+                    // Silenced — sync toasts on every capture are too spammy
                     return;
                 }
 
                 // No LAN success and no Cloudflare tunnel available
                 FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"'{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) — no active LAN peers or Cloudflare tunnel available");
-                Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    FlyShelf.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) — no active LAN peers or Cloudflare tunnel"));
+                // Silenced — "no LAN peers" toast on every capture is the worst offender
             }
             catch (Exception ex)
             {

@@ -6,6 +6,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using MicaWPF.Controls;
+using FlyShelf.Classes;
+using FlyShelf.Helpers;
 
 namespace FlyShelf.Windows
 {
@@ -18,22 +20,11 @@ namespace FlyShelf.Windows
         private bool _isPinned = false; // Default: unpinned
         private IntPtr _targetWindow = IntPtr.Zero; // Window that was focused before emoji picker opened
 
-        [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
-        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-        [DllImport("user32.dll")] private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
-        [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
-        [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct INPUT { public uint type; public INPUTUNION u; }
-        [StructLayout(LayoutKind.Explicit)]
-        private struct INPUTUNION { [FieldOffset(0)] public KEYBDINPUT ki; }
-        [StructLayout(LayoutKind.Sequential)]
-        private struct KEYBDINPUT { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
-        private const uint INPUT_KEYBOARD = 1;
-        private const uint KEYEVENTF_KEYUP = 0x0002;
-        private const ushort VK_CONTROL = 0x11;
-        private const ushort VK_V = 0x56;
+        // P/Invoke declarations centralized in NativeMethods.cs
+        private const uint INPUT_KEYBOARD = NativeMethods.INPUT_KEYBOARD;
+        private const uint KEYEVENTF_KEYUP = (uint)NativeMethods.KEYEVENTF_KEYUP;
+        private const ushort VK_CONTROL = (ushort)NativeMethods.VK_CONTROL;
+        private const ushort VK_V = (ushort)NativeMethods.VK_V;
 
         /// <summary>Pass the handle of the previously focused window so we can auto-paste emojis into it.</summary>
         public EmojiPickerWindow(IntPtr targetWindow = default)
@@ -45,6 +36,7 @@ namespace FlyShelf.Windows
             BuildCategoryTabs();
             FilterEmojis();
             UpdatePinVisual();
+            this.PreviewKeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Escape) this.Close(); };
         }
 
         protected override void OnSourceInitialized(EventArgs e)
@@ -79,7 +71,7 @@ namespace FlyShelf.Windows
                 PinIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Pin24;
                 PinBtn.ToolTip = "Pinned (always on top) — click to unpin";
                 PinBtn.Foreground = FindResource("ThemeAccent") as System.Windows.Media.Brush
-                    ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x63, 0x66, 0xF1));
+                    ?? new System.Windows.Media.SolidColorBrush(FlyShelf.Helpers.ThemeColors.IndigoMid);
             }
             else
             {
@@ -192,7 +184,7 @@ namespace FlyShelf.Windows
                 {
                     // Use theme accent color for active category tab
                     var accentBrush = FindResource("ThemeAccent") as System.Windows.Media.SolidColorBrush;
-                    var accentColor = accentBrush?.Color ?? System.Windows.Media.Color.FromRgb(0x63, 0x66, 0xF1);
+                    var accentColor = accentBrush?.Color ?? FlyShelf.Helpers.ThemeColors.IndigoMid;
                     btn.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x20, accentColor.R, accentColor.G, accentColor.B));
                 }
                 CategoryTabs.Children.Add(btn);
@@ -236,15 +228,15 @@ namespace FlyShelf.Windows
                     if (_targetWindow != IntPtr.Zero)
                     {
                         // Use AttachThreadInput trick to reliably steal focus
-                        uint targetThread = GetWindowThreadProcessId(_targetWindow, out _);
-                        uint currentThread = GetCurrentThreadId();
+                        uint targetThread = NativeMethods.GetWindowThreadProcessId(_targetWindow, out _);
+                        uint currentThread = NativeMethods.GetCurrentThreadId();
                         if (targetThread != currentThread)
-                            AttachThreadInput(currentThread, targetThread, true);
+                            NativeMethods.AttachThreadInput(currentThread, targetThread, true);
 
-                        SetForegroundWindow(_targetWindow);
+                        NativeMethods.SetForegroundWindow(_targetWindow);
 
                         if (targetThread != currentThread)
-                            AttachThreadInput(currentThread, targetThread, false);
+                            NativeMethods.AttachThreadInput(currentThread, targetThread, false);
 
                         // Brief delay to let the target window gain focus, then Ctrl+V
                         System.Threading.Tasks.Task.Delay(50).ContinueWith(_ =>
@@ -252,14 +244,14 @@ namespace FlyShelf.Windows
                             Dispatcher.Invoke(() =>
                             {
                                 // Simulate Ctrl+V via SendInput
-                                var inputs = new INPUT[]
+                                var inputs = new NativeMethods.INPUT[]
                                 {
-                                    new INPUT { type = INPUT_KEYBOARD, u = new INPUTUNION { ki = new KEYBDINPUT { wVk = VK_CONTROL } } },
-                                    new INPUT { type = INPUT_KEYBOARD, u = new INPUTUNION { ki = new KEYBDINPUT { wVk = VK_V } } },
-                                    new INPUT { type = INPUT_KEYBOARD, u = new INPUTUNION { ki = new KEYBDINPUT { wVk = VK_V, dwFlags = KEYEVENTF_KEYUP } } },
-                                    new INPUT { type = INPUT_KEYBOARD, u = new INPUTUNION { ki = new KEYBDINPUT { wVk = VK_CONTROL, dwFlags = KEYEVENTF_KEYUP } } },
+                                    new NativeMethods.INPUT { type = INPUT_KEYBOARD, u = new NativeMethods.INPUTUNION { ki = new NativeMethods.KEYBDINPUT { wVk = VK_CONTROL } } },
+                                    new NativeMethods.INPUT { type = INPUT_KEYBOARD, u = new NativeMethods.INPUTUNION { ki = new NativeMethods.KEYBDINPUT { wVk = VK_V } } },
+                                    new NativeMethods.INPUT { type = INPUT_KEYBOARD, u = new NativeMethods.INPUTUNION { ki = new NativeMethods.KEYBDINPUT { wVk = VK_V, dwFlags = KEYEVENTF_KEYUP } } },
+                                    new NativeMethods.INPUT { type = INPUT_KEYBOARD, u = new NativeMethods.INPUTUNION { ki = new NativeMethods.KEYBDINPUT { wVk = VK_CONTROL, dwFlags = KEYEVENTF_KEYUP } } },
                                 };
-                                SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+                                NativeMethods.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeMethods.INPUT>());
 
                                 // Bring emoji picker back to front if pinned
                                 if (_isPinned || IsLoaded)

@@ -21,7 +21,8 @@ namespace FlyShelf.Classes
     /// </summary>
     public static class FirebaseAuthManager
     {
-        private static readonly HttpClient _authClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(15) };
+        // AUDIT Task 5: Use shared pool instance instead of per-class HttpClient (prevents socket exhaustion)
+        private static HttpClient _authClient => HttpClientPool.Default;
         
         // Firebase Web API Key (obfuscated — see FirebaseSecrets.cs)
         private static string FIREBASE_API_KEY => FirebaseSecrets.ApiKey;
@@ -29,7 +30,8 @@ namespace FlyShelf.Classes
         public static string FirebaseDatabaseUrl => FirebaseSecrets.DatabaseUrl;
         
         // Cached token state
-        private static string _idToken = "";
+        // [FIX M-01]: volatile ensures ARM64 visibility for lock-free fast-path read
+        private static volatile string _idToken = "";
         private static string _refreshToken = "";
         private static string _uid = "";
         private static DateTime _tokenExpiry = DateTime.MinValue;
@@ -323,8 +325,14 @@ namespace FlyShelf.Classes
         /// </summary>
         public static void InvalidateToken()
         {
-            _idToken = "";
-            _tokenExpiry = DateTime.MinValue;
+            // [FIX H-07]: Acquire lock to prevent race with concurrent GetValidIdTokenAsync
+            _tokenLock.Wait();
+            try
+            {
+                _idToken = "";
+                _tokenExpiry = DateTime.MinValue;
+            }
+            finally { _tokenLock.Release(); }
             Logger.LogAction("FIREBASE AUTH", "Token invalidated — will re-authenticate on next call");
         }
 
@@ -335,11 +343,17 @@ namespace FlyShelf.Classes
         /// </summary>
         public static void ResetIdentity()
         {
-            _idToken = "";
-            _refreshToken = "";
-            _uid = "";
-            _tokenExpiry = DateTime.MinValue;
-            _diskLoaded = false;
+            // [FIX M-02]: Acquire lock to prevent race with concurrent GetValidIdTokenAsync
+            _tokenLock.Wait();
+            try
+            {
+                _idToken = "";
+                _refreshToken = "";
+                _uid = "";
+                _tokenExpiry = DateTime.MinValue;
+                _diskLoaded = false;
+            }
+            finally { _tokenLock.Release(); }
             DeletePersistedToken();
             Logger.LogAction("FIREBASE AUTH", "Identity fully reset — will create new anonymous user on next call");
         }

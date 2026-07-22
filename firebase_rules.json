@@ -15,7 +15,7 @@
         ".read": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
         ".write": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
         "$entryId": {
-          ".validate": "newData.hasChildren(['Type', 'Timestamp'])"
+          ".validate": "newData.hasChildren(['Type', 'Timestamp']) && newData.child('Type').isString() && newData.child('Timestamp').isNumber() && newData.val().toString().length < 1048576"
         }
       },
       ".read": false,
@@ -24,7 +24,10 @@
     "active_devices": {
       "$pairingKey": {
         ".read": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
-        ".write": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()"
+        ".write": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
+        "$deviceId": {
+          ".validate": "newData.hasChildren(['DeviceId', 'DeviceType']) && newData.child('DeviceType').isString()"
+        }
       },
       ".read": false,
       ".write": false

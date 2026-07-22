@@ -69,21 +69,9 @@ namespace FlyShelf.Classes
 
         // ═══ Formatting Helpers ═══
 
-        private static string FormatBytes(long bytes)
-        {
-            if (bytes < 1024) return string.Create(CultureInfo.InvariantCulture, $"{bytes} B");
-            if (bytes < 1_048_576) return string.Create(CultureInfo.InvariantCulture, $"{bytes / 1024.0:F1} KB");
-            if (bytes < 1_073_741_824) return string.Create(CultureInfo.InvariantCulture, $"{bytes / 1_048_576.0:F1} MB");
-            return string.Create(CultureInfo.InvariantCulture, $"{bytes / 1_073_741_824.0:F2} GB");
-        }
-
-        private static string FormatSpeed(double bytesPerSecond)
-        {
-            if (bytesPerSecond <= 0) return "—";
-            if (bytesPerSecond < 1_048_576) return string.Create(CultureInfo.InvariantCulture, $"{bytesPerSecond / 1024.0:F0} KB/s");
-            if (bytesPerSecond < 1_073_741_824) return string.Create(CultureInfo.InvariantCulture, $"{bytesPerSecond / 1_048_576.0:F1} MB/s");
-            return string.Create(CultureInfo.InvariantCulture, $"{bytesPerSecond / 1_073_741_824.0:F2} GB/s");
-        }
+        // [FIX M-58]: Delegated to shared FormatHelper
+        private static string FormatBytes(long bytes) => Classes.FormatHelper.FormatBytes(bytes);
+        private static string FormatSpeed(double bytesPerSecond) => Classes.FormatHelper.FormatSpeed(bytesPerSecond);
     }
 
     /// <summary>
@@ -388,6 +376,14 @@ namespace FlyShelf.Classes
                     string dir = Path.GetDirectoryName(_historyFile)!;
                     Directory.CreateDirectory(dir);
 
+                    // Create .bak before overwriting so we can recover from corruption
+                    string bakFile = _historyFile + ".bak";
+                    if (File.Exists(_historyFile))
+                    {
+                        try { File.Copy(_historyFile, bakFile, true); }
+                        catch { /* Best-effort backup */ }
+                    }
+
                     // Atomic write via temp file
                     string tmp = _historyFile + ".tmp";
                     File.WriteAllText(tmp, json, Encoding.UTF8);
@@ -407,27 +403,45 @@ namespace FlyShelf.Classes
         {
             lock (_lock)
             {
-                try
+                if (TryLoadFromFile(_historyFile)) return;
+
+                // Main file missing or corrupt — try .bak fallback
+                string bakFile = _historyFile + ".bak";
+                if (TryLoadFromFile(bakFile))
                 {
-                    if (!File.Exists(_historyFile)) return;
-
-                    string json = File.ReadAllText(_historyFile, Encoding.UTF8);
-                    if (string.IsNullOrWhiteSpace(json)) return;
-
-                    var entries = JsonSerializer.Deserialize<List<TransferHistoryEntry>>(json, _jsonOptions);
-                    if (entries == null || entries.Count == 0) return;
-
-                    // Take only the newest MAX_ENTRIES, ordered newest first
-                    var sorted = entries.OrderByDescending(e => e.CompletedAt).Take(MAX_ENTRIES).ToList();
-                    foreach (var entry in sorted)
-                    {
-                        Entries.Add(entry);
-                    }
+                    Logger.LogAction("HISTORY", "Recovered from .bak file");
                 }
-                catch (Exception ex)
+            }
+        }
+
+        /// <summary>
+        /// Attempts to load history entries from the given file path.
+        /// Returns true if entries were successfully loaded.
+        /// </summary>
+        private bool TryLoadFromFile(string filePath)
+        {
+            try
+            {
+                if (!File.Exists(filePath)) return false;
+
+                string json = File.ReadAllText(filePath, Encoding.UTF8);
+                if (string.IsNullOrWhiteSpace(json)) return false;
+
+                var entries = JsonSerializer.Deserialize<List<TransferHistoryEntry>>(json, _jsonOptions);
+                if (entries == null || entries.Count == 0) return false;
+
+                // Take only the newest MAX_ENTRIES, ordered newest first
+                var sorted = entries.OrderByDescending(e => e.CompletedAt).Take(MAX_ENTRIES).ToList();
+                foreach (var entry in sorted)
                 {
-                    Logger.LogAction("HISTORY", $"Load error: {ex.Message}");
+                    Entries.Add(entry);
                 }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("HISTORY", $"Load error ({Path.GetFileName(filePath)}): {ex.Message}");
+                return false;
             }
         }
     }

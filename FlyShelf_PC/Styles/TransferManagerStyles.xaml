@@ -156,7 +156,7 @@
                         <Trigger Property="IsEnabled" Value="True">
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
-                                    <Storyboard RepeatBehavior="Forever">
+                                    <Storyboard RepeatBehavior="Forever" Storyboard.DesiredFrameRate="20">
                                         <DoubleAnimation Storyboard.TargetName="ShimmerBrush"
                                                          Storyboard.TargetProperty="Transform.(TranslateTransform.X)"
                                                          From="-200" To="600"
@@ -284,7 +284,7 @@
         <Style.Triggers>
             <EventTrigger RoutedEvent="Loaded">
                 <BeginStoryboard>
-                    <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                    <Storyboard RepeatBehavior="Forever" AutoReverse="True" Storyboard.DesiredFrameRate="20">
                         <DoubleAnimation Storyboard.TargetProperty="Opacity"
                                          From="1" To="0.3" Duration="0:0:0.8">
                             <DoubleAnimation.EasingFunction>

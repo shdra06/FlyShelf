@@ -16,6 +16,7 @@ using FlyShelf.ViewModels;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows.Data;
+using FlyShelf.Helpers;
 
 namespace FlyShelf.Windows
 {
@@ -334,7 +335,7 @@ namespace FlyShelf.Windows
                 sb.AppendLine("└─────────────────────────────────────────────────────────┘");
                 try
                 {
-                    using var hc = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+                    var hc = HttpClientPool.Default;
                     var healthResp = await hc.GetStringAsync($"{baseUrl}/api/health");
                     using var healthDoc = System.Text.Json.JsonDocument.Parse(healthResp);
                     var h = healthDoc.RootElement;
@@ -372,14 +373,16 @@ namespace FlyShelf.Windows
                 sb.AppendLine("└─────────────────────────────────────────────────────────┘");
                 try
                 {
-                    using var sc = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                    var sc = HttpClientPool.Default;
+                    var syncReq = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, $"{baseUrl}/api/sync");
                     if (!string.IsNullOrEmpty(pairingKey))
-                        sc.DefaultRequestHeaders.Add("X-Pairing-Key", pairingKey);
+                        syncReq.Headers.Add("X-Pairing-Key", pairingKey);
                     if (!string.IsNullOrEmpty(pin))
-                        sc.DefaultRequestHeaders.Add("Authorization", $"Bearer {pin}");
-                    sc.DefaultRequestHeaders.Add("X-FlyShelf-Client", "DesktopSync");
+                        syncReq.Headers.Add("Authorization", $"Bearer {pin}");
+                    syncReq.Headers.Add("X-FlyShelf-Client", "DesktopSync");
 
-                    var syncResp = await sc.GetStringAsync($"{baseUrl}/api/sync");
+                    var syncHttpResp = await sc.SendAsync(syncReq);
+                    var syncResp = await syncHttpResp.Content.ReadAsStringAsync();
                     using var syncDoc = System.Text.Json.JsonDocument.Parse(syncResp);
 
                     int idx = 0;
@@ -438,7 +441,7 @@ namespace FlyShelf.Windows
                 sb.AppendLine("└─────────────────────────────────────────────────────────┘");
                 try
                 {
-                    using var lc = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                    var lc = HttpClientPool.Default;
                     var logReq = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, $"{baseUrl}/api/logs?lines=200");
                     logReq.Headers.Add("X-FlyShelf-Client", "DesktopSync");
                     if (!string.IsNullOrEmpty(pairingKey)) logReq.Headers.Add("X-Pairing-Key", pairingKey);
@@ -891,7 +894,7 @@ namespace FlyShelf.Windows
                     LicenseStatusDesc.Text = $"Activated on {FlyShelf.Classes.LicenseManager.ActivatedAt}";
                     LicenseStatusBadgeText.Text = "PRO";
                     var warnBrush = TryFindResource("WarningColor") as System.Windows.Media.SolidColorBrush;
-                    var warnColor = warnBrush?.Color ?? System.Windows.Media.Color.FromRgb(245, 158, 11);
+                    var warnColor = warnBrush?.Color ?? FlyShelf.Helpers.ThemeColors.WarningAmber;
                     LicenseStatusBadge.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, warnColor.R, warnColor.G, warnColor.B));
                     LicenseStatusBadgeText.Foreground = warnBrush ?? new System.Windows.Media.SolidColorBrush(warnColor);
                     LicenseStatusPanel.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(26, warnColor.R, warnColor.G, warnColor.B));
@@ -907,7 +910,7 @@ namespace FlyShelf.Windows
                     LicenseStatusBadge.Background = (TryFindResource("MicaWPF.Brushes.SubtleFillColorTertiary") as System.Windows.Media.Brush) ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, 128, 128, 128));
                     LicenseStatusBadgeText.Foreground = (TryFindResource("MicaWPF.Brushes.TextFillColorTertiary") as System.Windows.Media.Brush) ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(128, 128, 128));
                     var successBrush = TryFindResource("SuccessColor") as System.Windows.Media.SolidColorBrush;
-                    var successColor = successBrush?.Color ?? System.Windows.Media.Color.FromRgb(16, 185, 129);
+                    var successColor = successBrush?.Color ?? FlyShelf.Helpers.ThemeColors.SuccessGreen;
                     LicenseStatusPanel.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(26, successColor.R, successColor.G, successColor.B));
                     LicenseActivationPanel.Visibility = Visibility.Visible;
                     LicenseDeactivatePanel.Visibility = Visibility.Collapsed;
@@ -980,50 +983,53 @@ namespace FlyShelf.Windows
         /// <summary>Settings tab license key — handles both Activate and Deactivate.</summary>
         private async void SettingsActivateLicense_Click(object sender, RoutedEventArgs e)
         {
-            if (FlyShelf.Classes.LicenseManager.IsPro)
+            await SafeAsyncHandler.RunAsync(async () =>
             {
-                // Currently Pro → Deactivate
-                var result = System.Windows.MessageBox.Show(
-                    "Are you sure you want to deactivate your Pro license?\nYou can reactivate anytime with your key.",
-                    "Deactivate License",
-                    System.Windows.MessageBoxButton.YesNo,
-                    System.Windows.MessageBoxImage.Question);
-
-                if (result == System.Windows.MessageBoxResult.Yes)
+                if (FlyShelf.Classes.LicenseManager.IsPro)
                 {
-                    FlyShelf.Classes.LicenseManager.DeactivateLicense();
-                    RefreshLicenseUI();
-                    FlyShelf.Windows.ToastWindow.ShowToast("License deactivated — reverted to Free tier.");
-                }
-            }
-            else
-            {
-                // Currently Free → Activate
-                string key = SettingsLicenseKeyInput?.Text?.Trim() ?? "";
+                    // Currently Pro → Deactivate
+                    var result = System.Windows.MessageBox.Show(
+                        "Are you sure you want to deactivate your Pro license?\nYou can reactivate anytime with your key.",
+                        "Deactivate License",
+                        System.Windows.MessageBoxButton.YesNo,
+                        System.Windows.MessageBoxImage.Question);
 
-                if (string.IsNullOrWhiteSpace(key))
-                {
-                    SettingsLicenseError.Text = "Please enter a license key.";
-                    SettingsLicenseError.Visibility = Visibility.Visible;
-                    return;
-                }
-
-                bool success = await FlyShelf.Classes.LicenseManager.ActivateLicenseAsync(key);
-
-                if (success)
-                {
-                    SettingsLicenseError.Visibility = Visibility.Collapsed;
-                    SettingsLicenseKeyInput.Text = "";
-                    RefreshLicenseUI();
-                    FlyShelf.Windows.ToastWindow.ShowToast("Pro license activated successfully!");
+                    if (result == System.Windows.MessageBoxResult.Yes)
+                    {
+                        FlyShelf.Classes.LicenseManager.DeactivateLicense();
+                        RefreshLicenseUI();
+                        FlyShelf.Windows.ToastWindow.ShowToast("License deactivated — reverted to Free tier.");
+                    }
                 }
                 else
                 {
-                    SettingsLicenseError.Text = "Invalid license key. Please check and try again.";
-                    SettingsLicenseError.Foreground = TryFindResource("DangerColor") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
-                    SettingsLicenseError.Visibility = Visibility.Visible;
+                    // Currently Free → Activate
+                    string key = SettingsLicenseKeyInput?.Text?.Trim() ?? "";
+
+                    if (string.IsNullOrWhiteSpace(key))
+                    {
+                        SettingsLicenseError.Text = "Please enter a license key.";
+                        SettingsLicenseError.Visibility = Visibility.Visible;
+                        return;
+                    }
+
+                    bool success = await FlyShelf.Classes.LicenseManager.ActivateLicenseAsync(key);
+
+                    if (success)
+                    {
+                        SettingsLicenseError.Visibility = Visibility.Collapsed;
+                        SettingsLicenseKeyInput.Text = "";
+                        RefreshLicenseUI();
+                        FlyShelf.Windows.ToastWindow.ShowToast("Pro license activated successfully!");
+                    }
+                    else
+                    {
+                        SettingsLicenseError.Text = "Invalid license key. Please check and try again.";
+                        SettingsLicenseError.Foreground = TryFindResource("DangerColor") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
+                        SettingsLicenseError.Visibility = Visibility.Visible;
+                    }
                 }
-            }
+            });
         }
 
         private void DeactivateLicense_Click(object sender, RoutedEventArgs e)

@@ -19,6 +19,7 @@ export interface DownloadQueueItem {
   sourceDevice: string;
   retryCount?: number;
   timestamp?: number;
+  expectedSize?: number;
 }
 
 export function useDownloadQueue(params: {
@@ -51,7 +52,7 @@ export function useDownloadQueue(params: {
       try {
         // Check if already downloaded
         const existing = await FileSystem.getInfoAsync(item.destPath);
-        if (existing.exists && (existing as any).size > 100) {
+        if (existing.exists && ('size' in existing && typeof (existing as any).size === 'number' && (existing as any).size > 100)) {
           syncLog('DL-QUEUE', `Skip (exists): ${item.title}`);
           setDownloadedItems(prev => { const n = new Set(prev); n.add(item.id || item.title); return n; });
           // Update clip with CachedUri
@@ -63,10 +64,11 @@ export function useDownloadQueue(params: {
 
         // Show progress card
         setClips(prev => [{
-          id: progressId, Title: `⬇️ ${item.title}`, Type: 'Text',
+          id: progressId, Title: `⬇️ ${item.title}`, Type: '_DownloadProgress',
           Raw: `Downloading from ${item.sourceDevice} via ${item.source}...`,
           Time: new Date().toLocaleTimeString(),
-        }, ...prev]);
+          _isTransient: true,
+        } as any, ...prev]);
 
         syncLog('DL-QUEUE', `Downloading: ${item.title} via ${item.source}`);
         const dlHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
@@ -90,10 +92,11 @@ export function useDownloadQueue(params: {
               } catch (e) { console.warn('DL-Queue URL resolve: error', (e as any)?.message || e); }
               syncLog('DL-QUEUE', `Retry #${queueAttempt}: ${currentFileUrl.substring(0, 80)}`);
             }
-            // 60s timeout prevents stalled downloads from blocking the entire queue forever
+            // Scale timeout: minimum 60s, +1s per 256KB expected, capped at 600s
+            const dlTimeoutMs = Math.max(60000, Math.min(600000, ((item as any).expectedSize || 0) / 256));
             const dlResult = await Promise.race([
               FileSystem.downloadAsync(currentFileUrl, item.destPath, { headers: dlHeaders }),
-              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Download timeout (60s)')), 60000)),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Download timeout (${Math.round(dlTimeoutMs/1000)}s)`)), dlTimeoutMs)),
             ]);
 
             if (dlResult && dlResult.status === 200) {

@@ -35,21 +35,31 @@ export const IMAGE_CACHE_BASE = `${_docDir || ''}FlyShelf/Downloads/Images/`;
 
 /** User-initiated downloads: documentDirectory/FlyShelf/Downloads/{subfolder}/{filename} */
 export const getDownloadPath = async (subfolder: string, filename: string) => {
-  const dir = `${DOWNLOAD_BASE}${subfolder}/`;
+  // Sanitize to prevent path traversal
+  const safeSubfolder = subfolder.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '_');
+  if (safeFilename.length === 0 || safeFilename.length > 255) throw new Error('Invalid filename');
+  const dir = `${DOWNLOAD_BASE}${safeSubfolder}/`;
   await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
-  return `${dir}${filename}`;
+  return `${dir}${safeFilename}`;
 };
 
 /** Auto-sync temp files: cacheDirectory/FlyShelf/SyncCache/{filename} */
 export const getSyncCachePath = async (filename: string) => {
+  // Sanitize to prevent path traversal
+  const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '_');
+  if (safeFilename.length === 0 || safeFilename.length > 255) throw new Error('Invalid filename');
   await FileSystem.makeDirectoryAsync(SYNC_CACHE_BASE, { intermediates: true }).catch(() => {});
-  return `${SYNC_CACHE_BASE}${filename}`;
+  return `${SYNC_CACHE_BASE}${safeFilename}`;
 };
 
 /** Conversion outputs: documentDirectory/FlyShelf/Converted/{filename} */
 export const getConvertedPath = async (filename: string) => {
+  // Sanitize to prevent path traversal
+  const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '_');
+  if (safeFilename.length === 0 || safeFilename.length > 255) throw new Error('Invalid filename');
   await FileSystem.makeDirectoryAsync(CONVERTED_BASE, { intermediates: true }).catch(() => {});
-  return `${CONVERTED_BASE}${filename}`;
+  return `${CONVERTED_BASE}${safeFilename}`;
 };
 
 /** Image cache: documentDirectory/FlyShelf/Downloads/Images/{filename} */

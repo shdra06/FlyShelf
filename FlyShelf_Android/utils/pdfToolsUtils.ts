@@ -59,8 +59,10 @@ export async function cleanupOldPdfFiles(): Promise<number> {
 async function readPdfBytes(uri: string): Promise<Uint8Array> {
   // content:// URIs are handled directly by expo-file-system
   if (uri.startsWith('content://')) {
-    const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-    return base64ToUint8Array(b64);
+    let b64: string | null = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+    const bytes = base64ToUint8Array(b64);
+    b64 = null; // Release for GC
+    return bytes;
   }
   const fileUri = uri.startsWith('file://') ? uri : `file://${uri}`;
   // Guard: reject files > 30MB to prevent OOM in JS memory
@@ -70,35 +72,39 @@ async function readPdfBytes(uri: string): Promise<Uint8Array> {
       if (info.size > 30 * 1024 * 1024) {
         throw new Error(`This PDF is too large (${(info.size / 1024 / 1024).toFixed(1)}MB). The maximum supported file size is 30MB. Please use a smaller file or split it first.`);
       }
-      if (info.size > 50 * 1024 * 1024) {
-        console.warn(`[PDFTools] Large file detected (${(info.size / 1024 / 1024).toFixed(1)}MB). Processing may be slow or fail on low-memory devices.`);
-      }
     }
   } catch (e: any) {
     // Re-throw size limit errors, ignore other info check failures
     if (e?.message?.includes('too large')) throw e;
   }
-  const b64 = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
-  return base64ToUint8Array(b64);
+  let b64: string | null = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+  const bytes = base64ToUint8Array(b64);
+  b64 = null; // Release for GC
+  return bytes;
 }
 
 async function readImageBytes(uri: string): Promise<Uint8Array> {
   // content:// URIs are handled directly by expo-file-system
   if (uri.startsWith('content://')) {
-    const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-    return base64ToUint8Array(b64);
+    let b64: string | null = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+    const bytes = base64ToUint8Array(b64);
+    b64 = null; // Release for GC
+    return bytes;
   }
   const fileUri = uri.startsWith('file://') ? uri : (uri.startsWith('/') ? `file://${uri}` : uri);
-  const b64 = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
-  return base64ToUint8Array(b64);
+  let b64: string | null = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+  const bytes = base64ToUint8Array(b64);
+  b64 = null; // Release for GC
+  return bytes;
 }
 
 async function savePdf(doc: PDFDocument, prefix: string): Promise<string> {
   await ensureOutputDir();
   const outPath = getOutputPath(prefix);
   const bytes = await doc.save();
-  const b64 = uint8ArrayToBase64(bytes);
+  let b64: string | null = uint8ArrayToBase64(bytes);
   await FileSystem.writeAsStringAsync(outPath, b64, { encoding: FileSystem.EncodingType.Base64 });
+  b64 = null; // Release for GC
   return outPath;
 }
 

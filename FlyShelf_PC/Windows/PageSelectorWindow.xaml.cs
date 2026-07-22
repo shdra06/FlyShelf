@@ -32,6 +32,8 @@ namespace FlyShelf.Windows
             _ = LoadThumbnailsAsync();
             BuildPageGrid();
             UpdateSelectionInfo();
+            Closed += (s, e) => { _thumbnails = null; }; // PERF: release thumbnail memory on close
+            this.PreviewKeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Escape) this.Close(); };
         }
 
         private async Task LoadThumbnailsAsync()

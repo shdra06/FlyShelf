@@ -17,6 +17,8 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using FlyShelf.ViewModels;
+using FlyShelf.Helpers;
+using FlyShelf.Classes;
 
 namespace FlyShelf.Windows
 {
@@ -27,26 +29,19 @@ namespace FlyShelf.Windows
     /// </summary>
     public sealed class DragPreviewWindow : Window
     {
+
         // ═══ Win32 Constants ═══
         private const int GWL_EXSTYLE = -20;
         private const int WS_EX_TRANSPARENT = 0x00000020;
         private const int WS_EX_TOOLWINDOW = 0x00000080;
         private const int WS_EX_NOACTIVATE = 0x08000000;
 
-        // Win32 desktop invalidation to clear ghost artifacts
-        [DllImport("user32.dll")]
-        private static extern bool InvalidateRect(IntPtr hWnd, IntPtr lpRect, bool bErase);
-
-        [DllImport("user32.dll")]
-        private static extern bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
-
+        // Win32 desktop invalidation to clear ghost artifacts — P/Invoke centralized in NativeMethods.cs
         private const uint RDW_INVALIDATE = 0x0001;
         private const uint RDW_ALLCHILDREN = 0x0080;
         private const uint RDW_UPDATENOW = 0x0100;
         private const uint RDW_ERASE = 0x0004;
 
-        [DllImport("user32.dll")]
-        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
         private const int SW_HIDE = 0;
 
         // ═══ Card Sizing ═══
@@ -132,16 +127,53 @@ namespace FlyShelf.Windows
         }
 
         private bool _isClosed;
+        private System.Windows.Threading.DispatcherTimer? _safetyTimer;
 
         /// <summary>
-        /// Safely close the drag preview — aggressively removes from DWM compositor
-        /// to prevent ghost artifacts on screen.
+        /// Safely close the drag preview — plays a micro exit animation (80ms),
+        /// then aggressively removes from DWM compositor to prevent ghost artifacts.
         /// </summary>
         public void SafeClose()
         {
             if (_isClosed) return;
             _isClosed = true;
 
+            try
+            {
+                // Attempt a quick 80ms exit animation before aggressive cleanup
+                if (_rootCard.Opacity > 0 && Visibility == Visibility.Visible)
+                {
+                    var duration = new Duration(TimeSpan.FromMilliseconds(80));
+                    var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
+
+                    var fadeOut = new DoubleAnimation(0, duration) { EasingFunction = ease };
+                    var tg = _rootCard.RenderTransform as TransformGroup;
+                    var scaleTransform = tg?.Children[0] as ScaleTransform;
+
+                    if (scaleTransform != null)
+                    {
+                        var scaleXOut = new DoubleAnimation(0.9, duration) { EasingFunction = ease };
+                        var scaleYOut = new DoubleAnimation(0.9, duration) { EasingFunction = ease };
+                        scaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, scaleXOut);
+                        scaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty, scaleYOut);
+                    }
+
+                    fadeOut.Completed += (_, _) => PerformAggressiveCleanup();
+                    _rootCard.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+                    return;
+                }
+            }
+            catch { /* Fall through to instant cleanup */ }
+
+            PerformAggressiveCleanup();
+        }
+
+        /// <summary>
+        /// Performs the aggressive DWM cleanup — called after exit animation completes
+        /// or immediately if animation is skipped.
+        /// </summary>
+        private void PerformAggressiveCleanup()
+        {
             try
             {
                 // 1. Stop ALL running animations immediately — frozen frames cause ghosts
@@ -171,11 +203,11 @@ namespace FlyShelf.Windows
                 // 5. Hide the Win32 window immediately
                 var hwnd = new WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
-                    ShowWindow(hwnd, SW_HIDE);
+                    NativeMethods.ShowWindow(hwnd, SW_HIDE);
 
                 // 6. Force desktop repaint
-                InvalidateRect(IntPtr.Zero, IntPtr.Zero, true);
-                RedrawWindow(IntPtr.Zero, IntPtr.Zero, IntPtr.Zero,
+                NativeMethods.InvalidateRect(IntPtr.Zero, IntPtr.Zero, true);
+                NativeMethods.RedrawWindow(IntPtr.Zero, IntPtr.Zero, IntPtr.Zero,
                     RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW | RDW_ERASE);
 
                 // 7. Close on next dispatcher frame (allows compositor to flush)
@@ -193,16 +225,24 @@ namespace FlyShelf.Windows
         /// </summary>
         public void StartSafetyTimer()
         {
-            var timer = new System.Windows.Threading.DispatcherTimer
+            // Stop any previously running safety timer to prevent leaks
+            if (_safetyTimer != null)
+            {
+                _safetyTimer.Stop();
+                _safetyTimer = null;
+            }
+
+            _safetyTimer = new System.Windows.Threading.DispatcherTimer
             {
                 Interval = TimeSpan.FromSeconds(8)
             };
-            timer.Tick += (s, e) =>
+            _safetyTimer.Tick += (s, e) =>
             {
-                timer.Stop();
+                _safetyTimer?.Stop();
+                _safetyTimer = null;
                 if (!_isClosed) SafeClose();
             };
-            timer.Start();
+            _safetyTimer.Start();
         }
 
         /// <summary>
@@ -210,6 +250,11 @@ namespace FlyShelf.Windows
         /// </summary>
         protected override void OnClosed(EventArgs e)
         {
+            if (_safetyTimer != null)
+            {
+                _safetyTimer.Stop();
+                _safetyTimer = null;
+            }
             Content = null;
             base.OnClosed(e);
         }
@@ -264,8 +309,8 @@ namespace FlyShelf.Windows
             {
                 MaxWidth = CardMaxWidth,
                 CornerRadius = new CornerRadius(CardCornerRadius),
-                Background = new SolidColorBrush(Color.FromArgb(245, 22, 22, 30)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
+                Background = Helpers.BrushHelper.Frozen(Color.FromArgb(245, 22, 22, 30)),
+                BorderBrush = Helpers.BrushHelper.Frozen(Color.FromArgb(50, 255, 255, 255)),
                 BorderThickness = new Thickness(0.5),
                 ClipToBounds = true,
                 Child = cardContent,
@@ -328,7 +373,7 @@ namespace FlyShelf.Windows
                 {
                     Text = fileName,
                     FontSize = 10,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0xE2, 0xE8, 0xF0)),
+                    Foreground = Helpers.BrushHelper.Frozen(ThemeColors.LightSlate),
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     MaxWidth = 110
                 };
@@ -372,7 +417,7 @@ namespace FlyShelf.Windows
                 Text = displayName,
                 FontSize = 11,
                 FontWeight = FontWeights.Medium,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xE2, 0xE8, 0xF0)),
+                Foreground = Helpers.BrushHelper.Frozen(ThemeColors.LightSlate),
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 MaxWidth = 140
             };
@@ -386,7 +431,7 @@ namespace FlyShelf.Windows
                 {
                     Text = typeInfo,
                     FontSize = 9,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B)),
+                    Foreground = Helpers.BrushHelper.Frozen(ThemeColors.SlateGray),
                     Margin = new Thickness(0, 1, 0, 0),
                     TextTrimming = TextTrimming.CharacterEllipsis
                 };
@@ -418,7 +463,7 @@ namespace FlyShelf.Windows
                 Width = 36,
                 Height = 36,
                 CornerRadius = new CornerRadius(8),
-                Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                Background = Helpers.BrushHelper.Frozen(Color.FromArgb(40, 255, 255, 255)),
                 ClipToBounds = true
             };
 
@@ -446,53 +491,53 @@ namespace FlyShelf.Windows
 
                 case ClipboardItemType.Pdf:
                     iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("📕");
-                    iconBorder.Background = new SolidColorBrush(Color.FromArgb(30, 239, 68, 68));
+                    iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 239, 68, 68));
                     break;
 
                 case ClipboardItemType.Document:
                     iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("📄");
-                    iconBorder.Background = new SolidColorBrush(Color.FromArgb(30, 59, 130, 246));
+                    iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 59, 130, 246));
                     break;
 
                 case ClipboardItemType.Presentation:
                     iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("📊");
-                    iconBorder.Background = new SolidColorBrush(Color.FromArgb(30, 245, 158, 11));
+                    iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 245, 158, 11));
                     break;
 
                 case ClipboardItemType.Video:
                     iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("🎬");
-                    iconBorder.Background = new SolidColorBrush(Color.FromArgb(30, 168, 85, 247));
+                    iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 168, 85, 247));
                     break;
 
                 case ClipboardItemType.Audio:
                     iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("🎵");
-                    iconBorder.Background = new SolidColorBrush(Color.FromArgb(30, 236, 72, 153));
+                    iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 236, 72, 153));
                     break;
 
                 case ClipboardItemType.Archive:
                     iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("📦");
-                    iconBorder.Background = new SolidColorBrush(Color.FromArgb(30, 245, 158, 11));
+                    iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 245, 158, 11));
                     break;
 
                 case ClipboardItemType.Code:
                     iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("💻");
-                    iconBorder.Background = new SolidColorBrush(Color.FromArgb(30, 16, 185, 129));
+                    iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 16, 185, 129));
                     break;
 
                 case ClipboardItemType.Url:
                     iconBorder.Child = MakeCenteredEmoji("🔗");
-                    iconBorder.Background = new SolidColorBrush(Color.FromArgb(30, 59, 130, 246));
+                    iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 59, 130, 246));
                     break;
 
                 case ClipboardItemType.Folder:
                     iconBorder.Child = MakeCenteredEmoji("📁");
-                    iconBorder.Background = new SolidColorBrush(Color.FromArgb(30, 245, 158, 11));
+                    iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 245, 158, 11));
                     break;
 
                 case ClipboardItemType.Text:
                 default:
                     iconBorder.Child = MakeCenteredEmoji("📋");
-                    iconBorder.Background = new SolidColorBrush(Color.FromArgb(30, 148, 163, 184));
+                    iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 148, 163, 184));
                     break;
             }
 
@@ -543,23 +588,14 @@ namespace FlyShelf.Windows
                 _ => "File"
             });
 
-            // File size
-            if (!string.IsNullOrEmpty(item.FilePath))
+            // [FIX DD-3]: Use cached FormattedSize instead of FileInfo I/O on UI thread
+            if (!string.IsNullOrEmpty(item.FormattedSize))
             {
-                try
-                {
-                    var fi = new FileInfo(item.FilePath);
-                    if (fi.Exists)
-                    {
-                        parts.Add(fi.Length switch
-                        {
-                            < 1024 => $"{fi.Length} B",
-                            < 1024 * 1024 => $"{fi.Length / 1024.0:F0} KB",
-                            _ => $"{fi.Length / (1024.0 * 1024.0):F1} MB"
-                        });
-                    }
-                }
-                catch { /* ignore */ }
+                parts.Add(item.FormattedSize);
+            }
+            else if (!string.IsNullOrEmpty(item.FilePath))
+            {
+                // Fallback: file size not yet computed
             }
             else if (!string.IsNullOrEmpty(item.RawContent))
             {
@@ -582,7 +618,7 @@ namespace FlyShelf.Windows
             {
                 Width = width,
                 Height = height,
-                Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                Background = Helpers.BrushHelper.Frozen(Color.FromArgb(40, 255, 255, 255)),
                 Child = new TextBlock
                 {
                     Text = emoji,
@@ -636,8 +672,8 @@ namespace FlyShelf.Windows
                 MinWidth = 18,
                 Height = 18,
                 CornerRadius = new CornerRadius(9),
-                Background = new SolidColorBrush(Color.FromRgb(59, 130, 246)), // Blue
-                BorderBrush = new SolidColorBrush(Color.FromArgb(180, 20, 20, 28)),
+                Background = Helpers.BrushHelper.Frozen(Color.FromRgb(59, 130, 246)), // Blue
+                BorderBrush = Helpers.BrushHelper.Frozen(Color.FromArgb(180, 20, 20, 28)),
                 BorderThickness = new Thickness(1.5),
                 Padding = new Thickness(4, 0, 4, 0),
                 HorizontalAlignment = HorizontalAlignment.Right,
@@ -676,7 +712,7 @@ namespace FlyShelf.Windows
                 if (isPathMode)
                 {
                     // Tint border to indicate path mode
-                    _rootCard.BorderBrush = new SolidColorBrush(Color.FromArgb(160, 137, 180, 250)); // Accent blue
+                    _rootCard.BorderBrush = Helpers.BrushHelper.Frozen(Color.FromArgb(160, 137, 180, 250)); // Accent blue
                     _rootCard.BorderThickness = new Thickness(1.5);
 
                     // Add path mode badge if not already present
@@ -684,7 +720,7 @@ namespace FlyShelf.Windows
                     {
                         _pathModeBadge = new Border
                         {
-                            Background = new SolidColorBrush(Color.FromArgb(220, 137, 180, 250)),
+                            Background = Helpers.BrushHelper.Frozen(Color.FromArgb(220, 137, 180, 250)),
                             CornerRadius = new CornerRadius(4),
                             Padding = new Thickness(5, 2, 5, 2),
                             HorizontalAlignment = HorizontalAlignment.Left,
@@ -695,7 +731,7 @@ namespace FlyShelf.Windows
                                 Text = "📋 Path",
                                 FontSize = 9,
                                 FontWeight = FontWeights.SemiBold,
-                                Foreground = new SolidColorBrush(Color.FromRgb(20, 20, 28))
+                                Foreground = Helpers.BrushHelper.Frozen(Color.FromRgb(20, 20, 28))
                             }
                         };
                         panel.Children.Add(_pathModeBadge);
@@ -708,7 +744,7 @@ namespace FlyShelf.Windows
                 else
                 {
                     // Revert border
-                    _rootCard.BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255));
+                    _rootCard.BorderBrush = Helpers.BrushHelper.Frozen(Color.FromArgb(50, 255, 255, 255));
                     _rootCard.BorderThickness = new Thickness(0.5);
 
                     // Hide path mode badge

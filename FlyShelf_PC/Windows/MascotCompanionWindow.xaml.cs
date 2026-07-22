@@ -237,7 +237,7 @@ namespace FlyShelf.Windows
                     if (DateTime.Now > _actionEndTime)
                     {
                         _state = CompanionState.Falling; // Let physics settle it
-                        PlayThemeAnimation("idle");
+                        PlayThemeAnimation("falling");
                     }
                     else
                     {
@@ -344,6 +344,9 @@ namespace FlyShelf.Windows
                     break;
                 case CompanionState.Action:
                     // Action keeps its set animation until end time
+                    break;
+                case CompanionState.Dragging:
+                    // Dragging animation is managed by mouse handlers — preserve current animation
                     break;
                 default:
                     PlayThemeAnimation("idle");

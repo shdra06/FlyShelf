@@ -121,3 +121,7 @@ youtube_shorts/
 
 # ─── AI Mind Map Cache (local dev only) ────────────────────────
 .mindmap/
+
+# ─── Dev-only Artifacts (audit reports, agent configs) ─────────
+FlyShelf_PC/AUDIT_REPORT.md
+.agents/

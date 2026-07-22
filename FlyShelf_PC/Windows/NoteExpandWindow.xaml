@@ -12,10 +12,10 @@
         Closing="Window_Closing"
         TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
     <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="0" ResizeBorderThickness="5" CornerRadius="10" GlassFrameThickness="-1"/>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="5" CornerRadius="12" GlassFrameThickness="-1"/>
     </WindowChrome.WindowChrome>
     <Grid>
-        <Border x:Name="OuterBorder" CornerRadius="10" Background="#1A1A2E" 
+        <Border x:Name="OuterBorder" CornerRadius="12" Background="#1A1A2E" 
                 BorderBrush="#2A2A45" BorderThickness="1" ClipToBounds="True">
             <Grid>
                 <Grid.RowDefinitions>
@@ -26,7 +26,7 @@
                 </Grid.RowDefinitions>
 
                 <!-- ═══ TITLE BAR ═══ -->
-                <Border Grid.Row="0" CornerRadius="10,10,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Border Grid.Row="0" CornerRadius="12,12,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                             <GradientStop Color="#6366F1" Offset="0"/>

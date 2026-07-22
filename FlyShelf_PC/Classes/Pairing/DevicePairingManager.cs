@@ -76,7 +76,8 @@ namespace FlyShelf.Classes
         
         /// <summary>Fires whenever a device is successfully paired. UI can subscribe to auto-refresh.</summary>
         public static event Action<string> OnDevicePaired;
-        private static readonly HttpClient _httpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
+        // AUDIT Task 5: Use shared pool instance instead of per-class HttpClient (prevents socket exhaustion)
+        private static HttpClient _httpClient => HttpClientPool.Default;
         private static string FIREBASE_BASE => FirebaseAuthManager.FirebaseDatabaseUrl;
 
         /// <summary>Maximum number of paired devices allowed. Remove existing devices to pair new ones.</summary>

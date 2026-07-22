@@ -71,6 +71,45 @@ public static partial class NativeMethods
     internal const int APPCOMMAND_MEDIA_PLAY_PAUSE = 14;
     internal const int FAPPCOMMAND_KEY = 0x0000;
 
+    // Keyboard event flags
+    internal const int KEYEVENTF_KEYUP = 0x0002;
+    internal const int VK_CONTROL = 0x11;
+    internal const int VK_V = 0x56;
+    internal const int VK_MENU = 0x12; // Alt key
+
+    // Mouse event flags
+    internal const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    internal const uint MOUSEEVENTF_LEFTUP = 0x0004;
+
+    // WinEvent constants
+    internal const uint WINEVENT_OUTOFCONTEXT = 0;
+    internal const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+
+    // Window style extras
+    internal const int WS_EX_LAYERED = 0x00080000;
+    internal const uint LWA_ALPHA = 0x02;
+    internal const int WS_VISIBLE = 0x10000000;
+    internal const int DWMWA_CLOAK = 13;
+    internal const int DWMWA_CLOAKED = 14;
+
+    // Clipboard
+    internal const int WM_CLIPBOARDUPDATE = 0x031D;
+
+    // GetAncestor flags
+    internal const uint GA_ROOTOWNER = 3;
+
+    // Process / Token access rights
+    internal const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+    internal const uint TOKEN_QUERY = 0x0008;
+
+    // Console attach
+    internal const int ATTACH_PARENT_PROCESS = -1;
+
+    // Power throttling
+    internal const int ProcessPowerThrottling = 4;
+    internal const uint PROCESS_POWER_THROTTLING_CURRENT_VERSION = 1;
+    internal const uint PROCESS_POWER_THROTTLING_EXECUTION_SPEED = 0x1;
+
     #endregion
 
     #region Enums
@@ -218,12 +257,33 @@ public static partial class NativeMethods
 
     #endregion
 
+    #region Additional Structs
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct TOKEN_ELEVATION
+    {
+        public uint TokenIsElevated;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct PROCESS_POWER_THROTTLING_STATE
+    {
+        public uint Version;
+        public uint ControlMask;
+        public uint StateMask;
+    }
+
+    #endregion
+
     #region Delegates
 
     internal delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
     internal delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
     internal delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
     internal delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>Callback delegate for SetWinEventHook (foreground window change tracking).</summary>
+    internal delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
 
     #endregion
 
@@ -351,6 +411,130 @@ public static partial class NativeMethods
     
     [LibraryImport("user32.dll", SetLastError = true)]
     internal static partial IntPtr GetForegroundWindow();
+
+    /// <summary>Retrieves the status of the specified virtual key at call time.</summary>
+    [LibraryImport("user32.dll")]
+    internal static partial short GetAsyncKeyState(int vKey);
+
+    /// <summary>Retrieves a handle to the window that contains the specified point.</summary>
+    [LibraryImport("user32.dll")]
+    internal static partial IntPtr WindowFromPoint(POINT Point);
+
+    /// <summary>Retrieves a handle to the window at the specified physical screen coordinates.</summary>
+    [LibraryImport("user32.dll")]
+    internal static partial IntPtr WindowFromPhysicalPoint(POINT Point);
+
+    /// <summary>Retrieves a handle to the ancestor of the specified window.</summary>
+    [LibraryImport("user32.dll")]
+    internal static partial IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
+
+    /// <summary>Brings the specified window to the foreground.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetForegroundWindow(IntPtr hWnd);
+
+    /// <summary>Brings the specified window to the top of the Z order.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool BringWindowToTop(IntPtr hWnd);
+
+    /// <summary>Defines or redefines a system-wide hot key.</summary>
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+    /// <summary>Frees a hot key previously registered by RegisterHotKey.</summary>
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    /// <summary>Sets the layered window attributes (alpha, color key).</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
+
+    /// <summary>64-bit safe GetWindowLongPtr for extended window data.</summary>
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    internal static partial IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
+
+    /// <summary>64-bit safe SetWindowLongPtr for extended window data.</summary>
+    [LibraryImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    internal static partial IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    /// <summary>Sets an event hook function for a range of events.</summary>
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+
+    /// <summary>Removes an event hook installed by SetWinEventHook.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool UnhookWinEvent(IntPtr hWinEventHook);
+
+    /// <summary>Places the calling window in the clipboard viewer chain to receive WM_CLIPBOARDUPDATE.</summary>
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool AddClipboardFormatListener(IntPtr hwnd);
+
+    /// <summary>Removes the calling window from the clipboard viewer chain.</summary>
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool RemoveClipboardFormatListener(IntPtr hwnd);
+
+    /// <summary>GetWindowThreadProcessId overload that returns the process ID via out parameter.</summary>
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static partial uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    /// <summary>Attaches or detaches the input processing of one thread to another.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool AttachThreadInput(uint idAttach, uint idAttachTo, [MarshalAs(UnmanagedType.Bool)] bool fAttach);
+
+    /// <summary>Determines whether the specified window handle identifies an existing window.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool IsWindow(IntPtr hWnd);
+
+    /// <summary>Determines the visibility state of the specified window.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool IsWindowVisible(IntPtr hWnd);
+
+    /// <summary>Synthesizes a mouse motion or button event.</summary>
+    [LibraryImport("user32.dll")]
+    internal static partial void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
+
+    /// <summary>Copies the text of the specified window's title bar into a buffer.</summary>
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    internal static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+    /// <summary>Invalidates the client area of the specified window.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool InvalidateRect(IntPtr hWnd, IntPtr lpRect, [MarshalAs(UnmanagedType.Bool)] bool bErase);
+
+    /// <summary>Updates the specified rectangle or region in a window's client area.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
+
+    /// <summary>Destroys an icon and frees any memory the icon occupied.</summary>
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool DestroyIcon(IntPtr hIcon);
+
+    /// <summary>Synthesizes keystrokes, mouse motions, and button clicks.</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    // SendInput structs
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct INPUT { public uint type; public INPUTUNION u; }
+    [StructLayout(LayoutKind.Explicit)]
+    internal struct INPUTUNION { [FieldOffset(0)] public KEYBDINPUT ki; }
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct KEYBDINPUT { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
+    internal const uint INPUT_KEYBOARD = 1;
+
     #endregion
 
     #region gdi32.dll
@@ -378,6 +562,10 @@ public static partial class NativeMethods
     [LibraryImport("dwmapi.dll")]
     internal static partial int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
 
+    /// <summary>DwmGetWindowAttribute overload for int output (e.g. DWMWA_CLOAKED).</summary>
+    [LibraryImport("dwmapi.dll")]
+    internal static partial int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
+
     #endregion
 
     #region shcore.dll
@@ -392,12 +580,157 @@ public static partial class NativeMethods
     [LibraryImport("kernel32.dll", EntryPoint = "GetModuleHandleW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     internal static partial IntPtr GetModuleHandle(string lpModuleName);
 
+    /// <summary>Determines whether the calling process is being debugged by a user-mode debugger.</summary>
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool IsDebuggerPresent();
+
+    /// <summary>Determines whether the specified process is being debugged (remote debugger).</summary>
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool CheckRemoteDebuggerPresent(IntPtr hProcess, [MarshalAs(UnmanagedType.Bool)] out bool isDebuggerPresent);
+
+    /// <summary>Opens an existing local process object for access.</summary>
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    internal static partial IntPtr OpenProcess(uint processAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, uint processId);
+
+    /// <summary>Closes an open object handle.</summary>
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool CloseHandle(IntPtr hObject);
+
+    /// <summary>Returns the process identifier of the calling process.</summary>
+    [LibraryImport("kernel32.dll")]
+    internal static partial uint GetCurrentProcessId();
+
+    /// <summary>Returns the thread identifier of the calling thread.</summary>
+    [LibraryImport("kernel32.dll")]
+    internal static partial uint GetCurrentThreadId();
+
+    /// <summary>Attaches the calling process to the console of the specified process.</summary>
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool AttachConsole(int dwProcessId);
+
+    /// <summary>Retrieves the window handle of the console associated with the calling process.</summary>
+    [LibraryImport("kernel32.dll")]
+    internal static partial IntPtr GetConsoleWindow();
+
+    /// <summary>Sets the minimum and maximum working set sizes for the specified process.</summary>
+    [DllImport("kernel32.dll", EntryPoint = "SetProcessWorkingSetSize", SetLastError = true)]
+    internal static extern int SetProcessWorkingSetSize(IntPtr process, nint minimumWorkingSetSize, nint maximumWorkingSetSize);
+
+    /// <summary>Sets information for the specified process (e.g. power throttling).</summary>
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetProcessInformation(
+        IntPtr hProcess,
+        int ProcessInformationClass,
+        ref PROCESS_POWER_THROTTLING_STATE ProcessInformation,
+        uint ProcessInformationSize
+    );
+
     #endregion
 
     #region shell32.dll
 
     [LibraryImport("shell32.dll")]
     internal static partial int SHQueryUserNotificationState(out QUERY_USER_NOTIFICATION_STATE pquns);
+
+    /// <summary>Creates an ITEMIDLIST from a file-system path.</summary>
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    internal static extern IntPtr ILCreateFromPath([MarshalAs(UnmanagedType.LPWStr)] string pszPath);
+
+    /// <summary>Frees an ITEMIDLIST allocated by the Shell.</summary>
+    [LibraryImport("shell32.dll")]
+    internal static partial void ILFree(IntPtr pidl);
+
+    /// <summary>Opens a Windows Explorer folder window with specified items selected.</summary>
+    [DllImport("shell32.dll")]
+    internal static extern int SHOpenFolderAndSelectItems(
+        IntPtr pidlFolder,
+        uint cidl,
+        IntPtr[] apidl,
+        uint dwFlags);
+
+    /// <summary>Retrieves information about a file system object (icon, type name).</summary>
+    [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+    internal static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbSizeFileInfo, uint uFlags);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    internal struct SHFILEINFO
+    {
+        public IntPtr hIcon;
+        public int iIcon;
+        public uint dwAttributes;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string szDisplayName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
+        public string szTypeName;
+    }
+
+    /// <summary>Sends an appbar message to the system (taskbar query).</summary>
+    [DllImport("shell32.dll")]
+    internal static extern IntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA pData);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct APPBARDATA
+    {
+        public int cbSize;
+        public IntPtr hWnd;
+        public uint uCallbackMessage;
+        public uint uEdge;
+        public RECT rc;
+        public IntPtr lParam;
+    }
+
+    #endregion
+
+    #region advapi32.dll
+
+    /// <summary>Opens the access token associated with a process.</summary>
+    [LibraryImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+
+    /// <summary>Retrieves a specified type of information about an access token.</summary>
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetTokenInformation(
+        IntPtr TokenHandle,
+        int TokenInformationClass,
+        IntPtr TokenInformation,
+        int TokenInformationLength,
+        out int ReturnLength);
+
+    #endregion
+
+    #region combase.dll
+
+    /// <summary>Gets the activation factory for the specified WinRT runtime class.</summary>
+    [DllImport("combase.dll", PreserveSig = false)]
+    internal static extern void RoGetActivationFactory(
+        [MarshalAs(UnmanagedType.HString)] string activatableClassId,
+        [In] ref Guid iid,
+        out IntPtr factory);
+
+    /// <summary>Activates a WinRT runtime class instance.</summary>
+    [DllImport("combase.dll", PreserveSig = false)]
+    internal static extern void RoActivateInstance(
+        [MarshalAs(UnmanagedType.HString)] string activatableClassId,
+        out IntPtr instance);
+
+    #endregion
+
+    #region winmm.dll
+
+    /// <summary>Requests a minimum timer resolution (improves rendering timer precision).</summary>
+    [LibraryImport("winmm.dll", EntryPoint = "timeBeginPeriod", SetLastError = true)]
+    internal static partial uint TimeBeginPeriod(uint uMilliseconds);
+
+    /// <summary>Clears a previously set minimum timer resolution.</summary>
+    [LibraryImport("winmm.dll", EntryPoint = "timeEndPeriod", SetLastError = true)]
+    internal static partial uint TimeEndPeriod(uint uMilliseconds);
 
     #endregion
 
@@ -701,36 +1034,4 @@ public static partial class NativeMethods
     }
 
     #endregion
-
-    #region Auto-Hide Detection
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct APPBARDATA
-    {
-        public int cbSize;
-        public IntPtr hWnd;
-        public uint uCallbackMessage;
-        public uint uEdge;
-        public RECT rc;
-        public IntPtr lParam;
-    }
-
-    [DllImport("shell32.dll")]
-    internal static extern IntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA pData);
-
-    public static bool IsTaskbarAutoHideEnabled()
-    {
-        try
-        {
-            var abd = new APPBARDATA();
-            abd.cbSize = Marshal.SizeOf(typeof(APPBARDATA));
-            IntPtr result = SHAppBarMessage(0x04 /*ABM_GETSTATE*/, ref abd);
-            return (result.ToInt32() & 0x01 /*ABS_AUTOHIDE*/) != 0;
-        }
-        catch { return false; }
-    }
-
-    #endregion
 }
-
-

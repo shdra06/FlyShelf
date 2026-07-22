@@ -1,0 +1,98 @@
+# ─────────────────────────────────────────────────────────────────
+# FlyShelf PC — CI Build Pipeline
+# Validates build, code style, and publishes artifacts on main.
+# ─────────────────────────────────────────────────────────────────
+name: Build FlyShelf PC
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  PROJECT_PATH: FlyShelf_PC/FlyShelf.csproj
+
+jobs:
+  build:
+    name: Build & Validate
+    runs-on: windows-latest
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── .NET SDK ──────────────────────────────────────────────
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # ── Restore ───────────────────────────────────────────────
+      - name: Restore NuGet packages
+        run: dotnet restore ${{ env.PROJECT_PATH }}
+
+      # ── Build ─────────────────────────────────────────────────
+      # Skip BuildSparseResource — it calls a local PowerShell
+      # signing script that isn't available in CI.
+      - name: Build (Release)
+        run: >-
+          dotnet build ${{ env.PROJECT_PATH }}
+          --configuration Release
+          --no-restore
+          /p:BuildSparseResource=false
+
+      # ── Code Style ────────────────────────────────────────────
+      - name: Verify code formatting
+        run: >-
+          dotnet format ${{ env.PROJECT_PATH }}
+          --verify-no-changes
+          --verbosity diagnostic
+
+      # ── Tests ─────────────────────────────────────────────────
+      # TODO: Add test step when a test project is created.
+      #
+      # - name: Run tests
+      #   run: dotnet test FlyShelf_PC.Tests/FlyShelf_PC.Tests.csproj
+      #        --configuration Release --no-build --verbosity normal
+
+  # ═══════════════════════════════════════════════════════════════
+  # Publish — only on pushes to main (not PRs)
+  # ═══════════════════════════════════════════════════════════════
+  publish:
+    name: Publish Artifact
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish self-contained single-file (win-x64)
+        run: >-
+          dotnet publish ${{ env.PROJECT_PATH }}
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          /p:PublishSingleFile=true
+          /p:IncludeNativeLibrariesForSelfExtract=true
+          /p:BuildSparseResource=false
+          --output ./publish
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlyShelf-win-x64
+          path: ./publish/
+          retention-days: 30
+          if-no-files-found: error

@@ -15,6 +15,27 @@ namespace FlyShelf
     /// </summary>
     public partial class MainWindow
     {
+        // Cached frozen easing function — shared across all thumbnail fade-in animations (FIX M5)
+        private static readonly System.Windows.Media.Animation.CubicEase s_cachedEaseOut =
+            CreateFrozenEaseOut();
+        private static System.Windows.Media.Animation.CubicEase CreateFrozenEaseOut()
+        {
+            var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+            ease.Freeze();
+            return ease;
+        }
+
+        // [FIX ANIM-10]: Cached frozen icon fade-in animation — avoids per-load DoubleAnimation allocation
+        private static readonly System.Windows.Media.Animation.DoubleAnimation s_iconFadeIn = CreateIconFadeIn();
+        private static System.Windows.Media.Animation.DoubleAnimation CreateIconFadeIn()
+        {
+            var anim = new System.Windows.Media.Animation.DoubleAnimation(0.2, 1.0, TimeSpan.FromMilliseconds(150))
+            {
+                EasingFunction = s_cachedEaseOut
+            };
+            anim.Freeze();
+            return anim;
+        }
         private static System.Windows.Rect GetWorkAreaForPoint(double x, double y)
         {
             // Use Win32 MonitorFromPoint + GetMonitorInfo for correct multi-monitor work area
@@ -124,6 +145,7 @@ namespace FlyShelf
 
         public void ShowNearPosition(double targetX, double targetY, int mode = 0, bool isPersistent = false, bool stealFocus = true, bool? knownOnOtherDesktop = null)
         {
+            _hasOptimizedThisHide = false;
             Classes.Logger.LogAction("TELEMETRY", $"ShowNearPosition entered, mode={mode}, isPersistent={isPersistent}, stealFocus={stealFocus}");
             Classes.SpawnProfiler.Instance.BeginSpawn(this);
             
@@ -558,6 +580,20 @@ namespace FlyShelf
             RootContent.Opacity = 1;
             _spawnGeneration++;
             _isCurrentlySummoned = true;
+
+            // ═══ ALWAYS SCROLL TO TOP ON OPEN ═══
+            // User expects to see the most recent clipboard item first.
+            try
+            {
+                Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
+                var svTop = GetShelfScrollViewer();
+                if (svTop != null)
+                {
+                    svTop.ScrollToVerticalOffset(0);
+                    svTop.ScrollToTop();
+                }
+            }
+            catch { }
             // _isShowAnimating already set to true at the top of ShowNearPosition (before mode change)
             // Ensure it's still true here (belt-and-suspenders):
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
@@ -923,8 +959,8 @@ namespace FlyShelf
             }
 
             // Mark that active scrolling is happening, and suppress hover buttons immediately
-            _viewModel.IsScrolling = true;
-            _viewModel.AllowHover = false;
+            if (!_viewModel.IsScrolling) _viewModel.IsScrolling = true;
+            if (_viewModel.AllowHover) _viewModel.AllowHover = false;
 
             // Start or reset the timer to reset IsScrolling back to false after a delay
             if (_scrollDecayTimer == null)
@@ -948,38 +984,23 @@ namespace FlyShelf
 
             _scrollDecayTimer.Start();
 
-            // ═══ LIVE THUMBNAIL LOADING DURING SCROLL ═══
-            // Load thumbnails continuously while scrolling so images appear to be "already loaded"
-            // before entering the viewport. Uses Background dispatcher priority to avoid blocking
-            // the SmoothScroll physics engine. Throttled to every 80ms to balance responsiveness
-            // with CPU overhead. Safe because UpdateLayout() is NOT called inside RenderVisibleThumbnails.
+            // ═══ LIVE THUMBNAIL LOADING ═══
+            // v3.0.7 MSIX (proven smooth): loaded thumbnails ONLY after scroll stopped.
+            // Running RenderVisibleThumbnails during scroll adds TransformToAncestor()
+            // per visible item + potential bitmap loading — competing with scroll frames.
+            // Now: timer is ONLY started from _scrollHighQualityTimer after scroll stops.
             if (_scrollLiveLoadTimer == null)
             {
                 _scrollLiveLoadTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
                 {
-                    Interval = TimeSpan.FromMilliseconds(80)
+                    Interval = TimeSpan.FromMilliseconds(120)
                 };
                 _scrollLiveLoadTimer.Tick += (s, ev) =>
                 {
-                    // Restore aggressive live-load to 50ms during scroll.
-                    // This ensures thumbnails appear instantly when scrolling fast.
-                    if (_viewModel.IsScrolling)
-                    {
-                        if (_scrollLiveLoadTimer.Interval.TotalMilliseconds > 50)
-                            _scrollLiveLoadTimer.Interval = TimeSpan.FromMilliseconds(50);
-                    }
-                    else
-                    {
-                        if (_scrollLiveLoadTimer.Interval.TotalMilliseconds > 90)
-                            _scrollLiveLoadTimer.Interval = TimeSpan.FromMilliseconds(80);
-                    }
                     RenderVisibleThumbnails(onlyFirstTen: false);
                 };
             }
-            if (!_scrollLiveLoadTimer.IsEnabled)
-            {
-                _scrollLiveLoadTimer.Start();
-            }
+            // Do NOT start the live load timer during scroll — let scroll frames have full CPU
 
             // Start or reset the snappier 30ms stoppage timer for final high-quality pass when scroll stops
             if (_scrollHighQualityTimer == null)
@@ -1052,6 +1073,13 @@ namespace FlyShelf
                             if (!this.IsVisible) return;
                             RenderVisibleThumbnails(onlyFirstTen: false, isEvictionPass: true);
                         };
+                        _evictionBackgroundTimer.Start();
+                    }
+                    // PERF FIX: Restart eviction timer if it was stopped by AnimateAndHide.
+                    // Previously the timer was only started during creation (above), so after
+                    // hide→show cycles it stayed stopped, leaking off-screen bitmaps.
+                    else if (!_evictionBackgroundTimer.IsEnabled)
+                    {
                         _evictionBackgroundTimer.Start();
                     }
 
@@ -1234,9 +1262,10 @@ namespace FlyShelf
                                         var bmp = ViewModels.FlyShelfViewModel.LoadImageThumbnail(filePath, 300);
                                         if (bmp != null)
                                         {
-                                            // Fix 3: Use Background priority during scroll to avoid
-                                            // preempting Render. Skip fade animation during scroll
-                                            // (Storyboards add per-frame animation clock overhead).
+                                            // Fix 4: Use ApplicationIdle priority during scroll to coalesce
+                                            // multiple icon assignments into a single layout pass. Background
+                                            // priority was still preempting scroll frames with individual
+                                            // PropertyChanged → binding update → layout passes.
                                             bool scrolling = _viewModel.IsScrolling;
                                             Dispatcher.InvokeAsync(() =>
                                             {
@@ -1254,18 +1283,12 @@ namespace FlyShelf
                                                         var img = FindVisualChild<Image>(element, "ItemIcon");
                                                         if (img != null)
                                                         {
-                                                            var anim = new System.Windows.Media.Animation.DoubleAnimation
-                                                            {
-                                                                From = 0.2,
-                                                                To = 1.0,
-                                                                Duration = TimeSpan.FromMilliseconds(150),
-                                                                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-                                                            };
-                                                            img.BeginAnimation(UIElement.OpacityProperty, anim);
+                                                            // [FIX ANIM-10]: Use cached frozen animation
+                                                            img.BeginAnimation(UIElement.OpacityProperty, s_iconFadeIn);
                                                         }
                                                     }
                                                 }
-                                            }, scrolling ? System.Windows.Threading.DispatcherPriority.Background : System.Windows.Threading.DispatcherPriority.Normal);
+                                            }, scrolling ? System.Windows.Threading.DispatcherPriority.ApplicationIdle : System.Windows.Threading.DispatcherPriority.Normal);
                                         }
                                         else
                                         {
@@ -1340,7 +1363,10 @@ namespace FlyShelf
                         // (lets runtime decide if collection is productive) instead of Forced.
                         System.Threading.Tasks.Task.Run(() =>
                         {
-                            System.GC.Collect(2, System.GCCollectionMode.Optimized, false);
+                            // Gen 0 only: recently-freed thumbnail buffers are short-lived
+                            // allocations still in Gen 0. Gen 2 scans the entire heap and is
+                            // ~10x more expensive — not worth it for reclaiming young objects.
+                            System.GC.Collect(0, System.GCCollectionMode.Optimized, false);
                         });
                     }
 
@@ -1395,10 +1421,11 @@ namespace FlyShelf
         /// </summary>
         private void InstallKeyboardHook()
         {
-            if (_keyboardHookId != IntPtr.Zero) return; // Already installed
-
-            // Reset arrow ownership — arrows are always active on fresh summon
+            // PC-7 FIX: Always reset arrow ownership on summon, even if hook is already installed.
+            // Previously, re-summon without uninstall skipped this, leaving arrows dead.
             _hookOwnsArrows = true;
+
+            if (_keyboardHookId != IntPtr.Zero) return; // Already installed
 
             _keyboardHookProc = KeyboardHookCallback;
             _mouseHookProc = MouseHookCallback;
@@ -1570,6 +1597,28 @@ namespace FlyShelf
                 if (newTop + this.ActualHeight > workArea.Top + workArea.Height - 16)
                     newTop = workArea.Top + workArea.Height - this.ActualHeight - 16;
                 this.Top = newTop;
+            }
+        }
+
+        /// <summary>
+        /// Handles display DPI changes (monitor switch, Windows scaling change).
+        /// Recalculates locked positioning edges so the clipboard doesn't shift.
+        /// </summary>
+        protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+        {
+            base.OnDpiChanged(oldDpi, newDpi);
+            try
+            {
+                if (_lockedBottomEdge > 0)
+                {
+                    double ratio = newDpi.PixelsPerDip / oldDpi.PixelsPerDip;
+                    _lockedBottomEdge = _lockedBottomEdge * ratio;
+                }
+                Classes.Logger.LogAction("DPI_CHANGED", $"DPI changed from {oldDpi.PixelsPerDip} to {newDpi.PixelsPerDip}");
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("DPI_ERR", $"OnDpiChanged failed: {ex.Message}");
             }
         }
     }

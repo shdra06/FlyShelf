@@ -41,7 +41,7 @@
                         </Grid.ColumnDefinitions>
 
                         <!-- Animated bell badge -->
-                        <Border Grid.Column="0" CornerRadius="10" Width="36" Height="36" Margin="0,0,12,0">
+                        <Border Grid.Column="0" CornerRadius="12" Width="36" Height="36" Margin="0,0,12,0">
                             <Border.Background>
                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                     <GradientStop Color="#F59E0B" Offset="0"/>
@@ -104,7 +104,7 @@
                     <!-- ═══ META BADGES ═══ -->
                     <WrapPanel Margin="0,0,0,16">
                         <!-- Date badge -->
-                        <Border CornerRadius="6" Padding="8,4" Margin="0,0,6,0">
+                        <Border CornerRadius="8" Padding="8,4" Margin="0,0,6,0">
                             <Border.Background>
                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                                     <GradientStop Color="#10FFFFFF" Offset="0"/>
@@ -118,7 +118,7 @@
                             </StackPanel>
                         </Border>
                         <!-- Repeat badge -->
-                        <Border x:Name="RepeatBadge" CornerRadius="6" Padding="8,4" Visibility="Collapsed">
+                        <Border x:Name="RepeatBadge" CornerRadius="8" Padding="8,4" Visibility="Collapsed">
                             <Border.Background>
                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                                     <GradientStop Color="#18F59E0B" Offset="0"/>
@@ -248,7 +248,7 @@
                     </WrapPanel>
 
                     <!-- ═══ DONE BUTTON (full width, prominent) ═══ -->
-                    <Border CornerRadius="10" Padding="0,11" Margin="0,6,0,0" Cursor="Hand"
+                    <Border CornerRadius="12" Padding="0,11" Margin="0,6,0,0" Cursor="Hand"
                             MouseLeftButtonDown="Done_Click">
                         <Border.Style>
                             <Style TargetType="Border">

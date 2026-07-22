@@ -8,7 +8,7 @@ using FlyShelf.ViewModels;
 
 namespace FlyShelf.Classes
 {
-    public sealed class DocumentSniffer
+    public sealed class DocumentSniffer : IDisposable
     {
         private List<FileSystemWatcher> _watchers = new List<FileSystemWatcher>();
         private FlyShelfViewModel _viewModel;
@@ -68,6 +68,20 @@ namespace FlyShelf.Classes
                 watcher.Dispose();
             }
             _watchers.Clear();
+        }
+
+        /// <summary>
+        /// M14: Ensures FileSystemWatcher instances are released even if StopSniffing is not called.
+        /// </summary>
+        public void Dispose()
+        {
+            StopSniffing();
+            GC.SuppressFinalize(this);
+        }
+
+        ~DocumentSniffer()
+        {
+            StopSniffing();
         }
 
         private void OnFileDetected(object sender, FileSystemEventArgs e)
@@ -144,9 +158,7 @@ namespace FlyShelf.Classes
             if (fileName.StartsWith("~$", StringComparison.Ordinal)) return;
 
             // Debouncing fast duplicate events from web browsers downloading chunks
-            if (_recentlyTriggeredFiles.ContainsKey(e.FullPath)) return;
-            
-            _recentlyTriggeredFiles.TryAdd(e.FullPath, 0);
+            if (!_recentlyTriggeredFiles.TryAdd(e.FullPath, 0)) return;
 
             string targetPath = e.FullPath;
 
@@ -197,7 +209,8 @@ namespace FlyShelf.Classes
                     }
                     catch { } // Best-effort: failure is acceptable
                     string friendlyType = FlyShelf.Classes.FormatHelper.GetFileTypeFriendly(targetPath);
-                    FlyShelf.Windows.ToastWindow.ShowToast($"{friendlyType} sniffed{sizeStr} 📄");
+                    // Silenced — sniffer toasts on every auto-capture are too spammy
+                    Classes.Logger.LogAction("SNIFFER", $"{friendlyType} sniffed{sizeStr}");
                 });
             }
             catch 

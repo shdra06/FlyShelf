@@ -131,6 +131,7 @@ namespace FlyShelf.Controls
                     bitmap.BeginInit();
                     bitmap.UriSource = new Uri(filePath, UriKind.Absolute);
                     bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.DecodePixelWidth = 256;
                     bitmap.EndInit();
                     bitmap.Freeze();
                     SpriteImage.Source = bitmap;

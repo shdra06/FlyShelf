@@ -161,7 +161,7 @@ public partial class App
                 if (hwnd != IntPtr.Zero)
                 {
                     var settings = Classes.SettingsManager.Current;
-                    RegisterHotKey(hwnd, 9000, settings.HotkeyModifier | 0x4000, settings.HotkeyKey);
+                    FlyShelf.Classes.NativeMethods.RegisterHotKey(hwnd, 9000, settings.HotkeyModifier | 0x4000, settings.HotkeyKey);
                     System.Windows.Interop.HwndSource.FromHwnd(hwnd)?.AddHook((IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) =>
                     {
                         if (msg == 0x0312 && wp.ToInt32() == 9000)
@@ -178,7 +178,7 @@ public partial class App
 
                     safeWindow.Closed += (s2, ev2) =>
                     {
-                        try { UnregisterHotKey(hwnd, 9000); } catch { } // Best-effort: failure is acceptable
+                        try { FlyShelf.Classes.NativeMethods.UnregisterHotKey(hwnd, 9000); } catch { } // Best-effort: failure is acceptable
                     };
                 }
             };

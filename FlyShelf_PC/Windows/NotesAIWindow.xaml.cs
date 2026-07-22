@@ -35,6 +35,7 @@ namespace FlyShelf.Windows
 
         private async void NotesAIWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            Loaded -= NotesAIWindow_Loaded;
             try
             {
                 string result = string.Empty;

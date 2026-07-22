@@ -1,0 +1,139 @@
+<UserControl x:Class="FlyShelf.Controls.AiSettingsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <!-- ═══ AI Settings Panel Content — Extracted from MainWindow.xaml (Decomposition Phase 1) ═══ -->
+    <Border CornerRadius="0" Padding="0">
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#1A1A2E" Offset="0"/>
+                <GradientStop Color="#16162A" Offset="1"/>
+            </LinearGradientBrush>
+        </Border.Background>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8,16,16">
+            <StackPanel>
+                <!-- Header -->
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,12">
+                    <ui:SymbolIcon Symbol="Sparkle24" FontSize="20" Foreground="#A78BFA" Margin="0,0,10,0"/>
+                    <TextBlock Text="AI Settings" FontSize="18" FontWeight="SemiBold" Foreground="#CDD6F4"/>
+                </StackPanel>
+
+                <!-- ═══ API Key ═══ -->
+                <Border CornerRadius="12" Background="#222240" Padding="14,12" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="API Key" FontSize="13" FontWeight="SemiBold" Foreground="#A5B4FC" Margin="0,0,0,6"/>
+                        <TextBlock Text="Enter your Gemini, OpenAI, or Claude API key. The key is encrypted and stored locally." FontSize="11" Foreground="#64748B" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="AiApiKeyBox" Grid.Column="0" FontSize="12" Padding="8,6"
+                                     Background="#1A1A35" Foreground="#E8E8F0" CaretBrush="#E8E8F0"
+                                     BorderBrush="#2A2A45" BorderThickness="1"
+                                     TextChanged="AiApiKey_TextChanged"
+                                     AutomationProperties.Name="AI API Key">
+                                <TextBox.Style>
+                                    <Style TargetType="TextBox">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="TextBox">
+                                                    <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                                        <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </TextBox.Style>
+                            </TextBox>
+                            <ui:Button Grid.Column="1" x:Name="AiApiKeySaveBtn" Content="Save" Appearance="Primary" 
+                                       Click="AiApiKeySave_Click" Margin="8,0,0,0" Padding="12,6" CornerRadius="8"/>
+                        </Grid>
+                        <TextBlock x:Name="AiApiKeyStatus" FontSize="11" Foreground="#10B981" Margin="0,6,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ Provider ═══ -->
+                <Border CornerRadius="12" Background="#222240" Padding="14,12" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="AI Provider" FontSize="13" FontWeight="SemiBold" Foreground="#A5B4FC" Margin="0,0,0,6"/>
+                        <TextBlock Text="Choose which AI provider to use. 'Auto' picks the best available." FontSize="11" Foreground="#64748B" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                        <StackPanel x:Name="AiProviderRadioPanel" Orientation="Horizontal">
+                            <RadioButton x:Name="AiProviderAuto" Content="Auto" GroupName="AiProvider" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiProvider_Checked" Tag="auto"/>
+                            <RadioButton x:Name="AiProviderGemini" Content="Gemini" GroupName="AiProvider" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiProvider_Checked" Tag="gemini"/>
+                            <RadioButton x:Name="AiProviderOpenAI" Content="OpenAI" GroupName="AiProvider" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiProvider_Checked" Tag="openai"/>
+                            <RadioButton x:Name="AiProviderClaude" Content="Claude" GroupName="AiProvider" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiProvider_Checked" Tag="claude"/>
+                            <RadioButton x:Name="AiProviderWindows" Content="Windows AI" GroupName="AiProvider" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiProvider_Checked" Tag="windows"/>
+                        </StackPanel>
+                        <TextBlock x:Name="AiProviderStatus" FontSize="11" Foreground="#64748B" Margin="0,6,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ Default OCR/Table Method ═══ -->
+                <Border CornerRadius="12" Background="#222240" Padding="14,12" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="Default Data Extraction Method" FontSize="13" FontWeight="SemiBold" Foreground="#A5B4FC" Margin="0,0,0,6"/>
+                        <TextBlock Text="For OCR and Table Extraction from images. 'Auto' shows a choice popup when no API key is set." FontSize="11" Foreground="#64748B" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton x:Name="AiMethodAuto" Content="Auto (Recommended)" GroupName="AiMethod" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiMethod_Checked" Tag="auto"/>
+                            <RadioButton x:Name="AiMethodApi" Content="Always API" GroupName="AiMethod" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiMethod_Checked" Tag="api"/>
+                            <RadioButton x:Name="AiMethodLocal" Content="Always Local" GroupName="AiMethod" Foreground="#CDD6F4" Checked="AiMethod_Checked" Tag="local"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ Model Override ═══ -->
+                <Border CornerRadius="12" Background="#222240" Padding="14,12" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="Model Override (Optional)" FontSize="13" FontWeight="SemiBold" Foreground="#A5B4FC" Margin="0,0,0,6"/>
+                        <TextBlock Text="Override the default model. Leave empty for auto-detection. Examples: gpt-4o, gemini-2.0-flash, claude-3-5-haiku-latest" FontSize="11" Foreground="#64748B" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                        <TextBox x:Name="AiModelOverrideBox" FontSize="12" Padding="8,6"
+                                 Background="#1A1A35" Foreground="#E8E8F0" CaretBrush="#E8E8F0"
+                                 BorderBrush="#2A2A45" BorderThickness="1"
+                                 TextChanged="AiModelOverride_TextChanged"
+                                 AutomationProperties.Name="AI Model Override">
+                            <TextBox.Style>
+                                <Style TargetType="TextBox">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="TextBox">
+                                                <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                                    <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </TextBox.Style>
+                        </TextBox>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ AI Enabled Toggle ═══ -->
+                <Border CornerRadius="12" Background="#222240" Padding="14,12" Margin="0,0,0,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="AI Features" FontSize="13" FontWeight="SemiBold" Foreground="#A5B4FC"/>
+                            <TextBlock Text="Master toggle for all AI features. Turn off to disable AI completely." FontSize="11" Foreground="#64748B" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <CheckBox x:Name="AiEnabledToggle" Grid.Column="1" VerticalAlignment="Center" 
+                                  Checked="AiEnabled_Changed" Unchecked="AiEnabled_Changed"/>
+                    </Grid>
+                </Border>
+
+                <!-- ═══ Active Provider Info ═══ -->
+                <Border CornerRadius="12" Background="#1A2A1A" BorderBrush="#3010B981" BorderThickness="1" Padding="14,12" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="Current Status" FontSize="13" FontWeight="SemiBold" Foreground="#10B981" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="AiCurrentStatus" Text="Loading..." FontSize="12" Foreground="#CDD6F4" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</UserControl>

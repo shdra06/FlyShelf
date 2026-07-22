@@ -22,7 +22,7 @@ namespace FlyShelf.Classes
     /// Singleton orchestrator for all LAN file transfers.
     /// Routes WebSocket control messages, manages sessions, persists checkpoints.
     /// </summary>
-    public class LanTransferManager
+    public class LanTransferManager : IDisposable
     {
         public static LanTransferManager? Instance { get; private set; }
 
@@ -548,7 +548,7 @@ namespace FlyShelf.Classes
                     {
                         _viewModel.InsertWithDedup(clip);
                     }
-                    _viewModel.PersistHistoryPublic();
+                    _viewModel.SchedulePersistHistoryPublic(); // PERF: throttled — network transfer is non-critical
 
                     Windows.ToastWindow.ShowToast($"✅ {session.FileName} ({LanTransferSession.FormatBytes(session.FileSize)}) received from {session.PeerDeviceName}");
                 }
@@ -1061,6 +1061,22 @@ namespace FlyShelf.Classes
             [JsonPropertyName("peerDeviceName")] public string PeerDeviceName { get; set; } = "";
             [JsonPropertyName("xxhash64")] public string? XxHash64 { get; set; }
             [JsonPropertyName("timestamp")] public string Timestamp { get; set; } = "";
+        }
+
+        // ═══ IDisposable ═══
+        // AUDIT: Deterministic cleanup of _stalePendingReceivesTimer.
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            try { _stalePendingReceivesTimer?.Dispose(); } catch { }
+            _stalePendingReceivesTimer = null;
+            if (Instance == this) Instance = null;
+
+            GC.SuppressFinalize(this);
         }
     }
 }

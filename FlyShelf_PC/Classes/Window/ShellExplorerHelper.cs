@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -8,24 +8,12 @@ namespace FlyShelf.Classes
 {
     public static class ShellExplorerHelper
     {
-        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-        private static extern IntPtr ILCreateFromPath([MarshalAs(UnmanagedType.LPWStr)] string pszPath);
-
-        [DllImport("shell32.dll")]
-        private static extern void ILFree(IntPtr pidl);
-
-        [DllImport("shell32.dll")]
-        private static extern int SHOpenFolderAndSelectItems(
-            IntPtr pidlFolder,
-            uint cidl,
-            IntPtr[] apidl,
-            uint dwFlags);
 
         public static void OpenFolderAndSelectFiles(string parentFolder, string[] fileNames)
         {
             if (string.IsNullOrEmpty(parentFolder) || !Directory.Exists(parentFolder)) return;
 
-            IntPtr folderPidl = ILCreateFromPath(parentFolder);
+            IntPtr folderPidl = NativeMethods.ILCreateFromPath(parentFolder);
             if (folderPidl == IntPtr.Zero) return;
 
             try
@@ -34,7 +22,7 @@ namespace FlyShelf.Classes
                 foreach (var name in fileNames)
                 {
                     string fullPath = Path.Combine(parentFolder, name);
-                    IntPtr filePidl = ILCreateFromPath(fullPath);
+                    IntPtr filePidl = NativeMethods.ILCreateFromPath(fullPath);
                     if (filePidl != IntPtr.Zero)
                     {
                         pidlList.Add(filePidl);
@@ -43,7 +31,7 @@ namespace FlyShelf.Classes
 
                 if (pidlList.Count > 0)
                 {
-                    SHOpenFolderAndSelectItems(folderPidl, (uint)pidlList.Count, pidlList.ToArray(), 0);
+                    NativeMethods.SHOpenFolderAndSelectItems(folderPidl, (uint)pidlList.Count, pidlList.ToArray(), 0);
                 }
                 else
                 {
@@ -57,7 +45,7 @@ namespace FlyShelf.Classes
 
                 foreach (var pidl in pidlList)
                 {
-                    ILFree(pidl);
+                    NativeMethods.ILFree(pidl);
                 }
             }
             catch (Exception ex)
@@ -66,7 +54,7 @@ namespace FlyShelf.Classes
             }
             finally
             {
-                ILFree(folderPidl);
+                NativeMethods.ILFree(folderPidl);
             }
         }
 

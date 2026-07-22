@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -25,8 +26,34 @@ namespace FlyShelf.Windows
         private static string? _lastMessage;
         private static long _lastMessageTime;
 
+        // ═══ Recurring Notification Cooldown (Escalating) ═══
+        // Prevents annoying auto-notifications from showing repeatedly.
+        // Maps message text → (lastShownMs, repeatCount).
+        // Cooldown escalates: 15 min base, +30 min per subsequent repeat.
+        private static readonly Dictionary<string, (long lastShown, int repeatCount)> _cooldownTracker = new();
+        private const long COOLDOWN_BASE_MS  = 15 * 60 * 1000; // 15 minutes
+        private const long COOLDOWN_STEP_MS  = 30 * 60 * 1000; // +30 minutes per repeat
+
+        // Patterns that identify recurring system notifications (not user-triggered).
+        // These get cooldown-throttled so users see them at most once per 5 minutes.
+        private static readonly string[] _recurringPatterns = new[]
+        {
+            "cloud sync unavailable",
+            "check your internet",
+            "sync failed",
+            "connection lost",
+            "reconnecting",
+            "network error",
+            "offline",
+            "unreachable",
+            "firebase auth",
+            "token refresh",
+            "sign-in failed",
+        };
+
         // Dismiss timer
         private System.Windows.Threading.DispatcherTimer? _dismissTimer;
+        private int _customDurationMs;
 
         public ToastWindow()
         {
@@ -95,6 +122,8 @@ namespace FlyShelf.Windows
 
             // Reset transform for fresh animation
             ToastTranslate.Y = 12;
+            ToastScale.ScaleX = 0.97;
+            ToastScale.ScaleY = 0.97;
             this.Opacity = 0;
         }
 
@@ -153,25 +182,43 @@ namespace FlyShelf.Windows
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
             Storyboard.SetTarget(slideAnim, ToastBorder);
-            Storyboard.SetTargetProperty(slideAnim, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.Y)"));
+            Storyboard.SetTargetProperty(slideAnim, new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.Y)"));
+
+            // Subtle scale pop-in for tactile feel
+            var scaleXAnim = new DoubleAnimation(0.97, 1.0, TimeSpan.FromMilliseconds(180))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(scaleXAnim, ToastBorder);
+            Storyboard.SetTargetProperty(scaleXAnim, new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"));
+
+            var scaleYAnim = new DoubleAnimation(0.97, 1.0, TimeSpan.FromMilliseconds(180))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(scaleYAnim, ToastBorder);
+            Storyboard.SetTargetProperty(scaleYAnim, new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"));
 
             sb.Children.Add(fadeAnim);
             sb.Children.Add(slideAnim);
+            sb.Children.Add(scaleXAnim);
+            sb.Children.Add(scaleYAnim);
             sb.Begin();
         }
 
         private void RestartDismissTimer()
         {
-            _dismissTimer?.Stop();
-            _dismissTimer = new System.Windows.Threading.DispatcherTimer
+            if (_dismissTimer == null)
             {
-                Interval = TimeSpan.FromMilliseconds(2400)
-            };
-            _dismissTimer.Tick += async (s, e) =>
-            {
-                _dismissTimer?.Stop();
-                await DismissAsync();
-            };
+                _dismissTimer = new System.Windows.Threading.DispatcherTimer();
+                _dismissTimer.Tick += async (s, e) =>
+                {
+                    _dismissTimer?.Stop();
+                    await DismissAsync();
+                };
+            }
+            _dismissTimer.Stop();
+            _dismissTimer.Interval = TimeSpan.FromMilliseconds(_customDurationMs > 0 ? _customDurationMs : 2400);
             _dismissTimer.Start();
         }
 
@@ -193,10 +240,27 @@ namespace FlyShelf.Windows
                     EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
                 };
                 Storyboard.SetTarget(slideAnim, ToastBorder);
-                Storyboard.SetTargetProperty(slideAnim, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.Y)"));
+                Storyboard.SetTargetProperty(slideAnim, new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.Y)"));
+
+                // Scale-out for tactile dismiss
+                var scaleXOut = new DoubleAnimation(ToastScale.ScaleX, 0.97, TimeSpan.FromMilliseconds(140))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+                };
+                Storyboard.SetTarget(scaleXOut, ToastBorder);
+                Storyboard.SetTargetProperty(scaleXOut, new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"));
+
+                var scaleYOut = new DoubleAnimation(ToastScale.ScaleY, 0.97, TimeSpan.FromMilliseconds(140))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+                };
+                Storyboard.SetTarget(scaleYOut, ToastBorder);
+                Storyboard.SetTargetProperty(scaleYOut, new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"));
 
                 sb.Children.Add(fadeAnim);
                 sb.Children.Add(slideAnim);
+                sb.Children.Add(scaleXOut);
+                sb.Children.Add(scaleYOut);
 
                 var tcs = new TaskCompletionSource<bool>();
                 sb.Completed += (s, e) => tcs.TrySetResult(true);
@@ -237,7 +301,9 @@ namespace FlyShelf.Windows
         /// Shows a toast by reusing the pooled instance. If the pool is busy,
         /// the message is queued and will display after the current toast dismisses.
         /// </summary>
-        public static void ShowToast(string message)
+        public static void ShowToast(string message) => ShowToast(message, 0);
+
+        public static void ShowToast(string message, int durationMs)
         {
             // Respect user preference to disable notifications
             try { if (!FlyShelf.Classes.SettingsManager.Current.EnableNotifications) return; } catch { } // Best-effort: failure is acceptable
@@ -250,6 +316,46 @@ namespace FlyShelf.Windows
                 long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 if (_lastMessage == smartMessage && (now - _lastMessageTime) < 500)
                     return;
+
+                // ═══ Recurring notification cooldown (escalating) ═══
+                // Auto-notifications (cloud sync, network errors, etc.) are throttled.
+                // 1st repeat: 15 min, 2nd: 45 min, 3rd: 75 min, etc.
+                string msgLower = smartMessage.ToLowerInvariant();
+                bool isRecurring = false;
+                foreach (var pattern in _recurringPatterns)
+                {
+                    if (msgLower.Contains(pattern, StringComparison.Ordinal))
+                    {
+                        isRecurring = true;
+                        break;
+                    }
+                }
+                if (isRecurring)
+                {
+                    if (_cooldownTracker.TryGetValue(msgLower, out var entry))
+                    {
+                        long cooldownMs = COOLDOWN_BASE_MS + (entry.repeatCount * COOLDOWN_STEP_MS);
+                        if ((now - entry.lastShown) < cooldownMs)
+                        {
+                            return; // Still in cooldown — suppress
+                        }
+                        // Cooldown expired — show it but escalate for next time
+                        _cooldownTracker[msgLower] = (now, entry.repeatCount + 1);
+                    }
+                    else
+                    {
+                        // First occurrence — show it, start tracking
+                        _cooldownTracker[msgLower] = (now, 0);
+                    }
+                }
+
+                // Evict stale cooldown entries (>24h old) when tracker gets large
+                if (_cooldownTracker.Count > 100)
+                {
+                    var staleKeys = _cooldownTracker.Where(kv => (now - kv.Value.lastShown) > 24 * 60 * 60 * 1000L).Select(kv => kv.Key).ToList();
+                    foreach (var key in staleKeys) _cooldownTracker.Remove(key);
+                }
+
                 _lastMessage = smartMessage;
                 _lastMessageTime = now;
 
@@ -263,7 +369,7 @@ namespace FlyShelf.Windows
                         return;
                     }
 
-                    ShowNextFromPool(smartMessage);
+                    ShowNextFromPool(smartMessage, durationMs);
                 }
             });
         }
@@ -272,7 +378,7 @@ namespace FlyShelf.Windows
         /// Internal: configures and shows the pooled window with a new message.
         /// Must be called on the UI thread while holding _poolLock.
         /// </summary>
-        private static void ShowNextFromPool(string message)
+        private static void ShowNextFromPool(string message, int durationMs = 0)
         {
             _isShowing = true;
 
@@ -283,6 +389,7 @@ namespace FlyShelf.Windows
                     _pooledInstance = new ToastWindow();
                 }
 
+                _pooledInstance._customDurationMs = durationMs;
                 _pooledInstance.ConfigureForMessage(message);
 
                 if (!_pooledInstance.IsLoaded)

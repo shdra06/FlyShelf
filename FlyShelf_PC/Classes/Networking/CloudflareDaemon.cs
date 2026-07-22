@@ -264,7 +264,8 @@ namespace FlyShelf.Classes
                         await Task.Delay(3000); // Give cloudflared time to establish the proxy
                         
                         bool verified = false;
-                        using var verifyClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
+                        // AUDIT Task 5: Use shared pool — do NOT dispose (shared instance)
+                        var verifyClient = HttpClientPool.Default;
                         
                         // Phase 1: Verify local server is responding (this is what Cloudflare proxies to)
                         for (int v = 0; v < 3; v++)
@@ -571,7 +572,8 @@ namespace FlyShelf.Classes
             long now = Environment.TickCount64;
             if (now - _lastRetryScheduledTicks < 2000) return;
             _lastRetryScheduledTicks = now;
-            _ = Task.Run(async () =>
+            // PERF: LongRunning — retry loop can chain indefinitely, should not occupy ThreadPool thread
+            _ = Task.Factory.StartNew(async () =>
             {
                 try { await Task.Delay(delayMs); } catch { return; }
                 if (!_stopped)
@@ -579,7 +581,7 @@ namespace FlyShelf.Classes
                     Logger.LogAction("CLOUDFLARE", $"Auto-retry #{_consecutiveFailures} after {delayMs}ms...");
                     await StartTunnelCore();
                 }
-            });
+            }, TaskCreationOptions.LongRunning);
         }
 
         private async Task<bool> DownloadCloudflaredAsync(string exePath)
@@ -590,7 +592,8 @@ namespace FlyShelf.Classes
                 "https://github.com/cloudflare/cloudflared/releases/download/2024.12.2/cloudflared-windows-amd64.exe"
             };
 
-            using var client = new HttpClient() { Timeout = TimeSpan.FromMinutes(5) };
+            // AUDIT Task 5: Use shared pool — do NOT dispose (shared instance)
+            var client = HttpClientPool.Download;
 
             foreach (string url in downloadUrls)
             {
@@ -674,19 +677,28 @@ namespace FlyShelf.Classes
                     _cfProcess = null;
                 }
 
+                // Kill ALL cloudflared processes owned by FlyShelf (both bundled and AppData paths)
                 string appDataAgentPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 
                     "FlyShelf", "agent", "cloudflared.exe"
                 );
+                string bundledAgentPath = Path.Combine(AppContext.BaseDirectory, "agent", "cloudflared.exe");
+                string bundledRootPath = Path.Combine(AppContext.BaseDirectory, "cloudflared.exe");
 
+                int killed = 0;
                 foreach (var p in Process.GetProcessesByName("cloudflared"))
                 {
                     try
                     {
                         string processPath = p.MainModule?.FileName ?? "";
-                        if (string.Equals(processPath, appDataAgentPath, StringComparison.OrdinalIgnoreCase))
+                        bool isOurs = string.Equals(processPath, appDataAgentPath, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(processPath, bundledAgentPath, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(processPath, bundledRootPath, StringComparison.OrdinalIgnoreCase);
+                        if (isOurs)
                         {
                             p.Kill();
+                            p.Dispose(); // Prevent handle leak
+                            killed++;
                         }
                     }
                     catch
@@ -695,6 +707,7 @@ namespace FlyShelf.Classes
                         // In that case, do not kill it because it's not ours (ours is always accessible to us).
                     }
                 }
+                if (killed > 0) Logger.LogAction("CLOUDFLARE", $"Cleaned up {killed} zombie cloudflared process(es)");
             }
             catch { } // Best-effort: failure is acceptable
         }

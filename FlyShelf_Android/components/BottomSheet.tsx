@@ -20,6 +20,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { radius, space, spring as springConfig } from '../styles/theme';
 import { useAppTheme } from '../hooks/useAppTheme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 
 
@@ -41,6 +42,7 @@ export default function BottomSheet({
   maxHeight = 0.85,
 }: BottomSheetProps) {
   const { colors, surface } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors, surface), [colors, surface]);
   const { height: screenH } = useWindowDimensions();
   const sheetHeight = screenH * maxHeight;
@@ -105,7 +107,7 @@ export default function BottomSheet({
           <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
         </Animated.View>
         <GestureDetector gesture={panGesture}>
-          <Animated.View style={[styles.sheet, { maxHeight: sheetHeight }, sheetStyle]}>
+          <Animated.View style={[styles.sheet, { maxHeight: sheetHeight, paddingBottom: Math.max(insets.bottom, 20) }, sheetStyle]}>
             <View style={styles.handleBar} />
             {title && (
               <View style={styles.header}>

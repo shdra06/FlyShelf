@@ -62,6 +62,7 @@ export function useTodoSync({
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollCountRef = useRef(0);
   const syncFailCountRef = useRef(0);
+  const todoPollFailCountRef = useRef(0);
 
   // Resolve PC URL
   const resolvePcUrl = useCallback(async () => {
@@ -82,15 +83,15 @@ export function useTodoSync({
   const pushChangedDays = useCallback(async () => {
     if (!mountedRef.current) return;
     if (!pcUrlRef.current || !pairingKey) { onStatusChange('offline'); return; }
-    const keys = Array.from(changedDayKeysRef.current);
+    const keysToSync = new Set(changedDayKeysRef.current);
+    const keys = Array.from(keysToSync);
     if (keys.length === 0) return;
-    changedDayKeysRef.current.clear();
 
     const payload = daysRef.current.filter(d => keys.includes(d.Date));
     if (payload.length === 0) return;
 
     try {
-      await fetchWithTimeout(
+      const res = await fetchWithTimeout(
         `${pcUrlRef.current}/api/todos`,
         {
           method: 'POST',
@@ -103,7 +104,16 @@ export function useTodoSync({
         },
         5000,
       );
+      if (res.ok) {
+        // Only clear the keys we successfully synced
+        for (const k of keysToSync) changedDayKeysRef.current.delete(k);
+      } else {
+        // Re-add failed keys for retry
+        for (const k of keysToSync) changedDayKeysRef.current.add(k);
+      }
     } catch {
+      // Re-add failed keys
+      for (const k of keysToSync) changedDayKeysRef.current.add(k);
       // Persist failed sync keys for retry on next successful connection
       try {
         const existing = await AsyncStorage.getItem('@flyshelf_pending_todo_sync');
@@ -150,6 +160,7 @@ export function useTodoSync({
         saveLocal(merged);
         onStatusChange('connected');
         syncFailCountRef.current = 0;
+        todoPollFailCountRef.current = 0;
 
         // Flush offline queue on successful connection
         try {
@@ -172,6 +183,7 @@ export function useTodoSync({
       } else {
         onStatusChange('offline');
         syncFailCountRef.current++;
+        todoPollFailCountRef.current++;
         if (syncFailCountRef.current === 2) {
           if (Platform.OS === 'android') ToastAndroid.show('Todo sync offline — PC may be unreachable', ToastAndroid.SHORT);
         }
@@ -179,23 +191,34 @@ export function useTodoSync({
     } catch {
       onStatusChange('offline');
       syncFailCountRef.current++;
+      todoPollFailCountRef.current++;
       if (syncFailCountRef.current === 2) {
         if (Platform.OS === 'android') ToastAndroid.show('Todo sync offline — PC may be unreachable', ToastAndroid.SHORT);
       }
     }
   }, [pairingKey, deviceName, mergeDays, saveLocal, resolvePcUrl, daysRef, onDaysMerged, onStatusChange]);
 
-  // Lifecycle: init polling, clean up on unmount
+  // Lifecycle: init polling with adaptive backoff, clean up on unmount
   useEffect(() => {
-    resolvePcUrl().then(() => {
-      pollTodos();
-      pollRef.current = setInterval(pollTodos, POLL_INTERVAL);
-    });
+    // A-18 fix: skip polling if no pairing key (no paired device)
+    if (!pairingKey) return;
+    let active = true;
+    const poll = async () => {
+      await pollTodos();
+      if (!active) return;
+      // Adaptive backoff: 10s on success, exponential up to 120s on consecutive failures
+      const interval = todoPollFailCountRef.current === 0
+        ? POLL_INTERVAL
+        : Math.min(POLL_INTERVAL * Math.pow(2, todoPollFailCountRef.current), 120000);
+      pollRef.current = setTimeout(poll, interval);
+    };
+    resolvePcUrl().then(() => poll());
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      active = false;
+      if (pollRef.current) clearTimeout(pollRef.current);
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [resolvePcUrl, pollTodos]);
+  }, [pairingKey, resolvePcUrl, pollTodos]);
 
   return { schedulePush };
 }

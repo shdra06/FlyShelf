@@ -52,7 +52,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="CalendarDayButton">
                         <Grid>
-                            <Border x:Name="Bg" CornerRadius="6" Background="Transparent">
+                            <Border x:Name="Bg" CornerRadius="8" Background="Transparent">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                         </Grid>
@@ -88,7 +88,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="CalendarButton">
-                        <Border x:Name="Bg" CornerRadius="6" Background="Transparent">
+                        <Border x:Name="Bg" CornerRadius="8" Background="Transparent">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -241,7 +241,7 @@
                 <!-- ═══ HEADER ═══ -->
                 <DockPanel Margin="0,0,0,0" MouseLeftButtonDown="Header_MouseDown">
                     <!-- Close button -->
-                    <Border DockPanel.Dock="Right" CornerRadius="6" Padding="4" Cursor="Hand"
+                    <Border DockPanel.Dock="Right" CornerRadius="8" Padding="4" Cursor="Hand"
                             VerticalAlignment="Center" MouseLeftButtonDown="Close_Click" ToolTip="Close">
                         <Border.Style>
                             <Style TargetType="Border">
@@ -373,22 +373,22 @@
                 <StackPanel Margin="0,12,0,0">
                     <TextBlock Text="Repeat" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,6"/>
                     <StackPanel x:Name="RepeatPanel" Orientation="Horizontal">
-                        <Border x:Name="RepeatNone" CornerRadius="6" Padding="10,5" Margin="0,0,6,0"
+                        <Border x:Name="RepeatNone" CornerRadius="8" Padding="10,5" Margin="0,0,6,0"
                                 Background="#30F59E0B" BorderBrush="#50F59E0B" BorderThickness="1"
                                 Cursor="Hand" MouseLeftButtonDown="Repeat_Click" Tag="None">
                             <TextBlock Text="None" FontSize="12" Foreground="{DynamicResource ThemeTextPrimary}"/>
                         </Border>
-                        <Border x:Name="RepeatDaily" CornerRadius="6" Padding="10,5" Margin="0,0,6,0"
+                        <Border x:Name="RepeatDaily" CornerRadius="8" Padding="10,5" Margin="0,0,6,0"
                                 Background="#10FFFFFF" BorderBrush="Transparent" BorderThickness="1"
                                 Cursor="Hand" MouseLeftButtonDown="Repeat_Click" Tag="Daily">
                             <TextBlock Text="Daily" FontSize="12" Foreground="{DynamicResource ThemeTextPrimary}"/>
                         </Border>
-                        <Border x:Name="RepeatWeekly" CornerRadius="6" Padding="10,5" Margin="0,0,6,0"
+                        <Border x:Name="RepeatWeekly" CornerRadius="8" Padding="10,5" Margin="0,0,6,0"
                                 Background="#10FFFFFF" BorderBrush="Transparent" BorderThickness="1"
                                 Cursor="Hand" MouseLeftButtonDown="Repeat_Click" Tag="Weekly">
                             <TextBlock Text="Weekly" FontSize="12" Foreground="{DynamicResource ThemeTextPrimary}"/>
                         </Border>
-                        <Border x:Name="RepeatMonthly" CornerRadius="6" Padding="10,5"
+                        <Border x:Name="RepeatMonthly" CornerRadius="8" Padding="10,5"
                                 Background="#10FFFFFF" BorderBrush="Transparent" BorderThickness="1"
                                 Cursor="Hand" MouseLeftButtonDown="Repeat_Click" Tag="Monthly">
                             <TextBlock Text="Monthly" FontSize="12" Foreground="{DynamicResource ThemeTextPrimary}"/>
@@ -400,35 +400,35 @@
                 <StackPanel Margin="0,14,0,0">
                     <TextBlock Text="Quick Set" FontSize="12" Foreground="{DynamicResource ThemeTextMuted}" Margin="0,0,0,6"/>
                     <WrapPanel>
-                        <Border CornerRadius="10" Padding="10,5" Margin="0,0,6,6" Cursor="Hand"
+                        <Border CornerRadius="12" Padding="10,5" Margin="0,0,6,6" Cursor="Hand"
                                 MouseLeftButtonDown="QuickSet_Click" Tag="15">
                             <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="#10FFFFFF"/>
                                 <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#20FFFFFF"/></Trigger></Style.Triggers>
                             </Style></Border.Style>
                             <TextBlock Text="15 min" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}"/>
                         </Border>
-                        <Border CornerRadius="10" Padding="10,5" Margin="0,0,6,6" Cursor="Hand"
+                        <Border CornerRadius="12" Padding="10,5" Margin="0,0,6,6" Cursor="Hand"
                                 MouseLeftButtonDown="QuickSet_Click" Tag="30">
                             <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="#10FFFFFF"/>
                                 <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#20FFFFFF"/></Trigger></Style.Triggers>
                             </Style></Border.Style>
                             <TextBlock Text="30 min" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}"/>
                         </Border>
-                        <Border CornerRadius="10" Padding="10,5" Margin="0,0,6,6" Cursor="Hand"
+                        <Border CornerRadius="12" Padding="10,5" Margin="0,0,6,6" Cursor="Hand"
                                 MouseLeftButtonDown="QuickSet_Click" Tag="60">
                             <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="#10FFFFFF"/>
                                 <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#20FFFFFF"/></Trigger></Style.Triggers>
                             </Style></Border.Style>
                             <TextBlock Text="1 hour" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}"/>
                         </Border>
-                        <Border CornerRadius="10" Padding="10,5" Margin="0,0,6,6" Cursor="Hand"
+                        <Border CornerRadius="12" Padding="10,5" Margin="0,0,6,6" Cursor="Hand"
                                 MouseLeftButtonDown="QuickSet_Click" Tag="180">
                             <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="#10FFFFFF"/>
                                 <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#20FFFFFF"/></Trigger></Style.Triggers>
                             </Style></Border.Style>
                             <TextBlock Text="3 hours" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}"/>
                         </Border>
-                        <Border CornerRadius="10" Padding="10,5" Margin="0,0,6,6" Cursor="Hand"
+                        <Border CornerRadius="12" Padding="10,5" Margin="0,0,6,6" Cursor="Hand"
                                 MouseLeftButtonDown="QuickSet_Click" Tag="tomorrow9">
                             <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="#10FFFFFF"/>
                                 <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#20FFFFFF"/></Trigger></Style.Triggers>
@@ -442,7 +442,7 @@
                 <Border Height="1" Background="{DynamicResource ThemeSeparator}" Margin="0,14,0,12"/>
 
                 <!-- ═══ SUBMIT BUTTON ═══ -->
-                <Border x:Name="SubmitButton" CornerRadius="10" Padding="0,11" Cursor="Hand"
+                <Border x:Name="SubmitButton" CornerRadius="12" Padding="0,11" Cursor="Hand"
                         HorizontalAlignment="Stretch" MouseLeftButtonDown="Submit_Click"
                         AutomationProperties.Name="Set reminder">
                     <Border.Style>

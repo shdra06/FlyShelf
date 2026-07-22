@@ -46,6 +46,20 @@ const showToast = (msg: string) => {
   }
 };
 
+// A-16 FIX: Shared helper for offline queue persist with simple lock
+let isQueueingDates = false;
+const queueFailedDates = async (failedDates: string[]) => {
+  if (isQueueingDates) return; // Simple lock to prevent interleaving
+  isQueueingDates = true;
+  try {
+    const stored = await AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY);
+    const existing: string[] = stored ? JSON.parse(stored) : [];
+    const mergedDates = [...new Set([...existing, ...failedDates])];
+    await AsyncStorage.setItem(PENDING_NOTES_SYNC_KEY, JSON.stringify(mergedDates));
+  } catch {} // Best-effort
+  finally { isQueueingDates = false; }
+};
+
 // ─── Hook ──────────────────────────────────────────────────────
 export function useNotesSync() {
   const { pcLocalIp, pairingKey, pairedDevices, deviceName, getSyncPrefsForDevice } = useSettings();
@@ -63,14 +77,21 @@ export function useNotesSync() {
   /** Date keys of locally-modified days that need to be POSTed. */
   const modifiedDatesRef = useRef<Set<string>>(new Set());
   const syncFailCountRef = useRef(0);
+  const notesPollFailCountRef = useRef(0);
   const mountedRef = useRef(true);
   const schedulePostRef = useRef<(() => void) | null>(null);
+  // A-8 fix: persist lock to prevent concurrent AsyncStorage writes
+  const isPersistingRef = useRef(false);
 
   // Refs to avoid stale closures in fetchRemoteNotes
   const pairedDevicesRef = useRef(pairedDevices);
   useEffect(() => { pairedDevicesRef.current = pairedDevices; }, [pairedDevices]);
   const pcLocalIpRef = useRef(pcLocalIp);
   useEffect(() => { pcLocalIpRef.current = pcLocalIp; }, [pcLocalIp]);
+
+  // A-9 fix: ref for getSyncPrefsForDevice to avoid stale closure in fetchRemoteNotes
+  const getSyncPrefsRef = useRef(getSyncPrefsForDevice);
+  useEffect(() => { getSyncPrefsRef.current = getSyncPrefsForDevice; }, [getSyncPrefsForDevice]);
 
   // Keep daysRef in sync with state
   useEffect(() => { daysRef.current = days; }, [days]);
@@ -127,7 +148,7 @@ export function useNotesSync() {
     // Gate: skip sync if no paired device has notes sync enabled
     const anyDeviceWantsNotes =
       pairedDevicesRef.current.length === 0 ||
-      pairedDevicesRef.current.some(d => getSyncPrefsForDevice(d.deviceId).notes);
+      pairedDevicesRef.current.some(d => getSyncPrefsRef.current(d.deviceId).notes);
     if (!anyDeviceWantsNotes) {
       setSyncStatus('offline');
       return;
@@ -135,6 +156,8 @@ export function useNotesSync() {
 
     try {
       setSyncStatus('syncing');
+      // Snapshot modified dates before fetch to avoid race condition
+      const dirtySnapshot = new Set(modifiedDatesRef.current);
       const res = await fetchWithTimeout(`${pcUrlRef.current}/api/notes`, {
         method: 'GET',
         headers: {
@@ -146,6 +169,7 @@ export function useNotesSync() {
       if (!res.ok) {
         setSyncStatus('offline');
         syncFailCountRef.current++;
+        notesPollFailCountRef.current++;
         if (syncFailCountRef.current === 2) {
           showToast('Notes sync offline — PC may be unreachable');
         }
@@ -156,6 +180,7 @@ export function useNotesSync() {
       if (!Array.isArray(remoteDays)) {
         setSyncStatus('offline');
         syncFailCountRef.current++;
+        notesPollFailCountRef.current++;
         if (syncFailCountRef.current === 2) {
           showToast('Notes sync offline — PC may be unreachable');
         }
@@ -210,17 +235,25 @@ export function useNotesSync() {
         }
         // Persist after merge
         queueMicrotask(() => {
-          AsyncStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(merged)).catch(() => {});
+          if (isPersistingRef.current) return;
+          isPersistingRef.current = true;
+          AsyncStorage.setItem(`${NOTES_STORAGE_KEY}_pending`, JSON.stringify(merged))
+            .then(() => AsyncStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(merged)))
+            .then(() => AsyncStorage.removeItem(`${NOTES_STORAGE_KEY}_pending`))
+            .catch(() => {})
+            .finally(() => { isPersistingRef.current = false; });
         });
         return merged;
       });
 
       setSyncStatus('synced');
       syncFailCountRef.current = 0;
+      notesPollFailCountRef.current = 0;
 
       // Clear dates that were merged from remote to avoid re-POSTing stale data
+      // Only delete dates that were snapshotted before the fetch (race-condition fix)
       for (const remote of remoteDays) {
-        modifiedDatesRef.current.delete(remote.Date);
+        if (dirtySnapshot.has(remote.Date)) modifiedDatesRef.current.delete(remote.Date);
       }
 
       // Flush offline queue: re-add pending dates and trigger POST
@@ -241,6 +274,7 @@ export function useNotesSync() {
     } catch {
       setSyncStatus('offline');
       syncFailCountRef.current++;
+      notesPollFailCountRef.current++;
       if (syncFailCountRef.current === 2) {
         showToast('Notes sync offline — PC may be unreachable');
       }
@@ -249,14 +283,24 @@ export function useNotesSync() {
 
   // Start / restart polling whenever fetchRemoteNotes changes
   useEffect(() => {
-    // Initial fetch
-    fetchRemoteNotes();
-
-    pollTimerRef.current = setInterval(fetchRemoteNotes, POLL_INTERVAL);
-    return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    // A-18 fix: skip polling if no pairing key (no paired device)
+    if (!pairingKey) return;
+    let active = true;
+    const poll = async () => {
+      await fetchRemoteNotes();
+      if (!active) return;
+      // Adaptive backoff: 10s on success, exponential up to 120s on consecutive failures
+      const interval = notesPollFailCountRef.current === 0
+        ? POLL_INTERVAL
+        : Math.min(POLL_INTERVAL * Math.pow(2, notesPollFailCountRef.current), 120000);
+      pollTimerRef.current = setTimeout(poll, interval);
     };
-  }, [fetchRemoteNotes]);
+    poll();
+    return () => {
+      active = false;
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, [fetchRemoteNotes, pairingKey]);
 
   // ═══════════════════════════════════════════════════════════
   // SYNC: Debounced POST of modified days (POST /api/notes)
@@ -296,13 +340,8 @@ export function useNotesSync() {
         } else {
           setSyncStatus('offline');
           syncFailCountRef.current++;
-          // Persist failed dates to offline queue for retry
-          const failedDates = toPost.map(d => d.Date);
-          AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY).then(stored => {
-            const existing: string[] = stored ? JSON.parse(stored) : [];
-            const mergedDates = [...new Set([...existing, ...failedDates])];
-            AsyncStorage.setItem(PENDING_NOTES_SYNC_KEY, JSON.stringify(mergedDates)).catch(() => {});
-          }).catch(() => {});
+          // A-16 FIX: Use shared helper instead of duplicated inline persist
+          queueFailedDates(toPost.map(d => d.Date));
           if (syncFailCountRef.current === 2) {
             showToast('Notes sync offline — PC may be unreachable');
           }
@@ -310,13 +349,8 @@ export function useNotesSync() {
       } catch {
         setSyncStatus('offline');
         syncFailCountRef.current++;
-        // Persist failed dates to offline queue for retry
-        const failedDates = toPost.map(d => d.Date);
-        AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY).then(stored => {
-          const existing: string[] = stored ? JSON.parse(stored) : [];
-          const mergedDates = [...new Set([...existing, ...failedDates])];
-          AsyncStorage.setItem(PENDING_NOTES_SYNC_KEY, JSON.stringify(mergedDates)).catch(() => {});
-        }).catch(() => {});
+        // A-16 FIX: Use shared helper instead of duplicated inline persist
+        queueFailedDates(toPost.map(d => d.Date));
         if (syncFailCountRef.current === 2) {
           showToast('Notes sync offline — PC may be unreachable');
         }

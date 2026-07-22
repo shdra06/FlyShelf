@@ -1,4 +1,5 @@
 using FlyShelf.ViewModels;
+using FlyShelf.Classes;
 using MicaWPF.Controls;
 using System;
 using System.Collections.Specialized;
@@ -15,9 +16,12 @@ namespace FlyShelf
 {
     public partial class MainWindow : MicaWindow
     {
+        private bool _hasOptimizedThisHide = false;
+
         protected override void OnActivated(EventArgs e)
         {
             base.OnActivated(e);
+            if (!_isCurrentlySummoned) return; // Guard: don't resurrect a hidden/dismissed window
             if (_isAnimatingHide) return;
             if (_isShowAnimating) return; // Don't override opacity during show animation
             if (this.Opacity < 0.05) return; // Guard: window is in invisible pre-animation phase (first spawn)
@@ -59,13 +63,8 @@ namespace FlyShelf
         }
 
 
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern short GetAsyncKeyState(int vKey);
         private const int VK_LBUTTON = 0x01;
         private const int VK_RBUTTON = 0x02;
-
-        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "SetProcessWorkingSetSize", SetLastError = true)]
-        private static extern int SetProcessWorkingSetSize(IntPtr process, nint minimumWorkingSetSize, nint maximumWorkingSetSize);
 
         private System.Windows.Threading.DispatcherTimer? _dragActiveDismissTimer;
 
@@ -88,7 +87,7 @@ namespace FlyShelf
         private void DragActiveDismissTimer_Tick(object? sender, EventArgs e)
         {
             // Check if left or right mouse button is physically held down
-            bool isMouseDown = ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0);
+            bool isMouseDown = ((NativeMethods.GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0) || ((NativeMethods.GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0);
             if (isMouseDown)
             {
                 // Mid-drag, keep clipboard alive
@@ -371,12 +370,24 @@ namespace FlyShelf
                 if (_isTodoActive) CloseTodoPanel(immediate: true);
                 if (_isResearchActive) CloseResearchPanel(immediate: true);
 
-                // Ensure clean state for next summon — clear panel memory too
+                // PC-10 FIX: Don't set _desktopSwitchedSinceLastDismiss = true here.
+                // That flag triggers a 50ms DWM settle delay on re-summon which is wrong
+                // since no desktop switch actually occurred. Clearing _lastPanelBeforeDismiss
+                // is sufficient to prevent panel restore.
                 _lastPanelBeforeDismiss = null;
-                _desktopSwitchedSinceLastDismiss = true;
                 _isCurrentlySummoned = false;
                 UninstallKeyboardHook();
                 _isAnimatingHide = false;
+
+                // Consistent cleanup — same as AnimateAndHide
+                DismissMergeState();
+                CloseSearch();
+                if (_isFilterBarActive) ToggleFilterBar(false);
+                IsDragHovering = false;
+                _viewModel.IsScrolling = false;
+                _viewModel.AllowHover = true;
+                _evictionBackgroundTimer?.Stop();
+                _scrollLiveLoadTimer?.Stop();
                 this.Opacity = 0;
                 this.BeginAnimation(OpacityProperty, null);
                 // JITTER FIX: Hide via Win32 instead of moving to -20000
@@ -419,8 +430,8 @@ namespace FlyShelf
             _cachedSlideInAnim.Freeze();
         }
 
-        // Cached timer for clearing _isShowAnimating after animation completes
-        private System.Windows.Threading.DispatcherTimer? _showAnimEndTimer;
+        // [FIX STABLE-4]: CompositionTarget.Rendering handler for precise animation end detection
+        private EventHandler? _showAnimRenderHandler;
 
         /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
         private void PlayShowAnimation()
@@ -511,6 +522,17 @@ namespace FlyShelf
             //
             // Instead, detect completion via a frame-rate independent timer.
             // Both animations are 150ms.
+            // ═══ GREY-BOX PREVENTION: Reset any lingering scroll state ═══
+            // If a previous session ended mid-scroll (especially via Hub button),
+            // the scroll engine's CompositionTarget.Rendering may still be firing
+            // with stale velocity/offset. Clear it before re-rendering.
+            try
+            {
+                var sv = GetShelfScrollViewer();
+                Classes.SmoothScroll.ResetScrollState(sv);
+            }
+            catch { }
+
             RootContent.BeginAnimation(UIElement.OpacityProperty, null);
             RootContent.Opacity = 1.0;
             this.BeginAnimation(OpacityProperty, _cachedOpacityAnim);
@@ -525,24 +547,41 @@ namespace FlyShelf
             // so it does not block the animation's first frame.
             ForceFirstSpawnRepaint();
 
+            // ═══ DEFERRED SCROLL-TO-TOP ═══
+            // The early ScrollToTop in ShowNearPosition runs while the window is still offscreen
+            // (Left=-20000), where WPF may skip layout updates. This deferred call at Loaded
+            // priority runs after the window is repositioned onscreen and the visual tree is active,
+            // guaranteeing the scroll position resets to 0 on every respawn.
+            Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    var sv2 = GetShelfScrollViewer();
+                    if (sv2 != null && sv2.VerticalOffset > 0)
+                    {
+                        sv2.ScrollToVerticalOffset(0);
+                        sv2.ScrollToTop();
+                    }
+                }
+                catch { }
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
+
             int capturedGen = _spawnGeneration;
-            // M-21: Reuse the cached _showAnimEndTimer instead of creating a new DispatcherTimer each call
-            if (_showAnimEndTimer == null)
+            // [FIX STABLE-4]: Use CompositionTarget.Rendering with timestamp for precise animation end detection
+            // More accurate than DispatcherTimer which can drift under UI thread load
+            // PC-6 FIX: Remove any stale handler from previous show cycle
+            if (_showAnimRenderHandler != null)
             {
-                _showAnimEndTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render);
-                _showAnimEndTimer.Interval = TimeSpan.FromMilliseconds(150);
+                CompositionTarget.Rendering -= _showAnimRenderHandler;
+                _showAnimRenderHandler = null;
             }
-            else
+            var animStartTime = DateTime.UtcNow;
+            EventHandler onAnimRenderFrame = null!;
+            onAnimRenderFrame = (s, ev) =>
             {
-                _showAnimEndTimer.Stop();
-            }
-            // Remove any previous handler to avoid stacking closures
-            // Use a local method so we can unsubscribe cleanly
-            EventHandler onAnimTimerTick = null!;
-            onAnimTimerTick = (s, ev) =>
-            {
-                _showAnimEndTimer.Stop();
-                _showAnimEndTimer.Tick -= onAnimTimerTick;
+                if ((DateTime.UtcNow - animStartTime).TotalMilliseconds < 155) return; // 150ms + 5ms safety margin
+                CompositionTarget.Rendering -= onAnimRenderFrame;
+                _showAnimRenderHandler = null;
                 // Bail if a new spawn started (stale handler) or if the window was dismissed
                 if (_spawnGeneration != capturedGen || !_isCurrentlySummoned) return;
 
@@ -605,8 +644,8 @@ namespace FlyShelf
                     }
                 }, System.Windows.Threading.DispatcherPriority.Render);
             };
-            _showAnimEndTimer.Tick += onAnimTimerTick;
-            _showAnimEndTimer.Start();
+            CompositionTarget.Rendering += onAnimRenderFrame;
+            _showAnimRenderHandler = onAnimRenderFrame; // PC-6: Track for cleanup
         }
 
         /// <summary>
@@ -682,6 +721,18 @@ namespace FlyShelf
 
             DismissMergeState();
             CloseSearch();
+            if (_isFilterBarActive) ToggleFilterBar(false); // PC-5: Clear filter bar on dismiss
+
+            // PC-8: Reset drag hover indicator
+            IsDragHovering = false;
+
+            // PC-9: Reset scroll/hover state so hover buttons work on re-summon
+            _viewModel.IsScrolling = false;
+            _viewModel.AllowHover = true;
+
+            // PC-2/PC-3: Stop background timers that fire on hidden window
+            _evictionBackgroundTimer?.Stop();
+            _scrollLiveLoadTimer?.Stop();
 
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
 
@@ -740,6 +791,7 @@ namespace FlyShelf
             catch { }
 
             // Optimize memory
+            _hasOptimizedThisHide = true;
             OptimizeMemoryUsage();
         }
         private DateTime _spawnTime = DateTime.MinValue;
@@ -859,18 +911,15 @@ namespace FlyShelf
                         // Only trim if working set is higher than 45MB
                         if (workingSet > 45 * 1024 * 1024)
                         {
-                            // Non-blocking Gen 2 collection — reclaims all templates, styles, and unmanaged bitmaps
-                            // Uses Optimized mode with non-blocking, non-compacting to avoid worst-case GC pauses
-                            System.GC.Collect(2, System.GCCollectionMode.Optimized, false, false);
-                            System.GC.WaitForPendingFinalizers();
-                            System.GC.Collect(2, System.GCCollectionMode.Optimized, false, false);
+                            // Removed forced GC.Collect — let the runtime manage memory naturally.
+                            // Previous code caused unnecessary Gen2 collection pauses (10-100ms).
 
                             // Set working set floor to 20MB, ceiling to 50MB for aggressive idle trimming.
                             // 20MB keeps .NET runtime + core WPF resources resident, avoiding cold-start lag.
                             // 50MB ceiling (down from 80MB) lets OS reclaim more inactive pages at idle.
                             const nint MIN_WS = 20 * 1024 * 1024;   // 20 MB
                             const nint MAX_WS = 50 * 1024 * 1024;   // 50 MB
-                            SetProcessWorkingSetSize(currentProcess.Handle, MIN_WS, MAX_WS);
+                            NativeMethods.SetProcessWorkingSetSize(currentProcess.Handle, MIN_WS, MAX_WS);
                         }
                     }
                 }

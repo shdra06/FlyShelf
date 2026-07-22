@@ -74,6 +74,7 @@ namespace FlyShelf.Windows
             InitializeComponent();
             Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             LogItems.ItemsSource = _filteredLogs;
+            this.PreviewKeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Escape) this.Close(); };
 
             // Initial load
             _ = Task.Run(async () =>
@@ -89,11 +90,11 @@ namespace FlyShelf.Windows
         private void StartPolling()
         {
             _pollTimer?.Dispose();
-            _pollTimer = new Timer(async _ =>
+            _pollTimer = new Timer(_ => SafeAsyncHandler.SafeTimerCallback(async () =>
             {
                 if (_isClosing) return;
                 await PollAllDevices();
-            }, null, _pollIntervalMs, _pollIntervalMs);
+            }), null, _pollIntervalMs, _pollIntervalMs);
         }
 
         private async Task PollAllDevices()

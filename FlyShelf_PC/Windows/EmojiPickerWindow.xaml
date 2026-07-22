@@ -17,7 +17,7 @@
         TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <WindowChrome.WindowChrome>
-        <WindowChrome GlassFrameThickness="-1" CornerRadius="14" CaptionHeight="0" UseAeroCaptionButtons="False" ResizeBorderThickness="0" />
+        <WindowChrome GlassFrameThickness="-1" CornerRadius="12" CaptionHeight="0" UseAeroCaptionButtons="False" ResizeBorderThickness="0" />
     </WindowChrome.WindowChrome>
 
     <Grid Margin="0">
@@ -54,7 +54,7 @@
         </Grid>
 
         <!-- Search Box -->
-        <Border Grid.Row="1" Margin="14,4,14,8" CornerRadius="10" Padding="0">
+        <Border Grid.Row="1" Margin="14,4,14,8" CornerRadius="12" Padding="0">
             <Border.Style>
                 <Style TargetType="Border">
                     <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>

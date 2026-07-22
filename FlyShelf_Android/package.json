@@ -7,7 +7,7 @@
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
+    "web": "echo Web platform not supported — Android only",
     "lint": "expo lint"
   },
   "dependencies": {
@@ -51,15 +51,13 @@
     "firebase": "^12.11.0",
     "pdf-lib": "^1.17.1",
     "react": "19.1.0",
-    "react-dom": "^19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-quick-base64": "^2.2.2",
     "react-native-quick-crypto": "^1.1.2",
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
-    "react-native-screens": "~4.16.0",
-    "react-native-web": "^0.21.2"
+    "react-native-screens": "~4.16.0"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",

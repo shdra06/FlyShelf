@@ -56,7 +56,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="10"
+                            CornerRadius="12"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
@@ -96,7 +96,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="10"
+                            CornerRadius="12"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
@@ -135,7 +135,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="10"
+                            CornerRadius="12"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
@@ -363,7 +363,7 @@
                     <Grid Background="Transparent">
                         <Border x:Name="CheckBorder"
                                 Width="18" Height="18"
-                                CornerRadius="5"
+                                CornerRadius="4"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
@@ -414,12 +414,32 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ToolTip">
                     <Border Background="#E0181818" BorderBrush="#40FFFFFF" BorderThickness="1"
-                            CornerRadius="8" Padding="10,6" SnapsToDevicePixels="True">
+                            CornerRadius="8" Padding="10,6" SnapsToDevicePixels="True"
+                            RenderTransformOrigin="0.5,1" Opacity="0">
+                        <Border.RenderTransform>
+                            <TranslateTransform Y="4"/>
+                        </Border.RenderTransform>
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="12" Color="#000000" Opacity="0.4" ShadowDepth="2" Direction="270"/>
                         </Border.Effect>
                         <ContentPresenter/>
                     </Border>
+                    <ControlTemplate.Triggers>
+                        <EventTrigger RoutedEvent="Loaded">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                     From="0" To="1" Duration="{StaticResource Motion.Instant}">
+                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                     From="4" To="0" Duration="0:0:0.1">
+                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -437,12 +457,36 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ContextMenu">
                     <Border Background="#E8181818" BorderBrush="#35FFFFFF" BorderThickness="1"
-                            CornerRadius="10" Padding="4,6" SnapsToDevicePixels="True">
+                            CornerRadius="12" Padding="4,6" SnapsToDevicePixels="True"
+                            RenderTransformOrigin="0.5,0" Opacity="0">
+                        <Border.RenderTransform>
+                            <ScaleTransform ScaleX="0.96" ScaleY="0.96"/>
+                        </Border.RenderTransform>
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="16" Color="#000000" Opacity="0.5" ShadowDepth="4" Direction="270"/>
                         </Border.Effect>
                         <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
                     </Border>
+                    <ControlTemplate.Triggers>
+                        <EventTrigger RoutedEvent="Loaded">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                     From="0" To="1" Duration="{StaticResource Motion.Fast}">
+                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                     From="0.96" To="1.0" Duration="0:0:0.14">
+                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                     From="0.96" To="1.0" Duration="0:0:0.14">
+                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -458,14 +502,40 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="MenuItem">
-                    <Border x:Name="MenuBg" Background="Transparent" CornerRadius="6" Margin="2,1"
-                            Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
-                        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"
-                                          VerticalAlignment="Center"/>
-                    </Border>
+                    <Grid>
+                        <!-- Highlight overlay for smooth hover transition -->
+                        <Border x:Name="HoverHighlight" Background="#25FFFFFF" CornerRadius="8" Margin="2,1" Opacity="0"
+                                IsHitTestVisible="False"/>
+                        <Border x:Name="MenuBg" Background="Transparent" CornerRadius="8" Margin="2,1"
+                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsHighlighted" Value="True">
-                            <Setter TargetName="MenuBg" Property="Background" Value="#25FFFFFF"/>
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="HoverHighlight"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="{StaticResource Motion.Instant}">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="HoverHighlight"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0" Duration="0:0:0.06">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseIn"/></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="#50FFFFFF"/>
@@ -489,19 +559,20 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
                     <Grid Background="Transparent">
-                        <Border x:Name="Glow" Background="#7C3AED" Opacity="0"
-                                CornerRadius="3" HorizontalAlignment="Center" Width="6" Margin="0,2">
-                            <Border.Effect><BlurEffect Radius="4"/></Border.Effect>
-                        </Border>
+                        <Border x:Name="Glow" Background="#337C3AED" Opacity="0"
+                                CornerRadius="4" HorizontalAlignment="Center" Width="10" Margin="0,0"/>
                         <Border x:Name="Pill" Background="#FFFFFF" Opacity="0.22"
-                                CornerRadius="2" HorizontalAlignment="Center" Width="4" Margin="0,2"/>
+                                CornerRadius="2" HorizontalAlignment="Center" Width="6" Margin="0,2"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform><ScaleTransform ScaleX="0.667"/></Border.RenderTransform>
+                        </Border>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Trigger.EnterActions>
                                 <BeginStoryboard><Storyboard>
-                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Width"
-                                                     To="6" Duration="0:0:0.15">
+                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleX)"
+                                                     To="1.0" Duration="0:0:0.15">
                                         <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                     </DoubleAnimation>
                                     <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"
@@ -512,8 +583,8 @@
                             </Trigger.EnterActions>
                             <Trigger.ExitActions>
                                 <BeginStoryboard><Storyboard>
-                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Width"
-                                                     To="4" Duration="0:0:0.4">
+                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleX)"
+                                                     To="0.667" Duration="0:0:0.4">
                                         <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                     </DoubleAnimation>
                                     <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"
@@ -525,9 +596,9 @@
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
                             <Trigger.EnterActions>
-                                <BeginStoryboard><Storyboard>
-                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Width"
-                                                     To="6" Duration="0:0:0.08">
+                                <BeginStoryboard><!-- [FIX ANIM-7]: Cap ColorAnimation frame rate --><Storyboard Storyboard.DesiredFrameRate="30">
+                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleX)"
+                                                     To="1.0" Duration="0:0:0.08">
                                         <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                     </DoubleAnimation>
                                     <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"
@@ -546,9 +617,9 @@
                                 </Storyboard></BeginStoryboard>
                             </Trigger.EnterActions>
                             <Trigger.ExitActions>
-                                <BeginStoryboard><Storyboard>
-                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Width"
-                                                     To="4" Duration="0:0:0.5">
+                                <BeginStoryboard><!-- [FIX ANIM-7]: Cap ColorAnimation frame rate --><Storyboard Storyboard.DesiredFrameRate="30">
+                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleX)"
+                                                     To="0.667" Duration="0:0:0.5">
                                         <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                     </DoubleAnimation>
                                     <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"
@@ -577,19 +648,20 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
                     <Grid Background="Transparent">
-                        <Border x:Name="Glow" Background="#7C3AED" Opacity="0"
-                                CornerRadius="3" VerticalAlignment="Center" Height="6" Margin="2,0">
-                            <Border.Effect><BlurEffect Radius="4"/></Border.Effect>
-                        </Border>
+                        <Border x:Name="Glow" Background="#337C3AED" Opacity="0"
+                                CornerRadius="4" VerticalAlignment="Center" Height="10" Margin="0,0"/>
                         <Border x:Name="Pill" Background="#FFFFFF" Opacity="0.22"
-                                CornerRadius="2" VerticalAlignment="Center" Height="4" Margin="2,0"/>
+                                CornerRadius="2" VerticalAlignment="Center" Height="6" Margin="2,0"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform><ScaleTransform ScaleY="0.667"/></Border.RenderTransform>
+                        </Border>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Trigger.EnterActions>
                                 <BeginStoryboard><Storyboard>
-                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Height"
-                                                     To="6" Duration="0:0:0.15">
+                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)"
+                                                     To="1.0" Duration="0:0:0.15">
                                         <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                     </DoubleAnimation>
                                     <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"
@@ -600,8 +672,8 @@
                             </Trigger.EnterActions>
                             <Trigger.ExitActions>
                                 <BeginStoryboard><Storyboard>
-                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Height"
-                                                     To="4" Duration="0:0:0.4">
+                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)"
+                                                     To="0.667" Duration="0:0:0.4">
                                         <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                     </DoubleAnimation>
                                     <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"
@@ -613,9 +685,9 @@
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
                             <Trigger.EnterActions>
-                                <BeginStoryboard><Storyboard>
-                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Height"
-                                                     To="6" Duration="0:0:0.08">
+                                <BeginStoryboard><!-- [FIX ANIM-7]: Cap ColorAnimation frame rate --><Storyboard Storyboard.DesiredFrameRate="30">
+                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)"
+                                                     To="1.0" Duration="0:0:0.08">
                                         <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                     </DoubleAnimation>
                                     <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"
@@ -634,9 +706,9 @@
                                 </Storyboard></BeginStoryboard>
                             </Trigger.EnterActions>
                             <Trigger.ExitActions>
-                                <BeginStoryboard><Storyboard>
-                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Height"
-                                                     To="4" Duration="0:0:0.5">
+                                <BeginStoryboard><!-- [FIX ANIM-7]: Cap ColorAnimation frame rate --><Storyboard Storyboard.DesiredFrameRate="30">
+                                    <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)"
+                                                     To="0.667" Duration="0:0:0.5">
                                         <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                     </DoubleAnimation>
                                     <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"

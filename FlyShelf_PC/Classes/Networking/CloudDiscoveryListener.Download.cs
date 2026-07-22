@@ -20,7 +20,8 @@ namespace FlyShelf.Classes
 {
     public partial class CloudDiscoveryListener
     {
-        private static readonly HttpClient _downloadClient = new HttpClient() { Timeout = TimeSpan.FromMinutes(10) };
+        // AUDIT Task 5: Use shared pool instance instead of per-class HttpClient (prevents socket exhaustion)
+        private static HttpClient _downloadClient => HttpClientPool.Download;
 
         // ═══ PATH-SAFETY: Sanitize ALL network-sourced path components ═══
         // Replace space with underscore, then strip every NTFS-illegal character.

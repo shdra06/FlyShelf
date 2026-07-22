@@ -261,21 +261,7 @@ namespace FlyShelf.Windows
             return mainHwnd;
         }
 
-        // ═══ Auto-hide detection via Shell AppBar API ═══
-        [DllImport("shell32.dll")]
-        private static extern IntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA pData);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct APPBARDATA
-        {
-            public int cbSize;
-            public IntPtr hWnd;
-            public uint uCallbackMessage;
-            public uint uEdge;
-            public RECT rc;
-            public IntPtr lParam;
-        }
-
+        // ═══ Auto-hide detection via Shell AppBar API — P/Invoke centralized in NativeMethods.cs ═══
         private const uint ABM_GETSTATE = 0x04;
         private const int ABS_AUTOHIDE = 0x01;
 
@@ -283,9 +269,9 @@ namespace FlyShelf.Windows
         {
             try
             {
-                var abd = new APPBARDATA();
-                abd.cbSize = Marshal.SizeOf(typeof(APPBARDATA));
-                IntPtr result = SHAppBarMessage(ABM_GETSTATE, ref abd);
+                var abd = new NativeMethods.APPBARDATA();
+                abd.cbSize = Marshal.SizeOf(typeof(NativeMethods.APPBARDATA));
+                IntPtr result = NativeMethods.SHAppBarMessage(ABM_GETSTATE, ref abd);
                 return (result.ToInt32() & ABS_AUTOHIDE) != 0;
             }
             catch { return false; }
@@ -782,9 +768,7 @@ namespace FlyShelf.Windows
             }
         }
 
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool IsWindow(IntPtr hWnd);
+
 
 
         public Point GetWidgetScreenPosition()
@@ -794,7 +778,7 @@ namespace FlyShelf.Windows
             {
                 var interop = new WindowInteropHelper(this);
                 IntPtr taskbarWindowHandle = interop.Handle;
-                IntPtr taskbarHandle = _cachedTaskbarHandle != IntPtr.Zero && IsWindow(_cachedTaskbarHandle)
+                IntPtr taskbarHandle = _cachedTaskbarHandle != IntPtr.Zero && NativeMethods.IsWindow(_cachedTaskbarHandle)
                      ? _cachedTaskbarHandle
                      : GetSelectedTaskbarHandle(out _);
                 if (taskbarHandle != IntPtr.Zero && taskbarWindowHandle != IntPtr.Zero)

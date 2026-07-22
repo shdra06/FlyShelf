@@ -29,6 +29,7 @@ namespace FlyShelf.Classes
         private static int _journalEntryCount = 0;
         private static volatile bool _isHistoryFullyLoaded = false;
         private static int _maxLoadedItemCount = 0;
+        private static bool _imagesDirCreated; // [FIX M-18]: Cache to avoid Directory.CreateDirectory on hot path
 
         /// <summary>Maximum items to retain in history. Oldest items are evicted beyond this cap.</summary>
         private static int MAX_HISTORY_ITEMS => FlyShelf.Classes.LicenseManager.GetHistoryCap();
@@ -41,7 +42,8 @@ namespace FlyShelf.Classes
         /// </summary>
         public static string GetPersistentImageDir()
         {
-            Directory.CreateDirectory(_imagesDir);
+            // [FIX M-18]: Only call CreateDirectory if not already verified
+            if (!_imagesDirCreated) { Directory.CreateDirectory(_imagesDir); _imagesDirCreated = true; }
             return _imagesDir;
         }
 
@@ -50,7 +52,8 @@ namespace FlyShelf.Classes
         /// </summary>
         public static string GetPersistentImagePath()
         {
-            Directory.CreateDirectory(_imagesDir);
+            // [FIX M-18]: Only call CreateDirectory if not already verified
+            if (!_imagesDirCreated) { Directory.CreateDirectory(_imagesDir); _imagesDirCreated = true; }
             return Path.Combine(_imagesDir, $"FlyShelf_{DateTime.Now.ToString("yyyyMMdd_HHmmss", System.Globalization.CultureInfo.InvariantCulture)}_{Guid.NewGuid().ToString().Substring(0, 4)}.png");
         }
 
@@ -305,19 +308,21 @@ namespace FlyShelf.Classes
         /// This performs a FULL compaction (snapshot rewrite + journal clear).
         /// Accepts a copy of the list to avoid collection modified exceptions.
         /// </summary>
-        private static volatile int _saveGeneration;
+        // [FIX M-08]: Removed volatile — Interlocked.Increment already provides the memory barrier
+        private static int _saveGeneration;
 
         public static void SaveHistoryDebounced(List<ViewModels.ClipboardItem> items)
         {
             int generation = System.Threading.Interlocked.Increment(ref _saveGeneration);
 
+            // [FIX M-47]: Wrap timer callback in try/catch to prevent timer leak on throw
             var newTimer = new Timer(_ =>
             {
-                // Only run if no newer save was requested while we were waiting
-                if (generation != _saveGeneration) return;
-
                 try
                 {
+                    // Only run if no newer save was requested while we were waiting
+                    if (generation != _saveGeneration) return;
+
                     var snapshot = items;
                     // Enforce cap before saving
                     if (snapshot.Count > MAX_HISTORY_ITEMS)
@@ -408,11 +413,12 @@ namespace FlyShelf.Classes
         /// </summary>
         private static void ScheduleCompaction()
         {
+            // [FIX M-47]: Wrap timer callback in try/catch to prevent timer leak on throw
             var newTimer = new Timer(_ =>
             {
-                // Read current state from disk for compaction
                 try
                 {
+                    // Read current state from disk for compaction
                     var items = LoadHistoryRaw();
                     if (items.Count > 0)
                         CompactNow(items);
@@ -573,11 +579,11 @@ namespace FlyShelf.Classes
                             if (System.IO.File.GetLastWriteTime(file) < DateTime.Now.AddHours(-24))
                                 System.IO.File.Delete(file);
                         }
-                        catch { }
+                        catch { } // Best-effort: cleanup failure is acceptable
                     }
                 }
             }
-            catch { }
+            catch { } // Best-effort: cleanup failure is acceptable
 
             // Also clean up stale FlyShelf zip files older than 24 hours
             ScavengeStaleZipFiles();
@@ -653,46 +659,12 @@ namespace FlyShelf.Classes
         /// <summary>
         /// Generates a deterministic ID for a clipboard item (for journal delete tracking).
         /// </summary>
+        // [FIX STABLE-1]: Consolidated into FileRetryHelper
         private static T RunWithRetry<T>(Func<T> action, int retries = 3, int delayMs = 100)
-        {
-            for (int i = 0; i < retries; i++)
-            {
-                try
-                {
-                    return action();
-                }
-                catch (IOException) when (i < retries - 1)
-                {
-                    Thread.Sleep(delayMs);
-                }
-                catch (UnauthorizedAccessException) when (i < retries - 1)
-                {
-                    Thread.Sleep(delayMs);
-                }
-            }
-            return action();
-        }
+            => FileRetryHelper.RunWithRetry(action, retries, delayMs);
 
         private static void RunWithRetry(Action action, int retries = 3, int delayMs = 100)
-        {
-            for (int i = 0; i < retries; i++)
-            {
-                try
-                {
-                    action();
-                    return;
-                }
-                catch (IOException) when (i < retries - 1)
-                {
-                    Thread.Sleep(delayMs);
-                }
-                catch (UnauthorizedAccessException) when (i < retries - 1)
-                {
-                    Thread.Sleep(delayMs);
-                }
-            }
-            action();
-        }
+            => FileRetryHelper.RunWithRetry(action, retries, delayMs);
 
         /// <summary>
         /// Computes a deterministic FNV-1a hash from a string.

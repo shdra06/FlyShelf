@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useLatest } from '../../hooks/useLatest';
 import { Platform, NativeModules, ToastAndroid, AppState } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Notifications from 'expo-notifications';
@@ -11,14 +12,12 @@ import { decryptDevice } from '../../utils/networkHelpers';
 import { NetworkClock } from '../../utils/networkClock';
 import { setSecureItem, removeSecureItem } from '../../utils/secureStorage';
 import { createTimeoutSignal } from '../../utils/timeoutSignal';
+import { normalizeTextForFingerprint } from '../../utils/textNormalize';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { AdvanceOverlay } = NativeModules;
 
-const normalizeTextForFingerprint = (text: string): string => {
-  if (!text) return '';
-  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
-};
+// Audit Task 1: normalizeTextForFingerprint now imported from utils/textNormalize.ts
 
 export function useDeviceSync(params: {
   isGlobalSyncEnabled: boolean;
@@ -96,15 +95,23 @@ export function useDeviceSync(params: {
     setLocalDeletedIds,
   } = params;
 
+  // ─── Stale-closure guards: wrap values that change independently of useEffect deps ───
+  const pairedDevicesRef = useLatest(pairedDevices);
+  const getSyncPrefsRef = useLatest(getSyncPrefsForDevice);
+  const isFloatingBallEnabledRef = useLatest(isFloatingBallEnabled);
+
   // ─── Local PC Polling ───
   const pollLockRef = useRef(false); // Prevents concurrent pollFn from timer + long-poll
+  const pollRetryCountRef = useRef(0); // Exponential backoff counter for failed polls
   useEffect(() => {
     const pollFn = async () => {
       if (pollLockRef.current) return; // Already running — skip this invocation
       pollLockRef.current = true;
       try {
       // Gate: check if any paired device has clipboard sync enabled
-      const anySyncEnabled = pairedDevices.length === 0 || pairedDevices.some(d => getSyncPrefsForDevice(d.deviceId).clipboard);
+      const currentPairedDevices = pairedDevicesRef.current;
+      const currentGetSyncPrefs = getSyncPrefsRef.current;
+      const anySyncEnabled = currentPairedDevices.length === 0 || currentPairedDevices.some(d => currentGetSyncPrefs(d.deviceId).clipboard);
       if (!anySyncEnabled) { pollLockRef.current = false; return; }
       const targetUrl = await getCachedPcUrl().catch(() => '');
       // Guard: skip poll entirely if no valid PC URL is available yet
@@ -139,12 +146,13 @@ export function useDeviceSync(params: {
           // Phase 1: PC is reachable — disconnect Firebase listener if active
           markPcReachable();
           resetCloudflareFailCount();
+          pollRetryCountRef.current = 0; // Reset backoff on successful connection
           // H-3: Connection quality indicator
           const pollLatency = Math.round(performance.now() - pollStart);
           setConnectionInfo({ url: targetUrl, latencyMs: pollLatency, type: targetUrl.includes('trycloudflare.com') ? 'Cloud' : 'LAN' });
           // Update paired device status with connection type & latency
           const connType = targetUrl.includes('trycloudflare.com') ? 'Cloud' as const : 'LAN' as const;
-          pairedDevices.filter(d => d.deviceType === 'PC').forEach(d => {
+          pairedDevicesRef.current.filter(d => d.deviceType === 'PC').forEach(d => {
             updateDeviceStatus(d.deviceId, { isOnline: true, connectionType: connType, latencyMs: pollLatency, lastSeen: NetworkClock.now() });
           });
           // Mark this URL as proven-working for the image sweep to use
@@ -163,6 +171,13 @@ export function useDeviceSync(params: {
           const data = await response.json();
           if (Array.isArray(data) && data.length > 0) {
             const latest = data[0];
+
+            // Guard: skip oversized items to prevent OOM
+            if ((latest.Raw || '').length > 5_000_000) {
+              syncLog('PC-POLL', 'Skipping oversized item');
+              pollLockRef.current = false;
+              return;
+            }
 
             // ═══ DEDUP: Check EventId FIRST — before contentKey ═══
             // When items are deleted on PC, older items shift to data[0].
@@ -348,7 +363,7 @@ export function useDeviceSync(params: {
                   // REMOVED: UN-DELETE logic that brought back deleted items
                   // If user deleted an item locally, it stays deleted even if PC re-sends it
                 }
-                if (Platform.OS === 'android' && AdvanceOverlay && isFloatingBallEnabled) {
+                if (Platform.OS === 'android' && AdvanceOverlay && isFloatingBallEnabledRef.current) {
                   try {
                     if (latest.Type === 'Image' || latest.Type === 'ImageLink' || latest.Type === 'QRCode') {
                       const imgRaw = latest.PreviewUrl?.startsWith('/') ? `${targetUrl}${latest.PreviewUrl}` : latest.DownloadUrl?.startsWith('/') ? `${targetUrl}${latest.DownloadUrl}` : latest.Raw?.startsWith('http') ? latest.Raw : '';
@@ -498,8 +513,27 @@ export function useDeviceSync(params: {
           setImageDownloadTrigger(t => t + 1);
           setRichMediaDownloadTrigger(t => t + 1);
         }
+
+        // Cleanup stale fingerprints (LAN path) — prevent unbounded growth
+        if (recentSyncFingerprintsRef.current.size > 200) {
+          const entries = [...recentSyncFingerprintsRef.current.entries()];
+          const cutoff = Date.now() - 60000; // 60s window
+          for (const [key, ts] of entries) {
+            if (ts < cutoff) recentSyncFingerprintsRef.current.delete(key);
+          }
+        }
+
+        // Cleanup stale processed events — prevent unbounded growth
+        if (processedEventsRef.current.size > 500) {
+          const entries = [...processedEventsRef.current.entries()];
+          const cutoff = Date.now() - 600000; // 10min window
+          for (const [key, ts] of entries) {
+            if (ts < cutoff) processedEventsRef.current.delete(key);
+          }
+        }
       } catch (e) {
         syncLog('PC-POLL', `Poll failed: ${(e as any)?.message || e}`);
+        pollRetryCountRef.current = Math.min(pollRetryCountRef.current + 1, 15); // Increment backoff counter
         // Track Cloudflare failures for forced re-resolution (Issue #7)
         const failUrl = cachedPcUrlRef.current || '';
         cachedPcUrlRef.current = null;
@@ -516,6 +550,11 @@ export function useDeviceSync(params: {
     // Adaptive polling: 2s (LAN active) → 5s (Cloud) → 10s (idle/no PC) → re-evaluate every cycle
     lastActivityRef.current = NetworkClock.now();
     const getAdaptiveInterval = () => {
+      const retries = pollRetryCountRef.current;
+      // After 10 consecutive failures, switch to 60s low-frequency polling
+      if (retries >= 10) return 60000;
+      // Exponential backoff on failures: 1s, 2s, 4s, 8s... max 30s
+      if (retries > 0) return Math.min(1000 * Math.pow(2, retries), 30000);
       const url = cachedPcUrlRef.current || '';
       const idleSecs = (NetworkClock.now() - lastActivityRef.current) / 1000;
       if (!url) return 10000; // No PC found — slow poll

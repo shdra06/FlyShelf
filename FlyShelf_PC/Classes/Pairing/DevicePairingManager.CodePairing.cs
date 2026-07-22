@@ -110,7 +110,8 @@ namespace FlyShelf.Classes
                     var json = JsonSerializer.Serialize(pairPayload);
                     var content = new StringContent(json, Encoding.UTF8, "application/json");
                     
-                    using var client = new HttpClient() { Timeout = TimeSpan.FromSeconds(8) };
+                    // AUDIT Task 5: Use shared pool — do NOT dispose (shared instance)
+                    var client = HttpClientPool.Default;
                     var response = await client.PostAsync($"{url}/api/pair", content);
 
                     if (response.IsSuccessStatusCode)

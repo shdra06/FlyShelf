@@ -26,6 +26,7 @@ namespace FlyShelf.Windows
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
+            Loaded -= OnLoaded;
             try
             {
                 string improved = "";

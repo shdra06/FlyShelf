@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 
 namespace FlyShelf.Classes
@@ -31,6 +32,32 @@ namespace FlyShelf.Classes
                 ".apk" => "Android App",
                 _ => "File"
             };
+        }
+
+        // ═══ [FIX M-58]: Consolidated from 5 duplicate implementations ═══
+        // Previously in: ClipboardItem.Constructors.cs, LanTransferSession.cs,
+        //   NetworkFileQueue.cs, TransferHistory.cs, FlyShelfViewModel.cs
+
+        /// <summary>
+        /// Formats a byte count into a human-readable string (B, KB, MB, GB).
+        /// </summary>
+        public static string FormatBytes(long bytes)
+        {
+            if (bytes < 1024) return string.Create(CultureInfo.InvariantCulture, $"{bytes} B");
+            if (bytes < 1_048_576) return string.Create(CultureInfo.InvariantCulture, $"{bytes / 1024.0:F1} KB");
+            if (bytes < 1_073_741_824) return string.Create(CultureInfo.InvariantCulture, $"{bytes / 1_048_576.0:F1} MB");
+            return string.Create(CultureInfo.InvariantCulture, $"{bytes / 1_073_741_824.0:F2} GB");
+        }
+
+        /// <summary>
+        /// Formats a bytes-per-second speed into a human-readable string (KB/s, MB/s, GB/s).
+        /// </summary>
+        public static string FormatSpeed(double bytesPerSecond)
+        {
+            if (bytesPerSecond <= 0) return "—";
+            if (bytesPerSecond < 1_048_576) return string.Create(CultureInfo.InvariantCulture, $"{bytesPerSecond / 1024.0:F0} KB/s");
+            if (bytesPerSecond < 1_073_741_824) return string.Create(CultureInfo.InvariantCulture, $"{bytesPerSecond / 1_048_576.0:F1} MB/s");
+            return string.Create(CultureInfo.InvariantCulture, $"{bytesPerSecond / 1_073_741_824.0:F2} GB/s");
         }
     }
 }

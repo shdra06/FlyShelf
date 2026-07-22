@@ -106,5 +106,36 @@ namespace FlyShelf.Styles
         private void MakePasswordSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.MakePasswordSpecific_Click(sender, e);
         private void RenamePasswordSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.RenamePasswordSpecific_Click(sender, e);
         private void QuickLookSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.QuickLookSpecific_Click(sender, e);
+
+
+        // ═══════════════════════════════════════════════════════════════════
+        // GIF PAUSE/RESUME — [FIX ANIM-8]: Stop off-screen GIF decoders
+        // ═══════════════════════════════════════════════════════════════════
+
+        private void HubGifIcon_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Image img)
+            {
+                try
+                {
+                    var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(img);
+                    animator?.Play();
+                }
+                catch { } // Best-effort: GIF may not be loaded yet
+            }
+        }
+
+        private void HubGifIcon_Unloaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Image img)
+            {
+                try
+                {
+                    var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(img);
+                    animator?.Pause();
+                }
+                catch { } // Best-effort
+            }
+        }
     }
 }

@@ -124,7 +124,7 @@
                                                     </Style.Triggers>
                                                 </Style>
                                             </StackPanel.Style>
-                                            <Border CornerRadius="6" Padding="5,2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}">
+                                            <Border CornerRadius="8" Padding="5,2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}">
                                                 <StackPanel Orientation="Horizontal">
                                                     <ui:SymbolIcon FontSize="10" Margin="0,0,3,0">
                                                         <ui:SymbolIcon.Style>
@@ -214,7 +214,7 @@
                                         <CheckBox Grid.Column="2" IsChecked="{Binding IsCheckedForMerge, Mode=TwoWay}" VerticalAlignment="Center" Margin="6,0,0,0" Click="ItemCheckBox_Click" />
 
                                         <!-- File Type Icon Badge -->
-                                        <Border Grid.Column="3" Width="44" Height="44" CornerRadius="10" ClipToBounds="True" Margin="12,10,12,10">
+                                        <Border Grid.Column="3" Width="44" Height="44" CornerRadius="12" ClipToBounds="True" Margin="12,10,12,10">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
@@ -229,7 +229,7 @@
                                                 <!-- Static image thumbnail (non-GIF) -->
                                                 <Image Source="{Binding Icon}" Stretch="UniformToFill" Width="44" Height="44" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache" Visibility="{Binding IsStaticImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                                 <!-- Animated GIF thumbnail -->
-                                                <Image gif:AnimationBehavior.SourceUri="{Binding GifFilePath}" gif:AnimationBehavior.RepeatBehavior="Forever" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache" Visibility="{Binding IsGifPreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                <Image gif:AnimationBehavior.SourceUri="{Binding GifFilePath}" gif:AnimationBehavior.RepeatBehavior="Forever" gif:AnimationBehavior.AutoStart="True" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache" Loaded="HubGifIcon_Loaded" Unloaded="HubGifIcon_Unloaded" Visibility="{Binding IsGifPreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
                                                 <!-- Image Placeholder — shown when Icon hasn't loaded yet for image items -->
                                                 <Border Name="ImagePlaceholderBorder">
@@ -383,7 +383,7 @@
                                                 </Border>
 
                                                 <!-- Color Swatch Premium Preview — shown when a HEX, RGB, or HSL color is detected -->
-                                                <Border Name="ColorSwatchBorder" Background="{Binding DetectedColorBrush}" CornerRadius="10" 
+                                                <Border Name="ColorSwatchBorder" Background="{Binding DetectedColorBrush}" CornerRadius="12" 
                                                         BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1.5">
                                                     <Border.Style>
                                                         <Style TargetType="Border">
@@ -593,8 +593,8 @@
                                         <StackPanel Grid.Column="4" VerticalAlignment="Center" Margin="0,12,0,12">
                                             <StackPanel Orientation="Horizontal">
                                                 <!-- Color detection dot -->
-                                                <Border Width="12" Height="12" CornerRadius="6" Margin="0,0,6,0" VerticalAlignment="Center" Background="{Binding DetectedColorBrush}" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}" BorderBrush="{Binding DetectedColorBrush}" BorderThickness="1.5"/>
-                                                <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextTrimming="CharacterEllipsis">
+                                                <Border Width="12" Height="12" CornerRadius="8" Margin="0,0,6,0" VerticalAlignment="Center" Background="{Binding DetectedColorBrush}" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}" BorderBrush="{Binding DetectedColorBrush}" BorderThickness="1.5"/>
+                                                <TextBlock Text="{Binding FileName}" FontSize="13" FontFamily="Segoe UI Emoji, Segoe UI" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextTrimming="CharacterEllipsis">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
                                                             <Style.Triggers>
@@ -667,13 +667,10 @@
                                                 <TextBlock Text="{Binding DateCopied, StringFormat='{}{0:HH:mm}'}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" Opacity="0.6"/>
 
                                                 <!-- Color swatch preview -->
-                                                <Border Width="28" Height="14" CornerRadius="3" Margin="6,0,0,0" Background="{Binding DetectedColorBrush}" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}" ToolTip="{Binding DetectedColor}">
-                                                    <Border.Effect>
-                                                        <DropShadowEffect BlurRadius="4" ShadowDepth="0" Opacity="0.3"/>
-                                                    </Border.Effect>
-                                                </Border>
+                                                <!-- PERF: DropShadowEffect removed — per-item software shader -->
+                                                <Border Width="28" Height="14" CornerRadius="3" Margin="6,0,0,0" Background="{Binding DetectedColorBrush}" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}" ToolTip="{Binding DetectedColor}"/>
                                             </StackPanel>
-                                            <TextBlock Text="{Binding RawContent}" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" MaxHeight="{Binding CollapsedMaxHeight}" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                            <TextBlock Text="{Binding RawContent}" FontSize="12" FontFamily="Segoe UI Emoji, Segoe UI" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" MaxHeight="{Binding CollapsedMaxHeight}" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" Margin="0,4,0,0"/>
                                             
                                             <!-- Circular Expand/Collapse Chevron Toggle Button for Long Text / Code cards -->
                                             <Button PreviewMouseLeftButtonDown="ExpandToggleSpecific_Click"
@@ -689,11 +686,9 @@
                                                             <Setter.Value>
                                                                 <ControlTemplate TargetType="Button">
                                                                     <Grid Width="26" Height="26" Background="Transparent">
+                                                                        <!-- PERF: DropShadowEffect removed — per-item software shader -->
                                                                         <Border x:Name="CircleBorder" Width="22" Height="22" CornerRadius="11"
                                                                                 Background="{DynamicResource ThemeChevronBg}" BorderBrush="{DynamicResource ThemeChevronBorder}" BorderThickness="1.5">
-                                                                            <Border.Effect>
-                                                                                <DropShadowEffect BlurRadius="6" Color="#000000" Opacity="0.45" ShadowDepth="1.2" Direction="270" />
-                                                                            </Border.Effect>
                                                                             <ui:SymbolIcon x:Name="ChevronIcon" Symbol="ChevronDown24" FontSize="13" Foreground="{DynamicResource InfoColor}"
                                                                                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0.5,0,0"/>
                                                                         </Border>

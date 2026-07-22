@@ -13,8 +13,11 @@ namespace FlyShelf.Classes
     public static class SmartContentDetector
     {
         private static readonly Regex _rxEmail = new(@"[\w.+-]+@[\w-]+\.[\w.]+", RegexOptions.Compiled);
-        private static readonly Regex _rxPhone = new(@"(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}", RegexOptions.Compiled);
+        // [FIX M-16]: Add timeout to prevent ReDoS — nested optional quantifiers can backtrack
+        private static readonly Regex _rxPhone = new(@"(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}", RegexOptions.Compiled, TimeSpan.FromSeconds(1));
         private static readonly Regex _rxMath = new(@"^[\d\s+\-*/().,%^]+$", RegexOptions.Compiled);
+        // [FIX M-34]: Whitelist for safe math expressions — prevents DataTable.Compute expression injection
+        private static readonly Regex _rxSafeMathExpr = new(@"^[\d\s+\-*/().,%^]+$", RegexOptions.Compiled);
         private static readonly Regex _rxBase64 = new(@"^[A-Za-z0-9+/=]{20,}$", RegexOptions.Compiled | RegexOptions.Multiline);
         private static readonly Regex _rxEpoch = new(@"^\d{10,13}$", RegexOptions.Compiled);
 
@@ -70,7 +73,11 @@ namespace FlyShelf.Classes
         {
             try
             {
-                expr = expr.Trim().Replace("^", "**");
+                if (string.IsNullOrWhiteSpace(expr) || expr.Length > 200) return "Error";
+                expr = expr.Trim();
+                // [FIX M-34]: Sanitize before DataTable.Compute — only allow safe math characters
+                if (!_rxSafeMathExpr.IsMatch(expr)) return "Error";
+                expr = expr.Replace("^", "**");
                 using var dt = new DataTable();
                 var result = dt.Compute(expr, null);
                 return result?.ToString() ?? "Error";
@@ -85,12 +92,11 @@ namespace FlyShelf.Classes
             if (text.Length < 20 || text.Length > 100000) return false;
             if (text.Contains(' ') || text.Contains('\n')) return false;
             if (text.Length % 4 != 0) return false;
-            try
-            {
-                Convert.FromBase64String(text);
-                return _rxBase64.IsMatch(text);
-            }
-            catch { return false; }
+            if (!_rxBase64.IsMatch(text)) return false;
+            // [FIX M-17]: Use TryFromBase64String to validate without allocating the full decoded buffer
+            Span<byte> buffer = stackalloc byte[256];
+            string sample = text.Length > 256 ? text[..(256 - (256 % 4))] : text;
+            return Convert.TryFromBase64String(sample, buffer, out _);
         }
 
         public static string DecodeBase64(string text)

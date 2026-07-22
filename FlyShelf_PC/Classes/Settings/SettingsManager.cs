@@ -450,6 +450,8 @@ namespace FlyShelf.Classes
                             Logger.LogAction("SETTINGS_LOAD_WARN", $"Backed up corrupt settings to {corruptBackup}");
                         } 
                         catch { } // Best-effort: failure is acceptable
+                        // [FIX M-28]: Prevent fall-through to Deserialize with corrupt data
+                        json = null;
                     }
 
                     var settings = JsonSerializer.Deserialize<AdvanceSettings>(json);
@@ -491,6 +493,7 @@ namespace FlyShelf.Classes
                     const string pinChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // No ambiguous chars (0/O, 1/I/L)
                     var pinBytes = new byte[8];
                     System.Security.Cryptography.RandomNumberGenerator.Fill(pinBytes);
+                    // [FIX M-39]: Minor modulo bias (256 % 31) — acceptable for non-cryptographic PIN generation
                     Current.WebClientPinToken = new string(pinBytes.Select(b => pinChars[b % pinChars.Length]).ToArray());
                     Logger.LogAction("SETTINGS", "Generated random WebClient PIN for new install.");
                 }
@@ -542,8 +545,8 @@ namespace FlyShelf.Classes
                 // Debounce: reset the 500ms timer on each call. Only the last call
                 // within 500ms actually triggers the write. Prevents rapid saves
                 // during slider drags, checkbox toggles, etc.
-                _saveDebouncerTimer?.Dispose();
-                _saveDebouncerTimer = new System.Threading.Timer(_ =>
+                // [FIX H-09]: Atomic timer swap — prevents race where old timer fires between Dispose and reassignment
+                var newTimer = new System.Threading.Timer(_ =>
                 {
                     string path = GetConfigPath();
                     lock (_saveLock)
@@ -564,6 +567,8 @@ namespace FlyShelf.Classes
                         }
                     }
                 }, null, 500, System.Threading.Timeout.Infinite);
+                var old = System.Threading.Interlocked.Exchange(ref _saveDebouncerTimer, newTimer);
+                old?.Dispose();
             }
             catch (Exception ex)
             {
@@ -648,9 +653,9 @@ namespace FlyShelf.Classes
             // 6. Shut down the application
             try
             {
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
                 {
-                    System.Windows.Application.Current.Shutdown();
+                    System.Windows.Application.Current?.Shutdown();
                 });
             }
             catch
@@ -659,46 +664,12 @@ namespace FlyShelf.Classes
             }
         }
 
+        // [FIX STABLE-1]: Consolidated into FileRetryHelper
         private static T RunWithRetry<T>(Func<T> action, int retries = 3, int delayMs = 100)
-        {
-            for (int i = 0; i < retries; i++)
-            {
-                try
-                {
-                    return action();
-                }
-                catch (IOException) when (i < retries - 1)
-                {
-                    Thread.Sleep(delayMs);
-                }
-                catch (UnauthorizedAccessException) when (i < retries - 1)
-                {
-                    Thread.Sleep(delayMs);
-                }
-            }
-            return action();
-        }
+            => FileRetryHelper.RunWithRetry(action, retries, delayMs);
 
         private static void RunWithRetry(Action action, int retries = 3, int delayMs = 100)
-        {
-            for (int i = 0; i < retries; i++)
-            {
-                try
-                {
-                    action();
-                    return;
-                }
-                catch (IOException) when (i < retries - 1)
-                {
-                    Thread.Sleep(delayMs);
-                }
-                catch (UnauthorizedAccessException) when (i < retries - 1)
-                {
-                    Thread.Sleep(delayMs);
-                }
-            }
-            action();
-        }
+            => FileRetryHelper.RunWithRetry(action, retries, delayMs);
     }
 }
 

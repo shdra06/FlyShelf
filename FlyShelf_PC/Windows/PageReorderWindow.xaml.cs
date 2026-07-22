@@ -14,6 +14,7 @@ using System.Windows.Threading;
 using MicaWPF.Controls;
 using WinPdf = global::Windows.Data.Pdf;
 using global::Windows.Storage;
+using FlyShelf.Classes;
 
 namespace FlyShelf.Windows
 {
@@ -110,6 +111,8 @@ namespace FlyShelf.Windows
 
             RebuildGrid(false);
             _ = LoadThumbnailsAsync(_item.FilePath, _item.TotalPages);
+            Closed += (s, e) => { _thumbnails = null; }; // PERF: release thumbnail memory on close
+            this.PreviewKeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Escape) this.Close(); };
         }
 
         /// <summary>
@@ -849,6 +852,8 @@ namespace FlyShelf.Windows
 
         private async void AddPages_Click(object sender, RoutedEventArgs e)
         {
+            await SafeAsyncHandler.RunAsync(async () =>
+            {
             var dlg = new Microsoft.Win32.OpenFileDialog
             {
                 Filter = "PDF Files (*.pdf)|*.pdf",
@@ -910,6 +915,7 @@ namespace FlyShelf.Windows
             _selectedIndices.Clear();
             RebuildGrid(false);
             UpdateVisuals();
+            });
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -960,6 +966,8 @@ namespace FlyShelf.Windows
 
         private async void Overwrite_Click(object sender, RoutedEventArgs e)
         {
+            await SafeAsyncHandler.RunAsync(async () =>
+            {
             if (HasExternalPages)
             {
                 ToastWindow.ShowToast("⚠️ Cannot overwrite original file when external pages are added.");
@@ -1022,9 +1030,13 @@ namespace FlyShelf.Windows
             {
                 try
                 {
-                    // Overwrite the original file
-                    File.Copy(tempPath, _item.FilePath, true);
-                    File.Delete(tempPath);
+                    // Overwrite the original file (offload IO to thread pool)
+                    var targetPath = _item.FilePath;
+                    await Task.Run(() =>
+                    {
+                        File.Copy(tempPath, targetPath, true);
+                        File.Delete(tempPath);
+                    });
 
                     ToastWindow.ShowToast($"✅ Original file overwritten: {_item.FileName}");
                     
@@ -1047,6 +1059,7 @@ namespace FlyShelf.Windows
                 ConfirmBtn.IsEnabled = true;
                 OverwriteBtn.Content = "Save & Overwrite";
             }
+            });
         }
 
         protected override void OnClosed(EventArgs e)

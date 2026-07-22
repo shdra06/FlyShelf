@@ -27,16 +27,13 @@ namespace FlyShelf.Classes
                 return;
             }
 
-            try
+            // PERF: Fire-and-forget — sparse package registration doesn't need to complete before app starts.
+            // Errors are logged via ContinueWith since exceptions in fire-and-forget tasks are unobserved.
+            _ = Task.Run(() => EnsureRegisteredInternalAsync(args)).ContinueWith(t =>
             {
-                // We use Task.Run to run it synchronously on a threadpool thread to avoid blocking WPF's main thread
-                // during any initialization, then block on the result.
-                Task.Run(() => EnsureRegisteredInternalAsync(args)).GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("SPARSE_ERR", $"Error in EnsureRegistered: {ex.Message}");
-            }
+                if (t.Exception != null)
+                    Logger.LogAction("SPARSE_ERR", $"Error in EnsureRegistered: {t.Exception.InnerException?.Message ?? t.Exception.Message}");
+            }, TaskContinuationOptions.OnlyOnFaulted);
         }
 
         private static async Task EnsureRegisteredInternalAsync(string[] args)
@@ -215,9 +212,9 @@ namespace FlyShelf.Classes
                 Process.Start(startInfo);
                 
                 // Shutdown current instance
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
                 {
-                    System.Windows.Application.Current.Shutdown();
+                    System.Windows.Application.Current?.Shutdown();
                 });
             }
             catch (Exception ex)

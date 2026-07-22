@@ -162,9 +162,10 @@ namespace FlyShelf.Classes
                 CurrentPort = publicPort;
 
                 _isRunning = true;
+                // PERF: Avoid sync-over-async deadlock risk — run async loop directly on dedicated thread
                 _listenerThread = new Thread(() =>
                 {
-                    try { Task.Run(ListenLoopAsync).GetAwaiter().GetResult(); }
+                    try { ListenLoopAsync().GetAwaiter().GetResult(); }
                     catch (Exception ex) { Logger.LogAction("LISTENER", $"Thread crash caught: {ex.Message}"); }
                 });
                 _listenerThread.IsBackground = true;
@@ -339,7 +340,8 @@ namespace FlyShelf.Classes
                 Logger.LogAction("NETWORK ERROR", $"❌ Server failed to start: {ex.Message}");
             }
             
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.RefreshLocalServerData());
+            // [FIX M-35]: Null-conditional to prevent NRE during app shutdown
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => _viewModel.RefreshLocalServerData());
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -597,7 +599,8 @@ namespace FlyShelf.Classes
             try { _tlsListener?.Stop(); } catch { } // Best-effort: failure is acceptable
             try { _tlsCert?.Dispose(); } catch { } // Best-effort: failure is acceptable
             TlsUrl = "";
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.RefreshLocalServerData());
+            // [FIX M-35]: Null-conditional to prevent NRE during app shutdown
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => _viewModel.RefreshLocalServerData());
         }
 
         private void UpdateServerUrl()
@@ -655,7 +658,8 @@ namespace FlyShelf.Classes
                         catch { } // Best-effort: failure is acceptable
                     });
 
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.RefreshLocalServerData());
+                    // [FIX M-35]: Null-conditional to prevent NRE during app shutdown
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => _viewModel.RefreshLocalServerData());
                 }
             }
             catch { /* Best-effort — don't crash on network change events */ }
@@ -683,6 +687,24 @@ namespace FlyShelf.Classes
                     if (_listener == null || !_listener.IsListening) break;
                 }
             }
+        }
+
+        // ═══ AUDIT Task 6: IDisposable implementation ═══
+        // Delegates to Stop() which already disposes: _heartbeatTimer, _tlsCert,
+        // _listener, _proxyListener, _tlsListener, and stops _cfDaemon.
+        private bool _disposed = false;
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            Stop(); // Handles all resource cleanup (HttpListener, timers, TLS, CloudflareDaemon, etc.)
+
+            // Additional cleanup for resources not covered by Stop()
+            try { _listener?.Close(); } catch { } // Best-effort: ensure HttpListener is fully released
+            
+            GC.SuppressFinalize(this);
         }
     }
 }

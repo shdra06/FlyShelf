@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Globalization;
 using System.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace FlyShelf.Classes
 {
@@ -19,23 +20,15 @@ namespace FlyShelf.Classes
         Monthly
     }
 
-    public class ReminderItem : INotifyPropertyChanged
+    public partial class ReminderItem : ObservableObject
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
 
+        [ObservableProperty]
         private string _title = "";
-        public string Title
-        {
-            get => _title;
-            set { if (_title != value) { _title = value; OnPropertyChanged(nameof(Title)); } }
-        }
 
+        [ObservableProperty]
         private string _notes = "";
-        public string Notes
-        {
-            get => _notes;
-            set { if (_notes != value) { _notes = value; OnPropertyChanged(nameof(Notes)); } }
-        }
 
         private DateTime _dueAt;
         public DateTime DueAt
@@ -67,12 +60,8 @@ namespace FlyShelf.Classes
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        [ObservableProperty]
         private string _category = "";
-        public string Category
-        {
-            get => _category;
-            set { if (_category != value) { _category = value; OnPropertyChanged(nameof(Category)); } }
-        }
 
         private RepeatMode _repeat = RepeatMode.None;
         public RepeatMode Repeat
@@ -100,9 +89,6 @@ namespace FlyShelf.Classes
             RepeatMode.Monthly => "Monthly",
             _ => ""
         };
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 
     public static class ReminderManager

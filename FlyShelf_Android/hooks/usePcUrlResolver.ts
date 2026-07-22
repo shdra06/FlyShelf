@@ -12,19 +12,10 @@ import { NetworkClock } from '../utils/networkClock';
 import { syncLog } from '../utils/debugLog';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getLocalPairedDevices, updatePairedDeviceIp } from './useLanPresence';
-
-/** Cached active device from Firebase */
-export interface ActiveDeviceInfo {
-  DeviceId?: string;
-  DeviceName?: string;
-  DeviceType?: string;
-  LocalIp?: string;
-  GlobalUrl?: string;
-  TlsUrl?: string;
-  IsOnline?: boolean;
-  Timestamp?: number;
-  [key: string]: any;
-}
+// Audit: moved ActiveDeviceInfo to shared utils/deviceTypes.ts (was duplicated here)
+import { ActiveDeviceInfo } from '../utils/deviceTypes';
+// Re-export so any existing imports from this module keep working
+export type { ActiveDeviceInfo } from '../utils/deviceTypes';
 
 /** URL cache TTL in ms — adaptive based on connection type */
 const LAN_CACHE_TTL = 30_000;  // 30s — reduced from 60s for faster stale detection

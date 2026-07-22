@@ -17,6 +17,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FlyShelf.Helpers;
 
 namespace FlyShelf.Windows
 {
@@ -163,7 +164,7 @@ namespace FlyShelf.Windows
                     // Dark mode accent override — prevent system accent color bleeding
                     var overrides = new ResourceDictionary();
                     overrides["FlyShelf.ThemeOverride"] = true;
-                    overrides["MicaWPF.Brushes.SystemAccentColor"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(99, 102, 241));
+                    overrides["MicaWPF.Brushes.SystemAccentColor"] = new System.Windows.Media.SolidColorBrush(FlyShelf.Helpers.ThemeColors.IndigoAccent);
                     overrides["MicaWPF.Brushes.SystemAccentColorLight1"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(129, 132, 255));
                     overrides["MicaWPF.Brushes.SystemAccentColorLight2"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(159, 162, 255));
                     overrides["MicaWPF.Brushes.SystemAccentColorDark1"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(79, 82, 221));
@@ -355,17 +356,17 @@ namespace FlyShelf.Windows
 
         private async void ConnectByCode_Click(object sender, RoutedEventArgs e)
         {
-            string code = RemoteCodeInput?.Text?.Trim().ToUpper(CultureInfo.InvariantCulture) ?? "";
-            if (string.IsNullOrEmpty(code) || code.Length != 6)
+            await SafeAsyncHandler.RunAsync(async () =>
             {
-                Windows.ToastWindow.ShowToast("⚠️ Enter a 6-character code");
-                return;
-            }
+                string code = RemoteCodeInput?.Text?.Trim().ToUpper(CultureInfo.InvariantCulture) ?? "";
+                if (string.IsNullOrEmpty(code) || code.Length != 6)
+                {
+                    Windows.ToastWindow.ShowToast("⚠️ Enter a 6-character code");
+                    return;
+                }
 
-            Windows.ToastWindow.ShowToast($"Looking up {code}...");
+                Windows.ToastWindow.ShowToast($"Looking up {code}...");
 
-            try
-            {
                 var (success, deviceName) = await DevicePairingManager.ConnectByCode(code);
                 if (success)
                 {
@@ -401,12 +402,7 @@ namespace FlyShelf.Windows
                     Windows.ToastWindow.ShowToast($"❌ Code {code} not found — check the other device has internet and re-generate the code");
                     Logger.LogAction("PAIR CODE", $"Code {code} lookup returned null — not found in Firebase");
                 }
-            }
-            catch (Exception ex)
-            {
-                Windows.ToastWindow.ShowToast($"❌ Connection failed: {ex.Message}");
-                Logger.LogAction("PAIR CODE", $"ConnectByCode UI error: {ex.Message}");
-            }
+            });
         }
 
         // ═══ Color Copy Handlers ═══
@@ -835,7 +831,7 @@ namespace FlyShelf.Windows
                 // Map mode tag → accent color for active border
                 var modeAccents = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase)
                 {
-                    { "mica",    Color.FromRgb(156, 163, 175) },
+                    { "mica",    ThemeColors.GrayMuted },
                     { "glass",   Color.FromRgb(59, 130, 246)  },
                     { "desktop", Color.FromRgb(217, 119, 6)  },
                 };
@@ -933,13 +929,13 @@ namespace FlyShelf.Windows
                 // Map theme name → accent color for the active border
                 var themeAccents = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase)
                 {
-                    { "Midnight", Color.FromRgb(99, 102, 241) },
+                    { "Midnight", ThemeColors.IndigoAccent },
                     { "Ocean",    Color.FromRgb(8, 145, 178)  },
                     { "Sunset",   Color.FromRgb(234, 88, 12)  },
                     { "Emerald",  Color.FromRgb(5, 150, 105)  },
                     { "Lavender", Color.FromRgb(124, 58, 237) },
                     { "ArcticSnow",    Color.FromRgb(79, 70, 229)  },
-                    { "Default",  Color.FromRgb(156, 163, 175) },
+                    { "Default",  ThemeColors.GrayMuted },
                 };
 
                 // Find all theme buttons (including Default)

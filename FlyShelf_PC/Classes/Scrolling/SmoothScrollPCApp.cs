@@ -34,10 +34,10 @@ namespace FlyShelf.Classes
         private const double TouchpadImpulseMul   = 0.09;     // Touchpad impulse multiplier — matched to main clipboard's TouchpadMul
 
         // ═══ Velocity Physics (unified for mouse + touchpad) ═══
-        private const double MouseVelocityFriction   = 0.94;     // Per-frame decay — matched to main clipboard (smooth luxurious glide)
+        private const double MouseVelocityFriction   = 0.95;     // Per-frame decay (0.94→0.95 for slightly longer glide, better for content browsing)
         private const double MouseMaxVelocity        = 45.0;     // Maximum velocity cap (px/frame)
         private const double MouseImpulseScale       = 7.2;      // Mouse impulse per notch — matched to clipboard's MouseMul*120 (0.06*120)
-        private const double MouseMinVelocity        = 0.20;     // Below this → stop — matched to main clipboard
+        private const double MouseMinVelocity        = 0.15;     // Below this → stop (lowered from 0.20 for Apple-style longer tail)
         private const double MouseDirectionBrakeMul  = 0.35;     // Retained velocity on direction reversal
         private const double MouseTargetFrameMs      = 16.667;   // 60 FPS baseline for frame-time compensation
         private const double MouseBlendFactor        = 0.55;     // Velocity blending factor — matched to main clipboard
@@ -56,46 +56,20 @@ namespace FlyShelf.Classes
         private static bool _timerResolutionElevated;
         private static int _timerResolutionRefCount;  // Bug 5 fix: balanced timeBeginPeriod/timeEndPeriod
 
-        [System.Runtime.InteropServices.DllImport("winmm.dll", EntryPoint = "timeBeginPeriod", SetLastError = true)]
-        private static extern uint TimeBeginPeriod(uint uMilliseconds);
-
-        [System.Runtime.InteropServices.DllImport("winmm.dll", EntryPoint = "timeEndPeriod", SetLastError = true)]
-        private static extern uint TimeEndPeriod(uint uMilliseconds);
-
-        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool SetProcessInformation(
-            IntPtr hProcess,
-            int ProcessInformationClass,
-            ref PROCESS_POWER_THROTTLING_STATE ProcessInformation,
-            uint ProcessInformationSize
-        );
-
-        private const int ProcessPowerThrottling = 4;
-        private const uint PROCESS_POWER_THROTTLING_CURRENT_VERSION = 1;
-        private const uint PROCESS_POWER_THROTTLING_EXECUTION_SPEED = 0x1;
-
-        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-        private struct PROCESS_POWER_THROTTLING_STATE
-        {
-            public uint Version;
-            public uint ControlMask;
-            public uint StateMask;
-        }
-
         static SmoothScrollPCApp()
         {
             // Disable Windows 11 EcoQoS power throttling for unthrottled rendering
             try
             {
                 var hProcess = System.Diagnostics.Process.GetCurrentProcess().Handle;
-                var state = new PROCESS_POWER_THROTTLING_STATE
+                var state = new NativeMethods.PROCESS_POWER_THROTTLING_STATE
                 {
-                    Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION,
-                    ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+                    Version = NativeMethods.PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+                    ControlMask = NativeMethods.PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
                     StateMask = 0
                 };
                 uint size = (uint)System.Runtime.InteropServices.Marshal.SizeOf(state);
-                SetProcessInformation(hProcess, ProcessPowerThrottling, ref state, size);
+                NativeMethods.SetProcessInformation(hProcess, NativeMethods.ProcessPowerThrottling, ref state, size);
             }
             catch { } // Best-effort: failure is acceptable
         }
@@ -220,7 +194,7 @@ namespace FlyShelf.Classes
             // Bug 5 fix: Use reference counting to prevent unmatched Begin/End pairs
             if (!_timerResolutionElevated)
             {
-                try { TimeBeginPeriod(1); _timerResolutionRefCount++; } catch { }
+                try { NativeMethods.TimeBeginPeriod(1); _timerResolutionRefCount++; } catch { }
                 _timerResolutionElevated = true;
             }
             bool isTouchpad = (delta % 120 != 0) || (Math.Abs(delta) < 120);
@@ -526,7 +500,7 @@ namespace FlyShelf.Classes
                 // Bug 5 fix: Balanced timer resolution restore
                 if (_timerResolutionElevated && _timerResolutionRefCount > 0)
                 {
-                    try { TimeEndPeriod(1); _timerResolutionRefCount--; } catch { }
+                    try { NativeMethods.TimeEndPeriod(1); _timerResolutionRefCount--; } catch { }
                     _timerResolutionElevated = false;
                 }
             }

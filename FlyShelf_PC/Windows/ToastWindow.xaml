@@ -15,8 +15,12 @@
             <Border.Effect>
                 <DropShadowEffect x:Name="ToastShadow" BlurRadius="16" Opacity="0.30" ShadowDepth="2" Direction="270" Color="#000000" />
             </Border.Effect>
+            <Border.RenderTransformOrigin>0.5,0.5</Border.RenderTransformOrigin>
             <Border.RenderTransform>
-                <TranslateTransform x:Name="ToastTranslate" Y="12"/>
+                <TransformGroup>
+                    <ScaleTransform x:Name="ToastScale" ScaleX="0.97" ScaleY="0.97"/>
+                    <TranslateTransform x:Name="ToastTranslate" Y="12"/>
+                </TransformGroup>
             </Border.RenderTransform>
             
             <Grid>

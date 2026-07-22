@@ -13,7 +13,7 @@
                 </Grid.RowDefinitions>
                 
                 <!-- Thumbnail -->
-                <Border Grid.Row="0" CornerRadius="6" ClipToBounds="True" Background="White">
+                <Border Grid.Row="0" CornerRadius="8" ClipToBounds="True" Background="White">
                     <Image x:Name="PageThumbnail" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
                 </Border>
                 
@@ -24,7 +24,7 @@
                 </StackPanel>
 
                 <!-- Hover Actions Overlay -->
-                <Border x:Name="ActionsOverlay" Grid.RowSpan="2" Background="#80000000" CornerRadius="6">
+                <Border x:Name="ActionsOverlay" Grid.RowSpan="2" Background="#80000000" CornerRadius="8">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Visibility" Value="Collapsed"/>

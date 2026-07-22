@@ -117,7 +117,7 @@ namespace FlyShelf.ViewModels
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
-                        try { FlyShelf.Classes.ClipboardHelper.SafeSetText(result); } catch { }
+                        try { FlyShelf.Classes.ClipboardHelper.SafeSetText(result); } catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("OCR", $"Clipboard write failed: {ex.Message}"); }
                         FlyShelf.Windows.ToastWindow.ShowToast("✅ AI OCR text copied to clipboard!");
                     });
                 }

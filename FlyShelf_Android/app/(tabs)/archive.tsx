@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import AppErrorBoundary from '../../components/AppErrorBoundary';
 import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, useWindowDimensions, Modal, Alert, ScrollView, Image, Platform, FlatList, ToastAndroid, Linking, TextInput, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
@@ -27,7 +28,7 @@ import {
 const getThumbSize = (w: number) => (w - 50) / 4;
 
 
-export default function FilesScreen() {
+function FilesScreenInner() {
   const { colors, shadows } = useAppTheme();
   const s = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
   const { pcLocalIp, deviceName, defaultTargetDeviceName, pairingKey, pairedDevices } = useSettings();
@@ -835,3 +836,11 @@ const createStyles = (c: any, sh: any) => StyleSheet.create({
   controlBtnText: { color: c.text.primary, fontSize: 14, fontFamily: font.bold },
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 });
+
+export default function FilesScreen() {
+  return (
+    <AppErrorBoundary fallbackTitle="Files screen crashed">
+      <FilesScreenInner />
+    </AppErrorBoundary>
+  );
+}

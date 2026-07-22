@@ -108,9 +108,9 @@ export const createSyncStyles = (colors: ThemeColors, shadows: ThemeShadows) => 
     letterSpacing: -0.1,
   },
   actionBtnIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.sm,
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 6,

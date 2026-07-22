@@ -194,11 +194,16 @@ export function useLanPresence(params: {
   } = params;
 
   const announceCountRef = useRef(0);
+  const isMountedRef = useRef(false);
 
   useEffect(() => {
     if (!isEnabled || !deviceId) return;
 
+    // M15: Track mount state to prevent timer callbacks after unmount
+    isMountedRef.current = true;
+
     const announcePresence = async () => {
+      if (!isMountedRef.current) return;
       // Announce to current connected PC
       const pcUrl = cachedPcUrlRef.current || lastWorkingPcUrlRef.current;
       if (!pcUrl) return;
@@ -248,12 +253,13 @@ export function useLanPresence(params: {
 
     // Re-announce on network change
     const unsubscribe = NetInfo.addEventListener(state => {
-      if (state.isConnected && state.type === 'wifi') {
-        setTimeout(announcePresence, 2000); // Wait 2s for WiFi to stabilize
+      if (state.isConnected && state.type === 'wifi' && isMountedRef.current) {
+        setTimeout(() => { if (isMountedRef.current) announcePresence(); }, 2000);
       }
     });
 
     return () => {
+      isMountedRef.current = false; // M15: Prevent callbacks from firing after cleanup
       clearInterval(timer);
       unsubscribe();
     };

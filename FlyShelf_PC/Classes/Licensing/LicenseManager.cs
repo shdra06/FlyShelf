@@ -147,10 +147,14 @@ namespace FlyShelf.Classes
                 if (_tierSentinel != ComputeTierSentinel(_data.Tier, _data.LicenseKey))
                 {
                     Logger.LogAction("SECURITY", "⚠️ Tier sentinel mismatch — possible memory tampering detected");
-                    _data.Tier = "free";
-                    _data.LicenseKey = "";
-                    _tierSentinel = 0;
-                    try { Save(); } catch (Exception ex) { Logger.LogAction("LICENSE", $"Failed to save after sentinel reset: {ex.Message}"); }
+                    // [FIX M-09]: Lock around _data field modifications to prevent concurrent corruption
+                    lock (_lock)
+                    {
+                        _data.Tier = "free";
+                        _data.LicenseKey = "";
+                        _tierSentinel = 0;
+                        try { SaveInternal(); } catch (Exception ex) { Logger.LogAction("LICENSE", $"Failed to save after sentinel reset: {ex.Message}"); }
+                    }
                     return false;
                 }
 
@@ -326,86 +330,38 @@ namespace FlyShelf.Classes
 
         public static void RecordPdfMerge()
         {
-            EnsureTodayReset();
-            _data.DailyUsage.PdfMerges++;
-            Save();
-            if (!IsPro)
-            {
-                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    Windows.ToastWindow.ShowToast($"📄 PDF Merge: {GetRemaining("pdf_merge")} remaining today"));
-            }
+            // [FIX H-08]: Lock around increment + Save to prevent concurrent corruption
+            lock (_lock) { EnsureTodayReset(); _data.DailyUsage.PdfMerges++; Save(); }
         }
 
         public static void RecordPdfSave()
         {
-            EnsureTodayReset();
-            _data.DailyUsage.PdfSaves++;
-            Save();
-            if (!IsPro)
-            {
-                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    Windows.ToastWindow.ShowToast($"📄 PDF Page Save: {GetRemaining("pdf_save")} remaining today"));
-            }
+            lock (_lock) { EnsureTodayReset(); _data.DailyUsage.PdfSaves++; Save(); }
         }
 
         public static void RecordDocConversion()
         {
-            EnsureTodayReset();
-            _data.DailyUsage.DocConversions++;
-            Save();
-            if (!IsPro)
-            {
-                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    Windows.ToastWindow.ShowToast($"♻️ Doc Conversion: {GetRemaining("doc_convert")} remaining today"));
-            }
+            lock (_lock) { EnsureTodayReset(); _data.DailyUsage.DocConversions++; Save(); }
         }
 
         public static void RecordImageToPdf()
         {
-            EnsureTodayReset();
-            _data.DailyUsage.ImageToPdf++;
-            Save();
-            if (!IsPro)
-            {
-                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    Windows.ToastWindow.ShowToast($"🖼️ Image → PDF: {GetRemaining("image_to_pdf")} remaining today"));
-            }
+            lock (_lock) { EnsureTodayReset(); _data.DailyUsage.ImageToPdf++; Save(); }
         }
 
         public static void RecordQrScan()
         {
-            EnsureTodayReset();
-            _data.DailyUsage.QrScans++;
-            Save();
-            if (!IsPro)
-            {
-                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    Windows.ToastWindow.ShowToast($"📷 QR Code Scan: {GetRemaining("qr_scan")} remaining today"));
-            }
+            lock (_lock) { EnsureTodayReset(); _data.DailyUsage.QrScans++; Save(); }
         }
 
         public static void RecordOcrExtraction()
         {
-            EnsureTodayReset();
-            _data.DailyUsage.OcrExtractions++;
-            Save();
-            if (!IsPro)
-            {
-                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    Windows.ToastWindow.ShowToast($"🔍 OCR Text: {GetRemaining("ocr")} remaining today"));
-            }
+            lock (_lock) { EnsureTodayReset(); _data.DailyUsage.OcrExtractions++; Save(); }
         }
 
         public static void RecordTableExtraction()
         {
-            EnsureTodayReset();
-            _data.DailyUsage.TableExtractions++;
-            Save();
-            if (!IsPro)
-            {
-                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    Windows.ToastWindow.ShowToast($"📊 Table Extraction: {GetRemaining("table_extract")} remaining today"));
-            }
+            lock (_lock) { EnsureTodayReset(); _data.DailyUsage.TableExtractions++; Save(); }
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -551,16 +507,20 @@ namespace FlyShelf.Classes
                 return false;
             }
 
-            // Activate locally with verified JWT
-            _data.LicenseKey = key;
-            _data.Tier = "pro";
-            _data.ActivatedAt = activationTime;
-            _data.DeviceId = deviceId;
-            _data.ActivationToken = serverToken;
-            _data.LastValidated = activationTime;
-            UpdateTierSentinel(); // v2.4.0: Set sentinel so IsPro integrity check passes
-            Logger.LogAction("LICENSE", $"Pro license activated with server JWT: {MaskedKey}");
-            Save();
+            // [FIX M-09]: Lock around _data field modifications to prevent concurrent corruption
+            lock (_lock)
+            {
+                // Activate locally with verified JWT
+                _data.LicenseKey = key;
+                _data.Tier = "pro";
+                _data.ActivatedAt = activationTime;
+                _data.DeviceId = deviceId;
+                _data.ActivationToken = serverToken;
+                _data.LastValidated = activationTime;
+                UpdateTierSentinel(); // v2.4.0: Set sentinel so IsPro integrity check passes
+                Logger.LogAction("LICENSE", $"Pro license activated with server JWT: {MaskedKey}");
+                SaveInternal();
+            }
 
             // Save backup key for DPAPI recovery
             try
@@ -586,17 +546,6 @@ namespace FlyShelf.Classes
             }
 
             return true;
-        }
-
-        /// <summary>
-        /// Synchronous wrapper — DEPRECATED. Use ActivateLicenseAsync instead.
-        /// Uses Task.Run to avoid SynchronizationContext deadlock on UI thread.
-        /// </summary>
-        [System.Obsolete("Use ActivateLicenseAsync instead to avoid UI thread blocking.")]
-        public static bool ActivateLicense(string key)
-        {
-            Logger.LogAction("LICENSE", "⚠️ Deprecated sync ActivateLicense() called — use ActivateLicenseAsync instead");
-            return Task.Run(async () => await ActivateLicenseAsync(key).ConfigureAwait(false)).GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -641,13 +590,17 @@ namespace FlyShelf.Classes
         /// <summary>Deactivate the current license and revert to free tier.</summary>
         public static void DeactivateLicense()
         {
-            _data.LicenseKey = "";
-            _data.Tier = "free";
-            _data.ActivatedAt = "";
-            _data.ActivationToken = "";
-            _data.LastValidated = "";
-            UpdateTierSentinel(); // v2.4.0: Reset sentinel for free tier
-            Save();
+            // [FIX M-09]: Lock around _data field modifications to prevent concurrent corruption
+            lock (_lock)
+            {
+                _data.LicenseKey = "";
+                _data.Tier = "free";
+                _data.ActivatedAt = "";
+                _data.ActivationToken = "";
+                _data.LastValidated = "";
+                UpdateTierSentinel(); // v2.4.0: Reset sentinel for free tier
+                SaveInternal();
+            }
             Logger.LogAction("LICENSE", "License deactivated — reverted to Free tier");
 
             // Push updated licensing properties to active_devices so companion apps are updated in real-time

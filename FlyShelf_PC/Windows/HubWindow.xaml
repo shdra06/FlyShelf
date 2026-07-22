@@ -87,7 +87,7 @@
 
                     <!-- PRO Badge (gradient pill — only for Pro users) -->
                     <Border x:Name="ProBadgeTitleBar" Visibility="Collapsed" 
-                            CornerRadius="6" Padding="8,3,8,3" Margin="10,0,0,0" VerticalAlignment="Center">
+                            CornerRadius="8" Padding="8,3,8,3" Margin="10,0,0,0" VerticalAlignment="Center">
                         <Border.Background>
                             <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                                 <GradientStop Color="#F59E0B" Offset="0"/>
@@ -100,7 +100,7 @@
                     </Border>
 
                     <!-- FREE badge (subtle muted pill) -->
-                    <Border x:Name="FreeBadgeTitleBar" CornerRadius="6" Padding="8,3,8,3" 
+                    <Border x:Name="FreeBadgeTitleBar" CornerRadius="8" Padding="8,3,8,3" 
                             Margin="10,0,0,0" VerticalAlignment="Center"
                             Background="#12FFFFFF" BorderBrush="#18FFFFFF" BorderThickness="1">
                         <TextBlock Text="FREE" FontSize="10" FontWeight="SemiBold" 
@@ -118,7 +118,7 @@
                             <SolidColorBrush Color="#10B981"/>
                         </Ellipse.Fill>
                     </Ellipse>
-                    <Border Background="#0AFFFFFF" CornerRadius="6" Padding="10,4,10,4" 
+                    <Border Background="#0AFFFFFF" CornerRadius="8" Padding="10,4,10,4" 
                             BorderBrush="#10FFFFFF" BorderThickness="1">
                         <TextBlock x:Name="VersionBadgeText" Text="v—" FontSize="11" 
                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
@@ -254,7 +254,7 @@
                                 </Grid.ColumnDefinitions>
 
                                 <!-- Clipboard Items Stat -->
-                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="20,18" Cursor="Hand" Tag="History" MouseLeftButtonDown="DashboardCard_Click">
+                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="20,18" Cursor="Hand" Tag="History" MouseLeftButtonDown="DashboardCard_Click">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
@@ -262,7 +262,7 @@
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
                                         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
-                                            <Border Width="36" Height="36" CornerRadius="10" Margin="0,0,12,0">
+                                            <Border Width="36" Height="36" CornerRadius="12" Margin="0,0,12,0">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                         <GradientStop Color="#1D4ED8" Offset="0"/>
@@ -279,7 +279,7 @@
                                 </Border>
 
                                 <!-- Network Status Stat -->
-                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="20,18" Cursor="Hand" Tag="Network" MouseLeftButtonDown="DashboardCard_Click">
+                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="20,18" Cursor="Hand" Tag="Network" MouseLeftButtonDown="DashboardCard_Click">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
@@ -287,7 +287,7 @@
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
                                         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
-                                            <Border Width="36" Height="36" CornerRadius="10" Margin="0,0,12,0">
+                                            <Border Width="36" Height="36" CornerRadius="12" Margin="0,0,12,0">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                         <GradientStop Color="#0D9488" Offset="0"/>
@@ -313,10 +313,10 @@
                                 </Grid.ColumnDefinitions>
 
                                 <!-- Smart Suggestions Card -->
-                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" CornerRadius="14" Padding="0" Cursor="Hand" Tag="History" MouseLeftButtonDown="DashboardCard_Click" ClipToBounds="True" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#408B5CF6" BorderThickness="1">
+                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" CornerRadius="12" Padding="0" Cursor="Hand" Tag="History" MouseLeftButtonDown="DashboardCard_Click" ClipToBounds="True" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#408B5CF6" BorderThickness="1">
                                     <Grid>
                                         <!-- Subtle gradient glow in background -->
-                                        <Border CornerRadius="14" Opacity="0.15" HorizontalAlignment="Right" VerticalAlignment="Top" Width="120" Height="120" Margin="-20,-20,0,0">
+                                        <Border CornerRadius="12" Opacity="0.15" HorizontalAlignment="Right" VerticalAlignment="Top" Width="120" Height="120" Margin="-20,-20,0,0">
                                             <Border.Background>
                                                 <RadialGradientBrush>
                                                     <GradientStop Color="#8B5CF6" Offset="0"/>
@@ -346,9 +346,9 @@
                                 </Border>
 
                                 <!-- Quick Actions Card -->
-                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" CornerRadius="14" Padding="0" Cursor="Hand" Tag="Settings" MouseLeftButtonDown="DashboardCard_Click" ClipToBounds="True" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#40F59E0B" BorderThickness="1">
+                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" CornerRadius="12" Padding="0" Cursor="Hand" Tag="Settings" MouseLeftButtonDown="DashboardCard_Click" ClipToBounds="True" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#40F59E0B" BorderThickness="1">
                                     <Grid>
-                                        <Border CornerRadius="14" Opacity="0.12" HorizontalAlignment="Right" VerticalAlignment="Top" Width="120" Height="120" Margin="-20,-20,0,0">
+                                        <Border CornerRadius="12" Opacity="0.12" HorizontalAlignment="Right" VerticalAlignment="Top" Width="120" Height="120" Margin="-20,-20,0,0">
                                             <Border.Background>
                                                 <RadialGradientBrush>
                                                     <GradientStop Color="#F59E0B" Offset="0"/>
@@ -390,10 +390,10 @@
                                 </Grid.ColumnDefinitions>
 
                                 <!-- Card A: Duplicate Sweeper -->
-                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" CornerRadius="14" Padding="0" ClipToBounds="True" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#40F43F5E" BorderThickness="1">
+                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" CornerRadius="12" Padding="0" ClipToBounds="True" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#40F43F5E" BorderThickness="1">
                                     <Grid>
                                         <!-- Subtle gradient glow in background (AccentRose Color: #F43F5E) -->
-                                        <Border CornerRadius="14" Opacity="0.15" HorizontalAlignment="Right" VerticalAlignment="Top" Width="120" Height="120" Margin="-20,-20,0,0">
+                                        <Border CornerRadius="12" Opacity="0.15" HorizontalAlignment="Right" VerticalAlignment="Top" Width="120" Height="120" Margin="-20,-20,0,0">
                                             <Border.Background>
                                                 <RadialGradientBrush>
                                                     <GradientStop Color="#F43F5E" Offset="0"/>
@@ -430,10 +430,10 @@
                                 </Border>
 
                                 <!-- Card B: Smart History Cleanup -->
-                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" CornerRadius="14" Padding="0" ClipToBounds="True" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#4010B981" BorderThickness="1">
+                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" CornerRadius="12" Padding="0" ClipToBounds="True" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#4010B981" BorderThickness="1">
                                     <Grid>
                                         <!-- Subtle gradient glow in background (AccentEmerald Color: #10B981) -->
-                                        <Border CornerRadius="14" Opacity="0.12" HorizontalAlignment="Right" VerticalAlignment="Top" Width="120" Height="120" Margin="-20,-20,0,0">
+                                        <Border CornerRadius="12" Opacity="0.12" HorizontalAlignment="Right" VerticalAlignment="Top" Width="120" Height="120" Margin="-20,-20,0,0">
                                             <Border.Background>
                                                 <RadialGradientBrush>
                                                     <GradientStop Color="#10B981" Offset="0"/>
@@ -555,10 +555,10 @@
                                         </TextBlock.Text>
                                     </TextBlock>
                                 </Border>
-                                <ui:Button Appearance="Secondary" Padding="8,6" CornerRadius="10" ToolTip="Select All" Click="SelectAll_Click" Margin="0,0,6,0" AutomationProperties.Name="Select all items">
+                                <ui:Button Appearance="Secondary" Padding="8,6" CornerRadius="12" ToolTip="Select All" Click="SelectAll_Click" Margin="0,0,6,0" AutomationProperties.Name="Select all items">
                                     <ui:SymbolIcon Symbol="CheckmarkCircle24" FontSize="14" />
                                 </ui:Button>
-                                <ui:Button Padding="8,6" CornerRadius="10" ToolTip="Delete All Items" Click="DeleteAll_Click" Foreground="#EF4444" AutomationProperties.Name="Delete all items">
+                                <ui:Button Padding="8,6" CornerRadius="12" ToolTip="Delete All Items" Click="DeleteAll_Click" Foreground="#EF4444" AutomationProperties.Name="Delete all items">
                                     <ui:Button.Style>
                                         <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                             <Setter Property="Background" Value="#15EF4444"/>
@@ -995,14 +995,14 @@
                                     <Border Style="{StaticResource PremiumSettingStyle}" Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableLocalNetworkSync, Converter={StaticResource BooleanToVisibilityConverter}}">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8" HorizontalAlignment="Center">
-                                                <Border Width="28" Height="28" CornerRadius="7" Background="#1AEAB308" Margin="0,0,10,0">
+                                                <Border Width="28" Height="28" CornerRadius="8" Background="#1AEAB308" Margin="0,0,10,0">
                                                     <ui:SymbolIcon Symbol="Shield24" FontSize="14" Foreground="#EAB308" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
                                                 <TextBlock Text="Security PIN Code" FontWeight="Bold" FontSize="18" Foreground="#EAB308" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="Enter this PIN when accessing your clipboard from any browser or device." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,0,0,16" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" />
                                             
-                                            <Border Background="#11EAB308" BorderBrush="#22EAB308" BorderThickness="1.5" CornerRadius="14" Padding="28,12" HorizontalAlignment="Center" Margin="0,0,0,20">
+                                            <Border Background="#11EAB308" BorderBrush="#22EAB308" BorderThickness="1.5" CornerRadius="12" Padding="28,12" HorizontalAlignment="Center" Margin="0,0,0,20">
                                                 <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=WebClientPinToken}" FontSize="36" FontWeight="Bold" Foreground="#EAB308" FontFamily="Consolas" HorizontalAlignment="Center"/>
                                             </Border>
                                             
@@ -1036,7 +1036,7 @@
                                     <Border Style="{StaticResource PremiumSettingStyle}" Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableLocalNetworkSync, Converter={StaticResource BooleanToVisibilityConverter}}">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8" HorizontalAlignment="Center">
-                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                <Border Width="28" Height="28" CornerRadius="8" Margin="0,0,10,0">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#6366F1" Offset="0"/>
@@ -1050,7 +1050,7 @@
                                             <TextBlock Text="Scan this QR code with FlyShelf Mobile or enter the pairing code below." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,0,0,12" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" />
 
                                             <!-- QR Code Display -->
-                                            <Border Background="White" CornerRadius="14" Padding="10" HorizontalAlignment="Center" Margin="0,0,0,12">
+                                            <Border Background="White" CornerRadius="12" Padding="10" HorizontalAlignment="Center" Margin="0,0,0,12">
                                                 <Image x:Name="PairingQRImage" Width="160" Height="160" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
                                             </Border>
 
@@ -1061,7 +1061,7 @@
                                             </StackPanel>
 
                                             <!-- PAIRING CODE DISPLAY -->
-                                            <Border Background="#08A78BFA" CornerRadius="10" Padding="14,10" Margin="0,0,0,10" HorizontalAlignment="Center" MinWidth="260">
+                                            <Border Background="#08A78BFA" CornerRadius="12" Padding="14,10" Margin="0,0,0,10" HorizontalAlignment="Center" MinWidth="260">
                                                 <StackPanel>
                                                     <TextBlock Text="Your Pairing Code" FontSize="11" FontWeight="SemiBold" Foreground="#A78BFA" HorizontalAlignment="Center" Margin="0,0,0,6"/>
                                                     <TextBlock x:Name="PairingCodeDisplay" Text="------" FontSize="32" FontWeight="Black"
@@ -1073,7 +1073,7 @@
                                             </Border>
 
                                             <!-- ENTER CODE FROM ANOTHER DEVICE -->
-                                            <Border Background="#1A10B981" CornerRadius="10" Padding="14,10" Margin="0,0,0,10" HorizontalAlignment="Center" MinWidth="260"
+                                            <Border Background="#1A10B981" CornerRadius="12" Padding="14,10" Margin="0,0,0,10" HorizontalAlignment="Center" MinWidth="260"
                                                     BorderBrush="#4010B981" BorderThickness="1">
                                                 <StackPanel>
                                                     <TextBlock Text="Connect to Another Device" FontSize="11" FontWeight="SemiBold" Foreground="#10B981" HorizontalAlignment="Center" Margin="0,0,0,8"/>
@@ -1117,7 +1117,7 @@
                                             <ItemsControl x:Name="PeerStatusPanel">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
-                                                        <Border CornerRadius="10" Padding="12,10" Margin="0,0,0,5">
+                                                        <Border CornerRadius="12" Padding="12,10" Margin="0,0,0,5">
                                                             <Border.Style>
                                                                 <Style TargetType="Border">
                                                                     <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
@@ -1378,13 +1378,13 @@
 
                                     <!-- DEVICE GROUPS -->
                                     <StackPanel Orientation="Horizontal" Margin="0,16,0,10">
-                                        <Border Width="10" Height="10" CornerRadius="5" Background="#F59E0B" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <Border Width="10" Height="10" CornerRadius="4" Background="#F59E0B" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="Device Groups" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" />
                                         <Button x:Name="CreateGroupBtn" Content="+ New Group" Margin="12,0,0,0" Padding="10,4" FontSize="10" FontWeight="Bold" Click="CreateGroupBtn_Click"
                                                 Background="#F59E0B" Foreground="#000" BorderThickness="0" Cursor="Hand">
                                             <Button.Template>
                                                 <ControlTemplate TargetType="Button">
-                                                    <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                                    <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
                                                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     </Border>
                                                 </ControlTemplate>
@@ -1431,7 +1431,7 @@
                                     </StackPanel>
 
                                     <!-- Drag-drop zone -->
-                                    <Border x:Name="FileQueueDropZone" CornerRadius="14" Padding="28,24" Margin="0,0,0,16" 
+                                    <Border x:Name="FileQueueDropZone" CornerRadius="12" Padding="28,24" Margin="0,0,0,16" 
                                             BorderThickness="2" HorizontalAlignment="Stretch" AllowDrop="True"
                                             Background="#086366F1" BorderBrush="#406366F1">
                                         <StackPanel HorizontalAlignment="Center">
@@ -1499,7 +1499,7 @@
                                                     <TextBlock Text="Clear Queue" FontSize="11" FontWeight="SemiBold"/>
                                                 </StackPanel>
                                             </ui:Button>
-                                            <Border Grid.Column="4" Background="#226366F1" CornerRadius="6" Padding="10,4" VerticalAlignment="Center">
+                                            <Border Grid.Column="4" Background="#226366F1" CornerRadius="8" Padding="10,4" VerticalAlignment="Center">
                                                 <TextBlock x:Name="FileQueueCountBadge" Text="0 files" FontSize="11" FontWeight="Bold" Foreground="#A5B4FC"/>
                                             </Border>
                                         </Grid>
@@ -1509,7 +1509,7 @@
                                     <ItemsControl x:Name="FileQueueItemsControl">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Border CornerRadius="10" Padding="14,10" Margin="0,0,0,6"
+                                                <Border CornerRadius="12" Padding="14,10" Margin="0,0,0,6"
                                                         Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
                                                         BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                                     <Border.ContextMenu>
@@ -1610,7 +1610,7 @@
                                                         <Setter Property="Template">
                                                             <Setter.Value>
                                                                 <ControlTemplate TargetType="RadioButton">
-                                                                    <Border x:Name="FilterBorder" CornerRadius="6" Padding="10,5" Cursor="Hand" Background="Transparent" Margin="0,0,4,0">
+                                                                    <Border x:Name="FilterBorder" CornerRadius="8" Padding="10,5" Cursor="Hand" Background="Transparent" Margin="0,0,4,0">
                                                                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                     </Border>
                                                                     <ControlTemplate.Triggers>
@@ -1683,7 +1683,7 @@
                                     <ItemsControl x:Name="HistoryItemsControl">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Border CornerRadius="10" Padding="14,10" Margin="0,0,0,6"
+                                                <Border CornerRadius="12" Padding="14,10" Margin="0,0,0,6"
                                                         Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
                                                         BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                                     <Grid>
@@ -1806,7 +1806,7 @@
                                     <ItemsControl x:Name="NearbyDevicesPanel" Margin="0,8,0,0">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Border Margin="0,0,0,6" Padding="14,12" CornerRadius="10"
+                                                <Border Margin="0,0,0,6" Padding="14,12" CornerRadius="12"
                                                         Background="{DynamicResource CardBackground}">
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
@@ -1999,7 +1999,7 @@
                                         <TextBlock x:Name="SettingsLicenseError" Text="" FontSize="10" Foreground="#EF4444" Margin="0,4,0,0" Visibility="Collapsed" TextWrapping="Wrap"/>
 
                                         <!-- Buy Premium Button (visible for Free users only) -->
-                                        <Border x:Name="SettingsBuyPremiumBtn" CornerRadius="10" Margin="0,12,0,0" Cursor="Hand" MouseLeftButtonUp="BuyPremium_Click">
+                                        <Border x:Name="SettingsBuyPremiumBtn" CornerRadius="12" Margin="0,12,0,0" Cursor="Hand" MouseLeftButtonUp="BuyPremium_Click">
                                             <Border.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                                                     <GradientStop Color="#8B5CF6" Offset="0"/>
@@ -2085,7 +2085,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                <Border Width="28" Height="28" CornerRadius="8" Margin="0,0,10,0">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#10B981" Offset="0"/>
@@ -2112,7 +2112,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                <Border Width="28" Height="28" CornerRadius="8" Margin="0,0,10,0">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#F59E0B" Offset="0"/>
@@ -2139,7 +2139,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                <Border Width="28" Height="28" CornerRadius="8" Margin="0,0,10,0">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#8B5CF6" Offset="0"/>
@@ -2165,7 +2165,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                <Border Width="28" Height="28" CornerRadius="8" Margin="0,0,10,0">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#10B981" Offset="0"/>
@@ -2217,7 +2217,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                <Border Width="28" Height="28" CornerRadius="8" Margin="0,0,10,0">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#8B5CF6" Offset="0"/>
@@ -2244,7 +2244,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                <Border Width="28" Height="28" CornerRadius="8" Margin="0,0,10,0">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#F59E0B" Offset="0"/>
@@ -2277,7 +2277,7 @@
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                            <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                            <Border Width="28" Height="28" CornerRadius="8" Margin="0,0,10,0">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                         <GradientStop Color="#F59E0B" Offset="0"/>
@@ -2510,7 +2510,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                <Border Width="28" Height="28" CornerRadius="8" Margin="0,0,10,0">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#0EA5E9" Offset="0"/>
@@ -2537,7 +2537,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                <Border Width="28" Height="28" CornerRadius="8" Margin="0,0,10,0">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#A855F7" Offset="0"/>
@@ -2561,7 +2561,7 @@
                                     Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableTaskbarWidget, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <StackPanel VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                        <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                        <Border Width="28" Height="28" CornerRadius="8" Margin="0,0,10,0">
                                             <Border.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                     <GradientStop Color="#6366F1" Offset="0"/>
@@ -2646,7 +2646,7 @@
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                            <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                            <Border Width="28" Height="28" CornerRadius="8" Margin="0,0,10,0">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                         <GradientStop Color="#0EA5E9" Offset="0"/>
@@ -2781,7 +2781,7 @@
                                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,8"/>
                                     <UniformGrid Rows="1" Columns="3" Margin="0,0,0,16">
                                         <!-- Mica Blur -->
-                                        <Border x:Name="DisplayBtn_Mica" Margin="0,0,6,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                        <Border x:Name="DisplayBtn_Mica" Margin="0,0,6,0" CornerRadius="12" Padding="10,8" Cursor="Hand"
                                                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                                                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                                                 MouseLeftButtonDown="DisplayMode_Click" Tag="__mica__">
@@ -2797,7 +2797,7 @@
                                         </Border>
 
                                         <!-- Acrylic Blur (Pro) -->
-                                        <Border x:Name="DisplayBtn_Glass" Margin="0,0,6,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                        <Border x:Name="DisplayBtn_Glass" Margin="0,0,6,0" CornerRadius="12" Padding="10,8" Cursor="Hand"
                                                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                                                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                                                 MouseLeftButtonDown="DisplayMode_Click" Tag="__glass__">
@@ -2813,7 +2813,7 @@
                                         </Border>
 
                                         <!-- FlyShelf (Desktop Wallpaper) -->
-                                        <Border x:Name="DisplayBtn_Desktop" Margin="0,0,0,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                        <Border x:Name="DisplayBtn_Desktop" Margin="0,0,0,0" CornerRadius="12" Padding="10,8" Cursor="Hand"
                                                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                                                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                                                 MouseLeftButtonDown="DisplayMode_Click" Tag="__desktop__">
@@ -2836,7 +2836,7 @@
                                     <!-- Theme Grid: 3 columns × 3 rows -->
                                     <UniformGrid Rows="3" Columns="3" x:Name="ColorThemeGrid">
                                         <!-- Midnight -->
-                                        <Border x:Name="ThemeBtn_Midnight" Margin="0,0,6,6" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                        <Border x:Name="ThemeBtn_Midnight" Margin="0,0,6,6" CornerRadius="12" Padding="10,8" Cursor="Hand"
                                                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                                                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                                                 MouseLeftButtonDown="ColorTheme_Click" Tag="Midnight">
@@ -2852,7 +2852,7 @@
                                         </Border>
 
                                         <!-- Ocean -->
-                                        <Border x:Name="ThemeBtn_Ocean" Margin="0,0,6,6" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                        <Border x:Name="ThemeBtn_Ocean" Margin="0,0,6,6" CornerRadius="12" Padding="10,8" Cursor="Hand"
                                                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                                                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                                                 MouseLeftButtonDown="ColorTheme_Click" Tag="Ocean">
@@ -2868,7 +2868,7 @@
                                         </Border>
 
                                         <!-- Sunset -->
-                                        <Border x:Name="ThemeBtn_Sunset" Margin="0,0,0,6" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                        <Border x:Name="ThemeBtn_Sunset" Margin="0,0,0,6" CornerRadius="12" Padding="10,8" Cursor="Hand"
                                                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                                                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                                                 MouseLeftButtonDown="ColorTheme_Click" Tag="Sunset">
@@ -2884,7 +2884,7 @@
                                         </Border>
 
                                         <!-- Emerald -->
-                                        <Border x:Name="ThemeBtn_Emerald" Margin="0,0,6,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                        <Border x:Name="ThemeBtn_Emerald" Margin="0,0,6,0" CornerRadius="12" Padding="10,8" Cursor="Hand"
                                                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                                                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                                                 MouseLeftButtonDown="ColorTheme_Click" Tag="Emerald">
@@ -2900,7 +2900,7 @@
                                         </Border>
 
                                         <!-- Lavender -->
-                                        <Border x:Name="ThemeBtn_Lavender" Margin="0,0,6,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                        <Border x:Name="ThemeBtn_Lavender" Margin="0,0,6,0" CornerRadius="12" Padding="10,8" Cursor="Hand"
                                                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                                                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                                                 MouseLeftButtonDown="ColorTheme_Click" Tag="Lavender">
@@ -2916,7 +2916,7 @@
                                         </Border>
 
                                         <!-- Arctic Snow -->
-                                        <Border x:Name="ThemeBtn_ArcticSnow" Margin="0,0,0,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                        <Border x:Name="ThemeBtn_ArcticSnow" Margin="0,0,0,0" CornerRadius="12" Padding="10,8" Cursor="Hand"
                                                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                                                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                                                 MouseLeftButtonDown="ColorTheme_Click" Tag="ArcticSnow">
@@ -2932,7 +2932,7 @@
                                         </Border>
 
                                         <!-- Default (Reset) -->
-                                        <Border x:Name="ThemeBtn_Default" Margin="0,0,6,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                        <Border x:Name="ThemeBtn_Default" Margin="0,0,6,0" CornerRadius="12" Padding="10,8" Cursor="Hand"
                                                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                                                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                                                 MouseLeftButtonDown="ColorTheme_Click" Tag="Default">
@@ -2971,7 +2971,7 @@
                                     </StackPanel>
 
                                     <!-- Mascot Preview -->
-                                    <Border CornerRadius="14" Padding="20,16" Margin="0,0,0,14" HorizontalAlignment="Stretch"
+                                    <Border CornerRadius="12" Padding="20,16" Margin="0,0,0,14" HorizontalAlignment="Stretch"
                                             Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                                             BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                         <Grid HorizontalAlignment="Center">
@@ -3017,6 +3017,21 @@
                                                 <TextBlock Text="Play smooth fade-in and scale animations when opening and closing the clipboard (uncheck for instant 0ms response)" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" Margin="0,2,12,0"/>
                                             </StackPanel>
                                             <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableSummonAnimations, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Enable summon animations" />
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Show Notifications Toggle -->
+                                    <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="14,10" Margin="0,0,0,10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                <TextBlock Text="Show Notifications" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                <TextBlock Text="Show in-app toast popups for actions like copy, convert, sync, etc. Turn off for a distraction-free experience" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" Margin="0,2,12,0"/>
+                                            </StackPanel>
+                                            <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableNotifications, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Show notifications" />
                                         </Grid>
                                     </Border>
 
@@ -3202,7 +3217,7 @@
                             <Border Grid.Column="0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#15F472B6" BorderThickness="1" CornerRadius="12" Padding="16,12">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                        <Border Width="24" Height="24" CornerRadius="6" Background="#1AF472B6" Margin="0,0,8,0">
+                                        <Border Width="24" Height="24" CornerRadius="8" Background="#1AF472B6" Margin="0,0,8,0">
                                             <ui:SymbolIcon Symbol="DocumentText24" FontSize="12" Foreground="#F472B6" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
                                         <TextBlock Text="Live Network Monitor" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
@@ -3254,7 +3269,7 @@
                                     </Grid>
 
                                     <!-- Last Activity Status Bar -->
-                                    <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="6" Padding="8,4" Margin="0,0,0,8">
+                                    <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="8,4" Margin="0,0,0,8">
                                         <StackPanel Orientation="Horizontal">
                                             <ui:SymbolIcon Symbol="ArrowSync24" FontSize="10" Foreground="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                             <TextBlock Text="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=LastActivity}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
@@ -3298,7 +3313,7 @@
                             <Border Grid.Column="2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#15EF4444" BorderThickness="1" CornerRadius="12" Padding="16,12">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                        <Border Width="24" Height="24" CornerRadius="6" Background="#1AEF4444" Margin="0,0,8,0">
+                                        <Border Width="24" Height="24" CornerRadius="8" Background="#1AEF4444" Margin="0,0,8,0">
                                             <ui:SymbolIcon Symbol="WrenchScrewdriver24" FontSize="12" Foreground="#EF4444" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
                                         <TextBlock Text="Server Troubleshooting" FontWeight="Bold" FontSize="13" Foreground="#EF4444" VerticalAlignment="Center"/>
@@ -3336,14 +3351,14 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 
-                                <Border Grid.Column="0" Width="80" Height="80" CornerRadius="20" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="12" Margin="0,0,20,0">
+                                <Border Grid.Column="0" Width="80" Height="80" CornerRadius="16" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="12" Margin="0,0,20,0">
                                     <Image Source="{DynamicResource ThemeLogoIcon}" RenderOptions.BitmapScalingMode="HighQuality"/>
                                 </Border>
                                 
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="FlyShelf" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                        <Border Background="{DynamicResource MicaWPF.Brushes.SystemAccentColor}" CornerRadius="6" Padding="8,3" Margin="12,0,0,0" VerticalAlignment="Center">
+                                        <Border Background="{DynamicResource MicaWPF.Brushes.SystemAccentColor}" CornerRadius="8" Padding="8,3" Margin="12,0,0,0" VerticalAlignment="Center">
                                             <TextBlock Text="v2.0.0 Stable" FontSize="11" FontWeight="Bold" Foreground="White"/>
                                         </Border>
                                     </StackPanel>
@@ -3392,10 +3407,10 @@
                             </Border>
 
                             <!-- Core Features Card -->
-                            <Border Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="24" Margin="0,0,0,20" ClipToBounds="True">
+                            <Border Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="24" Margin="0,0,0,20" ClipToBounds="True">
                                 <Grid>
                                     <!-- Subtle radial glow in background -->
-                                    <Border CornerRadius="14" Opacity="0.08" HorizontalAlignment="Right" VerticalAlignment="Top" Width="180" Height="180" Margin="-40,-40,0,0">
+                                    <Border CornerRadius="12" Opacity="0.08" HorizontalAlignment="Right" VerticalAlignment="Top" Width="180" Height="180" Margin="-40,-40,0,0">
                                         <Border.Background>
                                             <RadialGradientBrush>
                                                 <GradientStop Color="#6366F1" Offset="0"/>
@@ -3450,10 +3465,10 @@
                             </Border>
 
                             <!-- License & Pro Status Card -->
-                            <Border x:Name="LicenseCard" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="24" Margin="0,0,0,20" ClipToBounds="True">
+                            <Border x:Name="LicenseCard" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="24" Margin="0,0,0,20" ClipToBounds="True">
                                 <Grid>
                                     <!-- Subtle radial glow -->
-                                    <Border CornerRadius="14" Opacity="0.08" HorizontalAlignment="Right" VerticalAlignment="Top" Width="180" Height="180" Margin="-40,-40,0,0">
+                                    <Border CornerRadius="12" Opacity="0.08" HorizontalAlignment="Right" VerticalAlignment="Top" Width="180" Height="180" Margin="-40,-40,0,0">
                                         <Border.Background>
                                             <RadialGradientBrush>
                                                 <GradientStop Color="#F59E0B" Offset="0"/>
@@ -3479,7 +3494,7 @@
                                         </StackPanel>
 
                                         <!-- Current Status -->
-                                        <Border x:Name="LicenseStatusPanel" CornerRadius="10" Padding="16,12" Margin="0,0,0,16">
+                                        <Border x:Name="LicenseStatusPanel" CornerRadius="12" Padding="16,12" Margin="0,0,0,16">
                                             <Border.Background>
                                                 <SolidColorBrush Color="#1A10B981"/>
                                             </Border.Background>
@@ -3492,7 +3507,7 @@
                                                     <TextBlock x:Name="LicenseStatusTitle" Text="Free Tier" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
                                                     <TextBlock x:Name="LicenseStatusDesc" Text="Upgrade to Pro to unlock unlimited features" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                                                 </StackPanel>
-                                                <Border x:Name="LicenseStatusBadge" Grid.Column="1" CornerRadius="6" Padding="10,5" VerticalAlignment="Center" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}">
+                                                <Border x:Name="LicenseStatusBadge" Grid.Column="1" CornerRadius="8" Padding="10,5" VerticalAlignment="Center" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}">
                                                     <TextBlock x:Name="LicenseStatusBadgeText" Text="FREE" FontSize="12" FontWeight="Black" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
                                                 </Border>
                                             </Grid>
@@ -3540,7 +3555,7 @@
                             </Border>
 
                             <!-- Software Updates Card -->
-                            <Border x:Name="UpdateSectionCard" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="24" Margin="0,0,0,20" ClipToBounds="True">
+                            <Border x:Name="UpdateSectionCard" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="24" Margin="0,0,0,20" ClipToBounds="True">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
@@ -3626,9 +3641,9 @@
                                 </Grid.ColumnDefinitions>
                                 
                                 <!-- Card 1: Compliance & Privacy -->
-                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="20" ClipToBounds="True">
+                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="20" ClipToBounds="True">
                                     <Grid>
-                                        <Border CornerRadius="14" Opacity="0.08" HorizontalAlignment="Right" VerticalAlignment="Top" Width="100" Height="100" Margin="-20,-20,0,0">
+                                        <Border CornerRadius="12" Opacity="0.08" HorizontalAlignment="Right" VerticalAlignment="Top" Width="100" Height="100" Margin="-20,-20,0,0">
                                             <Border.Background>
                                                 <RadialGradientBrush>
                                                     <GradientStop Color="#10B981" Offset="0"/>
@@ -3657,9 +3672,9 @@
                                 </Border>
                                 
                                 <!-- Card 2: Development & Source -->
-                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="20" ClipToBounds="True">
+                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="20" ClipToBounds="True">
                                     <Grid>
-                                        <Border CornerRadius="14" Opacity="0.08" HorizontalAlignment="Right" VerticalAlignment="Top" Width="100" Height="100" Margin="-20,-20,0,0">
+                                        <Border CornerRadius="12" Opacity="0.08" HorizontalAlignment="Right" VerticalAlignment="Top" Width="100" Height="100" Margin="-20,-20,0,0">
                                             <Border.Background>
                                                 <RadialGradientBrush>
                                                     <GradientStop Color="#8B5CF6" Offset="0"/>
@@ -3689,7 +3704,7 @@
                             </Grid>
 
                             <!-- ═══ Danger Zone — Uninstall ═══ -->
-                            <Border Background="#12EF4444" BorderBrush="#30EF4444" BorderThickness="1" CornerRadius="14" Padding="20,16" Margin="0,0,0,20">
+                            <Border Background="#12EF4444" BorderBrush="#30EF4444" BorderThickness="1" CornerRadius="12" Padding="20,16" Margin="0,0,0,20">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                         <Border Width="32" Height="32" CornerRadius="8" Background="#25EF4444" Margin="0,0,10,0">
@@ -3974,7 +3989,7 @@
                             </Border>
 
                             <!-- Replay Onboarding Button -->
-                            <ui:Button x:Name="ReplayOnboardingBtn" Appearance="Secondary" Padding="16,10" CornerRadius="10" HorizontalAlignment="Center" Margin="0,0,0,24" Click="ReplayOnboarding_Click">
+                            <ui:Button x:Name="ReplayOnboardingBtn" Appearance="Secondary" Padding="16,10" CornerRadius="12" HorizontalAlignment="Center" Margin="0,0,0,24" Click="ReplayOnboarding_Click">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="🔄" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="Replay Welcome Tour" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>

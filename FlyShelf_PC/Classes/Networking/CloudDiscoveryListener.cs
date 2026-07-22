@@ -12,8 +12,8 @@ namespace FlyShelf.Classes
 {
     public partial class CloudDiscoveryListener
     {
-        // Single client with reasonable timeout for on-demand REST queries
-        private static readonly HttpClient _queryClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(15) };
+        // AUDIT Task 5: Use shared pool instance instead of per-class HttpClient (prevents socket exhaustion)
+        private static HttpClient _queryClient => HttpClientPool.Default;
         private static string FIREBASE_BASE => FirebaseAuthManager.FirebaseDatabaseUrl;
         
         /// <summary>Wraps a Firebase REST URL with auth token.</summary>

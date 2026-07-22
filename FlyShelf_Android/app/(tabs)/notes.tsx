@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import AppErrorBoundary from '../../components/AppErrorBoundary';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Alert,
   Animated, Keyboard, Platform, ToastAndroid, Share, Modal,
@@ -105,7 +106,7 @@ const showToast = (msg: string) => {
 // ═══════════════════════════════════════════════════════════
 // MAIN SCREEN
 // ═══════════════════════════════════════════════════════════
-export default function NotesScreen() {
+function NotesScreenInner() {
   const { colors, shadows } = useAppTheme();
   const styles = useMemo(() => createNotesStyles(colors, shadows), [colors, shadows]);
   const { deviceName } = useSettings();
@@ -1155,5 +1156,13 @@ export default function NotesScreen() {
         </View>
       </LinearGradient>
     </View>
+  );
+}
+
+export default function NotesScreen() {
+  return (
+    <AppErrorBoundary fallbackTitle="Notes screen crashed">
+      <NotesScreenInner />
+    </AppErrorBoundary>
   );
 }

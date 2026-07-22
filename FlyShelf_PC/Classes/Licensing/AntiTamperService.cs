@@ -23,12 +23,6 @@ namespace FlyShelf.Classes
     public static class AntiTamperService
     {
         // ═══ ANTI-DEBUG ═══
-        [DllImport("kernel32.dll")]
-        private static extern bool IsDebuggerPresent();
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool CheckRemoteDebuggerPresent(IntPtr hProcess, out bool isDebuggerPresent);
-
         private static int _antiDebugCounter = 0;
         private static bool _debuggerDetected = false;
 
@@ -50,12 +44,12 @@ namespace FlyShelf.Classes
                 if (System.Diagnostics.Debugger.IsAttached) return true;
 
                 // Layer 2: Native debugger (x64dbg, WinDbg, Cheat Engine debugger)
-                if (IsDebuggerPresent()) return true;
+                if (NativeMethods.IsDebuggerPresent()) return true;
 
                 // Layer 3: Remote debugger (attached from another process)
                 // PL-7: Wrap in using to dispose the Process handle
                 using var proc = System.Diagnostics.Process.GetCurrentProcess();
-                CheckRemoteDebuggerPresent(proc.Handle, out bool remote);
+                NativeMethods.CheckRemoteDebuggerPresent(proc.Handle, out bool remote);
                 if (remote) return true;
             }
             catch { /* P/Invoke may fail on non-Windows — ignore */ }

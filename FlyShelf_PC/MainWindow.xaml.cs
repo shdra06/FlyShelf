@@ -122,16 +122,11 @@ namespace FlyShelf
             });
         }
 
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
-        private const int KEYEVENTF_KEYUP = 0x0002;
-        private const int VK_CONTROL = 0x11;
-        private const int VK_V = 0x56;
-        private const int VK_MENU = 0x12; // Alt key
+        // ═══ Thin wrappers for NativeMethods — avoids adding NativeMethods. prefix to 20+ call sites across partial files ═══
+        private static int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize)
+            => NativeMethods.DwmSetWindowAttribute(hwnd, attr, ref attrValue, attrSize);
 
-        [DllImport("dwmapi.dll")]
-        public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
-        public const int DWMWA_BORDER_COLOR = 34;
+        // MainWindow-specific DWMWA_COLOR_NONE: returns context-aware border color (no border in clipboard mode, dark gray border in focus panel modes)
         public static int DWMWA_COLOR_NONE
         {
             get
@@ -152,49 +147,34 @@ namespace FlyShelf
                 catch { return 0x002D2D2D; }
             }
         }
-        public const int DWMWA_COLOR_DARK_GRAY = 0x002D2D2D;
-        public const int DWMWA_CLOAK = 13;
+        private const int DWMWA_CLOAK = NativeMethods.DWMWA_CLOAK;
+        private const int DWMWA_BORDER_COLOR = NativeMethods.DWMWA_BORDER_COLOR;
+        private const int DWMWA_COLOR_DARK_GRAY = NativeMethods.DWMWA_COLOR_DARK_GRAY;
+        private const int GWL_EXSTYLE = NativeMethods.GWL_EXSTYLE;
+        private const int WS_EX_NOACTIVATE = NativeMethods.WS_EX_NOACTIVATE;
+        private const int WS_EX_TOOLWINDOW = NativeMethods.WS_EX_TOOLWINDOW;
+        private const int WS_EX_APPWINDOW = NativeMethods.WS_EX_APPWINDOW;
+        private const int WS_EX_LAYERED = NativeMethods.WS_EX_LAYERED;
+        private const uint LWA_ALPHA = NativeMethods.LWA_ALPHA;
+        private const int KEYEVENTF_KEYUP = NativeMethods.KEYEVENTF_KEYUP;
+        private const int VK_CONTROL = NativeMethods.VK_CONTROL;
+        private const int VK_V = NativeMethods.VK_V;
+        private const int VK_MENU = NativeMethods.VK_MENU;
+        private const int WM_CLIPBOARDUPDATE = NativeMethods.WM_CLIPBOARDUPDATE;
 
-        private const int GWL_EXSTYLE = -20;
-        private const int WS_EX_NOACTIVATE = 0x08000000;
-        private const int WS_EX_TOOLWINDOW = 0x00000080;
-        private const int WS_EX_APPWINDOW = 0x00040000;
-        private const int WS_EX_LAYERED = 0x00080000;
-        private const uint LWA_ALPHA = 0x02;
-
-        [DllImport("user32.dll")]
-        private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
-
-        [DllImport("user32.dll")]
-        public static extern IntPtr SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-
-        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
-        private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
-
-        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
-        private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-
-        [DllImport("user32.dll")]
-        public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-
+        // Pointer-width safe Get/SetWindowLong wrappers for 32/64-bit compatibility
         private static int GetWindowLongSafe(IntPtr hWnd, int nIndex)
         {
             if (IntPtr.Size == 8)
-                return (int)GetWindowLongPtr(hWnd, nIndex);
-            return GetWindowLong(hWnd, nIndex);
+                return (int)NativeMethods.GetWindowLongPtr(hWnd, nIndex);
+            return NativeMethods.GetWindowLong(hWnd, nIndex);
         }
         private static IntPtr SetWindowLongSafe(IntPtr hWnd, int nIndex, int dwNewLong)
         {
             if (IntPtr.Size == 8)
-                return SetWindowLongPtr(hWnd, nIndex, (IntPtr)dwNewLong);
-            return SetWindowLong(hWnd, nIndex, dwNewLong);
+                return NativeMethods.SetWindowLongPtr(hWnd, nIndex, (IntPtr)dwNewLong);
+            return (IntPtr)NativeMethods.SetWindowLong(hWnd, nIndex, dwNewLong);
         }
-
-        [DllImport("user32.dll")]
-        public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
-
-        [DllImport("user32.dll")]
-        public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
         private const int HOTKEY_ID = 9000;
         private const int HOTKEY_QUICKPASTE_BASE = 9001; // 9001-9009 for Alt+1 through Alt+9
@@ -318,6 +298,7 @@ namespace FlyShelf
             }
 
 
+            // TODO: Store handler and unsubscribe in OnClosed
             this.SizeChanged += (s, e) =>
             {
                 // CRITICAL: Don't reposition during spawn animation — causes visible bouncing
@@ -371,6 +352,7 @@ namespace FlyShelf
             };
 
             // Restore keyboard focus to ListView or Notes textbox after window is moved/repositioned
+            // TODO: Store handler and unsubscribe in OnClosed
             this.Activated += (s, e) =>
             {
                 // Skip re-focus during show animation or invisible pre-animation phase
@@ -398,8 +380,11 @@ namespace FlyShelf
                 }
             };
 
+            // TODO: Store handler and unsubscribe in OnClosed
             _viewModel.PropertyChanged += (s, e) =>
             {
+                Dispatcher.InvokeAsync(() =>
+                {
                 if (_isSuppressingSizeSync) return;
                 // Don't reposition during spawn animation or post-animation cooldown
                 if (_isShowAnimating) return;
@@ -434,6 +419,7 @@ namespace FlyShelf
                 {
                     UpdateToolbarButtonsVisibility();
                 }
+                });
             };
 
             // Live-refresh wallpaper when user changes it in settings
@@ -472,6 +458,7 @@ namespace FlyShelf
             Classes.SettingsManager.Current.PropertyChanged += _settingsChangedHandler;
 
             // Auto-dismiss merge state when new items arrive on the shelf + Reapply active category/search filters to keep UI state robust
+            // TODO: Store handler and unsubscribe in OnClosed
             _viewModel.DroppedItems.CollectionChanged += (s, e) =>
             {
                 if (e.Action == NotifyCollectionChangedAction.Add ||
@@ -620,6 +607,12 @@ namespace FlyShelf
 
                 // When context menu closes (by any means), clean up timer
                 cm.Closed += CardContextMenu_Closed;
+
+                // ═══ Populate "Send to Device" submenu with connected peers ═══
+                PopulateSendToDeviceMenu(cm);
+
+                // ═══ Contextual Tip: First context menu ═══
+                Windows.TipBadge.Show("context_menu_first_use", "⚡ Try Smart Actions for auto-detect features");
             }
         }
 
@@ -679,7 +672,7 @@ namespace FlyShelf
                 string email = FlyShelf.Classes.SmartContentDetector.ExtractFirstEmail(item.RawContent ?? item.FileName ?? "");
                 if (!string.IsNullOrEmpty(email))
                 {
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo($"mailto:{email}") { UseShellExecute = true }); } catch { }
+                    _ = System.Threading.Tasks.Task.Run(() => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo($"mailto:{email}") { UseShellExecute = true }); } catch { } });
                 }
             }
         }
@@ -775,115 +768,90 @@ namespace FlyShelf
 
         private async void RunClipboardAIActionCustom(object sender, string systemPrompt)
         {
-            if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item)
+            try
             {
-                string text = item.RawContent ?? item.FileName ?? "";
-                if (string.IsNullOrWhiteSpace(text))
+                if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item)
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No text content to process.");
-                    return;
-                }
-
-                // Check AI availability
-                if (!FlyShelf.Classes.AiProviderService.Instance.HasCloudApiKey &&
-                    !FlyShelf.Classes.WindowsAIService.Instance.IsAvailable)
-                {
-                    FlyShelf.Classes.AiProviderService.Instance.EnsureApiKeyOrPrompt(this);
-                    if (!FlyShelf.Classes.AiProviderService.Instance.HasCloudApiKey) return;
-                }
-
-                try
-                {
-                    FlyShelf.Windows.ToastWindow.ShowToast("🧠 AI working...");
-                    string result = await System.Threading.Tasks.Task.Run(async () =>
-                        await FlyShelf.Classes.AiProviderService.Instance.GenerateAsync(text, systemPrompt));
-
-                    if (!string.IsNullOrWhiteSpace(result))
+                    string text = item.RawContent ?? item.FileName ?? "";
+                    if (string.IsNullOrWhiteSpace(text))
                     {
-                        try { Clipboard.SetText(result); } catch { }
-                        FlyShelf.Windows.ToastWindow.ShowToast("✅ AI result copied to clipboard!");
+                        FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No text content to process.");
+                        return;
+                    }
+
+                    // Check AI availability
+                    if (!FlyShelf.Classes.AiProviderService.Instance.HasCloudApiKey &&
+                        !FlyShelf.Classes.WindowsAIService.Instance.IsAvailable)
+                    {
+                        FlyShelf.Classes.AiProviderService.Instance.EnsureApiKeyOrPrompt(this);
+                        if (!FlyShelf.Classes.AiProviderService.Instance.HasCloudApiKey) return;
+                    }
+
+                    try
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast("🧠 AI working...");
+                        string result = await System.Threading.Tasks.Task.Run(async () =>
+                            await FlyShelf.Classes.AiProviderService.Instance.GenerateAsync(text, systemPrompt));
+
+                        if (!string.IsNullOrWhiteSpace(result))
+                        {
+                            try { Clipboard.SetText(result); } catch { }
+                            FlyShelf.Windows.ToastWindow.ShowToast("✅ AI result copied to clipboard!");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ AI error: {ex.Message}");
                     }
                 }
-                catch (Exception ex)
-                {
-                    FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ AI error: {ex.Message}");
-                }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Classes.Logger.LogAction("AI_CUSTOM_ERROR", $"RunClipboardAIActionCustom failed: {ex.Message}");
             }
         }
 
-        private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
+        // ═══ Thin wrappers for NativeMethods — used across many MainWindow partial files ═══
+        private static IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, NativeMethods.WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags)
+            => NativeMethods.SetWinEventHook(eventMin, eventMax, hmodWinEventProc, lpfnWinEventProc, idProcess, idThread, dwFlags);
+        private static bool UnhookWinEvent(IntPtr hWinEventHook) => NativeMethods.UnhookWinEvent(hWinEventHook);
+        private static bool AddClipboardFormatListener(IntPtr hwnd) => NativeMethods.AddClipboardFormatListener(hwnd);
+        private static bool RemoveClipboardFormatListener(IntPtr hwnd) => NativeMethods.RemoveClipboardFormatListener(hwnd);
+        private static uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId) => NativeMethods.GetWindowThreadProcessId(hWnd, out processId);
+        private static uint GetCurrentProcessId() => NativeMethods.GetCurrentProcessId();
+        private static bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach) => NativeMethods.AttachThreadInput(idAttach, idAttachTo, fAttach);
+        private static uint GetCurrentThreadId() => NativeMethods.GetCurrentThreadId();
+        private static bool EnumWindows(NativeMethods.EnumWindowsProc lpEnumFunc, IntPtr lParam) => NativeMethods.EnumWindows(lpEnumFunc, lParam);
+        private static int GetClassName(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount) => NativeMethods.GetClassName(hWnd, lpClassName, nMaxCount);
+        private static bool IsWindow(IntPtr hWnd) => NativeMethods.IsWindow(hWnd);
+        private static bool IsWindowVisible(IntPtr hWnd) => NativeMethods.IsWindowVisible(hWnd);
+        private static IntPtr GetForegroundWindow() => NativeMethods.GetForegroundWindow();
+        private static bool SetForegroundWindow(IntPtr hWnd) => NativeMethods.SetForegroundWindow(hWnd);
+        private static IntPtr WindowFromPhysicalPoint(Classes.NativeMethods.POINT Point) => NativeMethods.WindowFromPhysicalPoint(Point);
+        private static IntPtr GetAncestor(IntPtr hwnd, uint gaFlags) => NativeMethods.GetAncestor(hwnd, gaFlags);
+        private static void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo) => NativeMethods.mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo);
+        private static bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags) => NativeMethods.SetLayeredWindowAttributes(hwnd, crKey, bAlpha, dwFlags);
+        private static bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk) => NativeMethods.RegisterHotKey(hWnd, id, fsModifiers, vk);
+        private static bool UnregisterHotKey(IntPtr hWnd, int id) => NativeMethods.UnregisterHotKey(hWnd, id);
+        private static int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount) => NativeMethods.GetWindowText(hWnd, lpString, nMaxCount);
+        private static int GetWindowLong(IntPtr hWnd, int nIndex) => GetWindowLongSafe(hWnd, nIndex);
+        private static IntPtr SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong) => SetWindowLongSafe(hWnd, nIndex, dwNewLong);
+        private static bool SetWindowPos(IntPtr hWnd, int hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags) => NativeMethods.SetWindowPos(hWnd, hWndInsertAfter, x, y, cx, cy, uFlags);
+        private static void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo) => NativeMethods.keybd_event(bVk, bScan, dwFlags, (IntPtr)(long)dwExtraInfo);
+        private static void keybd_event(byte bVk, byte bScan, int dwFlags, int dwExtraInfo) => NativeMethods.keybd_event(bVk, bScan, (uint)dwFlags, (IntPtr)dwExtraInfo);
 
-        [DllImport("user32.dll")]
-        private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+        private const int HWND_TOPMOST = NativeMethods.HWND_TOPMOST;
+        private const uint SWP_NOSIZE = NativeMethods.SWP_NOSIZE;
+        private const uint SWP_NOMOVE = NativeMethods.SWP_NOMOVE;
+        private const uint SWP_NOACTIVATE = NativeMethods.SWP_NOACTIVATE;
 
-        [DllImport("user32.dll")]
-        private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
-
-        private const uint WINEVENT_OUTOFCONTEXT = 0;
-        private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+        private const uint WINEVENT_OUTOFCONTEXT = NativeMethods.WINEVENT_OUTOFCONTEXT;
+        private const uint EVENT_SYSTEM_FOREGROUND = NativeMethods.EVENT_SYSTEM_FOREGROUND;
+        private const uint MOUSEEVENTF_LEFTDOWN = NativeMethods.MOUSEEVENTF_LEFTDOWN;
+        private const uint MOUSEEVENTF_LEFTUP = NativeMethods.MOUSEEVENTF_LEFTUP;
 
         private IntPtr _foregroundHook = IntPtr.Zero;
-        private WinEventDelegate _foregroundDelegate = null!;
-
-        [DllImport("user32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool AddClipboardFormatListener(IntPtr hwnd);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-
-        [DllImport("kernel32.dll")]
-        internal static extern uint GetCurrentProcessId();
-
-        [DllImport("user32.dll")]
-        private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
-
-        [DllImport("kernel32.dll")]
-        private static extern uint GetCurrentThreadId();
-
-        public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        internal static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        internal static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        internal static extern bool IsWindow(IntPtr hWnd);
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        internal static extern bool IsWindowVisible(IntPtr hWnd);
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr WindowFromPhysicalPoint(Classes.NativeMethods.POINT Point);
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
-
-        [DllImport("user32.dll")]
-        private static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool SetCursorPos(int X, int Y);
-
-        private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
-        private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+        private NativeMethods.WinEventDelegate _foregroundDelegate = null!;
 
         /// <summary>
         /// Simulates a mouse click at the specified screen coordinates.
@@ -891,15 +859,10 @@ namespace FlyShelf
         /// </summary>
         private static void SendClickAt(int screenX, int screenY)
         {
-            SetCursorPos(screenX, screenY);
-            mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
-            mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            NativeMethods.SetCursorPos(screenX, screenY);
+            NativeMethods.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+            NativeMethods.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
         }
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
-
-        private const int WM_CLIPBOARDUPDATE = 0x031D;
 
         private bool _isLoadedInitialized = false;
 
@@ -911,7 +874,7 @@ namespace FlyShelf
             // Setup global foreground window change listener to dismiss when clicking elsewhere (handles non-activated summons)
             try
             {
-                _foregroundDelegate = new WinEventDelegate(ForegroundChangedCallback);
+                _foregroundDelegate = new NativeMethods.WinEventDelegate(ForegroundChangedCallback);
                 _foregroundHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, _foregroundDelegate, 0, 0, WINEVENT_OUTOFCONTEXT);
             }
             catch (Exception ex)
@@ -928,6 +891,7 @@ namespace FlyShelf
             }
 
             // Hook state changes to prevent DWM border leakage on minimize/maximize/restore/etc.
+            // TODO: Store handler and unsubscribe in OnClosed
             this.StateChanged += (s, ev) =>
             {
                 try
@@ -1030,6 +994,7 @@ namespace FlyShelf
                     var verticalScrollBar = FindVisualChild<System.Windows.Controls.Primitives.ScrollBar>(sv);
                     if (verticalScrollBar == null) return;
 
+                    // TODO: Store handler and unsubscribe in OnClosed
                     verticalScrollBar.PreviewMouseLeftButtonDown += (s, args) =>
                     {
                         // Let thumb dragging work normally — only intercept track area clicks
@@ -1535,11 +1500,13 @@ namespace FlyShelf
                 if (Classes.StartupHelper.IsPackaged())
                 {
                     // MSIX/Store install — open the Store app directly
+                    _ = System.Threading.Tasks.Task.Run(() => { try {
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = "ms-windows-store://pdp/?ProductId=9PM37CMM3T72",
                         UseShellExecute = true
                     });
+                    } catch { } });
                 }
                 else
                 {
@@ -1649,14 +1616,17 @@ namespace FlyShelf
                 _scrollDecayTimer?.Stop();
                 _scrollHighQualityTimer?.Stop();
                 _mascotDelayTimer?.Stop();
-                _showAnimEndTimer?.Stop();
+                if (_showAnimRenderHandler != null) { CompositionTarget.Rendering -= _showAnimRenderHandler; _showAnimRenderHandler = null; }
                 _dragActiveDismissTimer?.Stop();
                 _hoverPreviewTimer?.Stop();
                 _altScrollTimer?.Stop();
                 _altThumbnailTimer?.Stop();
                 _incognitoRefreshTimer?.Stop();
-                _aiModelSaveTimer?.Stop();
                 _transferRefreshTimer?.Stop();
+                _notesSyncStatusTimer?.Stop();
+                _notesSidebarAutoCollapseTimer?.Stop();
+                _panelAutoRevertTimer?.Stop();
+                _wallpaperDebounceTimer?.Stop();
 
                 // Dispose wallpaper file watchers
                 try { StopWallpaperFileWatcher(); } catch { } // Best-effort: failure is acceptable
@@ -1719,7 +1689,7 @@ namespace FlyShelf
             catch { }
 
             // Actively optimize and release memory whenever the window is hidden/unsummoned
-            OptimizeMemoryUsage();
+            if (!_hasOptimizedThisHide) OptimizeMemoryUsage();
         }
 
         /// <summary>
@@ -1774,7 +1744,7 @@ namespace FlyShelf
         /// </summary>
         [ThreadStatic] private static FlyShelf.Classes.NativeMethods.IVirtualDesktopManager? _threadLocalVdm;
 
-        public bool IsWindowOnCurrentVirtualDesktop(IntPtr hwnd, int timeoutMs = 60)
+        public bool IsWindowOnCurrentVirtualDesktop(IntPtr hwnd, int timeoutMs = 30)
         {
             try
             {

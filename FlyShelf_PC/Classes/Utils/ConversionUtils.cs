@@ -77,14 +77,17 @@ namespace FlyShelf.Classes
                     {
                         if (!File.Exists(docPath)) continue;
 
+                        // [FIX H-15]: Ensure doc is closed even on exception to prevent Word zombie
+                        dynamic doc = null;
                         try
                         {
                             string pdfPath = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(docPath) + "_" + Guid.NewGuid().ToString()[..4] + ".pdf");
                             
                             // wdOpenFormatAuto = 0, wdFormatPDF = 17
-                            dynamic doc = dynamicWord.Documents.Open(docPath, false, true); // FileName, ConfirmConversions, ReadOnly
+                            doc = dynamicWord.Documents.Open(docPath, false, true); // FileName, ConfirmConversions, ReadOnly
                             doc.SaveAs2(pdfPath, 17); // FileFormat: wdFormatPDF
                             doc.Close(false); // wdDoNotSaveChanges = 0
+                            doc = null;
                             
                             if (File.Exists(pdfPath)) convertedPaths.Add(pdfPath);
                         }
@@ -92,9 +95,18 @@ namespace FlyShelf.Classes
                         {
                             Logger.LogAction("DOC2PDF_BATCH_ERR", $"Failed to convert {Path.GetFileName(docPath)}: {ex.Message}");
                         }
+                        finally
+                        {
+                            if (doc != null)
+                            {
+                                try { doc.Close(false); } catch { }
+                                try { System.Runtime.InteropServices.Marshal.ReleaseComObject(doc); } catch { }
+                            }
+                        }
                     }
 
-                    dynamicWord.Quit();
+                    // [FIX M-31]: Guard against Quit() failure leaving zombie Word process
+                    try { dynamicWord.Quit(); } catch { }
                 }
                 catch (Exception ex)
                 {
@@ -141,7 +153,7 @@ namespace FlyShelf.Classes
 
                 // Fallback / Option A: WebView2
                 string mdContent = File.ReadAllText(mdPath);
-                return await WebView2Converter.ConvertMarkdownToPdfAsync(mdContent, outputPdf);
+                return await WebView2Converter.ConvertMarkdownToPdfAsync(mdContent, outputPdf, mdPath);
             }
             catch (Exception ex)
             {
@@ -210,7 +222,13 @@ namespace FlyShelf.Classes
                     {
                         if (npmProc != null)
                         {
-                            await Task.Run(() => npmProc.WaitForExit(45000));
+                            // [FIX M-32]: Kill npm if it doesn't exit in time
+                            bool npmExited = await Task.Run(() => npmProc.WaitForExit(45000));
+                            if (!npmExited)
+                            {
+                                try { npmProc.Kill(); } catch { }
+                                Logger.LogAction("MD2PDF_NPM", "npm install timed out — killed.");
+                            }
                         }
                     }
                 }
@@ -231,6 +249,8 @@ namespace FlyShelf.Classes
                     using (var proc = Process.Start(nodePsi))
                     {
                         if (proc == null) return false;
+                        // [FIX M-22]: Read error before WaitForExit to prevent pipe buffer deadlock
+                        string err = proc.StandardError.ReadToEnd();
                         bool exited = proc.WaitForExit(30000); // 30s timeout
                         if (!exited)
                         {
@@ -240,7 +260,6 @@ namespace FlyShelf.Classes
                         }
                         if (proc.ExitCode != 0)
                         {
-                            string err = proc.StandardError.ReadToEnd();
                             Logger.LogAction("MD2PDF_NODE", $"Node process exited with code {proc.ExitCode}. Error: {err}");
                             return false;
                         }

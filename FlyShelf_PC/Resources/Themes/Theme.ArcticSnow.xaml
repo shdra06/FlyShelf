@@ -147,5 +147,5 @@
     <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorDark1"  Color="#4338CA" options:Freeze="True"/>
 
     <!-- Theme-specific logo icon -->
-    <BitmapImage x:Key="ThemeLogoIcon" UriSource="pack://application:,,,/Resources/FlyShelfIcon_MinimalSilver.png" />
+    <BitmapImage x:Key="ThemeLogoIcon" UriSource="pack://application:,,,/Resources/FlyShelfIcon_MinimalSilver.png" DecodePixelWidth="64" />
 </ResourceDictionary>

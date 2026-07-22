@@ -12,6 +12,7 @@ using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using FlyShelf.Classes;
+using FlyShelf.Helpers;
 
 namespace FlyShelf
 {
@@ -81,6 +82,9 @@ namespace FlyShelf
                     SearchTextBox.Focus();
                     Keyboard.Focus(SearchTextBox);
                     SearchTextBox.CaretIndex = 0;
+
+                    // ═══ Contextual Tip: First search ═══
+                    Windows.TipBadge.Show("search_first_use", "🔍 Search text, files, or use / for commands", SearchBarContainer);
                 }, System.Windows.Threading.DispatcherPriority.Input);
 
                 // Trigger mascot search animation
@@ -212,7 +216,7 @@ namespace FlyShelf
         /// the caller (OpenNotesPanel / OpenTodoPanel) is about to collapse ShelfListView anyway.
         /// This prevents the UI-thread freeze caused by cascading re-entrant events.
         /// </summary>
-        private void CloseSearch(bool switchingPanel = false)
+        internal void CloseSearch(bool switchingPanel = false)
         {
             if (_isClosingSearch) return;   // prevent re-entrant calls
             if (!_isSearchActive) return;   // PERF: fast-path — nothing to close
@@ -265,17 +269,19 @@ namespace FlyShelf
                     var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems) as ListCollectionView;
                     if (view != null)
                     {
-                        if (_activeCategoryFilter == null)
-                            view.Filter = null;
-                        view.CustomSort = null;
+                        using (view.DeferRefresh())
+                        {
+                            if (_activeCategoryFilter == null)
+                                view.Filter = null;
+                            view.CustomSort = null;
+                        }
                     }
                     return;
                 }
 
                 if (_isNotesActive)
                 {
-                    NotesSearchResults.Visibility = Visibility.Collapsed;
-                    NotesContentArea.Visibility = Visibility.Visible;
+                    ApplyNotesSearch(""); // Clears search results in the UserControl
                     FocusNotesActiveTextBox();
                 }
                 else
@@ -284,18 +290,21 @@ namespace FlyShelf
                     var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems) as ListCollectionView;
                     if (view != null)
                     {
-                        if (_activeCategoryFilter == null)
+                        using (view.DeferRefresh())
                         {
-                            view.Filter = null;
-                            if (ShelfListView != null && ShelfListView.Items.CanFilter) ShelfListView.Items.Filter = null;
-                            if (AltShelfListView != null && AltShelfListView.Items.CanFilter) AltShelfListView.Items.Filter = null;
+                            if (_activeCategoryFilter == null)
+                            {
+                                view.Filter = null;
+                                if (ShelfListView != null && ShelfListView.Items.CanFilter) ShelfListView.Items.Filter = null;
+                                if (AltShelfListView != null && AltShelfListView.Items.CanFilter) AltShelfListView.Items.Filter = null;
+                            }
+                            else
+                            {
+                                // Reapply the active category filter to maintain persistence
+                                ReapplyActiveFilters();
+                            }
+                            view.CustomSort = null;
                         }
-                        else
-                        {
-                            // Reapply the active category filter to maintain persistence
-                            ReapplyActiveFilters();
-                        }
-                        view.CustomSort = null;
                     }
                     _viewModel.IsSearchActive = false;
                     ShelfListView.Focus();
@@ -327,11 +336,14 @@ namespace FlyShelf
                 }
                 else
                 {
-                    view.Filter = null;
-                    if (ShelfListView != null && ShelfListView.Items.CanFilter) ShelfListView.Items.Filter = null;
-                    if (AltShelfListView != null && AltShelfListView.Items.CanFilter) AltShelfListView.Items.Filter = null;
+                    using (view.DeferRefresh())
+                    {
+                        view.Filter = null;
+                        if (ShelfListView != null && ShelfListView.Items.CanFilter) ShelfListView.Items.Filter = null;
+                        if (AltShelfListView != null && AltShelfListView.Items.CanFilter) AltShelfListView.Items.Filter = null;
+                        view.CustomSort = null;
+                    }
                 }
-                view.CustomSort = null;
                 _viewModel.IsSearchActive = _activeCategoryFilter != null;
             }
             else
@@ -346,7 +358,7 @@ namespace FlyShelf
                     if (obj is FlyShelf.ViewModels.ClipboardItem item)
                     {
                         // 1. Fuzzy match in text content or name (handles typos + word-order)
-                        if (Classes.FuzzyMatcher.IsMatchAny(q, item.RawContent, item.FileName))
+                        if (Classes.FuzzyMatcher.IsMatchAny(q, item.LowerFileName, item.LowerContent, item.FileName, item.RawContent))
                             return true;
 
                         // 2. Check exact extension match (direct property or via FilePath)
@@ -369,8 +381,19 @@ namespace FlyShelf
                     return false;
                 };
 
-                // Apply custom priority sorter with fuzzy scoring
-                view.CustomSort = new SearchResultComparer(q);
+                // Pre-compute scores once instead of scoring per comparison (O(N) vs O(N×log(N)×2))
+                var scoreCache = new Dictionary<ViewModels.ClipboardItem, double>();
+                foreach (var obj in view)
+                {
+                    if (obj is ViewModels.ClipboardItem ci)
+                        scoreCache[ci] = Classes.FuzzyMatcher.ScoreBest(q, ci.LowerFileName, ci.LowerContent, ci.FileName, ci.RawContent);
+                }
+                view.CustomSort = Comparer<object>.Create((a, b) =>
+                {
+                    var sa = a is ViewModels.ClipboardItem ca && scoreCache.TryGetValue(ca, out var va) ? va : 0.0;
+                    var sb = b is ViewModels.ClipboardItem cb && scoreCache.TryGetValue(cb, out var vb) ? vb : 0.0;
+                    return sb.CompareTo(sa);
+                });
             }
 
             // Render newly visible thumbnails immediately
@@ -466,7 +489,7 @@ namespace FlyShelf
             {
                 "Images" => System.Windows.Media.Color.FromRgb(0xF4, 0x72, 0xB6), // #F472B6 pink
                 "Pinned" => System.Windows.Media.Color.FromRgb(0xFB, 0xBF, 0x24), // #FBBF24 amber
-                "PDF"    => System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44), // #EF4444 red
+                "PDF"    => FlyShelf.Helpers.ThemeColors.ErrorRed, // #EF4444 red
                 "Docs"   => System.Windows.Media.Color.FromRgb(0x60, 0xA5, 0xFA), // #60A5FA blue
                 _        => TryFindResource("SystemAccentColor") is System.Windows.Media.Color c ? c : System.Windows.Media.Colors.DodgerBlue
             };
@@ -692,7 +715,7 @@ namespace FlyShelf
                     {
                         if (obj is FlyShelf.ViewModels.ClipboardItem item)
                         {
-                            return Classes.FuzzyMatcher.IsMatchAny(q, item.RawContent, item.FileName);
+                            return Classes.FuzzyMatcher.IsMatchAny(q, item.LowerFileName, item.LowerContent, item.FileName, item.RawContent);
                         }
                         return false;
                     };
@@ -751,22 +774,13 @@ namespace FlyShelf
                         if (source != null)
                         {
                             var hwnd = source.Handle;
-                            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+                            NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0, NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOACTIVATE);
                         }
                     }
                     catch { } // Best-effort: failure is acceptable
                 }, System.Windows.Threading.DispatcherPriority.Loaded);
             }
         }
-
-        // Win32 interop for popup z-order fix
-        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
-        private const uint SWP_NOSIZE = 0x0001;
-        private const uint SWP_NOMOVE = 0x0002;
-        private const uint SWP_NOACTIVATE = 0x0010;
-
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
 
         private void ShortcutsBtn_Click(object sender, RoutedEventArgs e)

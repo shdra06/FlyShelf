@@ -1,0 +1,13 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+    <!-- FlyShelf Type Ramp — standardized font sizes -->
+    <sys:Double x:Key="TypeMicro">9</sys:Double>
+    <sys:Double x:Key="TypeCaption">10</sys:Double>
+    <sys:Double x:Key="TypeSmall">11</sys:Double>
+    <sys:Double x:Key="TypeBody">12</sys:Double>
+    <sys:Double x:Key="TypeSubtitle">13</sys:Double>
+    <sys:Double x:Key="TypeTitle">16</sys:Double>
+    <sys:Double x:Key="TypeHeadline">20</sys:Double>
+    <sys:Double x:Key="TypeDisplay">28</sys:Double>
+</ResourceDictionary>

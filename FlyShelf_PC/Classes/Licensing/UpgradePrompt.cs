@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FlyShelf.Helpers;
 
 
 namespace FlyShelf.Classes
@@ -188,7 +189,7 @@ namespace FlyShelf.Classes
             var dangerBrush = app?.TryFindResource("DangerColor") as Brush ?? new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
 
             // Extract accent color for gradient button
-            Color accentColor = (accentBrush is SolidColorBrush scb) ? scb.Color : Color.FromRgb(0x8B, 0x5C, 0xF6);
+            Color accentColor = (accentBrush is SolidColorBrush scb) ? scb.Color : ThemeColors.VioletAccent;
             Color accentDark = Color.FromRgb(
                 (byte)Math.Max(0, (int)accentColor.R - 30),
                 (byte)Math.Min(255, (int)accentColor.G + 10),
@@ -412,8 +413,8 @@ namespace FlyShelf.Classes
             var warningBrush = app?.TryFindResource("WarningColor") as Brush ?? new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
 
             // Extract accent color for gradients
-            Color accentColor = (accentBrush is SolidColorBrush scb) ? scb.Color : Color.FromRgb(0x8B, 0x5C, 0xF6);
-            Color accentLightColor = (accentLightBrush is SolidColorBrush slb) ? slb.Color : Color.FromRgb(0xA7, 0x8B, 0xFA);
+            Color accentColor = (accentBrush is SolidColorBrush scb) ? scb.Color : ThemeColors.VioletAccent;
+            Color accentLightColor = (accentLightBrush is SolidColorBrush slb) ? slb.Color : ThemeColors.VioletLight;
             Color accentDarkColor = Color.FromRgb(
                 (byte)Math.Max(0, (int)accentColor.R - 40),
                 (byte)Math.Max(0, (int)accentColor.G - 20),

@@ -22,7 +22,7 @@ namespace FlyShelf.Classes
     /// Flow: Discover → Handshake → Confirm tick → Talk direct. URLs persist in Firebase as a "phone book".
     /// All text/files flow device-to-device via LAN or Cloudflare. 5s heartbeat.
     /// </summary>
-    public partial class PeerManager
+    public partial class PeerManager : IDisposable
     {
         public static PeerManager? Instance { get; private set; }
 
@@ -651,5 +651,23 @@ namespace FlyShelf.Classes
         }
 
         // ═══ Handshake, WebSocket & Cleanup moved to PeerManager.Connection.cs ═══
+
+        // ═══ IDisposable ═══
+        // AUDIT: Deterministic cleanup of _cts. Static _sharedHandler/_sharedClient are
+        // app-lifetime singletons and intentionally NOT disposed here.
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            try { _cts.Cancel(); } catch { }
+            try { _cts.Dispose(); } catch { }
+            _peers.Clear();
+            if (Instance == this) Instance = null;
+
+            GC.SuppressFinalize(this);
+        }
     }
 }

@@ -24,15 +24,24 @@ namespace FlyShelf
             try
             {
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
-            var checkedPdfs = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.IsPdfPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
-                .ToList();
-            var checkedDocs = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.IsDocPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
-                .ToList();
-            var checkedImages = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
-                .ToList();
+            // PERF: Single-pass categorization — avoids 3 separate LINQ chains each calling File.Exists (3N → N I/O calls)
+            // File.Exists moved off UI thread to avoid blocking clicks
+            var itemsSnapshot = _viewModel.DroppedItems.ToList();
+            var (checkedPdfs, checkedDocs, checkedImages) = await System.Threading.Tasks.Task.Run(() =>
+            {
+                var pdfs = new List<ClipboardItem>();
+                var docs = new List<ClipboardItem>();
+                var images = new List<ClipboardItem>();
+                foreach (var i in itemsSnapshot)
+                {
+                    if (!i.IsCheckedForMerge || string.IsNullOrEmpty(i.FilePath) || !System.IO.File.Exists(i.FilePath))
+                        continue;
+                    if (i.IsPdfPreview) pdfs.Add(i);
+                    else if (i.IsDocPreview) docs.Add(i);
+                    else if (i.ItemType == ClipboardItemType.Image) images.Add(i);
+                }
+                return (pdfs, docs, images);
+            });
 
             var convertedPdfPaths = new List<string>();
 
@@ -104,7 +113,7 @@ namespace FlyShelf
                     App.ActiveMergeWindow = null;
                     try
                     {
-                        if (!_isClosed && this.IsLoaded)
+                        if (!_isClosed && this.IsLoaded && _isCurrentlySummoned)
                         {
                             this.Show();
                             this.Activate();
@@ -241,17 +250,26 @@ namespace FlyShelf
             }
         }
 
-        private void UpdatePdfMergeToolbar()
+        private async void UpdatePdfMergeToolbar()
         {
-            var checkedPdfs = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.IsPdfPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
-                .ToList();
-            var checkedDocs = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.IsDocPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
-                .ToList();
-            var checkedImages = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
-                .ToList();
+            // PERF: Single-pass categorization — avoids 3 separate LINQ chains each calling File.Exists (3N → N I/O calls)
+            // File.Exists moved off UI thread to avoid blocking clicks
+            var itemsSnapshot = _viewModel.DroppedItems.ToList();
+            var (checkedPdfs, checkedDocs, checkedImages) = await System.Threading.Tasks.Task.Run(() =>
+            {
+                var pdfs = new List<ClipboardItem>();
+                var docs = new List<ClipboardItem>();
+                var images = new List<ClipboardItem>();
+                foreach (var i in itemsSnapshot)
+                {
+                    if (!i.IsCheckedForMerge || string.IsNullOrEmpty(i.FilePath) || !System.IO.File.Exists(i.FilePath))
+                        continue;
+                    if (i.IsPdfPreview) pdfs.Add(i);
+                    else if (i.IsDocPreview) docs.Add(i);
+                    else if (i.ItemType == ClipboardItemType.Image) images.Add(i);
+                }
+                return (pdfs, docs, images);
+            });
 
             int totalChecked = checkedPdfs.Count + checkedDocs.Count + checkedImages.Count;
 
@@ -345,11 +363,13 @@ namespace FlyShelf
                 if (clipItem == null || string.IsNullOrEmpty(clipItem.RawContent)) return;
 
                 string query = Uri.EscapeDataString(clipItem.RawContent);
+                _ = System.Threading.Tasks.Task.Run(() => { try {
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = $"https://www.google.com/search?q={query}",
                     UseShellExecute = true
                 });
+                } catch { } });
             }
             catch (Exception ex)
             {
@@ -482,7 +502,7 @@ $word.Quit()
                     _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
 
                     // Open containing folder with the file selected
-                    System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{outputPath}\"");
+                    _ = System.Threading.Tasks.Task.Run(() => { try { System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{outputPath}\""); } catch { } });
                     FlyShelf.Windows.ToastWindow.ShowToast($"✅ Converted: {System.IO.Path.GetFileName(outputPath)}");
                 }
                 else
@@ -1205,6 +1225,7 @@ $word.Quit()
                 string outputDir = System.IO.Path.Combine(dir, $"{baseName}_images");
                 System.IO.Directory.CreateDirectory(outputDir);
 
+                // [FIX BTN-20]: Offload byte I/O to background thread, yield UI between pages
                 var storageFile = await global::Windows.Storage.StorageFile.GetFileFromPathAsync(item.FilePath);
                 var pdfDoc = await global::Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(storageFile);
 
@@ -1221,14 +1242,22 @@ $word.Quit()
                             await page.RenderToStreamAsync(stream, options);
                             stream.Seek(0);
 
-                            // Read bytes from WinRT stream and write to file
-                            var reader = new global::Windows.Storage.Streams.DataReader(stream.GetInputStreamAt(0));
+                            // Move byte reading and file writing off the UI thread
                             uint size = (uint)stream.Size;
+                            var reader = new global::Windows.Storage.Streams.DataReader(stream.GetInputStreamAt(0));
                             await reader.LoadAsync(size);
                             var buffer = new byte[size];
                             reader.ReadBytes(buffer);
                             await System.Threading.Tasks.Task.Run(() => System.IO.File.WriteAllBytes(pngPath, buffer));
                         }
+                    }
+
+                    // Yield to UI thread periodically so the app stays responsive
+                    if ((i + 1) % 5 == 0)
+                    {
+                        await Dispatcher.InvokeAsync(() =>
+                            FlyShelf.Windows.ToastWindow.ShowToast($"📝 Exported {i + 1}/{total} pages..."),
+                            System.Windows.Threading.DispatcherPriority.Background);
                     }
                 }
 
@@ -1303,7 +1332,7 @@ $word.Quit()
                     // Also copy to clipboard
                     Dispatcher.InvokeAsync(() =>
                     {
-                        try { System.Windows.Clipboard.SetText(text); } catch { }
+                        try { ClipboardHelper.SafeSetText(text); } catch { }
                         FlyShelf.Windows.ToastWindow.ShowToast($"📝 Text extracted ({text.Length} chars) and copied to clipboard");
                         _viewModel.HandleDrop(new System.Windows.DataObject(System.Windows.DataFormats.FileDrop, new[] { txtPath }), true);
                     });

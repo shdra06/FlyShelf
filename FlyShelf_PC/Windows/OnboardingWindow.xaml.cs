@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Collections.Generic;
+using FlyShelf.Helpers;
 
 namespace FlyShelf.Windows
 {
@@ -31,7 +32,7 @@ namespace FlyShelf.Windows
             {
                 _stepPanels[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
                 _dots[i].Fill = i <= index
-                    ? new SolidColorBrush(Color.FromRgb(99, 102, 241))  // #6366F1
+                    ? new SolidColorBrush(ThemeColors.IndigoAccent)  // #6366F1
                     : new SolidColorBrush(Color.FromRgb(55, 65, 81));   // #374151
                 _dots[i].Width = i == index ? 10 : 6;
                 _dots[i].Height = i == index ? 10 : 6;
@@ -86,7 +87,7 @@ namespace FlyShelf.Windows
                         : Color.FromRgb(217, 119, 6),  // amber
                     mode == "mica"
                         ? Color.FromRgb(124, 58, 237)  // purple
-                        : Color.FromRgb(245, 158, 11), // amber-light
+                        : ThemeColors.WarningAmber, // amber-light
                     new Point(0, 0), new Point(1, 1));
                 var inactiveBrush = new SolidColorBrush(Color.FromRgb(42, 45, 63)); // #2A2D3E
 

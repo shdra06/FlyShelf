@@ -305,7 +305,7 @@ namespace FlyShelf.Classes
                         _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                         
                         // Persist history so the synced assembled chunk file survives app restarts
-                        _viewModel.PersistHistoryPublic();
+                        _viewModel.SchedulePersistHistoryPublic(); // PERF: throttled — network sync is non-critical
                     }
                     catch (Exception ex) { Logger.LogAction("SYNC", $"Failed to add synced chunk to shelf: {ex.Message}"); }
                 });

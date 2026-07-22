@@ -13,7 +13,8 @@ namespace FlyShelf.Classes
 {
     public partial class CloudDiscoveryManager
     {
-        private static readonly HttpClient _client = new HttpClient() { Timeout = TimeSpan.FromSeconds(15) };
+        // AUDIT Task 5: Use shared pool instance instead of per-class HttpClient (prevents socket exhaustion)
+        private static HttpClient _client => HttpClientPool.Default;
         private static string FIREBASE_BASE => FirebaseAuthManager.FirebaseDatabaseUrl;
         
         /// <summary>

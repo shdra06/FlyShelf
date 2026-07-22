@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
+using FlyShelf.Helpers;
 
 namespace FlyShelf.Classes
 {
@@ -47,14 +48,14 @@ namespace FlyShelf.Classes
             {
                 return state switch
                 {
-                    TransferState.Queued => new SolidColorBrush(Color.FromRgb(156, 163, 175)),       // Gray
+                    TransferState.Queued => new SolidColorBrush(ThemeColors.GrayMuted),       // Gray
                     TransferState.Connecting => new SolidColorBrush(Color.FromRgb(96, 165, 250)),     // Blue
                     TransferState.Transferring => new SolidColorBrush(Color.FromRgb(74, 222, 128)),   // Green
                     TransferState.Paused => new SolidColorBrush(Color.FromRgb(251, 191, 36)),         // Amber
                     TransferState.Completed => new SolidColorBrush(Color.FromRgb(34, 197, 94)),       // Green
                     TransferState.Failed => new SolidColorBrush(Color.FromRgb(248, 113, 113)),        // Red
-                    TransferState.Cancelled => new SolidColorBrush(Color.FromRgb(156, 163, 175)),     // Gray
-                    _ => new SolidColorBrush(Color.FromRgb(156, 163, 175))
+                    TransferState.Cancelled => new SolidColorBrush(ThemeColors.GrayMuted),     // Gray
+                    _ => new SolidColorBrush(ThemeColors.GrayMuted)
                 };
             }
             return new SolidColorBrush(Colors.Gray);

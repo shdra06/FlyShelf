@@ -10,12 +10,14 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using FlyShelf.ViewModels;
 using MicaWPF.Controls;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 using Microsoft.Win32;
 using FlyShelf.Classes;
+using FlyShelf.Helpers;
 
 namespace FlyShelf.Windows
 {
@@ -24,20 +26,20 @@ namespace FlyShelf.Windows
     // ═══════════════════════════════════════════════════════════════
     public class DragAdorner : Adorner
     {
-        private readonly VisualBrush _brush;
+        private readonly Brush _brush;
         private readonly Size _size;
         private Point _location;
 
         public DragAdorner(UIElement adornedElement, UIElement draggedElement, Point startPoint) : base(adornedElement)
         {
             _size = new Size(draggedElement.RenderSize.Width, draggedElement.RenderSize.Height);
-            _brush = new VisualBrush(draggedElement)
-            {
-                Opacity = 0.8,
-                Stretch = Stretch.None,
-                AlignmentX = AlignmentX.Left,
-                AlignmentY = AlignmentY.Top
-            };
+            // [FIX ANIM-4]: Capture bitmap once instead of VisualBrush re-rendering every frame
+            var rtb = new RenderTargetBitmap(
+                Math.Max(1, (int)_size.Width), Math.Max(1, (int)_size.Height),
+                96, 96, PixelFormats.Pbgra32);
+            rtb.Render(draggedElement);
+            rtb.Freeze();
+            _brush = new ImageBrush(rtb) { Opacity = 0.8 };
             _location = startPoint;
             IsHitTestVisible = false;
         }
@@ -399,7 +401,7 @@ namespace FlyShelf.Windows
                 if (!item.SetPageRange(rangeText))
                 {
                     textBox.Foreground = TryFindResource("DangerColor") as System.Windows.Media.Brush
-                        ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
+                        ?? new System.Windows.Media.SolidColorBrush(FlyShelf.Helpers.ThemeColors.ErrorRed);
                     textBox.ToolTip = "Invalid range! Use: 1-5, 8, 10-12";
                     return;
                 }
@@ -485,7 +487,7 @@ namespace FlyShelf.Windows
             if (success && File.Exists(outputPath))
             {
                 FlyShelf.Classes.LicenseManager.RecordPdfSave();
-                Application.Current.Dispatcher.Invoke(() =>
+                Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     var dataObj = new DataObject();
                     dataObj.SetData(DataFormats.FileDrop, new string[] { outputPath });
@@ -747,7 +749,7 @@ namespace FlyShelf.Windows
             if (success && File.Exists(outputPath))
             {
                 FlyShelf.Classes.LicenseManager.RecordPdfMerge();
-                Application.Current.Dispatcher.Invoke(() =>
+                Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     var dataObj = new DataObject();
                     dataObj.SetData(DataFormats.FileDrop, new string[] { outputPath });

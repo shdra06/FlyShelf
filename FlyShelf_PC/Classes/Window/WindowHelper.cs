@@ -17,12 +17,6 @@ namespace FlyShelf.Classes
     /// </summary>
     public static class WindowHelper
     {
-        [DllImport("user32.dll")]
-        private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-        [DllImport("user32.dll")]
-        private static extern bool BringWindowToTop(IntPtr hWnd);
-
         /// <summary>
         /// Shows a non-modal window and ensures it appears in the foreground.
         /// Uses the Topmost trick: temporarily set Topmost=true, show, activate, then reset.
@@ -43,7 +37,7 @@ namespace FlyShelf.Classes
                 var hwnd = new WindowInteropHelper(window).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    SetForegroundWindow(hwnd);
+                    NativeMethods.SetForegroundWindow(hwnd);
                 }
             }
             catch { } // Best-effort: failure is acceptable

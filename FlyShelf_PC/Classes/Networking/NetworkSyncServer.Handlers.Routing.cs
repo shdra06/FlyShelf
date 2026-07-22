@@ -157,7 +157,7 @@ namespace FlyShelf.Classes
 
                 if (path == "/" || path == "/index.html")
                 {
-                    ServeHtml(res);
+                    await ServeHtml(res);
                 }
                 else if (path == "/ping")
                 {
@@ -552,15 +552,17 @@ namespace FlyShelf.Classes
                                 mobileDeviceId, mobileDeviceName, mobileIp, 8999, "Mobile");
                         }
 
-                        ServeClipboardData(res);
+                        await ServeClipboardData(res);
                     }
                     else if (path == "/api/events" && req.HttpMethod == "GET")
                     {
                         var tcs = new TaskCompletionSource<string>();
+                        // Fix: CancellationTokenSource ensures cleanup if client disconnects
+                        using var cts = new CancellationTokenSource();
                         lock (_longPollLock) { _longPollWaiters.Add(tcs); }
                         try
                         {
-                            var timeoutTask = Task.Delay(30000);
+                            var timeoutTask = Task.Delay(30000, cts.Token);
                             var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
                             if (completedTask == tcs.Task)
                             {
@@ -568,12 +570,18 @@ namespace FlyShelf.Classes
                                 byte[] data = Encoding.UTF8.GetBytes(payload);
                                 res.StatusCode = 200; res.ContentType = "application/json";
                                 res.ContentLength64 = data.Length;
-                                res.OutputStream.Write(data, 0, data.Length);
+                                await res.OutputStream.WriteAsync(data, 0, data.Length);
                             }
                             else { res.StatusCode = 204; }
                         }
+                        catch (OperationCanceledException) { res.StatusCode = 204; }
                         catch { res.StatusCode = 500; }
-                        finally { lock (_longPollLock) { _longPollWaiters.Remove(tcs); } try { res.Close(); } catch { } /* Best-effort: failure is acceptable */ }
+                        finally
+                        {
+                            cts.Cancel(); // Cancel timeout task if still running
+                            lock (_longPollLock) { _longPollWaiters.Remove(tcs); }
+                            try { res.Close(); } catch { } /* Best-effort: failure is acceptable */
+                        }
                     }
                     else if (path == "/api/events/stream" && req.HttpMethod == "GET")
                     {
@@ -593,6 +601,8 @@ namespace FlyShelf.Classes
                     else if (path == "/api/logs/stream" && req.HttpMethod == "GET") { await ServeLogStream(req, res); }
                     else if (path == "/api/logs" && req.HttpMethod == "GET") { ServeLogsJson(req, res); }
                     else if (path == "/api/logs" && req.HttpMethod == "POST") { await HandleRemoteLogPost(req, res); }
+                    else if (path == "/api/network/dashboard" && req.HttpMethod == "GET") { ServeNetworkDashboard(res); }
+                    else if (path == "/api/speedtest" && req.HttpMethod == "POST") { await HandleSpeedTest(req, res); }
                     else if (path == "/api/notes" && req.HttpMethod == "GET") { ServeNotesData(res); }
                     else if (path == "/api/notes" && req.HttpMethod == "POST") { await HandleNotesUpdate(req, res); }
                     else if (path == "/api/todos" && req.HttpMethod == "GET") { ServeTodosData(res); }

@@ -55,12 +55,7 @@ namespace FlyShelf.Classes
             public double ScrollOffset;// ScrollViewer.VerticalOffset
         }
 
-        // Win32 interop for DWM-level state inspection
-        [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-        [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-        [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
-        [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
-        private const int GWL_STYLE = -16;
+        // Win32 interop for DWM-level state inspection — P/Invoke declarations centralized in NativeMethods.cs
         private const int WS_VISIBLE = 0x10000000;
         private const int DWMWA_CLOAKED = 14;
         private IntPtr _hwnd;
@@ -167,10 +162,10 @@ namespace FlyShelf.Classes
                 // Win32-level state: what DWM actually sees
                 if (_hwnd != IntPtr.Zero)
                 {
-                    int style = GetWindowLong(_hwnd, GWL_STYLE);
+                    int style = NativeMethods.GetWindowLong(_hwnd, NativeMethods.GWL_STYLE);
                     wsVisible = (style & WS_VISIBLE) != 0;
-                    DwmGetWindowAttribute(_hwnd, DWMWA_CLOAKED, out dwmCloaked, sizeof(int));
-                    if (GetWindowRect(_hwnd, out RECT r))
+                    NativeMethods.DwmGetWindowAttribute(_hwnd, DWMWA_CLOAKED, out dwmCloaked, sizeof(int));
+                    if (NativeMethods.GetWindowRect(_hwnd, out NativeMethods.RECT r))
                     {
                         win32Left = r.Left;
                         win32Top = r.Top;

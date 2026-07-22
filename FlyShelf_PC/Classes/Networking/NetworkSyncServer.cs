@@ -17,7 +17,9 @@ using FlyShelf.ViewModels;
 
 namespace FlyShelf.Classes
 {
-    public partial class NetworkSyncServer
+    // AUDIT Task 6: Implement IDisposable to ensure deterministic cleanup of HttpListener,
+    // timers, TLS cert, and CloudflareDaemon resources when server is torn down.
+    public partial class NetworkSyncServer : IDisposable
     {
         public static NetworkSyncServer? Instance { get; private set; }
         private HttpListener _listener;
@@ -29,7 +31,8 @@ namespace FlyShelf.Classes
         private System.Net.Sockets.TcpListener _proxyListener = null;
         private bool _proxyRunning = false;
         private int _proxyInternalPort = 0;
-        private static readonly HttpClient _httpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(30) };
+        // AUDIT Task 5: Use shared pool instance instead of per-class HttpClient (prevents socket exhaustion)
+        private static HttpClient _httpClient => HttpClientPool.Sync;
 
         private static readonly System.Text.RegularExpressions.Regex _rxBase64 = new System.Text.RegularExpressions.Regex(
             @"^[A-Za-z0-9+/=\r\n]+$", System.Text.RegularExpressions.RegexOptions.Compiled);
@@ -151,16 +154,18 @@ namespace FlyShelf.Classes
                 while (_isRunning)
                 {
                     await Task.Delay(20000);
+                    if (!_isRunning) break; // M4: Re-check after delay to avoid write after shutdown
                     byte[] heartbeat = Encoding.UTF8.GetBytes(": heartbeat\n\n");
                     await res.OutputStream.WriteAsync(heartbeat, 0, heartbeat.Length);
                     await res.OutputStream.FlushAsync();
                 }
             }
-            catch { /* Client disconnected */ }
+            catch { /* Client disconnected or server shutting down */ }
             finally
             {
                 _sseClipboardClients.TryRemove(clientId, out _);
                 Logger.LogAction("SSE", $"Clipboard SSE client #{clientId} disconnected ({_sseClipboardClients.Count} remaining)");
+                try { res.Close(); } catch { } // M4: Ensure response stream is always closed
             }
         }
 
@@ -171,7 +176,7 @@ namespace FlyShelf.Classes
         public void NotifyClipboardChanged(string itemType = "clipboard", string title = "")
         {
             // Invalidate the sync cache so the next /api/sync poll returns fresh data
-            _cachedSyncJson = null;
+            _syncCache = null;
 
             var payloadObj = new { type = itemType, title = title, ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
             string payload = System.Text.Json.JsonSerializer.Serialize(payloadObj);
@@ -305,7 +310,11 @@ namespace FlyShelf.Classes
         {
             try
             {
-                string resolved = Path.GetFullPath(requestedPath);
+                // H22: Decode URL-encoded characters (%2e%2e = ..) before normalization
+                string decoded = Uri.UnescapeDataString(requestedPath);
+                // Reject null bytes which can truncate paths in native code
+                if (decoded.Contains('\0')) return false;
+                string resolved = Path.GetFullPath(decoded);
                 foreach (var root in _allowedRoots)
                 {
                     string allowedRoot = Path.GetFullPath(root);
@@ -363,8 +372,9 @@ namespace FlyShelf.Classes
         {
             Instance = this;
             _viewModel = viewModel;
+            // [FIX M-11]: TODO: Store handler and unsubscribe if NetworkSyncServer is ever disposable
             _cfDaemon.GlobalUrlUpdated += (url) => { 
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.RefreshLocalServerData()); 
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => _viewModel.RefreshLocalServerData()); 
                 if (!string.IsNullOrEmpty(url) && url.Contains(".trycloudflare.com", StringComparison.Ordinal))
                 {
                     // Purge Firebase entries with the old dead Cloudflare URL before caching the new one

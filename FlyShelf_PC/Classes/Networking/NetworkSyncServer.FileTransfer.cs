@@ -384,7 +384,7 @@ namespace FlyShelf.Classes
 
         public void InjectReceivedFile(string filePath, string sourceDevice, string transferMethod, string sourceDeviceType = "Mobile", ClipboardItem? placeholder = null)
         {
-            _cachedSyncJson = null; // Invalidate sync cache
+            _syncCache = null; // Invalidate sync cache
             
             System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
             {
@@ -428,7 +428,7 @@ namespace FlyShelf.Classes
 
         public void InjectReceivedGroup(string[] files, string sourceDevice, string transferMethod, string sourceDeviceType = "Mobile", ClipboardItem? placeholder = null)
         {
-            _cachedSyncJson = null; // Invalidate sync cache
+            _syncCache = null; // Invalidate sync cache
             
             System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
             {
@@ -448,8 +448,7 @@ namespace FlyShelf.Classes
                     _viewModel.PruneOldItems();
                     _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
 
-                    // Persist network metadata via debounced JSON save
-                    _viewModel.PersistHistoryPublic();
+                    _viewModel.SchedulePersistHistoryPublic(); // PERF: throttled — network sync is non-critical
 
                     // Set file drop list to clipboard
                     var clipList = new System.Collections.Specialized.StringCollection();
@@ -468,7 +467,7 @@ namespace FlyShelf.Classes
 
         public void InjectReceivedText(string text, string sourceDevice, string transferMethod, string? itemType = null, string sourceDeviceType = "Mobile")
         {
-            _cachedSyncJson = null; // Invalidate sync cache
+            _syncCache = null; // Invalidate sync cache
 
             string capturedText = text;
             string capturedSource = sourceDevice;
@@ -550,8 +549,8 @@ namespace FlyShelf.Classes
                     _viewModel.InsertWithDedup(clip);
                     if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                     
-                    // Persist history so the synced text survives app restarts
-                    _viewModel.PersistHistoryPublic();
+                    // PERF: throttled — network sync is non-critical
+                    _viewModel.SchedulePersistHistoryPublic();
                     
                     // ECHO PREVENTION: Mark this text as cloud-sourced so the clipboard monitor
                     // doesn't re-push it to Firebase when we set the Windows clipboard below.

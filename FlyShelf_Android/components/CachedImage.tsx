@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import * as FileSystem from 'expo-file-system/legacy';
-import { IMAGE_CACHE_BASE } from '../utils/clipTypes';
+import { IMAGE_CACHE_BASE, CONVERTED_BASE } from '../utils/clipTypes';
 import { useAppTheme } from '../hooks/useAppTheme';
 
 const safeHash = (s: string): string => {
@@ -181,5 +181,105 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
     </TouchableOpacity>
   );
 });
+
+/**
+ * Evicts stale/oversized images from the local cache.
+ * - Deletes files older than 7 days
+ * - If still > 500MB, deletes oldest files until under limit
+ * Call this on app startup or periodically.
+ */
+const MAX_CACHE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
+const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+export async function evictImageCache(): Promise<void> {
+  try {
+    const cacheDir = IMAGE_CACHE_BASE;
+    const info = await FileSystem.getInfoAsync(cacheDir);
+    if (!info.exists) return;
+    const files = await FileSystem.readDirectoryAsync(cacheDir);
+
+    const fileInfos: Array<{ name: string; size: number; mtime: number }> = [];
+    for (const f of files) {
+      try {
+        const fi = await FileSystem.getInfoAsync(`${cacheDir}${f}`);
+        if (fi.exists && !(fi as any).isDirectory) {
+          fileInfos.push({ name: f, size: (fi as any).size || 0, mtime: (fi as any).modificationTime || 0 });
+        }
+      } catch {}
+    }
+
+    // Phase 1: Delete files older than 7 days
+    const now = Date.now() / 1000; // modificationTime is in seconds
+    let totalSize = 0;
+    const remaining: typeof fileInfos = [];
+    for (const f of fileInfos) {
+      if (f.mtime > 0 && (now - f.mtime) > MAX_CACHE_AGE_MS / 1000) {
+        await FileSystem.deleteAsync(`${cacheDir}${f.name}`, { idempotent: true }).catch(() => {});
+      } else {
+        remaining.push(f);
+        totalSize += f.size;
+      }
+    }
+
+    // Phase 2: If still over 500MB, delete oldest until under limit
+    if (totalSize > MAX_CACHE_SIZE_BYTES) {
+      const sorted = remaining.sort((a, b) => a.mtime - b.mtime);
+      for (const f of sorted) {
+        if (totalSize <= MAX_CACHE_SIZE_BYTES) break;
+        await FileSystem.deleteAsync(`${cacheDir}${f.name}`, { idempotent: true }).catch(() => {});
+        totalSize -= f.size;
+      }
+    }
+  } catch {}
+}
+
+/**
+ * Evict old converted/merged PDFs from CONVERTED_BASE.
+ * Runs on app startup to prevent unbounded disk growth.
+ * - Deletes files older than 30 days
+ * - If still over 200MB, deletes oldest until under limit
+ */
+const MAX_CONVERTED_SIZE_BYTES = 200 * 1024 * 1024; // 200MB
+const MAX_CONVERTED_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+export async function evictConvertedPdfs(): Promise<void> {
+  try {
+    const convertedDir = CONVERTED_BASE;
+    const info = await FileSystem.getInfoAsync(convertedDir);
+    if (!info.exists) return;
+    const files = await FileSystem.readDirectoryAsync(convertedDir);
+
+    const fileInfos: Array<{ name: string; size: number; mtime: number }> = [];
+    for (const f of files) {
+      try {
+        const fi = await FileSystem.getInfoAsync(`${convertedDir}${f}`);
+        if (fi.exists && !(fi as any).isDirectory) {
+          fileInfos.push({ name: f, size: (fi as any).size || 0, mtime: (fi as any).modificationTime || 0 });
+        }
+      } catch {}
+    }
+
+    const now = Date.now() / 1000;
+    let totalSize = 0;
+    const remaining: typeof fileInfos = [];
+    for (const f of fileInfos) {
+      if (f.mtime > 0 && (now - f.mtime) > MAX_CONVERTED_AGE_MS / 1000) {
+        await FileSystem.deleteAsync(`${convertedDir}${f.name}`, { idempotent: true }).catch(() => {});
+      } else {
+        remaining.push(f);
+        totalSize += f.size;
+      }
+    }
+
+    if (totalSize > MAX_CONVERTED_SIZE_BYTES) {
+      const sorted = remaining.sort((a, b) => a.mtime - b.mtime);
+      for (const f of sorted) {
+        if (totalSize <= MAX_CONVERTED_SIZE_BYTES) break;
+        await FileSystem.deleteAsync(`${convertedDir}${f.name}`, { idempotent: true }).catch(() => {});
+        totalSize -= f.size;
+      }
+    }
+  } catch {}
+}
 
 export default CachedImage;

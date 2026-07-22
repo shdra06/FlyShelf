@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace FlyShelf.Classes
 {
@@ -44,32 +45,20 @@ namespace FlyShelf.Classes
     // TODO ITEM
     // ═══════════════════════════════════════════════════════════
 
-    public class TodoItem : INotifyPropertyChanged
+    public partial class TodoItem : ObservableObject
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
 
+        [ObservableProperty]
         private string _text = "";
-        public string Text
-        {
-            get => _text;
-            set { if (_text != value) { _text = value; OnPropertyChanged(nameof(Text)); } }
-        }
 
+        [ObservableProperty]
         private bool _isDone;
-        public bool IsDone
-        {
-            get => _isDone;
-            set { if (_isDone != value) { _isDone = value; OnPropertyChanged(nameof(IsDone)); } }
-        }
 
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
+        [ObservableProperty]
         private DateTime _lastEdited = DateTime.Now;
-        public DateTime LastEdited
-        {
-            get => _lastEdited;
-            set { if (_lastEdited != value) { _lastEdited = value; OnPropertyChanged(nameof(LastEdited)); } }
-        }
 
         // ── Priority ────────────────────────────────────────────
         private TodoPriority _priority = TodoPriority.None;
@@ -180,10 +169,9 @@ namespace FlyShelf.Classes
                     OnPropertyChanged(nameof(Description));
                     OnPropertyChanged(nameof(HasDescription));
                     // Auto-expand if description gets content; don't auto-collapse (user controls that)
-                    if (!string.IsNullOrWhiteSpace(_description) && !_descriptionVisible)
+                    if (!string.IsNullOrWhiteSpace(_description) && !_isDescriptionVisible)
                     {
-                        _descriptionVisible = true;
-                        OnPropertyChanged(nameof(IsDescriptionVisible));
+                        IsDescriptionVisible = true;
                     }
                 }
             }
@@ -192,12 +180,9 @@ namespace FlyShelf.Classes
         [JsonIgnore] public bool HasDescription => !string.IsNullOrWhiteSpace(_description);
 
         // Controls whether description panel is expanded (separate from whether content exists)
-        private bool _descriptionVisible = false;
-        [JsonIgnore] public bool IsDescriptionVisible
-        {
-            get => _descriptionVisible;
-            set { if (_descriptionVisible != value) { _descriptionVisible = value; OnPropertyChanged(nameof(IsDescriptionVisible)); } }
-        }
+        [ObservableProperty]
+        [property: JsonIgnore]
+        private bool _isDescriptionVisible = false;
 
         // ── Subtasks ────────────────────────────────────────────
         private ObservableCollection<TodoItem> _subTasks = new();
@@ -246,13 +231,9 @@ namespace FlyShelf.Classes
             _ => ""
         };
 
-        // ── Sort Order (for manual drag-reorder) ────────────────
+        // ── Sort Order (for manual drag-reorder) ────────────────────
+        [ObservableProperty]
         private int _sortOrder;
-        public int SortOrder
-        {
-            get => _sortOrder;
-            set { if (_sortOrder != value) { _sortOrder = value; OnPropertyChanged(nameof(SortOrder)); } }
-        }
 
         // ── Device Origin (tracks which device created/edited this item) ──
         public string? CreatedByDevice { get; set; }
@@ -302,8 +283,6 @@ namespace FlyShelf.Classes
         public string CollapseIcon => _isExpanded ? "▾" : "▸";
 
         // ── INotifyPropertyChanged ──────────────────────────────
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
         /// <summary>Refresh all computed display properties (call after bulk updates)</summary>
         public void RefreshDisplayProperties()
@@ -385,16 +364,9 @@ namespace FlyShelf.Classes
         private static int _isDirty = 0;
         private static bool _isLoaded; // TM-3 FIX: Guard against saving before load completes
 
-        // TM-2 FIX: Retry wrapper for transient file-lock conflicts (mirrors ClipboardHistoryManager.RunWithRetry)
+        // [FIX STABLE-1]: Consolidated into FileRetryHelper — tightened from bare catch to IOException/UnauthorizedAccessException only
         private static T RunWithRetry<T>(Func<T> action, int maxAttempts = 3, int delayMs = 50)
-        {
-            for (int i = 0; i < maxAttempts; i++)
-            {
-                try { return action(); }
-                catch when (i < maxAttempts - 1) { System.Threading.Thread.Sleep(delayMs); }
-            }
-            return action(); // Final attempt — let exception propagate
-        }
+            => FileRetryHelper.RunWithRetry(action, maxAttempts, delayMs);
 
         public static ObservableCollection<TodoDay> Days
         {

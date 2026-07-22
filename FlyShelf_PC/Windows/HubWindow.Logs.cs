@@ -239,7 +239,7 @@ namespace FlyShelf.Windows
                     try
                     {
                         string serverUrl = vm.LocalServer.ServerUrl?.TrimEnd('/') ?? "http://localhost:8999";  // CA1866: char overload already used
-                        using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                        var client = HttpClientPool.Quick;
                         var json = System.Text.Json.JsonSerializer.Serialize(logLines);
                         var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
                         content.Headers.Add("X-FlyShelf-Client", "DesktopApp");
@@ -289,23 +289,10 @@ namespace FlyShelf.Windows
 
         private void Window_DragEnter(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop) || 
-                e.Data.GetDataPresent("FileNameW") ||
-                e.Data.GetDataPresent("FileName") ||
-                e.Data.GetDataPresent("text/uri-list") ||
-                e.Data.GetDataPresent("application/vnd.code.tree.workspaceFiles") ||
-                e.Data.GetDataPresent(DataFormats.Bitmap) || 
-                e.Data.GetDataPresent(DataFormats.Dib) ||
-                e.Data.GetDataPresent(DataFormats.UnicodeText) || 
-                e.Data.GetDataPresent(DataFormats.StringFormat) ||
-                e.Data.GetDataPresent(DataFormats.Text))
-            {
-                e.Effects = DragDropEffects.Copy;
-            }
-            else
-            {
-                e.Effects = DragDropEffects.None;
-            }
+            // [FIX DD-1]: Accept all drag formats unconditionally — COM queries can stall 50-135ms.
+            // The drop handler validates format presence anyway.
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
         }
 
         private void Window_PreviewDragOver(object sender, DragEventArgs e)

@@ -124,8 +124,9 @@ namespace FlyShelf.Windows
                                 
                                 try
                                 {
-                                    using var pingClient = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMilliseconds(1000) };
-                                    var resp = await pingClient.GetAsync(checkUrl.TrimEnd('/') + "/api/health").ConfigureAwait(false);
+                                    var pingClient = HttpClientPool.Quick;
+                                    using var pingCts = new System.Threading.CancellationTokenSource(TimeSpan.FromMilliseconds(1000));
+                                    var resp = await pingClient.GetAsync(checkUrl.TrimEnd('/') + "/api/health", pingCts.Token).ConfigureAwait(false);
                                     isLan = resp.IsSuccessStatusCode;
                                 }
                                 catch { isLan = false; }
@@ -214,7 +215,7 @@ namespace FlyShelf.Windows
                     }
                 }
 
-                MessageBox.Show(info, $"Device Info — {device.DeviceName}", MessageBoxButton.OK, MessageBoxImage.Information);
+                Windows.ToastWindow.ShowToast(info, 5000);
                 e.Handled = true;
             }
         }
@@ -272,7 +273,7 @@ namespace FlyShelf.Windows
                     if (int.TryParse(numStr.Trim(), out int idx) && idx >= 1 && idx <= deviceNames.Count)
                         selected.Add(deviceNames[idx - 1]);
                 }
-                if (selected.Count == 0) { MessageBox.Show("No devices selected."); return; }
+                if (selected.Count == 0) { Windows.ToastWindow.ShowToast("No devices selected.", 2000); return; }
 
                 var groupId = $"grp_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
                 await CloudDiscoveryManager.SaveDeviceGroup(groupId, name.Trim(), selected);
@@ -330,14 +331,17 @@ namespace FlyShelf.Windows
 
         private async void DeleteGroupBtn_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is System.Windows.Controls.Button btn && btn.Tag is string groupId)
+            await SafeAsyncHandler.RunAsync(async () =>
             {
-                var result = MessageBox.Show("Delete this group?", "Confirm", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                if (result != MessageBoxResult.Yes) return;
+                if (sender is System.Windows.Controls.Button btn && btn.Tag is string groupId)
+                {
+                    var result = MessageBox.Show("Delete this group?", "Confirm", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    if (result != MessageBoxResult.Yes) return;
 
-                await CloudDiscoveryManager.DeleteDeviceGroup(groupId);
-                RefreshGroups();
-            }
+                    await CloudDiscoveryManager.DeleteDeviceGroup(groupId);
+                    RefreshGroups();
+                }
+            });
         }
 
         /// <summary>
@@ -402,72 +406,78 @@ namespace FlyShelf.Windows
 
         private async void UpdateBtn_Click(object sender, RoutedEventArgs e)
         {
-            string btnContent = UpdateBtn.Content?.ToString() ?? string.Empty;
-
-            if (btnContent.Contains("Restart", StringComparison.Ordinal))
+            await SafeAsyncHandler.RunAsync(async () =>
             {
-                _updateManager.ApplyUpdateAndRestart();
-                return;
-            }
+                string btnContent = UpdateBtn.Content?.ToString() ?? string.Empty;
 
-            if (btnContent.Contains("Retry", StringComparison.Ordinal))
-            {
-                // Retry: re-download + auto-apply
+                if (btnContent.Contains("Restart", StringComparison.Ordinal))
+                {
+                    _updateManager.ApplyUpdateAndRestart();
+                    return;
+                }
+
+                if (btnContent.Contains("Retry", StringComparison.Ordinal))
+                {
+                    // Retry: re-download + auto-apply
+                    UpdateBtn.IsEnabled = false;
+                    UpdateBtn.Content = "Downloading...";
+                    UpdateProgressPanel.Visibility = Visibility.Visible;
+
+                    bool success = await _updateManager.DownloadAndApplyUpdateAsync();
+                    if (success)
+                    {
+                        UpdateBtn.Content = "Restarting...";
+                        UpdateStatusText.Text = "✅ Update downloaded! Restarting now...";
+                        await Task.Delay(1500);
+                        _updateManager.ApplyUpdateAndRestart();
+                    }
+                    else
+                    {
+                        UpdateBtn.Content = "Retry Download";
+                        UpdateBtn.IsEnabled = true;
+                    }
+                    return;
+                }
+
+                // Default: Check for updates (UpdateCheckCompleted event handles the UI)
+                UpdateBtn.Content = "Checking...";
                 UpdateBtn.IsEnabled = false;
-                UpdateBtn.Content = "Downloading...";
                 UpdateProgressPanel.Visibility = Visibility.Visible;
+                ChangelogPanel.Visibility = Visibility.Collapsed;
+                LatestVersionText.Text = "";
 
-                bool success = await _updateManager.DownloadAndApplyUpdateAsync();
+                await _updateManager.CheckForUpdateAsync();
+            });
+        }
+
+        private async void RedownloadBtn_Click(object sender, RoutedEventArgs e)
+        {
+            await SafeAsyncHandler.RunAsync(async () =>
+            {
+                RedownloadBtn.IsEnabled = false;
+                UpdateBtn.IsEnabled = false;
+                UpdateProgressPanel.Visibility = Visibility.Visible;
+                UpdateStatusText.Text = $"Finding v{UpdateManager.CurrentVersion} on GitHub...";
+                UpdatePctText.Text = "";
+
+                bool success = await _updateManager.RedownloadCurrentVersionAsync();
                 if (success)
                 {
+                    RedownloadBtn.IsEnabled = false;
                     UpdateBtn.Content = "Restarting...";
-                    UpdateStatusText.Text = "✅ Update downloaded! Restarting now...";
+                    UpdateStatusText.Text = $"✅ v{UpdateManager.CurrentVersion} re-downloaded! Restarting now...";
+                    UpdatePctText.Text = "100%";
+
                     await Task.Delay(1500);
                     _updateManager.ApplyUpdateAndRestart();
                 }
                 else
                 {
-                    UpdateBtn.Content = "Retry Download";
+                    RedownloadBtn.IsEnabled = true;
                     UpdateBtn.IsEnabled = true;
+                    UpdateStatusText.Text = "❌ Redownload failed — check your internet connection.";
                 }
-                return;
-            }
-
-            // Default: Check for updates (UpdateCheckCompleted event handles the UI)
-            UpdateBtn.Content = "Checking...";
-            UpdateBtn.IsEnabled = false;
-            UpdateProgressPanel.Visibility = Visibility.Visible;
-            ChangelogPanel.Visibility = Visibility.Collapsed;
-            LatestVersionText.Text = "";
-
-            await _updateManager.CheckForUpdateAsync();
-        }
-
-        private async void RedownloadBtn_Click(object sender, RoutedEventArgs e)
-        {
-            RedownloadBtn.IsEnabled = false;
-            UpdateBtn.IsEnabled = false;
-            UpdateProgressPanel.Visibility = Visibility.Visible;
-            UpdateStatusText.Text = $"Finding v{UpdateManager.CurrentVersion} on GitHub...";
-            UpdatePctText.Text = "";
-
-            bool success = await _updateManager.RedownloadCurrentVersionAsync();
-            if (success)
-            {
-                RedownloadBtn.IsEnabled = false;
-                UpdateBtn.Content = "Restarting...";
-                UpdateStatusText.Text = $"✅ v{UpdateManager.CurrentVersion} re-downloaded! Restarting now...";
-                UpdatePctText.Text = "100%";
-
-                await Task.Delay(1500);
-                _updateManager.ApplyUpdateAndRestart();
-            }
-            else
-            {
-                RedownloadBtn.IsEnabled = true;
-                UpdateBtn.IsEnabled = true;
-                UpdateStatusText.Text = "❌ Redownload failed — check your internet connection.";
-            }
+            });
         }
 
     } // end HubWindow class

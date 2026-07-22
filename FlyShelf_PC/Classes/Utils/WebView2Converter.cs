@@ -13,7 +13,7 @@ namespace FlyShelf.Classes
         /// Converts Markdown content to a beautifully formatted PDF using an offscreen Edge WebView2.
         /// Runs entirely on the WPF UI thread but does not block since WebView2 rendering is out-of-process.
         /// </summary>
-        public static async Task<bool> ConvertMarkdownToPdfAsync(string markdownContent, string outputPath)
+        public static async Task<bool> ConvertMarkdownToPdfAsync(string markdownContent, string outputPath, string sourceFilePath = null)
         {
             var tcs = new TaskCompletionSource<bool>();
 
@@ -21,7 +21,7 @@ namespace FlyShelf.Classes
             if (!System.Windows.Application.Current.Dispatcher.CheckAccess())
             {
                 return await System.Windows.Application.Current.Dispatcher.Invoke(async () => 
-                    await ConvertMarkdownToPdfAsync(markdownContent, outputPath)
+                    await ConvertMarkdownToPdfAsync(markdownContent, outputPath, sourceFilePath)
                 );
             }
 
@@ -78,7 +78,9 @@ namespace FlyShelf.Classes
                 };
 
                 // Compile markdown + JS libraries + CSS into styled HTML
-                string html = MarkdownTemplate.GetHtml(markdownContent);
+                string html = string.IsNullOrEmpty(sourceFilePath)
+                    ? MarkdownTemplate.GetHtml(markdownContent)
+                    : MarkdownTemplate.GetHtml(markdownContent, sourceFilePath);
 
                 // Load the HTML content
                 webView.NavigateToString(html);
@@ -103,14 +105,12 @@ namespace FlyShelf.Classes
                 printSettings.Orientation = CoreWebView2PrintOrientation.Portrait;
                 printSettings.PageWidth = 8.27;  // A4 Width in inches
                 printSettings.PageHeight = 11.69; // A4 Height in inches
-                printSettings.MarginTop = 0.78;   // 20mm margin
-                printSettings.MarginBottom = 0.78;
-                printSettings.MarginLeft = 0.59;  // 15mm margin
-                printSettings.MarginRight = 0.59;
+                printSettings.MarginTop = 0.39;   // 10mm margin (was 20mm — too much white space)
+                printSettings.MarginBottom = 0.39; // 10mm
+                printSettings.MarginLeft = 0.31;   // 8mm margin (was 15mm)
+                printSettings.MarginRight = 0.31;  // 8mm
                 printSettings.ShouldPrintBackgrounds = true; // Required for colored code blocks & table rows
-                printSettings.ShouldPrintHeaderAndFooter = true;
-                printSettings.HeaderTitle = ""; // Empty string suppresses header title
-                printSettings.FooterUri = ""; // Empty string suppresses footer URL (avoids showing path)
+                printSettings.ShouldPrintHeaderAndFooter = false; // No header/footer — saves vertical space
 
                 // Print the rendered webpage to PDF
                 await webView.CoreWebView2.PrintToPdfAsync(outputPath, printSettings);

@@ -1,5 +1,5 @@
 // PdfPageEditor — Modal component for selecting, reordering, and extracting PDF pages
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, Modal, TouchableOpacity, ScrollView, ActivityIndicator,
   ToastAndroid, Platform, StyleSheet, Alert, TextInput,
@@ -8,6 +8,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { getPdfPageInfo, extractPages } from '../utils/pdfUtils';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAppTheme } from '../hooks/useAppTheme';
 
 interface PdfPageEditorProps {
   visible: boolean;
@@ -19,6 +20,7 @@ interface PdfPageEditorProps {
 }
 
 export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outputDir, onSaved }: PdfPageEditorProps) {
+  const { colors } = useAppTheme();
   const [loading, setLoading] = useState(true);
   const [pageCount, setPageCount] = useState(0);
   const [selectedPages, setSelectedPages] = useState<number[]>([]);  // 1-indexed, in order
@@ -27,6 +29,16 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
   // Android page-range input modal (Alert.prompt is iOS-only)
   const [pageInputVisible, setPageInputVisible] = useState(false);
   const [pageInputValue, setPageInputValue] = useState('');
+  // Cache PDF bytes to avoid double-loading (info + save)
+  const cachedBytesRef = useRef<Uint8Array | null>(null);
+
+  // O(1) lookup structures derived from selectedPages
+  const selectedSet = useMemo(() => new Set(selectedPages), [selectedPages]);
+  const selectedOrderMap = useMemo(() => {
+    const map = new Map<number, number>();
+    selectedPages.forEach((p, i) => map.set(p, i));
+    return map;
+  }, [selectedPages]);
 
   useEffect(() => {
     if (visible && pdfUri) {
@@ -44,6 +56,8 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
     try {
       const info = await getPdfPageInfo(pdfUri);
       setPageCount(info.pageCount);
+      // Cache bytes so extractPages doesn't re-load the entire PDF
+      cachedBytesRef.current = info.cachedBytes;
       // Select all pages by default
       setSelectedPages(Array.from({ length: info.pageCount }, (_, i) => i + 1));
     } catch (err: any) {
@@ -105,10 +119,11 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
       const outputName = `${baseName}_${suffix}_${Date.now()}.pdf`;
       const outputPath = `${outputDir}${outputName}`;
 
-      await extractPages(pdfUri, selectedPages, outputPath);
+      // Pass cached bytes to avoid re-loading the entire PDF
+      await extractPages(pdfUri, selectedPages, outputPath, cachedBytesRef.current || undefined);
 
       if (Platform.OS === 'android') {
-        ToastAndroid.show(`✅ Saved: ${outputName}`, ToastAndroid.LONG);
+        ToastAndroid.show(`\u2705 Saved: ${outputName}`, ToastAndroid.LONG);
       }
 
       if (onSaved) {
@@ -124,6 +139,8 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
         });
       } catch {}
 
+      // Release cached bytes
+      cachedBytesRef.current = null;
       onClose();
     } catch (err: any) {
       Alert.alert('Save Error', err.message || 'Failed to save PDF');
@@ -134,25 +151,26 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
 
   const renderPageGrid = () => {
     const pages: React.ReactNode[] = [];
-    const cols = 5;
     for (let i = 1; i <= pageCount; i++) {
-      const isSelected = selectedPages.includes(i);
-      const orderIdx = selectedPages.indexOf(i);
+      // O(1) lookups via Set and Map instead of O(n) array.includes/indexOf
+      const isSelected = selectedSet.has(i);
+      const orderIdx = selectedOrderMap.get(i) ?? -1;
       pages.push(
         <TouchableOpacity
           key={i}
           onPress={() => togglePage(i)}
           style={[
             s.pageCell,
-            isSelected && s.pageCellSelected,
+            { backgroundColor: colors.bg.elevated, borderColor: isSelected ? colors.accent.primary : colors.border.subtle },
+            isSelected && { backgroundColor: colors.accent.primary + '22' },
           ]}
           activeOpacity={0.6}
           accessibilityLabel={`Page ${i}${isSelected ? `, selected, order ${orderIdx + 1}` : ''}`}
           accessibilityRole="checkbox"
         >
-          <Text style={[s.pageNum, isSelected && s.pageNumSelected]}>{i}</Text>
+          <Text style={[s.pageNum, { color: isSelected ? colors.accent.primary : colors.text.secondary }]}>{i}</Text>
           {isSelected && (
-            <View style={s.checkBadge}>
+            <View style={[s.checkBadge, { backgroundColor: colors.accent.primary }]}>
               <Text style={s.checkBadgeText}>{orderIdx + 1}</Text>
             </View>
           )}

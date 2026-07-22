@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network Security Config for FlyShelf Android.
+  Restricts cleartext HTTP to private/LAN IP ranges only.
+  All other domains require HTTPS.
+-->
+<network-security-config>
+  <!-- Allow cleartext only for private/LAN IP ranges (PC sync) -->
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="true">10.0.0.0</domain>
+    <domain includeSubdomains="true">172.16.0.0</domain>
+    <domain includeSubdomains="true">192.168.0.0</domain>
+    <domain includeSubdomains="true">localhost</domain>
+    <!-- Android emulator host IP -->
+    <domain includeSubdomains="true">10.0.2.2</domain>
+  </domain-config>
+
+  <!-- Default: require HTTPS for everything else -->
+  <base-config cleartextTrafficPermitted="false">
+    <trust-anchors>
+      <certificates src="system"/>
+    </trust-anchors>
+  </base-config>
+</network-security-config>

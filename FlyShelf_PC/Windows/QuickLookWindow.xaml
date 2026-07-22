@@ -139,7 +139,7 @@
                     </StackPanel>
                 </Grid>
 
-                <Grid Grid.Row="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}">
+                <Grid Grid.Row="1" Background="#20000000">
                     <ProgressBar IsIndeterminate="True" x:Name="LoadingProgress" VerticalAlignment="Top" Height="3" Background="Transparent" Foreground="{DynamicResource ThemeAccentLight}" BorderThickness="0" Visibility="Collapsed" Panel.ZIndex="10" />
                     <!-- Image Mode Grid -->
                     <Grid x:Name="ImageModeGrid" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
@@ -157,7 +157,7 @@
 
                         <!-- Doodle Toolbar (floating at bottom, visible only in doodle mode) -->
                         <Border x:Name="DoodleToolbar" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center"
-                                Margin="0,0,0,10" Padding="8,5" CornerRadius="10"
+                                Margin="0,0,0,10" Padding="8,5" CornerRadius="12"
                                 Background="#E0181825" BorderBrush="#40A78BFA" BorderThickness="1">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <!-- Color presets -->
@@ -174,7 +174,7 @@
                                         BorderThickness="1" BorderBrush="Transparent" MouseLeftButtonDown="DoodleColorPick_Click" Tag="#3B82F6"/>
 
                                 <!-- Color palette toggle -->
-                                <Border x:Name="DoodlePaletteBtn" Width="20" Height="20" CornerRadius="10" Cursor="Hand"
+                                <Border x:Name="DoodlePaletteBtn" Width="20" Height="20" CornerRadius="12" Cursor="Hand"
                                         Margin="0,0,8,0" ToolTip="More colors"
                                         MouseLeftButtonDown="DoodlePalette_Click">
                                     <Border.Background>
@@ -192,14 +192,14 @@
                                 <Popup x:Name="DoodlePalettePopup" Placement="Top" StaysOpen="False"
                                        PlacementTarget="{Binding ElementName=DoodlePaletteBtn}" AllowsTransparency="True"
                                        VerticalOffset="-6" HorizontalOffset="-60">
-                                    <Border CornerRadius="10" Padding="10" Background="#F0181825" BorderBrush="#40A78BFA" BorderThickness="1">
+                                    <Border CornerRadius="12" Padding="10" Background="#F0181825" BorderBrush="#40A78BFA" BorderThickness="1">
                                         <Border.Effect>
                                             <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.4" Color="Black"/>
                                         </Border.Effect>
                                         <StackPanel>
                                             <TextBlock Text="Color Palette" Foreground="#94A3B8" FontSize="10" FontWeight="SemiBold" Margin="2,0,0,6"/>
                                             <UniformGrid x:Name="DoodlePaletteGrid" Columns="7"/>
-                                            <Border Margin="0,6,0,0" CornerRadius="6" Padding="6,4" Cursor="Hand"
+                                            <Border Margin="0,6,0,0" CornerRadius="8" Padding="6,4" Cursor="Hand"
                                                     Background="#18A78BFA" BorderBrush="#30A78BFA" BorderThickness="1"
                                                     MouseLeftButtonDown="DoodleCustomColor_Click" ToolTip="Custom color picker">
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -224,7 +224,7 @@
                                 <Border Width="1" Height="18" Background="#30FFFFFF" Margin="0,0,8,0"/>
 
                                 <!-- Eraser toggle -->
-                                <Border x:Name="DoodleEraserBtn" CornerRadius="6" Padding="6,3" Cursor="Hand"
+                                <Border x:Name="DoodleEraserBtn" CornerRadius="8" Padding="6,3" Cursor="Hand"
                                         Background="Transparent" BorderBrush="#30FFFFFF" BorderThickness="1"
                                         MouseLeftButtonDown="DoodleEraser_Click" ToolTip="Eraser (click strokes to erase)">
                                     <StackPanel Orientation="Horizontal">
@@ -234,7 +234,7 @@
                                 </Border>
 
                                 <!-- Clear all -->
-                                <Border CornerRadius="6" Padding="6,3" Margin="4,0,0,0" Cursor="Hand"
+                                <Border CornerRadius="8" Padding="6,3" Margin="4,0,0,0" Cursor="Hand"
                                         Background="#18EF4444" BorderBrush="#30EF4444" BorderThickness="1"
                                         MouseLeftButtonDown="DoodleClearAll_Click" ToolTip="Clear all strokes">
                                     <ui:SymbolIcon Symbol="Delete24" Foreground="#EF4444" FontSize="12" VerticalAlignment="Center"/>

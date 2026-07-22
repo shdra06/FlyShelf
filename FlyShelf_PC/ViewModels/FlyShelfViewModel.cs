@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
@@ -17,7 +18,16 @@ namespace FlyShelf.ViewModels
 {
     public partial class FlyShelfViewModel : INotifyPropertyChanged
     {
+        // ═══ Named Constants (extracted from magic numbers) ═══
+        private const int MaxRawContentPreviewLength = 5000;
+        private const int InitialBatchSize = 40;
+        private const int StreamingChunkSize = 50;
+        private const int StreamingChunkDelayMs = 50;
+        private const int VisibleViewportCount = 12;
+        private const int MaxStartupImageDecodes = 5;
+
         public BulkObservableCollection<ClipboardItem> DroppedItems { get; } = new BulkObservableCollection<ClipboardItem>();
+        private readonly object _droppedItemsLock = new object();
         // Limit parallel image/icon decodes to prevent memory spikes on bulk file copies
         private static readonly System.Threading.SemaphoreSlim _iconDecodeSemaphore = new System.Threading.SemaphoreSlim(2, 2);
 
@@ -117,7 +127,7 @@ namespace FlyShelf.ViewModels
                             continue;
 
                         if (string.IsNullOrWhiteSpace(item.FileName) && !string.IsNullOrWhiteSpace(item.RawContent))
-                            item.FileName = item.RawContent.Length > 5000 ? string.Concat(item.RawContent.AsSpan(0, 5000), "...") : item.RawContent;
+                            item.FileName = item.RawContent.Length > MaxRawContentPreviewLength ? string.Concat(item.RawContent.AsSpan(0, MaxRawContentPreviewLength), "...") : item.RawContent;
 
                         item.EvaluateSmartActions();
 
@@ -153,23 +163,22 @@ namespace FlyShelf.ViewModels
 
                 if (sortedItems.Count > 0)
                 {
-                    // PERF: Load the first 40 items synchronously to make startup summon instantaneous
-                    var initialBatch = sortedItems.Take(40).ToList();
+                    // PERF: Load the first batch synchronously to make startup summon instantaneous
+                    var initialBatch = sortedItems.Take(InitialBatchSize).ToList();
                     var vmDispatcher2 = Application.Current?.Dispatcher;
                     if (vmDispatcher2 != null)
                         await vmDispatcher2.InvokeAsync(() => DroppedItems.AddRange(initialBatch));
 
                     // Stream the remaining items in background chunks to keep UI 100% responsive
-                    var remainingItems = sortedItems.Skip(40).ToList();
+                    var remainingItems = sortedItems.Skip(InitialBatchSize).ToList();
                     if (remainingItems.Count > 0)
                     {
                         _ = System.Threading.Tasks.Task.Run(async () =>
                         {
-                            const int chunkSize = 50;
-                            for (int i = 0; i < remainingItems.Count; i += chunkSize)
+                            for (int i = 0; i < remainingItems.Count; i += StreamingChunkSize)
                             {
-                                var chunk = remainingItems.Skip(i).Take(chunkSize).ToList();
-                                await System.Threading.Tasks.Task.Delay(50); // Yield UI thread budget
+                                var chunk = remainingItems.Skip(i).Take(StreamingChunkSize).ToList();
+                                await System.Threading.Tasks.Task.Delay(StreamingChunkDelayMs); // Yield UI thread budget
                                 var vmDispatcher3 = Application.Current?.Dispatcher;
                                 if (vmDispatcher3 != null)
                                     await vmDispatcher3.InvokeAsync(() => DroppedItems.AddRange(chunk));
@@ -187,7 +196,7 @@ namespace FlyShelf.ViewModels
 
                 // Only decode icons for the first ~12 items (visible viewport) at startup,
                 // but keep image/QR thumbnails capped at the top 5 to keep RAM extremely low.
-                var visibleBatch = sortedItems.Take(12).ToList();
+                var visibleBatch = sortedItems.Take(VisibleViewportCount).ToList();
                 int startupImageCount = 0;
                 foreach (var item in visibleBatch)
                 {
@@ -198,7 +207,7 @@ namespace FlyShelf.ViewModels
                     if (needsIcon)
                     {
                         startupImageCount++;
-                        if (startupImageCount > 5)
+                        if (startupImageCount > MaxStartupImageDecodes)
                         {
                             // Cap image decoding to the top 5 at startup to ensure RAM stays under 50 MB
                             continue;
@@ -271,7 +280,11 @@ namespace FlyShelf.ViewModels
         /// </summary>
         private void PersistHistory()
         {
-            var fullHistory = DroppedItems.ToList();
+            List<ClipboardItem> fullHistory;
+            lock (_droppedItemsLock)
+            {
+                fullHistory = DroppedItems.ToList();
+            }
             Classes.ClipboardHistoryManager.SaveHistoryDebounced(fullHistory);
         }
 
@@ -296,7 +309,7 @@ namespace FlyShelf.ViewModels
                 _persistThrottleTimer?.Dispose();
                 _persistThrottleTimer = new System.Threading.Timer(_ =>
                 {
-                    _persistScheduled = false;
+                    lock (_persistLock) { _persistScheduled = false; }
                     try
                     {
                         // Take snapshot on dispatcher, then save off-thread
@@ -313,9 +326,17 @@ namespace FlyShelf.ViewModels
         }
 
         /// <summary>
-        /// Public wrapper for PersistHistory — used by MainWindow for bulk operations.
+        /// Public wrapper for PersistHistory — used by MainWindow for CRITICAL paths only
+        /// (app shutdown, clear-all, explicit save). Non-critical callers should use
+        /// SchedulePersistHistoryPublic() to benefit from 2-second throttle/coalescing.
         /// </summary>
         public void PersistHistoryPublic() => PersistHistory();
+
+        /// <summary>
+        /// PERF: Public throttled persist — coalesces rapid persist requests (e.g. network sync,
+        /// drag reorder, settings changes) into a single write after a 2-second cooldown.
+        /// </summary>
+        public void SchedulePersistHistoryPublic() => SchedulePersistHistory();
 
         /// <summary>
         /// Returns true if the item has no displayable content (no text, no file, no image).
@@ -342,14 +363,15 @@ namespace FlyShelf.ViewModels
             if (!string.IsNullOrEmpty(item.FilePath))
                 return "F:" + item.FilePath;
             if (!string.IsNullOrEmpty(item.RawContent))
-                return "T:" + item.RawContent;
+                return "T:" + (item.RawContent.Length > 500 ? item.RawContent[..500] + ":" + item.RawContent.Length : item.RawContent);
             if (!string.IsNullOrEmpty(item.FileName))
                 return "N:" + item.FileName;
             return string.Empty;
         }
 
         // Pre-compiled regex patterns for text classification — avoids recompilation on every clipboard event
-        private static readonly Regex _rxCode = new Regex(@"(#include\s*[<""]|<iostream>|<stdio\.h>|<stdlib\.h>|<string\.h>|<cstdlib>|<vector>|<map>|<algorithm>|std::|printf\s*\(|scanf\s*\(|malloc\s*\(|free\s*\(|sizeof\s*\(|typedef\s|struct\s+\w+|enum\s+\w+|public\s+class\s|private\s+(void|int|string|static)|protected\s|int\s+main\s*\(|void\s+main\s*\(|using\s+namespace\s|#define\s|#ifdef|#ifndef|#pragma|template\s*<|namespace\s+\w+|def\s+\w+\s*\(|class\s+\w+\s*[(:]\s|import\s+(os|sys|json|re|math|numpy|pandas|flask|django|requests|typing|collections|pathlib|subprocess|asyncio|datetime)|from\s+\w+\s+import|if\s+__name__\s*==|print\s*\(|lambda\s|self\.|__init__|@(staticmethod|classmethod|property|override|Deprecated)|public\s+static\s+(void|int)|System\.(out|in|err)\.|new\s+\w+\s*[(<\[]|throws\s|implements\s|extends\s|interface\s+\w+|abstract\s+class|Console\.\w+|=>\s*\{|=>\s*[^;]+;|\{""|var\s+\w+\s*=|let\s+\w+\s*=|const\s+\w+\s*=|<\/?(html|div|span|script|style|body|head|table|form)|function\s+\w+\s*\(|console\.(log|error|warn)\(|require\s*\(|module\.exports|export\s+(default|const|function|class)|async\s+function|await\s|try\s*\{|catch\s*\(|switch\s*\(|for\s*\(.*;\s*.*;\s*|while\s*\(|SELECT\s+.*\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|CREATE\s+TABLE)", RegexOptions.Compiled);
+        // [FIX M-52]: Added 1-second timeout to prevent catastrophic NFA backtracking with ~60 alternatives
+        private static readonly Regex _rxCode = new Regex(@"(#include\s*[<""]|<iostream>|<stdio\.h>|<stdlib\.h>|<string\.h>|<cstdlib>|<vector>|<map>|<algorithm>|std::|printf\s*\(|scanf\s*\(|malloc\s*\(|free\s*\(|sizeof\s*\(|typedef\s|struct\s+\w+|enum\s+\w+|public\s+class\s|private\s+(void|int|string|static)|protected\s|int\s+main\s*\(|void\s+main\s*\(|using\s+namespace\s|#define\s|#ifdef|#ifndef|#pragma|template\s*<|namespace\s+\w+|def\s+\w+\s*\(|class\s+\w+\s*[(:]\s|import\s+(os|sys|json|re|math|numpy|pandas|flask|django|requests|typing|collections|pathlib|subprocess|asyncio|datetime)|from\s+\w+\s+import|if\s+__name__\s*==|print\s*\(|lambda\s|self\.|__init__|@(staticmethod|classmethod|property|override|Deprecated)|public\s+static\s+(void|int)|System\.(out|in|err)\.|new\s+\w+\s*[(<\[]|throws\s|implements\s|extends\s|interface\s+\w+|abstract\s+class|Console\.\w+|=>\s*\{|=>\s*[^;]+;|\{""|var\s+\w+\s*=|let\s+\w+\s*=|const\s+\w+\s*=|<\/?(html|div|span|script|style|body|head|table|form)|function\s+\w+\s*\(|console\.(log|error|warn)\(|require\s*\(|module\.exports|export\s+(default|const|function|class)|async\s+function|await\s|try\s*\{|catch\s*\(|switch\s*\(|for\s*\(.*;\s*.*;\s*|while\s*\(|SELECT\s+.*\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|CREATE\s+TABLE)", RegexOptions.Compiled, TimeSpan.FromSeconds(1));
         private static readonly Regex _rxUtmClean = new Regex(@"(?<=&|\?)(utm_source|utm_medium|utm_campaign|utm_term|utm_content|gclid|fbclid|_gl|msclkid|mc_eid|ig_shid)=[^&]*&?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex _rxCpp = new Regex(@"(cout|cin|endl|cerr)\s*<<", RegexOptions.Compiled);
         private static readonly Regex _rxC = new Regex(@"\b(printf|scanf|malloc|free|sizeof|typedef|struct\s+\w+)\s*[\(;]", RegexOptions.Compiled);
@@ -360,7 +382,7 @@ namespace FlyShelf.ViewModels
         private static readonly Regex _rxSql = new Regex(@"(SELECT\s+.*\s+FROM|INSERT\s+INTO|CREATE\s+(TABLE|DATABASE)|ALTER\s+TABLE|WHERE\s+\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex _rxHtml = new Regex(@"<\/?(html|div|span|body|script|style|form|table)[\s>]", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex _rxSlashTimer = new Regex(@"^\/\d+$", RegexOptions.Compiled);
-        private static readonly Regex _rxFunction = new Regex(@"\b(void|int|string|double|float|bool|var|let|const)?\s*\w+\s*\([^)]*\)\s*({|;|=>)");
+        private static readonly Regex _rxFunction = new Regex(@"\b(void|int|string|double|float|bool|var|let|const)?\s*\w+\s*\([^)]*\)\s*({|;|=>)", RegexOptions.Compiled);
 
         private int _currentMode = 0; // 0=Mini, 1=Medium, 2=Full
         public int CurrentMode
@@ -441,6 +463,11 @@ namespace FlyShelf.ViewModels
 
         public FlyShelfViewModel()
         {
+            // Enable cross-thread access to DroppedItems with lock-based synchronization.
+            // Prevents InvalidOperationException when background threads (PersistHistory, network)
+            // enumerate while the UI thread modifies the collection.
+            BindingOperations.EnableCollectionSynchronization(DroppedItems, _droppedItemsLock);
+
             ClearCommand = new RelayCommand(ClearShelf);
             RemoveItemCommand = new RelayCommand<ClipboardItem>(RemoveItem);
             OpenItemCommand = new RelayCommand<ClipboardItem>(OpenItem);
@@ -624,7 +651,7 @@ namespace FlyShelf.ViewModels
 
             DroppedItems.CollectionChanged += (s, e) =>
             {
-                InvalidateUnpinnedCount();
+                InvalidateUnpinnedCount(e);
                 UpdateFirstTenFlags();
             };
         }
@@ -720,19 +747,15 @@ namespace FlyShelf.ViewModels
             });
         }
 
-        public static string FormatBytesStatic(long bytes)
-        {
-            if (bytes < 1024) return $"{bytes} B";
-            if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
-            if (bytes < 1024L * 1024 * 1024) return $"{bytes / (1024.0 * 1024.0):F1} MB";
-            return $"{bytes / (1024.0 * 1024.0 * 1024.0):F2} GB";
-        }
+        // [FIX M-58]: Delegated to shared FormatHelper
+        public static string FormatBytesStatic(long bytes) => Classes.FormatHelper.FormatBytes(bytes);
 
     }
 
     public class BulkObservableCollection<T> : ObservableCollection<T>
     {
-        private bool _suppressNotification = false;
+        // [FIX M-04]: volatile is sufficient — only simple true/false assignments, no check-then-act patterns
+        private volatile bool _suppressNotification = false;
 
         public BulkObservableCollection() : base() { }
         public BulkObservableCollection(IEnumerable<T> collection) : base(collection) { }

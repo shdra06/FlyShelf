@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FlyShelf.Classes;
+using FlyShelf.Helpers;
 
 namespace FlyShelf.Windows
 {
@@ -97,7 +98,7 @@ namespace FlyShelf.Windows
                     new Paragraph(new Run(_section.Content ?? "")))
                 {
                     PagePadding = new Thickness(0),
-                    Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xF0)),
+                    Foreground = new SolidColorBrush(ThemeColors.LightLavender),
                     FontFamily = new FontFamily("Segoe UI"),
                     FontSize = 13
                 };
@@ -330,6 +331,8 @@ namespace FlyShelf.Windows
 
         private async void NoteRichTextBox_Paste(object sender, DataObjectPastingEventArgs e)
         {
+            await SafeAsyncHandler.RunAsync(async () =>
+            {
             var dataObject = e.DataObject;
             if (dataObject == null) return;
 
@@ -357,6 +360,7 @@ namespace FlyShelf.Windows
                             img = dataObject.GetData(typeof(BitmapSource)) as BitmapSource;
                         if (img == null)
                             img = Clipboard.GetImage();
+                        if (img != null && img.CanFreeze) img.Freeze();
 
                         if (img != null)
                         {
@@ -413,6 +417,7 @@ namespace FlyShelf.Windows
             {
                 Logger.LogAction("NOTES_EXPAND", $"Paste error: {ex.Message}");
             }
+            });
         }
 
         // ═══════════════════════════════════════════════════════════
@@ -892,12 +897,12 @@ namespace FlyShelf.Windows
         // ─── TEXT COLOR ───
         private static readonly (string name, Color color)[] _textColors =
         {
-            ("Default", Color.FromRgb(0xE8, 0xE8, 0xF0)),
-            ("Red", Color.FromRgb(0xEF, 0x44, 0x44)),
-            ("Orange", Color.FromRgb(0xF5, 0x9E, 0x0B)),
-            ("Green", Color.FromRgb(0x10, 0xB9, 0x81)),
-            ("Blue", Color.FromRgb(0x3B, 0x82, 0xF6)),
-            ("Purple", Color.FromRgb(0x8B, 0x5C, 0xF6)),
+            ("Default", ThemeColors.LightLavender),
+            ("Red", ThemeColors.ErrorRed),
+            ("Orange", ThemeColors.WarningAmber),
+            ("Green", ThemeColors.SuccessGreen),
+            ("Blue", ThemeColors.Blue500),
+            ("Purple", ThemeColors.VioletAccent),
         };
         private int _textColorIndex = 0;
 
@@ -964,7 +969,7 @@ namespace FlyShelf.Windows
             selection.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Normal);
             selection.ApplyPropertyValue(TextElement.FontStyleProperty, FontStyles.Normal);
             selection.ApplyPropertyValue(Inline.TextDecorationsProperty, new TextDecorationCollection());
-            selection.ApplyPropertyValue(TextElement.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xF0)));
+            selection.ApplyPropertyValue(TextElement.ForegroundProperty, new SolidColorBrush(ThemeColors.LightLavender));
             selection.ApplyPropertyValue(TextElement.BackgroundProperty, new SolidColorBrush(Colors.Transparent));
             selection.ApplyPropertyValue(TextElement.FontSizeProperty, NoteRichTextBox.FontSize);
             selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily("Segoe UI"));
@@ -1007,7 +1012,7 @@ namespace FlyShelf.Windows
                 string text = textRange.Text?.TrimEnd('\r', '\n') ?? "";
                 if (!string.IsNullOrEmpty(text))
                 {
-                    Clipboard.SetText(text);
+                    ClipboardHelper.SafeSetText(text);
                     FooterStatus.Text = "✓ Copied";
                 }
             }

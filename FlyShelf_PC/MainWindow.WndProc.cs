@@ -5,6 +5,7 @@
 // Split from MainWindow.xaml.cs for modularity
 // ---------------------------------------------------------------
 using FlyShelf.ViewModels;
+using FlyShelf.Classes;
 using System;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -19,6 +20,7 @@ namespace FlyShelf
     public partial class MainWindow
     {
         private int _clipboardUpdateToken;
+        private static readonly System.Threading.SemaphoreSlim _clipboardStaSemaphore = new System.Threading.SemaphoreSlim(1, 1);
         private DateTime _lastClipboardCaptureTime = DateTime.MinValue;
         private DateTime _lastHotkeyTime = DateTime.MinValue;
         private bool _waitingForHotkeyRelease = false;
@@ -138,7 +140,7 @@ namespace FlyShelf
                     // Alt+1=item0, Alt+2=item1, ..., Alt+9=item8, Alt+0=item9
                     int index = hotkeyId == HOTKEY_QUICKPASTE_BASE + 10 ? 9 : (hotkeyId - HOTKEY_QUICKPASTE_BASE - 1);
                     // CRITICAL: Defer clipboard + focus work out of WndProc to avoid dispatcher suspension crash
-                    Dispatcher.InvokeAsync(() =>
+                    Dispatcher.InvokeAsync(async () =>
                     {
                         Classes.Logger.LogAction("HOTKEY", $"Alt+{(index + 1) % 10} fired, items={_viewModel.DroppedItems.Count}");
                         if (index < _viewModel.DroppedItems.Count)
@@ -148,8 +150,64 @@ namespace FlyShelf
                             Classes.Logger.LogAction("HOTKEY", $"Target window: 0x{targetWindow:X}");
                             var item = _viewModel.DroppedItems[index];
                             
-                            // Set clipboard directly — guard against echo
-                            if (!string.IsNullOrEmpty(item.RawContent))
+                            // Wait for async PNG save if Image item has no FilePath yet
+                            if (item.ItemType == ClipboardItemType.Image && string.IsNullOrEmpty(item.FilePath))
+                            {
+                                for (int w = 0; w < 15 && string.IsNullOrEmpty(item.FilePath); w++)
+                                    await System.Threading.Tasks.Task.Delay(100); // Up to 1.5s
+                            }
+                            
+                            // ═══ FIX: Image items should paste as IMAGE, not OCR text ═══
+                            // Previously, RawContent (which OCR fills with extracted text) was
+                            // checked first, so Alt+N on an image always pasted OCR text.
+                            // Now: Image items get a rich DataObject (FileDrop + Bitmap + text)
+                            // so the target app can choose the best format.
+                            if (item.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(item.FilePath))
+                            {
+                                try
+                                {
+                                    var dataObj = new DataObject();
+                                    var dropList = new System.Collections.Specialized.StringCollection();
+                                    dropList.Add(item.FilePath);
+                                    dataObj.SetFileDropList(dropList);
+                                    dataObj.SetData("FileNameW", new string[] { item.FilePath });
+                                    dataObj.SetData("FileName", new string[] { item.FilePath });
+                                    
+                                    // Load bitmap from file (capped at 1024px to keep it fast)
+                                    try
+                                    {
+                                        var bmp = await System.Threading.Tasks.Task.Run(() =>
+                                        {
+                                            var bytes = System.IO.File.ReadAllBytes(item.FilePath);
+                                            var bi = new System.Windows.Media.Imaging.BitmapImage();
+                                            bi.BeginInit();
+                                            using var ms = new System.IO.MemoryStream(bytes);
+                                            bi.StreamSource = ms;
+                                            bi.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                                            bi.DecodePixelWidth = 1024;
+                                            bi.EndInit();
+                                            bi.Freeze();
+                                            return bi;
+                                        });
+                                        dataObj.SetImage(bmp);
+                                    }
+                                    catch (Exception imgEx) { Classes.Logger.LogAction("HOTKEY_IMG", imgEx.Message); }
+                                    
+                                    // Also provide text for text-only targets (OCR text or file path)
+                                    string textContent = !string.IsNullOrEmpty(item.RawContent) ? item.RawContent : item.FilePath;
+                                    dataObj.SetData(DataFormats.UnicodeText, textContent);
+                                    
+                                    Classes.ClipboardHelper.SafeSetDataObject(dataObj, true, suppressEcho: true, echoDelayMs: 600);
+                                }
+                                catch (Exception ex)
+                                {
+                                    // Fallback: file drop list if DataObject creation fails
+                                    var dropList = new System.Collections.Specialized.StringCollection();
+                                    dropList.Add(item.FilePath);
+                                    Classes.ClipboardHelper.SafeSetFileDropList(dropList, suppressEcho: true, echoDelayMs: 600);
+                                }
+                            }
+                            else if (!string.IsNullOrEmpty(item.RawContent))
                             {
                                 Classes.ClipboardHelper.SafeSetText(item.RawContent, suppressEcho: true, echoDelayMs: 600);
                             }
@@ -218,19 +276,44 @@ namespace FlyShelf
                 // freeing the WndProc message pump immediately and avoiding dispatcher suspension crash
                 _ = Task.Run(async () =>
                 {
-                    await Task.Delay(100); // Debounce — 100ms to coalesce Windows double-fire
+                    await Task.Delay(50); // Debounce — 50ms to coalesce Windows double-fire (was 100ms, reduced for rapid screenshots)
                     
                     if (currentToken != System.Threading.Volatile.Read(ref _clipboardUpdateToken))
                         return; // A newer update has arrived, cancel this one
 
-                    var op = Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    // ═══ PERF FIX: Run clipboard COM reads on a DEDICATED STA THREAD ═══
+                    // Clipboard.GetDataObject() and data.GetData() are OLE COM calls that hold
+                    // the global Windows clipboard lock. Running them on the main UI thread
+                    // freezes the entire UI and blocks ALL other apps from pasting.
+                    // By using a dedicated STA thread, we release the clipboard lock faster
+                    // and keep the main UI thread completely free.
+                    // Gate: only one STA thread at a time — prevents unbounded thread creation
+                    if (!await _clipboardStaSemaphore.WaitAsync(0)) return;
+                    try
                     {
+                    var staThread = new System.Threading.Thread(() =>
+                    {
+                        // STABILITY: Re-check drag state — a drag may have started during the 50ms debounce
+                        if (_isDragging)
+                        {
+                            Classes.Logger.LogAction("CLIPBOARD", "Skipped clipboard update: Drag in progress (post-debounce).");
+                            return;
+                        }
                         if (currentToken == System.Threading.Volatile.Read(ref _clipboardUpdateToken))
                         {
-                            HandleClipboardUpdateDeferred();
+                            HandleClipboardUpdateOnStaThread(currentToken);
                         }
                     });
-                    if (op != null) await op.Task;
+                    staThread.SetApartmentState(System.Threading.ApartmentState.STA);
+                    staThread.IsBackground = true;
+                    staThread.Priority = System.Threading.ThreadPriority.AboveNormal;
+                    staThread.Start();
+                    staThread.Join(); // Wait for STA thread to complete before releasing semaphore
+                    }
+                    finally
+                    {
+                        _clipboardStaSemaphore.Release();
+                    }
                 });
                 
                 handled = true;
@@ -238,164 +321,69 @@ namespace FlyShelf
             return IntPtr.Zero;
         }
 
-        private void HandleClipboardUpdateDeferred()
+        /// <summary>
+        /// PERF FIX: Phase 1 — runs on a dedicated STA background thread (NOT the main UI thread).
+        /// Extracts clipboard data via OLE COM calls. This holds the global clipboard lock but
+        /// does NOT block the main UI thread, so the app and other programs remain responsive.
+        /// After extraction, dispatches the pre-extracted data to HandleClipboardUpdateDeferred()
+        /// on the UI thread for lightweight routing (dedup, shortcut expansion, background dispatch).
+        /// </summary>
+        private void HandleClipboardUpdateOnStaThread(int currentToken)
         {
             try
             {
                 var now = DateTime.UtcNow;
-                if ((now - _lastClipboardCaptureTime).TotalMilliseconds < 150)
+                if ((now - _lastClipboardCaptureTime).TotalMilliseconds < 80)
                 {
-                    Classes.Logger.LogAction("CLIPBOARD", "Skipped clipboard update: Cooldown (150ms) active.");
+                    Classes.Logger.LogAction("CLIPBOARD", "Skipped clipboard update: Cooldown (80ms) active.");
                     return;
                 }
 
-                // ═══ SOURCE APP TRACKING: Capture which app the user copied from ═══
-                string sourceAppName = "";
-                System.Windows.Media.Imaging.BitmapSource sourceAppIcon = null;
+                // ═══ SOURCE APP TRACKING: Capture on this thread (P/Invoke is thread-safe) ═══
+                IntPtr capturedFgWindow = IntPtr.Zero;
+                uint capturedProcessId = 0;
                 try
                 {
-                    IntPtr fgWindow = GetForegroundWindow();
-                    if (fgWindow != IntPtr.Zero)
-                    {
-                        // Get process name
-                        uint processId = 0;
-                        GetWindowThreadProcessId(fgWindow, out processId);
-                        string processName = "";
-                        string processExePath = null;
-                        try
-                        {
-                            using var proc = System.Diagnostics.Process.GetProcessById((int)processId);
-                            processName = proc.ProcessName;
-                            // PERF (copy jitter fix): MainModule enumeration moved to the
-                            // icon-cache-miss path below. Accessing proc.MainModule walks the
-                            // process module list (5-50ms) and was paid on EVERY copy -
-                            // a visible UI-thread hitch while copying.
-                        }
-                        catch { }
-
-                        // Get window title
-                        var sb = new System.Text.StringBuilder(512);
-                        GetWindowText(fgWindow, sb, sb.Capacity);
-                        string windowTitle = sb.ToString();
-
-                        // Format: prefer "README.md - VS Code" style, fallback to process name
-                        if (!string.IsNullOrEmpty(windowTitle) && windowTitle != "FlyShelf")
-                        {
-                            // Clean up common process names to friendly names
-                            string friendlyName = processName?.ToLower(System.Globalization.CultureInfo.InvariantCulture) switch
-                            {
-                                "code" => "VS Code",
-                                "devenv" => "Visual Studio",
-                                "chrome" => "Chrome",
-                                "msedge" => "Edge",
-                                "firefox" => "Firefox",
-                                "explorer" => "Explorer",
-                                "notepad" => "Notepad",
-                                "powershell" => "PowerShell",
-                                "windowsterminal" => "Terminal",
-                                "cmd" => "CMD",
-                                "slack" => "Slack",
-                                "teams" => "Teams",
-                                "discord" => "Discord",
-                                "outlook" => "Outlook",
-                                "winword" => "Word",
-                                "excel" => "Excel",
-                                "powerpnt" => "PowerPoint",
-                                _ => processName ?? ""
-                            };
-
-                            // If window title contains the friendly name or process name, use full title
-                            // e.g. "README.md - Visual Studio Code" → show as-is but trimmed
-                            if (windowTitle.Length > 60)
-                                windowTitle = string.Concat(windowTitle.AsSpan(0, 57), "...");
-                            
-                            // Check if title is meaningful (not just the app name repeated)
-                            if (windowTitle.Equals(friendlyName, StringComparison.OrdinalIgnoreCase) ||
-                                windowTitle.Equals(processName, StringComparison.OrdinalIgnoreCase))
-                            {
-                                sourceAppName = friendlyName;
-                            }
-                            else
-                            {
-                                // Include window title for richer context (e.g. "README.md — VS Code")
-                                sourceAppName = $"{friendlyName} — {windowTitle}";
-                            }
-                        }
-
-                        // ═══ SOURCE APP ICON: Extract from process exe (cached) ═══
-                        if (!string.IsNullOrEmpty(processName))
-                        {
-                            string cacheKey = processName.ToLower(System.Globalization.CultureInfo.InvariantCulture);
-                            if (_sourceAppIconCache.TryGetValue(cacheKey, out var cachedIcon))
-                            {
-                                sourceAppIcon = cachedIcon;
-                            }
-                            else
-                            {
-                                try
-                                {
-                                    // Resolve the exe path only once per app (icon-cache miss).
-                                    // MainModule is expensive; the result is cached below so this
-                                    // cost is paid at most once per source application.
-                                    try
-                                    {
-                                        using var procForIcon = System.Diagnostics.Process.GetProcessById((int)processId);
-                                        processExePath = procForIcon.MainModule?.FileName;
-                                    }
-                                    catch { } // Access denied for elevated processes
-                                    if (!string.IsNullOrEmpty(processExePath) && System.IO.File.Exists(processExePath))
-                                    {
-                                        using var icon = System.Drawing.Icon.ExtractAssociatedIcon(processExePath);
-                                        if (icon != null)
-                                        {
-                                            sourceAppIcon = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
-                                                icon.Handle, Int32Rect.Empty,
-                                                System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
-                                            sourceAppIcon.Freeze(); // Thread-safe
-                                        }
-                                    }
-                                }
-                                catch { } // Best-effort: icon extraction should never break clipboard
-                                _sourceAppIconCache[cacheKey] = sourceAppIcon; // Cache even null to avoid re-trying
-                            }
-                        }
-                    }
+                    capturedFgWindow = GetForegroundWindow();
+                    if (capturedFgWindow != IntPtr.Zero)
+                        GetWindowThreadProcessId(capturedFgWindow, out capturedProcessId);
                 }
-                catch { } // Best-effort: source tracking should never break clipboard
+                catch { }
 
-                // PERF: Clipboard.GetDataObject() is a COM call that MUST run on the STA UI thread.
-                // Extract the MINIMUM data here, then offload ALL processing to a background thread.
-                IDataObject data = Clipboard.GetDataObject();
+                // ═══ CLIPBOARD COM READS (the expensive part — runs here, NOT on UI thread) ═══
+                IDataObject data;
+                try
+                {
+                    data = Clipboard.GetDataObject();
+                }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("CLIPBOARD", $"GetDataObject failed on STA thread: {ex.Message}");
+                    return;
+                }
                 if (data == null) return;
 
-                // Snapshot all data now while we're on the STA thread — IDataObject can't cross threads
                 string[] files = null;
                 string text = null;
                 System.Windows.Media.Imaging.BitmapSource bitmap = null;
 
-                // STEP 1: Try bitmap extraction (lightweight — just a COM query)
+                // STEP 1: Bitmap extraction
                 try
                 {
                     if (data.GetDataPresent(DataFormats.Bitmap))
-                    {
                         bitmap = data.GetData(DataFormats.Bitmap) as System.Windows.Media.Imaging.BitmapSource;
-                    }
                     if (bitmap == null && data.GetDataPresent(typeof(System.Windows.Media.Imaging.BitmapSource)))
-                    {
                         bitmap = data.GetData(typeof(System.Windows.Media.Imaging.BitmapSource)) as System.Windows.Media.Imaging.BitmapSource;
-                    }
                     if (bitmap == null && data.GetDataPresent(DataFormats.Dib))
-                    {
                         bitmap = data.GetData(DataFormats.Dib) as System.Windows.Media.Imaging.BitmapSource;
-                    }
                     if (bitmap != null && bitmap.CanFreeze) bitmap.Freeze(); // Make thread-safe
                 }
-                catch (Exception bmpEx) 
-                { 
+                catch (Exception bmpEx)
+                {
                     Classes.Logger.LogAction("CLIPBOARD", $"Bitmap extraction failed: {bmpEx.Message}");
                 }
 
-                // STEP 2: Extract file paths
+                // STEP 2: File paths
                 try
                 {
                     if (data.GetDataPresent(DataFormats.FileDrop))
@@ -405,7 +393,7 @@ namespace FlyShelf
                 }
                 catch { }
 
-                // STEP 3: Extract text only if no bitmap and no files
+                // STEP 3: Text (only if no bitmap and no files)
                 if (bitmap == null && (files == null || files.Length == 0))
                 {
                     try
@@ -415,22 +403,62 @@ namespace FlyShelf
                         if (string.IsNullOrEmpty(text) && data.GetDataPresent(DataFormats.Text))
                             text = data.GetData(DataFormats.Text) as string;
                     }
-                    catch { } // Best-effort: failure is acceptable
+                    catch { }
                 }
 
-                // ═══ FLYSHELF INTERNAL SIGNATURE: Dedup check for self-originated copies ═══
-                // When FlyShelf writes to clipboard via SafeSetTextAllowCapture, it adds a
-                // FlyShelf_Internal_v1 tag. If we see this tag, check if the content already
-                // exists as the most recent item — skip if duplicate (prevents loop).
+                // STEP 4: Check FlyShelf internal format
                 bool isFlyShelfInternal = false;
                 try { isFlyShelfInternal = data.GetDataPresent(Classes.ClipboardHelper.FLYSHELF_INTERNAL_FORMAT); } catch { }
-                
+
+                // ═══ COM READS DONE — clipboard lock is released ═══
+                // Stale check before dispatching
+                if (currentToken != System.Threading.Volatile.Read(ref _clipboardUpdateToken))
+                    return;
+
+                // Dispatch pre-extracted data to UI thread for lightweight routing
+                // (dedup check, shortcut expansion, background dispatch — NO more COM calls)
+                Application.Current?.Dispatcher?.InvokeAsync(() =>
+                {
+                    // STABILITY: Final drag guard — a drag may have started while the STA thread
+                    // was reading clipboard data. Inserting items during DoDragDrop's nested
+                    // message loop shifts indices and can crash the ListView.
+                    if (_isDragging)
+                    {
+                        Classes.Logger.LogAction("CLIPBOARD", "Skipped clipboard routing: Drag in progress (UI dispatch).");
+                        return;
+                    }
+                    if (currentToken == System.Threading.Volatile.Read(ref _clipboardUpdateToken))
+                    {
+                        HandleClipboardUpdateRouting(bitmap, files, text, isFlyShelfInternal, capturedFgWindow, capturedProcessId);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("CLIPBOARD", $"STA thread handler error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Phase 2 — runs on UI thread but does NO clipboard COM calls (data already extracted).
+        /// Handles dedup checking, shortcut expansion, and dispatching to background processing.
+        /// </summary>
+        private void HandleClipboardUpdateRouting(
+            System.Windows.Media.Imaging.BitmapSource bitmap,
+            string[] files,
+            string text,
+            bool isFlyShelfInternal,
+            IntPtr capturedFgWindow,
+            uint capturedProcessId)
+        {
+            try
+            {
+                // ═══ FLYSHELF INTERNAL DEDUP CHECK ═══
                 if (isFlyShelfInternal && !string.IsNullOrEmpty(text))
                 {
                     var vm2 = DataContext as FlyShelfViewModel;
                     if (vm2 != null)
                     {
-                        // Check the top 20 items for exact match — prevents duplicate cards
                         var recentItems = vm2.DroppedItems.Take(20);
                         foreach (var existing in recentItems)
                         {
@@ -445,34 +473,25 @@ namespace FlyShelf
                     }
                 }
 
-                // ═══ SHORTCUT EXPANSION: Intercept /trigger text before normal processing ═══
+                // ═══ SHORTCUT EXPANSION ═══
                 if (!string.IsNullOrWhiteSpace(text) && text.Trim().StartsWith('/'))
                 {
                     var matchedShortcut = Classes.ShortcutManager.TryExpand(text);
                     if (matchedShortcut != null)
                     {
                         Classes.Logger.LogAction("SHORTCUTS", $"Expanding '{matchedShortcut.Trigger}' → '{matchedShortcut.Label}'");
-                        
-                        // Premium Safeguard: Detect target window integrity/elevation
                         IntPtr targetWindow = GetForegroundWindow();
                         bool isElevated = IsTargetProcessElevatedOrAccessDenied(targetWindow);
-                        Classes.Logger.LogAction("SHORTCUTS", $"Target window elevated: {isElevated}");
 
                         Classes.ClipboardHelper.SafeSetText(matchedShortcut.Expansion, suppressEcho: true, echoDelayMs: 500);
-
                         _lastClipboardCaptureTime = DateTime.UtcNow;
 
                         if (isElevated)
                         {
-                            // Premium Fallback: Display manual paste instructions if auto-paste is blocked by UIPI
-                            Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                Windows.ToastWindow.ShowToast($"✦ {matchedShortcut.Label} Copied! (Manual Ctrl+V needed in Admin app)");
-                            });
+                            Windows.ToastWindow.ShowToast($"✦ {matchedShortcut.Label} Copied! (Manual Ctrl+V needed in Admin app)");
                         }
                         else
                         {
-                            // Standard: Auto-paste: simulate Ctrl+V after a brief delay so the clipboard is ready.
                             _ = Task.Run(async () =>
                             {
                                 await Task.Delay(80);
@@ -480,57 +499,53 @@ namespace FlyShelf
                                 keybd_event((byte)VK_V, 0, 0, 0);
                                 keybd_event((byte)VK_V, 0, KEYEVENTF_KEYUP, 0);
                                 keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
-                            }).ContinueWith(t => { if (t.IsFaulted) Classes.Logger.LogAction("ASYNC_ERR", $"WndProc task failed: {t.Exception?.InnerException?.Message}"); }, TaskContinuationOptions.OnlyOnFaulted);
-
-                            Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                Windows.ToastWindow.ShowToast($"✦ {matchedShortcut.Label} Auto-Pasted! ✦");
                             });
+                            Windows.ToastWindow.ShowToast($"✦ {matchedShortcut.Label} Auto-Pasted! ✦");
                         }
-                        
-                        return; // Don't create a clipboard card for the trigger text
+                        return;
                     }
                 }
 
-                // ═══ PERF: ALL heavy processing moves to background thread ═══
-                // No more COM calls needed — dispatch pre-extracted data directly
+                // ═══ DISPATCH TO BACKGROUND PROCESSING ═══
                 var vm = (FlyShelfViewModel)DataContext;
 
-                if (bitmap != null && (files == null || files.Length == 0))
+                if (bitmap != null && files != null && files.Length > 0)
                 {
-                    // STEP 3.5: bitmap+files disambiguation (kept on UI thread — very fast)
-                    // No-op: files is already null/empty
-                }
-                else if (bitmap != null && files != null && files.Length > 0)
-                {
-                    // If we have BOTH bitmap AND files, decide which to use
-                    bool allFilesExist = files.All(f => System.IO.File.Exists(f));
-                    if (!allFilesExist)
+                    _lastClipboardCaptureTime = DateTime.UtcNow;
+                    var capturedBitmap = bitmap;
+                    var capturedFiles = files;
+                    _ = Task.Run(() =>
                     {
-                        files = null; // Snipping Tool — file doesn't exist yet
-                    }
-                    else
-                    {
-                        string ext = System.IO.Path.GetExtension(files[0]).ToLower(System.Globalization.CultureInfo.InvariantCulture);
-                        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".gif" || ext == ".webp")
+                        var (sourceAppName, sourceAppIcon) = ResolveSourceApp(capturedFgWindow, capturedProcessId);
+                        bool allFilesExist = capturedFiles.All(f => System.IO.File.Exists(f));
+                        if (!allFilesExist)
                         {
-                            files = null; // Image file — prefer bitmap for richer preview
+                            Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as BITMAP ({capturedBitmap.PixelWidth}x{capturedBitmap.PixelHeight}) [files not yet on disk]");
+                            vm.HandleDropInternal(null, capturedBitmap, null, false, false, sourceAppName: sourceAppName, sourceAppIcon: sourceAppIcon);
                         }
                         else
                         {
-                            bitmap = null; // Non-image files — use FileDrop path
+                            string ext = System.IO.Path.GetExtension(capturedFiles[0]).ToLower(System.Globalization.CultureInfo.InvariantCulture);
+                            if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".gif" || ext == ".webp")
+                            {
+                                Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as BITMAP ({capturedBitmap.PixelWidth}x{capturedBitmap.PixelHeight}) [image file, prefer bitmap]");
+                                vm.HandleDropInternal(null, capturedBitmap, null, false, false, sourceAppName: sourceAppName, sourceAppIcon: sourceAppIcon);
+                            }
+                            else
+                            {
+                                Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as FILES ({capturedFiles.Length} items) [non-image, prefer files]");
+                                vm.HandleDropInternal(capturedFiles, null, null, false, false, sourceAppName: sourceAppName, sourceAppIcon: sourceAppIcon);
+                            }
                         }
-                    }
+                    });
                 }
-
-                // ═══ PERF: Route directly to HandleDropInternal on background thread ═══
-                // Bypasses HandleDrop() which would re-extract data from IDataObject (redundant COM calls)
-                if (bitmap != null && (files == null || files.Length == 0))
+                else if (bitmap != null && (files == null || files.Length == 0))
                 {
                     _lastClipboardCaptureTime = DateTime.UtcNow;
                     var capturedBitmap = bitmap;
                     _ = Task.Run(() =>
                     {
+                        var (sourceAppName, sourceAppIcon) = ResolveSourceApp(capturedFgWindow, capturedProcessId);
                         Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as BITMAP ({capturedBitmap.PixelWidth}x{capturedBitmap.PixelHeight})");
                         vm.HandleDropInternal(null, capturedBitmap, null, false, false, sourceAppName: sourceAppName, sourceAppIcon: sourceAppIcon);
                     });
@@ -540,45 +555,39 @@ namespace FlyShelf
                     _lastClipboardCaptureTime = DateTime.UtcNow;
                     Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as FILES ({files.Length} items)");
                     var capturedFiles = files;
-                    _ = Task.Run(() => vm.HandleDropInternal(capturedFiles, null, null, false, false, sourceAppName: sourceAppName, sourceAppIcon: sourceAppIcon));
+                    _ = Task.Run(() =>
+                    {
+                        var (sourceAppName, sourceAppIcon) = ResolveSourceApp(capturedFgWindow, capturedProcessId);
+                        vm.HandleDropInternal(capturedFiles, null, null, false, false, sourceAppName: sourceAppName, sourceAppIcon: sourceAppIcon);
+                    });
                 }
                 else if (!string.IsNullOrWhiteSpace(text))
                 {
-                    // ═══ ONE-CLICK ACTIVATE: Detect activation trigger from website ═══
-                    // The FlyShelf website copies "FLYSHELF_ACTIVATE::FS-PRO-XXXX-XXXX-XXXX-XXXX"
-                    // to clipboard when the user clicks "One-Click Activate PC App".
+                    // ═══ ONE-CLICK ACTIVATE ═══
                     const string ACTIVATION_PREFIX = "FLYSHELF_ACTIVATE::";
                     if (text.Trim().StartsWith(ACTIVATION_PREFIX, StringComparison.OrdinalIgnoreCase))
                     {
                         string keyCandidate = text.Trim().Substring(ACTIVATION_PREFIX.Length).Trim();
                         Classes.Logger.LogAction("LICENSE", $"Clipboard activation trigger detected: ****-{keyCandidate[Math.Max(0, keyCandidate.Length - 4)..]}");
-                        
-                        // Clear the trigger from clipboard so it doesn't re-fire
                         _lastClipboardCaptureTime = DateTime.UtcNow;
 
-                        // If already Pro, just copy the plain key — no need to re-activate
                         if (Classes.LicenseManager.IsPro)
                         {
-                            try { Clipboard.SetText(keyCandidate); } catch { } // Best-effort: failure is acceptable
+                            try { ClipboardHelper.SafeSetText(keyCandidate); } catch { }
                             Classes.Logger.LogAction("LICENSE", "Already Pro — copied plain key to clipboard");
                             return;
                         }
-
                         try { Clipboard.Clear(); } catch { }
 
-                        // Validate format before attempting activation
                         if (keyCandidate.StartsWith("FS-PRO-", StringComparison.OrdinalIgnoreCase) && keyCandidate.Length >= 23)
                         {
-                            // Auto-activate on background thread
                             _ = Task.Run(async () =>
                             {
                                 try
                                 {
                                     Application.Current?.Dispatcher?.InvokeAsync(() =>
                                         Windows.ToastWindow.ShowToast("⚡ Activating your Pro license..."));
-
                                     bool success = await Classes.LicenseManager.ActivateLicenseAsync(keyCandidate);
-                                    
                                     Application.Current?.Dispatcher?.InvokeAsync(() =>
                                     {
                                         if (success)
@@ -599,67 +608,154 @@ namespace FlyShelf
                                     Application.Current?.Dispatcher?.InvokeAsync(() =>
                                         Windows.ToastWindow.ShowToast("❌ Activation error — please try again."));
                                 }
-                            }).ContinueWith(t => { if (t.IsFaulted) Classes.Logger.LogAction("ASYNC_ERR", $"WndProc task failed: {t.Exception?.InnerException?.Message}"); }, TaskContinuationOptions.OnlyOnFaulted);
+                            });
                         }
-                        return; // Don't create a clipboard card for the activation trigger
+                        return;
                     }
 
                     _lastClipboardCaptureTime = DateTime.UtcNow;
                     Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as TEXT ({text.Length} chars)");
                     var capturedText = text;
-                    _ = Task.Run(() => vm.HandleDropInternal(null, null, capturedText, false, false, sourceAppName: sourceAppName, sourceAppIcon: sourceAppIcon));
+                    _ = Task.Run(() =>
+                    {
+                        var (sourceAppName, sourceAppIcon) = ResolveSourceApp(capturedFgWindow, capturedProcessId);
+                        vm.HandleDropInternal(null, null, capturedText, false, false, sourceAppName: sourceAppName, sourceAppIcon: sourceAppIcon);
+                    });
                 }
                 else
                 {
                     Classes.Logger.LogAction("CLIPBOARD", "→ No actionable data found on clipboard");
                 }
             }
-            catch (Exception cbEx) { Classes.Logger.LogAction("CLIPBOARD", $"Deferred handler error: {cbEx.Message}"); }
+            catch (Exception cbEx) { Classes.Logger.LogAction("CLIPBOARD", $"Routing handler error: {cbEx.Message}"); }
         }
 
-        // ═══════════════════════════════════════════════════════
+        // ═══ SOURCE APP RESOLUTION: Runs entirely on background thread ═══
+        // Called from Task.Run dispatch blocks above. Receives the foreground window
+        // handle + process ID that were cheaply captured on the UI thread.
+        // Returns (sourceAppName, sourceAppIcon) after resolving process name, window
+        // title, friendly name formatting, and icon extraction — all off the UI thread.
+        private (string sourceAppName, System.Windows.Media.Imaging.BitmapSource sourceAppIcon) ResolveSourceApp(IntPtr fgWindow, uint processId)
+        {
+            string sourceAppName = "";
+            System.Windows.Media.Imaging.BitmapSource sourceAppIcon = null;
+
+            if (fgWindow == IntPtr.Zero || processId == 0)
+                return (sourceAppName, sourceAppIcon);
+
+            try
+            {
+                // ── Process name (5-50ms: Process.GetProcessById walks the process list) ──
+                string processName = "";
+                try
+                {
+                    using var proc = System.Diagnostics.Process.GetProcessById((int)processId);
+                    processName = proc.ProcessName;
+                }
+                catch { } // Access denied for elevated/exited processes
+
+                // ── Window title (GetWindowText is a P/Invoke — safe from any thread) ──
+                var sb = new System.Text.StringBuilder(512);
+                GetWindowText(fgWindow, sb, sb.Capacity);
+                string windowTitle = sb.ToString();
+
+                // ── Format: prefer "README.md - VS Code" style, fallback to process name ──
+                if (!string.IsNullOrEmpty(windowTitle) && windowTitle != "FlyShelf")
+                {
+                    string friendlyName = processName?.ToLower(System.Globalization.CultureInfo.InvariantCulture) switch
+                    {
+                        "code" => "VS Code",
+                        "devenv" => "Visual Studio",
+                        "chrome" => "Chrome",
+                        "msedge" => "Edge",
+                        "firefox" => "Firefox",
+                        "explorer" => "Explorer",
+                        "notepad" => "Notepad",
+                        "powershell" => "PowerShell",
+                        "windowsterminal" => "Terminal",
+                        "cmd" => "CMD",
+                        "slack" => "Slack",
+                        "teams" => "Teams",
+                        "discord" => "Discord",
+                        "outlook" => "Outlook",
+                        "winword" => "Word",
+                        "excel" => "Excel",
+                        "powerpnt" => "PowerPoint",
+                        _ => processName ?? ""
+                    };
+
+                    if (windowTitle.Length > 60)
+                        windowTitle = string.Concat(windowTitle.AsSpan(0, 57), "...");
+
+                    if (windowTitle.Equals(friendlyName, StringComparison.OrdinalIgnoreCase) ||
+                        windowTitle.Equals(processName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        sourceAppName = friendlyName;
+                    }
+                    else
+                    {
+                        sourceAppName = $"{friendlyName} — {windowTitle}";
+                    }
+                }
+
+                // ── Icon extraction (cached; MainModule + ExtractAssociatedIcon can take 5-50ms) ──
+                if (!string.IsNullOrEmpty(processName))
+                {
+                    string cacheKey = processName.ToLower(System.Globalization.CultureInfo.InvariantCulture);
+                    if (_sourceAppIconCache.TryGetValue(cacheKey, out var cachedIcon))
+                    {
+                        sourceAppIcon = cachedIcon;
+                    }
+                    else
+                    {
+                        // Already on background thread — extract synchronously (no extra Task.Run needed)
+                        try
+                        {
+                            string exePath = null;
+                            try
+                            {
+                                using var procForIcon = System.Diagnostics.Process.GetProcessById((int)processId);
+                                exePath = procForIcon.MainModule?.FileName;
+                            }
+                            catch { } // Access denied for elevated processes
+                            if (!string.IsNullOrEmpty(exePath) && System.IO.File.Exists(exePath))
+                            {
+                                using var icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
+                                if (icon != null)
+                                {
+                                    var bmpSrc = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
+                                        icon.Handle, Int32Rect.Empty,
+                                        System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
+                                    bmpSrc.Freeze(); // Thread-safe
+                                    _sourceAppIconCache[cacheKey] = bmpSrc;
+                                    sourceAppIcon = bmpSrc;
+                                }
+                            }
+                        }
+                        catch { } // Best-effort: icon extraction should never break clipboard
+                        if (sourceAppIcon == null)
+                            _sourceAppIconCache[cacheKey] = null; // Cache null to avoid re-trying
+                    }
+                }
+            }
+            catch { } // Best-effort: source tracking should never break clipboard
+
+            return (sourceAppName, sourceAppIcon);
+        }
+
         // TARGET ELEVATION DETECTION (UIPI SAFEGUARDS)
         // ═══════════════════════════════════════════════════════
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, uint processId);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool CloseHandle(IntPtr hObject);
-
-        [DllImport("advapi32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
-
-        [DllImport("advapi32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool GetTokenInformation(
-            IntPtr TokenHandle,
-            int TokenInformationClass,
-            IntPtr TokenInformation,
-            int TokenInformationLength,
-            out int ReturnLength);
-
-        private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
-        private const uint TOKEN_QUERY = 0x0008;
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct TOKEN_ELEVATION
-        {
-            public uint TokenIsElevated;
-        }
 
         private bool IsTargetProcessElevatedOrAccessDenied(IntPtr hWnd)
         {
             if (hWnd == IntPtr.Zero) return false;
             
             uint processId;
-            GetWindowThreadProcessId(hWnd, out processId);
+            NativeMethods.GetWindowThreadProcessId(hWnd, out processId);
             if (processId == 0) return false;
 
             // Step 1: Try to open process. If access is denied (error 5), it is elevated/higher integrity
-            IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
+            IntPtr hProcess = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
             if (hProcess == IntPtr.Zero)
             {
                 int error = Marshal.GetLastWin32Error();
@@ -674,22 +770,22 @@ namespace FlyShelf
             IntPtr hToken = IntPtr.Zero;
             try
             {
-                if (!OpenProcessToken(hProcess, TOKEN_QUERY, out hToken))
+                if (!NativeMethods.OpenProcessToken(hProcess, NativeMethods.TOKEN_QUERY, out hToken))
                 {
                     int error = Marshal.GetLastWin32Error();
                     if (error == 5) return true; // Access Denied
                 }
                 else
                 {
-                    TOKEN_ELEVATION elevationType;
-                    int size = Marshal.SizeOf<TOKEN_ELEVATION>();
+                    NativeMethods.TOKEN_ELEVATION elevationType;
+                    int size = Marshal.SizeOf<NativeMethods.TOKEN_ELEVATION>();
                     IntPtr pElevationType = Marshal.AllocHGlobal(size);
                     try
                     {
                         // 20 is TokenElevation in the enum
-                        if (GetTokenInformation(hToken, 20, pElevationType, size, out _))
+                        if (NativeMethods.GetTokenInformation(hToken, 20, pElevationType, size, out _))
                         {
-                            elevationType = Marshal.PtrToStructure<TOKEN_ELEVATION>(pElevationType);
+                            elevationType = Marshal.PtrToStructure<NativeMethods.TOKEN_ELEVATION>(pElevationType);
                             return elevationType.TokenIsElevated != 0;
                         }
                     }
@@ -702,8 +798,8 @@ namespace FlyShelf
             catch { } // Best-effort: failure is acceptable
             finally
             {
-                if (hToken != IntPtr.Zero) CloseHandle(hToken);
-                CloseHandle(hProcess);
+                if (hToken != IntPtr.Zero) NativeMethods.CloseHandle(hToken);
+                NativeMethods.CloseHandle(hProcess);
             }
 
             return false;

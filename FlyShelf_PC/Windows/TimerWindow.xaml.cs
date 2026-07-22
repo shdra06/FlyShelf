@@ -6,6 +6,7 @@ using System.Windows.Shapes;
 using System.Globalization;
 using System.Windows.Threading;
 using MicaWPF.Controls;
+using FlyShelf.Helpers;
 
 namespace FlyShelf.Windows
 {
@@ -25,11 +26,11 @@ namespace FlyShelf.Windows
         public event Action<string>? TimerCompleted;
 
         // Gradient colors for the arc
-        private static readonly Color StartColor = Color.FromRgb(0x8B, 0x5C, 0xF6); // #8B5CF6
-        private static readonly Color MidColor = Color.FromRgb(0x3B, 0x82, 0xF6);   // #3B82F6
+        private static readonly Color StartColor = ThemeColors.VioletAccent; // #8B5CF6
+        private static readonly Color MidColor = ThemeColors.Blue500;   // #3B82F6
         private static readonly Color EndColor = Color.FromRgb(0x06, 0xB6, 0xD4);    // #06B6D4
-        private static readonly Color DangerColor = Color.FromRgb(0xEF, 0x44, 0x44); // #EF4444
-        private static readonly Color WarningColor = Color.FromRgb(0xF5, 0x9E, 0x0B); // #F59E0B
+        private static readonly Color DangerColor = ThemeColors.ErrorRed; // #EF4444
+        private static readonly Color WarningColor = ThemeColors.WarningAmber; // #F59E0B
 
         // Cache resource brushes at startup so Timer_Tick never calls FindResource
         private Brush _primaryTextBrush;
@@ -318,7 +319,7 @@ namespace FlyShelf.Windows
                 _isRunning = true;
                 
                 PlayPauseIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Pause16;
-                PlayPauseBtn.Background = new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6)); // Purple for pause
+                PlayPauseBtn.Background = new SolidColorBrush(ThemeColors.VioletAccent); // Purple for pause
             }
         }
 
@@ -443,7 +444,7 @@ namespace FlyShelf.Windows
             
             // Set initial state of play/pause button
             PlayPauseIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Pause16;
-            PlayPauseBtn.Background = new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6));
+            PlayPauseBtn.Background = new SolidColorBrush(ThemeColors.VioletAccent);
             
             Action_Click(null, (RoutedEventArgs)null);
         }
