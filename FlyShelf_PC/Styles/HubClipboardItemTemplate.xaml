@@ -666,7 +666,7 @@
                                                 <!-- PERF: DropShadowEffect removed — per-item software shader -->
                                                 <Border Width="28" Height="14" CornerRadius="3" Margin="6,0,0,0" Background="{Binding DetectedColorBrush}" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}" ToolTip="{Binding DetectedColor}"/>
                                             </StackPanel>
-                                            <TextBlock Text="{Binding RawContent}" FontSize="{StaticResource TypeBody}" FontFamily="Segoe UI Emoji, Segoe UI" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" MaxHeight="{Binding CollapsedMaxHeight}" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                            <TextBlock Text="{Binding RawContentPreview}" FontSize="{StaticResource TypeBody}" FontFamily="Segoe UI Emoji, Segoe UI" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" MaxHeight="{Binding CollapsedMaxHeight}" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" Margin="0,4,0,0"/>
                                             
                                             <!-- Circular Expand/Collapse Chevron Toggle Button for Long Text / Code cards -->
                                             <Button PreviewMouseLeftButtonDown="ExpandToggleSpecific_Click"

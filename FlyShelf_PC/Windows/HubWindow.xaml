@@ -41,7 +41,7 @@
     <Grid x:Name="RootGrid" TextElement.Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}">
         <Grid.ColumnDefinitions>
             <!-- Sidebar column -->
-            <ColumnDefinition Width="220" MinWidth="52" />
+            <ColumnDefinition x:Name="SidebarColumn" Width="220" MinWidth="52" />
             <!-- Content column -->
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
@@ -49,7 +49,7 @@
         <!-- ═══════════════════════════════════════════════════════ -->
         <!-- LEFT SIDEBAR — Windows 11 Settings Style               -->
         <!-- ═══════════════════════════════════════════════════════ -->
-        <Border Grid.Column="0"
+        <Border x:Name="SidebarBorder" Grid.Column="0"
                 Background="{DynamicResource MicaWPF.Brushes.LayerOnMicaBaseAltFillColorDefault}"
                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"
                 BorderThickness="0,0,1,0">
@@ -110,6 +110,16 @@
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
+
+                <!-- Sidebar Collapse Toggle -->
+                <Button x:Name="SidebarCollapseBtn" DockPanel.Dock="Top" 
+                        Click="SidebarCollapse_Click" Cursor="Hand"
+                        HorizontalAlignment="Right" Margin="0,0,8,4"
+                        ToolTip="Collapse sidebar"
+                        Background="Transparent" BorderThickness="0" Padding="6">
+                    <ui:SymbolIcon x:Name="SidebarCollapseIcon" Symbol="PanelLeftContract24" FontSize="{StaticResource TypeTitle}" 
+                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                </Button>
 
                 <!-- Sidebar Footer: Status -->
                 <StackPanel DockPanel.Dock="Bottom" Margin="16,0,16,14">
@@ -729,7 +739,7 @@
                               ScrollViewer.CanContentScroll="True"
                               HorizontalContentAlignment="Stretch" 
                               VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling"
-                              VirtualizingPanel.ScrollUnit="Pixel" VirtualizingPanel.CacheLength="3,3" VirtualizingPanel.CacheLengthUnit="Page"
+                              VirtualizingPanel.ScrollUnit="Pixel" VirtualizingPanel.CacheLength="1.5,1.5" VirtualizingPanel.CacheLengthUnit="Page"
                               SelectionMode="Extended" SelectionChanged="HubListView_SelectionChanged">
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem">
@@ -755,25 +765,27 @@
                     <!-- ═══ IMAGE GRID VIEW (shown when Images filter active) ═══ -->
                     <ScrollViewer x:Name="ImageGridScroll" Grid.Row="2" 
                                   Visibility="Collapsed"
-                                  Style="{StaticResource VSCodeScrollViewer}" Padding="0,4,16,4">
+                                  ScrollChanged="ImageGridScroll_ScrollChanged"
+                                  Style="{StaticResource VSCodeScrollViewer}" Padding="4">
                         <ItemsControl x:Name="ImageGridControl" 
                                       ItemsSource="{Binding DroppedItems}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <WrapPanel Orientation="Horizontal" />
+                                    <UniformGrid Columns="3" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="ImageCard" 
-                                            Width="160" Height="160" Margin="4" 
+                                            Height="180" Margin="4" 
                                             CornerRadius="{StaticResource RadiusMD}" 
                                             ClipToBounds="True" Cursor="Hand"
                                             Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
                                             BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"
                                             BorderThickness="1"
                                             RenderTransformOrigin="0.5,0.5"
-                                            ToolTip="{Binding DisplayTitle}">
+                                            ToolTip="{Binding DisplayTitle}"
+                                            MouseLeftButtonDown="ImageGrid_QuickLook">
                                         <Border.RenderTransform>
                                             <ScaleTransform ScaleX="1" ScaleY="1"/>
                                         </Border.RenderTransform>
@@ -784,27 +796,59 @@
                                                    RenderOptions.BitmapScalingMode="HighQuality"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             
+                                            <!-- Selection checkbox (top-left, always visible when checked) -->
+                                            <CheckBox x:Name="ImageSelectCheck" 
+                                                      IsChecked="{Binding IsCheckedForMerge, Mode=TwoWay}"
+                                                      VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8,8,0,0"
+                                                      Click="ImageGrid_SelectionChanged"
+                                                      Cursor="Hand">
+                                                <CheckBox.Style>
+                                                    <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+                                                        <Style.Triggers>
+                                                            <!-- Show only on hover OR when checked -->
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding IsCheckedForMerge}" Value="False"/>
+                                                                    <Condition Binding="{Binding RelativeSource={RelativeSource AncestorType=Border, AncestorLevel=1}, Path=IsMouseOver}" Value="False"/>
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="Opacity" Value="0"/>
+                                                            </MultiDataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </CheckBox.Style>
+                                            </CheckBox>
+                                            
                                             <!-- Hover overlay with quick actions -->
                                             <Border x:Name="ImageHoverOverlay" Opacity="0"
-                                                    Background="#80000000">
-                                                <StackPanel VerticalAlignment="Bottom" Margin="8">
-                                                    <TextBlock Text="{Binding DisplayTitle}" FontSize="{StaticResource TypeCaption}" 
-                                                               Foreground="#CCFFFFFF" Margin="0,0,0,4"
-                                                               TextTrimming="CharacterEllipsis" MaxWidth="144"/>
-                                                    <!-- Quick action row -->
-                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                                        <Button Style="{StaticResource ImageGridActionBtn}" 
-                                                                ToolTip="Copy" Click="ImageGrid_Copy"
-                                                                Tag="{Binding}">
-                                                            <ui:SymbolIcon Symbol="Copy24" FontSize="{StaticResource TypeBody}" Foreground="White"/>
-                                                        </Button>
-                                                        <Button Style="{StaticResource ImageGridActionBtn}" 
-                                                                ToolTip="Delete" Click="ImageGrid_Delete" Margin="4,0,0,0"
-                                                                Tag="{Binding}">
-                                                            <ui:SymbolIcon Symbol="Delete24" FontSize="{StaticResource TypeBody}" Foreground="#EF4444"/>
-                                                        </Button>
-                                                    </StackPanel>
-                                                </StackPanel>
+                                                    Background="#60000000">
+                                                <Grid>
+                                                    <!-- Center: QuickLook icon -->
+                                                    <Button Style="{StaticResource ImageGridActionBtn}" 
+                                                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                            ToolTip="Quick Look" Click="ImageGrid_QuickLookBtn"
+                                                            Tag="{Binding}" Width="40" Height="40">
+                                                        <ui:SymbolIcon Symbol="Eye24" FontSize="18" Foreground="White"/>
+                                                    </Button>
+                                                    
+                                                    <!-- Bottom bar: title + action buttons -->
+                                                    <DockPanel VerticalAlignment="Bottom" Margin="8,0,8,8">
+                                                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                                            <Button Style="{StaticResource ImageGridActionBtn}" 
+                                                                    ToolTip="Copy" Click="ImageGrid_Copy"
+                                                                    Tag="{Binding}">
+                                                                <ui:SymbolIcon Symbol="Copy24" FontSize="{StaticResource TypeBody}" Foreground="White"/>
+                                                            </Button>
+                                                            <Button Style="{StaticResource ImageGridActionBtn}" 
+                                                                    ToolTip="Delete" Click="ImageGrid_Delete" Margin="4,0,0,0"
+                                                                    Tag="{Binding}">
+                                                                <ui:SymbolIcon Symbol="Delete24" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource DangerColor}"/>
+                                                            </Button>
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding DisplayTitle}" FontSize="{StaticResource TypeCaption}" 
+                                                                   Foreground="#CCFFFFFF" VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis" Margin="0,0,8,0"/>
+                                                    </DockPanel>
+                                                </Grid>
                                             </Border>
                                         </Grid>
                                         
@@ -819,11 +863,11 @@
                                                                 <Storyboard>
                                                                     <DoubleAnimation 
                                                                         Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)"
-                                                                        To="1.03" Duration="{StaticResource Motion.Fast}"
+                                                                        To="1.02" Duration="{StaticResource Motion.Fast}"
                                                                         EasingFunction="{StaticResource Motion.EaseOut}"/>
                                                                     <DoubleAnimation 
                                                                         Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)"
-                                                                        To="1.03" Duration="{StaticResource Motion.Fast}"
+                                                                        To="1.02" Duration="{StaticResource Motion.Fast}"
                                                                         EasingFunction="{StaticResource Motion.EaseOut}"/>
                                                                 </Storyboard>
                                                             </BeginStoryboard>
@@ -873,6 +917,29 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
+
+                    <!-- Floating Merge Images bar — appears when 2+ images are checked -->
+                    <Border x:Name="MergeImagesFloatingBar" Grid.Row="2" Visibility="Collapsed"
+                            VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,16"
+                            CornerRadius="{StaticResource RadiusMD}" Padding="16,10,16,10"
+                            Background="{DynamicResource ThemeFloatingBarBg}"
+                            BorderBrush="{DynamicResource ThemeFloatingBarBorder}"
+                            BorderThickness="1">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="MergeImagesCountText" Text="2 images selected" 
+                                       FontSize="{StaticResource TypeSmall}" 
+                                       Foreground="{DynamicResource ThemeTextPrimary}" 
+                                       VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <Button x:Name="MergeImagesBtn" Content="Merge to PDF" 
+                                    Click="MergeImages_Click" 
+                                    FontSize="{StaticResource TypeSmall}" FontWeight="SemiBold"
+                                    Padding="12,6" Cursor="Hand"/>
+                            <Button Content="Deselect All" 
+                                    Click="DeselectAllImages_Click" Margin="8,0,0,0"
+                                    FontSize="{StaticResource TypeSmall}"
+                                    Padding="8,6" Cursor="Hand"/>
+                        </StackPanel>
+                    </Border>
 
                     <!-- Floating Merge PDFs bar — appears when 2+ PDFs are checked -->
                     <Border x:Name="MergePdfFloatingBar" Grid.Row="2" Visibility="Collapsed"

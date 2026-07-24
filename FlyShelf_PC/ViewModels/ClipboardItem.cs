@@ -36,6 +36,7 @@ namespace FlyShelf.ViewModels
     {
         // ═══ Named Constants ═══
         private const int DisplayTextTruncationLimit = 150;
+        private const int RawContentPreviewLimit = 300;
         private const int LargeTextSpillThreshold = 10_000_000;
         private const int SpillPreviewLength = 200;
         private const int LongTextThreshold = 260;
@@ -416,7 +417,9 @@ namespace FlyShelf.ViewModels
 
                         // [FIX C-1]: Raise PropertyChanged and return early so the fall-through
                         // below doesn't re-assign the huge string back into _rawContent.
+                        _rawContentPreview = null; // invalidate preview cache
                         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));
+                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContentPreview)));
                         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLongText)));
                         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
                         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExpandToggleText)));
@@ -430,11 +433,40 @@ namespace FlyShelf.ViewModels
                 {
                     _rawContent = newValue;
                     _lowerContent = null; // invalidate cache
+                    _rawContentPreview = null; // invalidate preview cache
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContentPreview)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLongText)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExpandToggleText)));
                 }
+            }
+        }
+
+        /// <summary>
+        /// Truncated preview of RawContent for UI binding in scrollable lists.
+        /// Caps at 300 chars when collapsed to prevent WPF TextBlock.MeasureOverride
+        /// from processing thousands of characters for wrap computation during scroll.
+        /// Full text is returned when IsExpanded=true.
+        /// </summary>
+        private string? _rawContentPreview;
+        [JsonIgnore]
+        public string RawContentPreview
+        {
+            get
+            {
+                if (IsExpanded) return RawContent;
+                if (_rawContentPreview != null) return _rawContentPreview;
+                var raw = RawContent;
+                if (raw.Length <= RawContentPreviewLimit)
+                {
+                    _rawContentPreview = raw;
+                }
+                else
+                {
+                    _rawContentPreview = string.Concat(raw.AsSpan(0, RawContentPreviewLimit), "…");
+                }
+                return _rawContentPreview;
             }
         }
 
@@ -462,10 +494,12 @@ namespace FlyShelf.ViewModels
                 if (_isExpanded != value)
                 {
                     _isExpanded = value;
+                    _rawContentPreview = null; // invalidate preview — expanded state changed
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsExpanded)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExpandToggleText)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayText)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContentPreview)));
                 }
             }
         }

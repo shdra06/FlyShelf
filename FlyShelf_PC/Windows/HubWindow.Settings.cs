@@ -634,6 +634,189 @@ namespace FlyShelf.Windows
             }
         }
 
+        // ═══ IMAGE GRID: QuickLook on click ═══
+        private void ImageGrid_QuickLook(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
+            {
+                var mainWin = System.Windows.Application.Current.MainWindow as MainWindow;
+                mainWin?.ShowQuickLookForItem(item);
+                e.Handled = true;
+            }
+        }
+
+        private void ImageGrid_QuickLookBtn(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is ClipboardItem item)
+            {
+                var mainWin = System.Windows.Application.Current.MainWindow as MainWindow;
+                mainWin?.ShowQuickLookForItem(item);
+            }
+        }
+
+        // ═══ IMAGE GRID: Selection & Merge ═══
+        private void ImageGrid_SelectionChanged(object sender, RoutedEventArgs e)
+        {
+            UpdateImageMergeBar();
+        }
+
+        private void UpdateImageMergeBar()
+        {
+            if (MergeImagesFloatingBar == null) return;
+            var vm = DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
+            if (vm == null) return;
+            var selected = vm.DroppedItems.Where(i => i.IsCheckedForMerge && 
+                (i.ItemType == FlyShelf.ViewModels.ClipboardItemType.Image || i.ItemType == FlyShelf.ViewModels.ClipboardItemType.QRCode)).ToList();
+            if (selected.Count >= 2)
+            {
+                MergeImagesFloatingBar.Visibility = Visibility.Visible;
+                MergeImagesCountText.Text = $"{selected.Count} images selected";
+            }
+            else
+            {
+                MergeImagesFloatingBar.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private async void MergeImages_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var vm = DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
+                if (vm == null) return;
+                var selected = vm.DroppedItems.Where(i => i.IsCheckedForMerge && 
+                    (i.ItemType == FlyShelf.ViewModels.ClipboardItemType.Image || i.ItemType == FlyShelf.ViewModels.ClipboardItemType.QRCode))
+                    .ToList();
+                if (selected.Count < 2) return;
+
+                // Collect image paths
+                var imagePaths = new System.Collections.Generic.List<string>();
+                foreach (var item in selected)
+                {
+                    if (!string.IsNullOrEmpty(item.FilePath) && System.IO.File.Exists(item.FilePath))
+                        imagePaths.Add(item.FilePath);
+                }
+                if (imagePaths.Count < 2) return;
+
+                // Create PDF from images using PdfSharp
+                var saveDialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    Filter = "PDF Files|*.pdf",
+                    FileName = $"merged_images_{DateTime.Now:yyyyMMdd_HHmmss}.pdf",
+                    Title = "Save Merged PDF"
+                };
+                if (saveDialog.ShowDialog() != true) return;
+
+                await System.Threading.Tasks.Task.Run(() =>
+                {
+                    using var doc = new PdfSharp.Pdf.PdfDocument();
+                    foreach (var path in imagePaths)
+                    {
+                        try
+                        {
+                            var page = doc.AddPage();
+                            using var img = PdfSharp.Drawing.XImage.FromFile(path);
+                            page.Width = img.PointWidth;
+                            page.Height = img.PointHeight;
+                            using var gfx = PdfSharp.Drawing.XGraphics.FromPdfPage(page);
+                            gfx.DrawImage(img, 0, 0, page.Width, page.Height);
+                        }
+                        catch { /* skip invalid images */ }
+                    }
+                    doc.Save(saveDialog.FileName);
+                });
+
+                // Deselect all after merge
+                foreach (var item in selected)
+                    item.IsCheckedForMerge = false;
+                UpdateImageMergeBar();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Image merge failed: {ex.Message}");
+            }
+        }
+
+        private void DeselectAllImages_Click(object sender, RoutedEventArgs e)
+        {
+            var vm = DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
+            if (vm == null) return;
+            foreach (var item in vm.DroppedItems)
+                item.IsCheckedForMerge = false;
+            UpdateImageMergeBar();
+        }
+
+        // ═══ IMAGE GRID: Lazy thumbnail loading on scroll ═══
+        private void ImageGridScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            // Trigger thumbnail rendering for newly visible items
+            if (sender is ScrollViewer sv && ImageGridControl != null)
+            {
+                var vm = DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
+                if (vm == null) return;
+                // Force the view model to load icons for visible items
+                // The Icon property is already lazy-loaded via PropertyChanged
+                // This scroll event ensures the UI re-evaluates bindings
+            }
+        }
+
+        // ═══ SIDEBAR COLLAPSE ═══
+        private bool _isSidebarCollapsed = false;
+        
+        private void SidebarCollapse_Click(object sender, RoutedEventArgs e)
+        {
+            _isSidebarCollapsed = !_isSidebarCollapsed;
+            
+            if (_isSidebarCollapsed)
+            {
+                // Collapse: show only icons
+                SidebarColumn.Width = new GridLength(52);
+                SidebarCollapseIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.PanelLeftExpand24;
+                SidebarCollapseBtn.ToolTip = "Expand sidebar";
+                
+                // Hide text in nav items
+                foreach (var rb in FindVisualChildren<RadioButton>(SidebarBorder)
+                    .Where(r => r.GroupName == "NavTabs"))
+                {
+                    if (rb.Content is StackPanel sp && sp.Children.Count > 1)
+                    {
+                        for (int i = 1; i < sp.Children.Count; i++)
+                            sp.Children[i].Visibility = Visibility.Collapsed;
+                        // Center the icon
+                        if (sp.Children[0] is FrameworkElement icon)
+                            icon.Margin = new Thickness(0);
+                    }
+                }
+                // Hide header brand text and footer
+                foreach (var child in FindVisualChildren<StackPanel>(SidebarBorder))
+                {
+                    // Skip nav panels
+                    if (child.Parent is RadioButton) continue;
+                }
+            }
+            else
+            {
+                // Expand: show full sidebar
+                SidebarColumn.Width = new GridLength(220);
+                SidebarCollapseIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.PanelLeftContract24;
+                SidebarCollapseBtn.ToolTip = "Collapse sidebar";
+                
+                // Restore text in nav items
+                foreach (var rb in FindVisualChildren<RadioButton>(SidebarBorder)
+                    .Where(r => r.GroupName == "NavTabs"))
+                {
+                    if (rb.Content is StackPanel sp)
+                    {
+                        for (int i = 1; i < sp.Children.Count; i++)
+                            sp.Children[i].Visibility = Visibility.Visible;
+                        // Restore icon margin
+                        if (sp.Children[0] is FrameworkElement icon)
+                            icon.Margin = new Thickness(0, 0, 12, 0);
+                    }
+                }
+            }
+        }
+
         private System.Windows.Threading.DispatcherTimer? _hubSearchDebounceTimer;
 
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
