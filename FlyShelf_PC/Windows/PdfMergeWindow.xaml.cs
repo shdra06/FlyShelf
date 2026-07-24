@@ -138,67 +138,91 @@ namespace FlyShelf.Windows
 
                 // Start drag
                 var data = new DataObject("PdfMergeItem", _draggedItem);
-                DragDrop.DoDragDrop(PdfItemsList, data, DragDropEffects.Move);
-
-                // Cleanup after drop
-                CleanupDrag();
+                try
+                {
+                    DragDrop.DoDragDrop(PdfItemsList, data, DragDropEffects.Move);
+                }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("PDF_MERGE_DRAG", $"DoDragDrop failed: {ex.Message}");
+                }
+                finally
+                {
+                    // Guaranteed cleanup — adorner + opacity + state flags
+                    CleanupDrag();
+                }
             }
         }
 
         private void PdfList_DragOver(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            try
             {
-                e.Effects = DragDropEffects.Copy;
-                e.Handled = true;
-                return;
-            }
-
-            if (!e.Data.GetDataPresent("PdfMergeItem"))
-            {
-                e.Effects = DragDropEffects.None;
-                e.Handled = true;
-                return;
-            }
-
-            e.Effects = DragDropEffects.Move;
-            e.Handled = true;
-
-            // Move adorner
-            if (_dragAdorner != null)
-            {
-                _dragAdorner.UpdatePosition(e.GetPosition(PdfItemsList));
-            }
-
-            // Live reorder — move the item as you drag
-            var targetItem = GetItemAtPosition(e.GetPosition(PdfItemsList));
-            if (targetItem != null && _draggedItem != null && targetItem != _draggedItem)
-            {
-                int oldIdx = MergeItems.IndexOf(_draggedItem);
-                int newIdx = MergeItems.IndexOf(targetItem);
-                if (oldIdx >= 0 && newIdx >= 0 && oldIdx != newIdx)
+                if (e.Data.GetDataPresent(DataFormats.FileDrop))
                 {
-                    MergeItems.Move(oldIdx, newIdx);
+                    e.Effects = DragDropEffects.Copy;
+                    e.Handled = true;
+                    return;
                 }
+
+                if (!e.Data.GetDataPresent("PdfMergeItem"))
+                {
+                    e.Effects = DragDropEffects.None;
+                    e.Handled = true;
+                    return;
+                }
+
+                e.Effects = DragDropEffects.Move;
+                e.Handled = true;
+
+                // Move adorner
+                if (_dragAdorner != null)
+                {
+                    _dragAdorner.UpdatePosition(e.GetPosition(PdfItemsList));
+                }
+
+                // Live reorder — move the item as you drag
+                var targetItem = GetItemAtPosition(e.GetPosition(PdfItemsList));
+                if (targetItem != null && _draggedItem != null && targetItem != _draggedItem)
+                {
+                    int oldIdx = MergeItems.IndexOf(_draggedItem);
+                    int newIdx = MergeItems.IndexOf(targetItem);
+                    if (oldIdx >= 0 && newIdx >= 0 && oldIdx != newIdx)
+                    {
+                        MergeItems.Move(oldIdx, newIdx);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("PDF_MERGE_DRAG_OVER", $"DragOver error: {ex.Message}");
             }
         }
 
         private async void PdfList_Drop(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            try
             {
-                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
-                if (files != null && files.Length > 0)
+                if (e.Data.GetDataPresent(DataFormats.FileDrop))
                 {
-                    await HandleAddFilesAsync(files);
+                    string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                    if (files != null && files.Length > 0)
+                    {
+                        await HandleAddFilesAsync(files);
+                    }
+                    e.Handled = true;
+                    return;
                 }
-                e.Handled = true;
-                return;
-            }
 
-            // Drop is already handled by live reorder in DragOver
-            e.Handled = true;
-            CleanupDrag();
+                // Drop is already handled by live reorder in DragOver
+                e.Handled = true;
+                CleanupDrag();
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("PDF_MERGE_DROP", $"Drop error: {ex.Message}");
+                CleanupDrag();
+            }
         }
 
         private void PdfList_DragLeave(object sender, DragEventArgs e)
@@ -487,7 +511,7 @@ namespace FlyShelf.Windows
             if (success && File.Exists(outputPath))
             {
                 FlyShelf.Classes.LicenseManager.RecordPdfSave();
-                Application.Current.Dispatcher.InvokeAsync(() =>
+                _ = Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     var dataObj = new DataObject();
                     dataObj.SetData(DataFormats.FileDrop, new string[] { outputPath });
@@ -749,7 +773,7 @@ namespace FlyShelf.Windows
             if (success && File.Exists(outputPath))
             {
                 FlyShelf.Classes.LicenseManager.RecordPdfMerge();
-                Application.Current.Dispatcher.InvokeAsync(() =>
+                _ = Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     var dataObj = new DataObject();
                     dataObj.SetData(DataFormats.FileDrop, new string[] { outputPath });

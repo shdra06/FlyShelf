@@ -194,6 +194,11 @@ namespace FlyShelf.Windows
                     encoder.Frames.Add(BitmapFrame.Create(rtb));
                     
                     string tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"FlyShelf_PdfDoodle_{Guid.NewGuid()}.png");
+                    if (!FlyShelf.Classes.DiskSpaceHelper.HasSufficientDiskSpace(tempPath, 10_000_000))
+                    {
+                        FlyShelf.Classes.Logger.LogAction("IMAGE_SAVE", "Insufficient disk space");
+                        return;
+                    }
                     using (var fs = System.IO.File.OpenWrite(tempPath))
                     {
                         encoder.Save(fs);
@@ -294,6 +299,11 @@ namespace FlyShelf.Windows
 
                     encoder.Frames.Add(BitmapFrame.Create(rtb2));
 
+                    if (!FlyShelf.Classes.DiskSpaceHelper.HasSufficientDiskSpace(filePath, 10_000_000))
+                    {
+                        FlyShelf.Classes.Logger.LogAction("IMAGE_SAVE", "Insufficient disk space");
+                        return;
+                    }
                     using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write))
                     {
                         encoder.Save(fs);

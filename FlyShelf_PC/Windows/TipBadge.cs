@@ -186,7 +186,7 @@ namespace FlyShelf.Windows
         // ═══ Design Constants ═══
         private const double PillHeight = 28;
         private const double PillCornerRadius = 14;
-        private const double FontSize = 11.5;
+        private new const double FontSize = 11.5;
         private const double ShadowBlur = 8;
         private const double ShadowOpacity = 0.3;
         private const int AutoDismissMs = 4000;

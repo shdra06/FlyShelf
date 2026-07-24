@@ -247,7 +247,7 @@ namespace FlyShelf.Classes
                     res.OutputStream.Write(json, 0, json.Length);
 
                     // Show toast on PC
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     {
                         FlyShelf.Windows.ToastWindow.ShowToast($"📱 {deviceName} paired successfully!");
                     });

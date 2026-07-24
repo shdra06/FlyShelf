@@ -264,7 +264,7 @@ namespace FlyShelf.Classes
             string capturedSource = sourceDevice;
             string capturedType = itemType;
             var capturedTransport = DetectTransport(req);
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+            _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
             {
                 // Detect if capturedText is a path or file:// URI
                 string possiblePath = capturedText;
@@ -445,7 +445,7 @@ namespace FlyShelf.Classes
                     res.StatusCode = 413; // Payload Too Large
                     try { await WriteJsonResponse(res, false, "File size exceeds 50 GB limit for Free tier."); } catch { } // Best-effort: failure is acceptable
                     res.Close();
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                    _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                         FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming transfer rejected: file exceeds 50 GB Free tier limit.");
                     });
                     return;
@@ -468,7 +468,7 @@ namespace FlyShelf.Classes
                 }
                 else
                 {
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                    _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                         FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {rawName} from {sourceDevice}... 📥");
                     });
                 }
@@ -504,7 +504,7 @@ namespace FlyShelf.Classes
                                 ? $"{FlyShelfViewModel.FormatBytesStatic(totalRead)} of {FlyShelfViewModel.FormatBytesStatic(totalBytes)}" 
                                 : $"{FlyShelfViewModel.FormatBytesStatic(totalRead)}";
                             
-                            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {
                                 placeholder.TransferProgress = progress;
                                 placeholder.TransferStatusText = $"Transferring... {progress:F0}% ({speedText})";
@@ -593,7 +593,7 @@ namespace FlyShelf.Classes
                 FlyShelf.Classes.Logger.LogAction("SERVER ERR", ex.Message);
                 if (placeholder != null)
                 {
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.DroppedItems.Remove(placeholder));
+                    _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.DroppedItems.Remove(placeholder));
                 }
                 res.StatusCode = 500;
             }
@@ -652,7 +652,7 @@ namespace FlyShelf.Classes
                 res.StatusCode = 413;
                 try { await WriteJsonResponse(res, false, "File size exceeds 50 GB limit for Free tier."); } catch { } // Best-effort: failure is acceptable
                 res.Close();
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                     FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming archive rejected: exceeds 50 GB Free tier limit.");
                 });
                 return;
@@ -697,7 +697,7 @@ namespace FlyShelf.Classes
                 if ((DateTime.Now - _lastArchiveToastTime).TotalSeconds > 2)
                 {
                     _lastArchiveToastTime = DateTime.Now;
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                    _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                         FlyShelf.Windows.ToastWindow.ShowToast($"Extracting batch data... 📦");
                     });
                 }
@@ -758,7 +758,7 @@ namespace FlyShelf.Classes
                 // Auto-copy to Windows clipboard if â‰¤2 files in this batch
                 if (batchList.Count <= 2)
                 {
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     {
                         try
                         {
@@ -846,7 +846,7 @@ namespace FlyShelf.Classes
                 res.StatusCode = 413;
                 try { await WriteJsonResponse(res, false, "File size exceeds 50 GB limit for Free tier."); } catch { } // Best-effort: failure is acceptable
                 res.Close();
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                     FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming relay rejected: exceeds 50 GB Free tier limit.");
                 });
                 return;
@@ -973,7 +973,7 @@ namespace FlyShelf.Classes
                     ? string.Create(CultureInfo.InvariantCulture, $"{new FileInfo(finalPath).Length / 1_073_741_824.0:F1} GB") 
                     : string.Create(CultureInfo.InvariantCulture, $"{new FileInfo(finalPath).Length / 1_048_576.0:F1} MB");
 
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     FlyShelf.Windows.ToastWindow.ShowToast($"📡 Relayed {rawName} ({sizeStr}) from {senderDevice}");
                 });

@@ -220,7 +220,7 @@ namespace FlyShelf
                                 {
                                     currentDesktopId = fgDesktopId;
                                     // Always update the cached current desktop ID on the UI thread
-                                    Application.Current.Dispatcher.InvokeAsync(() =>
+                                    _ = Application.Current.Dispatcher.InvokeAsync(() =>
                                     {
                                         _currentDesktopId = fgDesktopId;
                                     });
@@ -247,7 +247,7 @@ namespace FlyShelf
                                     }
                                     if (summonedId == Guid.Empty)
                                     {
-                                        Application.Current.Dispatcher.InvokeAsync(() =>
+                                        _ = Application.Current.Dispatcher.InvokeAsync(() =>
                                         {
                                             _summonedDesktopId = currentDesktopId;
                                         });
@@ -262,7 +262,7 @@ namespace FlyShelf
                                     if (hr == 0 && onCurrent == 0)
                                     {
                                         desktopSwitched = true;
-                                        Application.Current.Dispatcher.InvokeAsync(() =>
+                                        _ = Application.Current.Dispatcher.InvokeAsync(() =>
                                         {
                                             _currentDesktopId = Guid.Empty;
                                         });
@@ -277,7 +277,7 @@ namespace FlyShelf
                                     if (hr == 0 && onCurrent == 0)
                                     {
                                         desktopSwitched = true;
-                                        Application.Current.Dispatcher.InvokeAsync(() =>
+                                        _ = Application.Current.Dispatcher.InvokeAsync(() =>
                                         {
                                             _currentDesktopId = Guid.Empty;
                                         });
@@ -293,7 +293,7 @@ namespace FlyShelf
                                     Classes.Logger.LogAction("VD_CB", $"DISMISS: Dispatching AnimateAndHide to UI thread (gen={capturedGeneration})");
 
                                     // User switched to a different virtual desktop — force clipboard mode
-                                    Application.Current.Dispatcher.InvokeAsync(() =>
+                                    _ = Application.Current.Dispatcher.InvokeAsync(() =>
                                     {
                                         if (_spawnGeneration != capturedGeneration) return;
 
@@ -721,7 +721,11 @@ namespace FlyShelf
 
             DismissMergeState();
             CloseSearch();
-            if (_isFilterBarActive) ToggleFilterBar(false); // PC-5: Clear filter bar on dismiss
+            // Reset category filters on dismiss — prevents stale filter persisting
+            // when Hub changes the filter while clipboard is hidden
+            if (_activeCategoryFilter != null) ClearCategoryFilter();
+            if (_altActiveCategory != null) ApplyAltCategoryFilter(null);
+            if (_isFilterBarActive) ToggleFilterBar(false);
 
             // PC-8: Reset drag hover indicator
             IsDragHovering = false;
@@ -729,6 +733,7 @@ namespace FlyShelf
             // PC-9: Reset scroll/hover state so hover buttons work on re-summon
             _viewModel.IsScrolling = false;
             _viewModel.AllowHover = true;
+            _viewModel?.CollapseAllExpandedItems();
 
             // PC-2/PC-3: Stop background timers that fire on hidden window
             _evictionBackgroundTimer?.Stop();

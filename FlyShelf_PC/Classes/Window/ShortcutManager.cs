@@ -67,7 +67,7 @@ namespace FlyShelf.Classes
                 string path = GetFilePath();
                 if (File.Exists(path))
                 {
-                    var json = File.ReadAllText(path);
+                    var json = FileRetryHelper.RunWithRetry(() => File.ReadAllText(path));
                     var decrypted = SecureStorage.Decrypt(json);
                     var list = JsonSerializer.Deserialize<ObservableCollection<TextShortcut>>(decrypted);
                     if (list != null)

@@ -387,7 +387,7 @@ namespace FlyShelf.Windows
                             if (PeerManager.Instance != null)
                             {
                                 await PeerManager.Instance.ForceResync();
-                                Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
+                                _ = Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
                             }
                         }
                         catch (Exception ex) { Logger.LogAction("PAIR CODE", $"Post-pair ForceResync failed: {ex.Message}"); }

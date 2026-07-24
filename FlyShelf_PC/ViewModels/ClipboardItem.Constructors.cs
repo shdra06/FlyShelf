@@ -545,8 +545,13 @@ namespace FlyShelf.ViewModels
 
         // NOTE (M-14): SHGetFileInfo is safe here — callers invoke this on the UI Dispatcher thread
         // via GenerateStackedGroupIcon's InvokeAsync, so no background-thread concern.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, BitmapSource?> _shellIconCache = new();
         private static BitmapSource GetShellIconForStacking(string filePath)
         {
+            string ext = System.IO.Path.GetExtension(filePath)?.ToLowerInvariant() ?? "";
+            if (!string.IsNullOrEmpty(ext) && _shellIconCache.TryGetValue(ext, out var cached))
+                return cached;
+
             try
             {
                 const uint SHGFI_ICON = 0x100;
@@ -566,6 +571,7 @@ namespace FlyShelf.ViewModels
                             Int32Rect.Empty,
                             BitmapSizeOptions.FromEmptyOptions());
                         bitmapSource.Freeze();
+                        if (!string.IsNullOrEmpty(ext)) _shellIconCache.TryAdd(ext, bitmapSource);
                         return bitmapSource;
                     }
                     finally
@@ -575,6 +581,8 @@ namespace FlyShelf.ViewModels
                 }
             }
             catch { } // Best-effort: failure is acceptable
+            // Cache null result to avoid retrying for extensions that have no icon
+            if (!string.IsNullOrEmpty(ext)) _shellIconCache.TryAdd(ext, null);
             return null;
         }
 

@@ -7,7 +7,7 @@
 
     <!-- Hub Clipboard Item Template — extracted from HubWindow.xaml for modularity -->
     <DataTemplate x:Key="HubClipboardItemTemplate">
-                                <Border Margin="0,0,18,6" Padding="0" ClipToBounds="True" CornerRadius="12" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}" UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display" RenderOptions.ClearTypeHint="Enabled">
+                                <Border Margin="0,0,0,8" Padding="0" ClipToBounds="True" CornerRadius="{StaticResource RadiusMD}" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}" UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display" RenderOptions.ClearTypeHint="Enabled">
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" />
@@ -21,27 +21,23 @@
                                             </Setter>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsCheckedForMerge}" Value="True">
-                                                    <Setter Property="Background" Value="#156366F1" />
-                                                    <Setter Property="BorderBrush" Value="#406366F1" />
+                                                    <Setter Property="Background" Value="{DynamicResource SyncBothBg}" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource SyncBothBorder}" />
                                                 </DataTrigger>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" />
-                                                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorSecondary}" />
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeOverlayBgHover}" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeOverlayBorderHover}" />
                                                     <Trigger.EnterActions>
                                                         <BeginStoryboard>
                                                             <Storyboard>
-                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="-2" Duration="0:0:0.15">
-                                                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
-                                                                </DoubleAnimation>
+                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="-1" Duration="{StaticResource Motion.Fast}" EasingFunction="{StaticResource Motion.EaseOut}" />
                                                             </Storyboard>
                                                         </BeginStoryboard>
                                                     </Trigger.EnterActions>
                                                     <Trigger.ExitActions>
                                                         <BeginStoryboard>
                                                             <Storyboard>
-                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="0" Duration="0:0:0.2">
-                                                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
-                                                                </DoubleAnimation>
+                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="0" Duration="{StaticResource Motion.Normal}" EasingFunction="{StaticResource Motion.EaseInOut}" />
                                                             </Storyboard>
                                                         </BeginStoryboard>
                                                     </Trigger.ExitActions>
@@ -88,7 +84,7 @@
                                             <!-- Color Actions -->
                                             <ui:MenuItem Header="Copy as Hex" Icon="{ui:SymbolIcon Color24}" Foreground="{DynamicResource TypeColorColor}" Click="CopyColorHex_Click" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             <ui:MenuItem Header="Copy as RGB" Icon="{ui:SymbolIcon Color24}" Foreground="{DynamicResource TypeImageColor}" Click="CopyColorRgb_Click" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Copy as HSL" Icon="{ui:SymbolIcon Color24}" Foreground="#38BDF8" Click="CopyColorHsl_Click" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            <ui:MenuItem Header="Copy as HSL" Icon="{ui:SymbolIcon Color24}" Foreground="{DynamicResource TypeColorColor}" Click="CopyColorHsl_Click" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             
                                             
                                             <!-- Group / Archive / Folder Actions -->
@@ -124,45 +120,45 @@
                                                     </Style.Triggers>
                                                 </Style>
                                             </StackPanel.Style>
-                                            <Border CornerRadius="8" Padding="5,2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}">
+                                            <Border CornerRadius="{StaticResource RadiusSM}" Padding="5,2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <ui:SymbolIcon FontSize="10" Margin="0,0,3,0">
+                                                    <ui:SymbolIcon FontSize="{StaticResource TypeCaption}" Margin="0,0,3,0">
                                                         <ui:SymbolIcon.Style>
                                                             <Style TargetType="ui:SymbolIcon">
                                                                 <Setter Property="Symbol" Value="Laptop24" />
-                                                                <Setter Property="Foreground" Value="#60A5FA" />
+                                                                <Setter Property="Foreground" Value="{DynamicResource DeviceLaptopColor}" />
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding SourceDeviceType}" Value="Mobile">
                                                                         <Setter Property="Symbol" Value="Phone24"/>
-                                                                        <Setter Property="Foreground" Value="#A78BFA"/>
+                                                                        <Setter Property="Foreground" Value="{DynamicResource TypeGroupColor}"/>
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
                                                         </ui:SymbolIcon.Style>
                                                     </ui:SymbolIcon>
-                                                    <TextBlock Text="{Binding SourceDeviceName}" Foreground="{DynamicResource SubtleTextColor}" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center" />
-                                                    <TextBlock Text="·" Foreground="{DynamicResource SeparatorDotColor}" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding SourceDeviceName}" Foreground="{DynamicResource SubtleTextColor}" FontSize="{StaticResource TypeMicro}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                                    <TextBlock Text="·" Foreground="{DynamicResource SeparatorDotColor}" FontSize="{StaticResource TypeMicro}" Margin="0,0,4,0" VerticalAlignment="Center" />
                                                     <TextBlock FontSize="8" FontWeight="SemiBold" VerticalAlignment="Center">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
                                                                 <Setter Property="Text" Value="☁️ Cloud"/>
-                                                                <Setter Property="Foreground" Value="#F59E0B"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource WarningColor}"/>
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding TransferMethod}" Value="Cloudflare">
                                                                         <Setter Property="Text" Value="🌐 Cloudflare"/>
-                                                                        <Setter Property="Foreground" Value="#10B981"/>
+                                                                        <Setter Property="Foreground" Value="{DynamicResource TypeCodeColor}"/>
                                                                     </DataTrigger>
                                                                     <DataTrigger Binding="{Binding TransferMethod}" Value="LAN">
                                                                         <Setter Property="Text" Value="📡 LAN"/>
-                                                                        <Setter Property="Foreground" Value="#6366F1"/>
+                                                                        <Setter Property="Foreground" Value="{DynamicResource TypeDefaultColor}"/>
                                                                     </DataTrigger>
                                                                     <DataTrigger Binding="{Binding TransferMethod}" Value="ForceSend">
                                                                         <Setter Property="Text" Value="🎯 Direct"/>
-                                                                        <Setter Property="Foreground" Value="#EF4444"/>
+                                                                        <Setter Property="Foreground" Value="{DynamicResource TypePdfColor}"/>
                                                                     </DataTrigger>
                                                                     <DataTrigger Binding="{Binding TransferMethod}" Value="Local">
                                                                         <Setter Property="Text" Value="📋 Local"/>
-                                                                        <Setter Property="Foreground" Value="#9CA3AF"/>
+                                                                        <Setter Property="Foreground" Value="{DynamicResource SubtleTextColor}"/>
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
@@ -176,34 +172,34 @@
                                         <Border Grid.Column="0" CornerRadius="2">
                                             <Border.Style>
                                                 <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#6366F1" />
+                                                    <Setter Property="Background" Value="{DynamicResource TypeDefaultColor}" />
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsCodePreview}" Value="True">
-                                                            <Setter Property="Background" Value="#10B981"/>
+                                                            <Setter Property="Background" Value="{DynamicResource TypeCodeColor}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsUrlPreview}" Value="True">
-                                                            <Setter Property="Background" Value="#0EA5E9"/>
+                                                            <Setter Property="Background" Value="{DynamicResource TypeUrlColor}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                                                            <Setter Property="Background" Value="#F472B6"/>
+                                                            <Setter Property="Background" Value="{DynamicResource TypeImageColor}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsPdfPreview}" Value="True">
-                                                            <Setter Property="Background" Value="#EF4444"/>
+                                                            <Setter Property="Background" Value="{DynamicResource TypePdfColor}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsDocPreview}" Value="True">
-                                                            <Setter Property="Background" Value="#3B82F6"/>
+                                                            <Setter Property="Background" Value="{DynamicResource TypeDocColor}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsTextPreview}" Value="True">
-                                                            <Setter Property="Background" Value="#8B5CF6"/>
+                                                            <Setter Property="Background" Value="{DynamicResource TypeTextColor}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsGroupPreview}" Value="True">
-                                                            <Setter Property="Background" Value="#A78BFA"/>
+                                                            <Setter Property="Background" Value="{DynamicResource TypeGroupColor}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsArchivePreview}" Value="True">
-                                                            <Setter Property="Background" Value="#F59E0B"/>
+                                                            <Setter Property="Background" Value="{DynamicResource WarningColor}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsFolderPreview}" Value="True">
-                                                            <Setter Property="Background" Value="#8B5CF6"/>
+                                                            <Setter Property="Background" Value="{DynamicResource TypeTextColor}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -214,7 +210,7 @@
                                         <CheckBox Grid.Column="2" IsChecked="{Binding IsCheckedForMerge, Mode=TwoWay}" VerticalAlignment="Center" Margin="6,0,0,0" Click="ItemCheckBox_Click" />
 
                                         <!-- File Type Icon Badge -->
-                                        <Border Grid.Column="3" Width="44" Height="44" CornerRadius="12" ClipToBounds="True" Margin="12,10,12,10">
+                                        <Border Grid.Column="3" Width="44" Height="44" CornerRadius="{StaticResource RadiusMD}" ClipToBounds="True" Margin="12,10,12,10">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
@@ -227,9 +223,9 @@
                                             </Border.Style>
                                             <Grid>
                                                 <!-- Static image thumbnail (non-GIF) -->
-                                                <Image Source="{Binding Icon}" Stretch="UniformToFill" Width="44" Height="44" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache" Visibility="{Binding IsStaticImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                <Image Source="{Binding Icon}" Stretch="UniformToFill" Width="44" Height="44" RenderOptions.BitmapScalingMode="HighQuality" Visibility="{Binding IsStaticImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                                 <!-- Animated GIF thumbnail -->
-                                                <Image gif:AnimationBehavior.SourceUri="{Binding GifFilePath}" gif:AnimationBehavior.RepeatBehavior="Forever" gif:AnimationBehavior.AutoStart="True" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache" Loaded="HubGifIcon_Loaded" Unloaded="HubGifIcon_Unloaded" Visibility="{Binding IsGifPreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                <Image gif:AnimationBehavior.SourceUri="{Binding GifFilePath}" gif:AnimationBehavior.RepeatBehavior="Forever" gif:AnimationBehavior.AutoStart="True" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" Loaded="HubGifIcon_Loaded" Unloaded="HubGifIcon_Unloaded" Visibility="{Binding IsGifPreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
                                                 <!-- Image Placeholder — shown when Icon hasn't loaded yet for image items -->
                                                 <Border Name="ImagePlaceholderBorder">
@@ -249,14 +245,14 @@
                                                         </Style>
                                                     </Border.Style>
                                                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5">
-                                                        <TextBlock Text="🖼" FontSize="22" HorizontalAlignment="Center"/>
-                                                        <TextBlock Text="Image" FontSize="9" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
+                                                        <TextBlock Text="🖼" FontSize="{StaticResource TypeHeadline}" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="Image" FontSize="{StaticResource TypeMicro}" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
                                                                    HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                                     </StackPanel>
                                                 </Border>
 
                                                 <!-- System file-association icon (e.g. PDF reader, Word, etc.) — shown when Icon is available for file types -->
-                                                <Image Source="{Binding Icon}" Stretch="Uniform" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache"
+                                                <Image Source="{Binding Icon}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center" Width="36" Height="36">
                                                     <Image.Style>
                                                         <Style TargetType="Image">
@@ -383,7 +379,7 @@
                                                 </Border>
 
                                                 <!-- Color Swatch Premium Preview — shown when a HEX, RGB, or HSL color is detected -->
-                                                <Border Name="ColorSwatchBorder" Background="{Binding DetectedColorBrush}" CornerRadius="12" 
+                                                <Border Name="ColorSwatchBorder" Background="{Binding DetectedColorBrush}" CornerRadius="{StaticResource RadiusMD}" 
                                                         BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1.5">
                                                     <Border.Style>
                                                         <Style TargetType="Border">
@@ -420,7 +416,7 @@
                                                             <GradientStop Color="#F87171" Offset="1"/>
                                                         </LinearGradientBrush>
                                                     </Border.Background>
-                                                    <TextBlock Text="PDF" FontSize="13" FontWeight="ExtraBold" Foreground="{DynamicResource ThemeTextOnAccent}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="PDF" FontSize="{StaticResource TypeSubtitle}" FontWeight="ExtraBold" Foreground="{DynamicResource ThemeTextOnAccent}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
 
                                                 <!-- Document icon FALLBACK (only when no system Icon available) -->
@@ -567,7 +563,7 @@
                                                                 <Border Width="22" Height="22" CornerRadius="11"
                                                                         Background="{DynamicResource ThemeOverlayButtonBg}" BorderBrush="{DynamicResource ThemeOverlayBorderStrong}" BorderThickness="1"
                                                                         ToolTip="Rotate 90°">
-                                                                    <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="11" Foreground="{DynamicResource TypeGroupColor}"
+                                                                    <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="{StaticResource TypeSmall}" Foreground="{DynamicResource TypeGroupColor}"
                                                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                 </Border>
                                                             </ControlTemplate>
@@ -593,8 +589,8 @@
                                         <StackPanel Grid.Column="4" VerticalAlignment="Center" Margin="0,12,0,12">
                                             <StackPanel Orientation="Horizontal">
                                                 <!-- Color detection dot -->
-                                                <Border Width="12" Height="12" CornerRadius="8" Margin="0,0,6,0" VerticalAlignment="Center" Background="{Binding DetectedColorBrush}" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}" BorderBrush="{Binding DetectedColorBrush}" BorderThickness="1.5"/>
-                                                <TextBlock Text="{Binding FileName}" FontSize="13" FontFamily="Segoe UI Emoji, Segoe UI" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextTrimming="CharacterEllipsis">
+                                                <Border Width="12" Height="12" CornerRadius="{StaticResource RadiusSM}" Margin="0,0,6,0" VerticalAlignment="Center" Background="{Binding DetectedColorBrush}" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}" BorderBrush="{Binding DetectedColorBrush}" BorderThickness="1.5"/>
+                                                <TextBlock Text="{Binding FileName}" FontSize="{StaticResource TypeSubtitle}" FontFamily="Segoe UI Emoji, Segoe UI" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextTrimming="CharacterEllipsis">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
                                                             <Style.Triggers>
@@ -613,48 +609,48 @@
                                                             <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" />
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsCodePreview}" Value="True">
-                                                                    <Setter Property="Background" Value="#1A10B981" />
+                                                                    <Setter Property="Background" Value="{DynamicResource BadgeCodeBg}" />
                                                                 </DataTrigger>
                                                                 <DataTrigger Binding="{Binding IsPdfPreview}" Value="True">
-                                                                    <Setter Property="Background" Value="#1AEF4444" />
+                                                                    <Setter Property="Background" Value="{DynamicResource BadgePdfBg}" />
                                                                 </DataTrigger>
                                                                 <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                                                                    <Setter Property="Background" Value="#1AF472B6" />
+                                                                    <Setter Property="Background" Value="{DynamicResource BadgeImageBg}" />
                                                                 </DataTrigger>
                                                                 <DataTrigger Binding="{Binding IsUrlPreview}" Value="True">
-                                                                    <Setter Property="Background" Value="#1A0EA5E9" />
+                                                                    <Setter Property="Background" Value="{DynamicResource BadgeUrlBg}" />
                                                                 </DataTrigger>
                                                                 <DataTrigger Binding="{Binding IsGroupPreview}" Value="True">
-                                                                    <Setter Property="Background" Value="#1AA78BFA" />
+                                                                    <Setter Property="Background" Value="{DynamicResource BadgeGroupBg}" />
                                                                 </DataTrigger>
                                                                 <DataTrigger Binding="{Binding IsArchivePreview}" Value="True">
-                                                                    <Setter Property="Background" Value="#1AF59E0B" />
+                                                                    <Setter Property="Background" Value="{DynamicResource BadgeArchiveBg}" />
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Border.Style>
-                                                    <TextBlock Text="{Binding FormatIdentifier}" FontSize="10" FontWeight="SemiBold">
+                                                    <TextBlock Text="{Binding FormatIdentifier}" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
-                                                                <Setter Property="Foreground" Value="#60A5FA" />
+                                                                <Setter Property="Foreground" Value="{DynamicResource DeviceLaptopColor}" />
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding IsCodePreview}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#10B981" />
+                                                                        <Setter Property="Foreground" Value="{DynamicResource TypeCodeColor}" />
                                                                     </DataTrigger>
                                                                     <DataTrigger Binding="{Binding IsPdfPreview}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#EF4444" />
+                                                                        <Setter Property="Foreground" Value="{DynamicResource TypePdfColor}" />
                                                                     </DataTrigger>
                                                                     <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#F472B6" />
+                                                                        <Setter Property="Foreground" Value="{DynamicResource TypeImageColor}" />
                                                                     </DataTrigger>
                                                                     <DataTrigger Binding="{Binding IsUrlPreview}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#0EA5E9" />
+                                                                        <Setter Property="Foreground" Value="{DynamicResource TypeUrlColor}" />
                                                                     </DataTrigger>
                                                                     <DataTrigger Binding="{Binding IsGroupPreview}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#A78BFA" />
+                                                                        <Setter Property="Foreground" Value="{DynamicResource TypeGroupColor}" />
                                                                     </DataTrigger>
                                                                     <DataTrigger Binding="{Binding IsArchivePreview}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#F59E0B" />
+                                                                        <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
@@ -662,15 +658,15 @@
                                                     </TextBlock>
                                                 </Border>
                                                 <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,2" Margin="0,0,6,0" Visibility="{Binding FormattedSize, Converter={StaticResource StringToVisibilityConverter}}">
-                                                    <TextBlock Text="{Binding FormattedSize}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" />
+                                                    <TextBlock Text="{Binding FormattedSize}" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" />
                                                 </Border>
-                                                <TextBlock Text="{Binding DateCopied, StringFormat='{}{0:HH:mm}'}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" Opacity="0.6"/>
+                                                <TextBlock Text="{Binding DateCopied, StringFormat='{}{0:HH:mm}'}" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" Opacity="0.6"/>
 
                                                 <!-- Color swatch preview -->
                                                 <!-- PERF: DropShadowEffect removed — per-item software shader -->
                                                 <Border Width="28" Height="14" CornerRadius="3" Margin="6,0,0,0" Background="{Binding DetectedColorBrush}" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}" ToolTip="{Binding DetectedColor}"/>
                                             </StackPanel>
-                                            <TextBlock Text="{Binding RawContent}" FontSize="12" FontFamily="Segoe UI Emoji, Segoe UI" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" MaxHeight="{Binding CollapsedMaxHeight}" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                            <TextBlock Text="{Binding RawContent}" FontSize="{StaticResource TypeBody}" FontFamily="Segoe UI Emoji, Segoe UI" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" MaxHeight="{Binding CollapsedMaxHeight}" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" Margin="0,4,0,0"/>
                                             
                                             <!-- Circular Expand/Collapse Chevron Toggle Button for Long Text / Code cards -->
                                             <Button PreviewMouseLeftButtonDown="ExpandToggleSpecific_Click"
@@ -689,14 +685,14 @@
                                                                         <!-- PERF: DropShadowEffect removed — per-item software shader -->
                                                                         <Border x:Name="CircleBorder" Width="22" Height="22" CornerRadius="11"
                                                                                 Background="{DynamicResource ThemeChevronBg}" BorderBrush="{DynamicResource ThemeChevronBorder}" BorderThickness="1.5">
-                                                                            <ui:SymbolIcon x:Name="ChevronIcon" Symbol="ChevronDown24" FontSize="13" Foreground="{DynamicResource InfoColor}"
+                                                                            <ui:SymbolIcon x:Name="ChevronIcon" Symbol="ChevronDown24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource InfoColor}"
                                                                                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0.5,0,0"/>
                                                                         </Border>
                                                                     </Grid>
                                                                     <ControlTemplate.Triggers>
                                                                         <DataTrigger Binding="{Binding IsExpanded}" Value="True">
                                                                             <Setter TargetName="ChevronIcon" Property="Symbol" Value="ChevronUp24"/>
-                                                                            <Setter TargetName="ChevronIcon" Property="Foreground" Value="#EF4444"/>
+                                                                            <Setter TargetName="ChevronIcon" Property="Foreground" Value="{DynamicResource TypePdfColor}"/>
                                                                         </DataTrigger>
                                                                         <Trigger Property="IsMouseOver" Value="True">
                                                                             <Setter TargetName="CircleBorder" Property="Background" Value="#E62C2C32"/>
@@ -783,7 +779,7 @@
                                             <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorLight1}" PreviewMouseLeftButtonDown="SmartActionSpecific_Click">
                                                 <ui:Button.ToolTip><ToolTip Content="{Binding SmartActionName}" /></ui:Button.ToolTip>
                                                 <ui:Button.Icon>
-                                                    <ui:SymbolIcon FontSize="14">
+                                                    <ui:SymbolIcon FontSize="{StaticResource TypeSubtitle}">
                                                         <ui:SymbolIcon.Style>
                                                             <Style TargetType="ui:SymbolIcon">
                                                                 <Setter Property="Symbol" Value="Flash24"/><Setter Property="Filled" Value="True"/>
@@ -818,7 +814,7 @@
 
                                             <!-- Open in Browser -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Open in Browser" Command="{Binding DataContext.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Globe24" FontSize="14" /></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Globe24" FontSize="{StaticResource TypeSubtitle}" /></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -833,7 +829,7 @@
 
                                             <!-- Run Script -->
                                             <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource SyncIncomingColor}" ToolTip="Run Script" PreviewMouseLeftButtonDown="RunTerminalSpecific_Click">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -846,7 +842,7 @@
 
                                             <!-- Show in Explorer -->
                                             <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource PinActiveColor}" ToolTip="Show in Explorer" PreviewMouseLeftButtonDown="OpenExplorer_Click">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -866,7 +862,7 @@
 
                                             <!-- Open Folder -->
                                             <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource PinActiveColor}" ToolTip="Open Folder" PreviewMouseLeftButtonDown="OpenExplorer_Click">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -879,7 +875,7 @@
 
                                             <!-- Convert to .zip -->
                                             <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource CyanAccentColor}" ToolTip="Convert to .zip" PreviewMouseLeftButtonDown="ConvertToZip_Click">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="FolderZip24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="FolderZip24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -905,7 +901,7 @@
 
                                             <!-- Sync via LAN -->
                                             <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource SuccessColor}" ToolTip="Sync via LAN" PreviewMouseLeftButtonDown="SyncZipLan_Click">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Send24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Send24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -931,7 +927,7 @@
 
                                             <!-- Sanitize URL -->
                                             <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource SanitizeColor}" ToolTip="Sanitize URL (Remove trackers)" PreviewMouseLeftButtonDown="SanitizeUrlSpecific_Click">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Shield24" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Shield24" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -946,7 +942,7 @@
 
                                             <!-- Protect as Password -->
                                             <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource WarningColor}" ToolTip="Protect as Password" PreviewMouseLeftButtonDown="MakePasswordSpecific_Click">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Key24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Key24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -961,7 +957,7 @@
 
                                             <!-- Rename Password Label -->
                                             <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource WarningColor}" ToolTip="Rename Password Label" PreviewMouseLeftButtonDown="RenamePasswordSpecific_Click">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Edit24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Edit24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -976,7 +972,7 @@
 
                                             <!-- Extract Text (OCR) -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Extract Text (OCR)" Command="{Binding DataContext.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <TextBlock Text="T" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI" Foreground="{DynamicResource MenuOcrColor}" Margin="4,0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="T" FontSize="{StaticResource TypeSubtitle}" FontWeight="Bold" FontFamily="Segoe UI" Foreground="{DynamicResource MenuOcrColor}" Margin="4,0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -991,7 +987,7 @@
 
                                             <!-- Extract Table Data -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Extract Table Data" Command="{Binding DataContext.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Table24" FontSize="14" Foreground="{DynamicResource TypeTextColor}" /></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Table24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource TypeTextColor}" /></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -1006,7 +1002,7 @@
 
                                             <!-- Convert Image to PDF -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Convert Image to PDF" Command="{Binding DataContext.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" FontSize="14" Foreground="{DynamicResource DangerColor}" /></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource DangerColor}" /></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -1022,7 +1018,7 @@
 
                                             <!-- Convert PDF to Word -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Convert PDF to Word" Command="{Binding DataContext.ConvertPdfToWordCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Document24" FontSize="14" Foreground="{DynamicResource TypeDocColor}" /></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Document24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource TypeDocColor}" /></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -1037,7 +1033,7 @@
 
                                             <!-- Convert to PDF -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Convert to PDF" Command="{Binding DataContext.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" FontSize="14" Foreground="{DynamicResource DangerColor}" /></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource DangerColor}" /></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -1055,7 +1051,7 @@
 
                                             <!-- Search Google (hidden for Markdown & terminal/batch cards) -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Search on Google" Command="{Binding DataContext.GoogleSearchCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" FontSize="14" Foreground="{DynamicResource MenuCodeActionColor}" /></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource MenuCodeActionColor}" /></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -1079,7 +1075,7 @@
 
                                             <!-- Send to Device (Group/Archive/Folder) -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Send to Device" PreviewMouseLeftButtonDown="SendToDevice_Click">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Send24" FontSize="14" Foreground="{DynamicResource TypeDefaultColor}" /></ui:Button.Icon>
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Send24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource TypeDefaultColor}" /></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -1103,7 +1099,7 @@
                                                        Foreground="{DynamicResource TypeImageColor}" ToolTip="Quick Look"
                                                        PreviewMouseLeftButtonDown="QuickLookSpecific_Click">
                                                 <ui:Button.Icon>
-                                                    <ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="14"/>
+                                                    <ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="{StaticResource TypeSubtitle}"/>
                                                 </ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
@@ -1128,14 +1124,14 @@
 
                                             <ui:Button Appearance="Transparent" Padding="5,4" Margin="0,0,3,0" ToolTip="Pin" PreviewMouseLeftButtonDown="PinSpecific_Click">
                                                 <ui:Button.Icon>
-                                                    <ui:SymbolIcon FontSize="14">
+                                                    <ui:SymbolIcon FontSize="{StaticResource TypeSubtitle}">
                                                         <ui:SymbolIcon.Style>
                                                             <Style TargetType="ui:SymbolIcon">
                                                                 <Setter Property="Symbol" Value="Pin24"/>
                                                                 <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" />
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding IsPinned}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#F59E0B"/>
+                                                                        <Setter Property="Foreground" Value="{DynamicResource WarningColor}"/>
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
@@ -1146,7 +1142,7 @@
 
                                             <ui:Button Appearance="Transparent" Padding="5,4" ToolTip="Delete" PreviewMouseLeftButtonDown="DeleteSpecific_Click">
                                                 <ui:Button.Icon>
-                                                    <ui:SymbolIcon Symbol="Delete24" FontSize="14" Foreground="{DynamicResource DangerColor}" />
+                                                    <ui:SymbolIcon Symbol="Delete24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource DangerColor}" />
                                                 </ui:Button.Icon>
                                             </ui:Button>
                                         </StackPanel>

@@ -673,9 +673,21 @@ namespace FlyShelf.ViewModels
             }
         }
 
-
-
-    
+        /// <summary>
+        /// Resets all expanded cards back to compact mode.
+        /// Called when the shelf is summoned or dismissed so cards don't stay expanded across summons.
+        /// </summary>
+        public void CollapseAllExpandedItems()
+        {
+            if (DroppedItems == null || DroppedItems.Count == 0) return;
+            foreach (var item in DroppedItems)
+            {
+                if (item != null && item.IsExpanded)
+                {
+                    item.IsExpanded = false;
+                }
+            }
+        }
 
         /// <summary>Moves an item to the top of the list without triggering clipboard copy or sync.</summary>
         public void MoveItemToTop(ClipboardItem item)

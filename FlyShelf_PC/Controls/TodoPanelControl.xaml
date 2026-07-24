@@ -246,6 +246,7 @@
                                     <Border x:Name="TodoCard" Style="{StaticResource TodoCardStyle}"
                                             AllowDrop="True" 
                                             PreviewMouseLeftButtonDown="TodoItem_PreviewMouseLeftButtonDown"
+                                            PreviewMouseLeftButtonUp="TodoItem_PreviewMouseLeftButtonUp"
                                             PreviewMouseMove="TodoItem_PreviewMouseMove"
                                             DragOver="TodoItem_DragOver" Drop="TodoItem_Drop">
                                         <Border.ContextMenu>

@@ -291,7 +291,7 @@ namespace FlyShelf.ViewModels
                     case '\t': sb.Append("    "); break;
                     default:
                         if (c > 0x7E)
-                            sb.Append($"\\{((int)c):D3}"); // Octal-style escape for non-ASCII
+                            sb.Append(CultureInfo.InvariantCulture, $"\\{((int)c):D3}"); // Octal-style escape for non-ASCII
                         else
                             sb.Append(c);
                         break;
@@ -705,6 +705,11 @@ namespace FlyShelf.ViewModels
                             encoder = new System.Windows.Media.Imaging.JpegBitmapEncoder { QualityLevel = 95 };
                         }
                         encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(frame));
+                        if (!FlyShelf.Classes.DiskSpaceHelper.HasSufficientDiskSpace(outputPath, 10_000_000))
+                        {
+                            FlyShelf.Classes.Logger.LogAction("IMAGE_SAVE", "Insufficient disk space");
+                            return;
+                        }
                         encoder.Save(fs);
                     }
 

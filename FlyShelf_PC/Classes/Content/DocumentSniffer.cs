@@ -192,7 +192,7 @@ namespace FlyShelf.Classes
 
             try
             {
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     var dataObj = new System.Windows.DataObject();
                     var dropList = new System.Collections.Specialized.StringCollection { targetPath };

@@ -751,6 +751,11 @@ namespace FlyShelf.Classes
                                 // Persist on the dispatcher thread directly since we can't block
                                 var cps = checkpoints.ToList();
                                 cps.AddRange(snapshot.Select(SessionToCheckpoint));
+                                if (!DiskSpaceHelper.HasSufficientDiskSpace(_checkpointFile, 1_000_000))
+                                {
+                                    Logger.LogAction("TRANSFER", "Insufficient disk space for checkpoint persist");
+                                    return;
+                                }
                                 string json2 = JsonSerializer.Serialize(cps, new JsonSerializerOptions { WriteIndented = true });
                                 string dir2 = Path.GetDirectoryName(_checkpointFile)!;
                                 Directory.CreateDirectory(dir2);
@@ -777,6 +782,11 @@ namespace FlyShelf.Classes
                     .ToList();
                 checkpoints.AddRange(failedFromActive);
 
+                if (!DiskSpaceHelper.HasSufficientDiskSpace(_checkpointFile, 1_000_000))
+                {
+                    Logger.LogAction("TRANSFER", "Insufficient disk space for checkpoint persist");
+                    return;
+                }
                 string json = JsonSerializer.Serialize(checkpoints, new JsonSerializerOptions { WriteIndented = true });
                 string dir = Path.GetDirectoryName(_checkpointFile)!;
                 Directory.CreateDirectory(dir);
@@ -797,7 +807,7 @@ namespace FlyShelf.Classes
             try
             {
                 if (!File.Exists(_checkpointFile)) return null;
-                string json = File.ReadAllText(_checkpointFile);
+                string json = FileRetryHelper.RunWithRetry(() => File.ReadAllText(_checkpointFile));
                 var checkpoints = JsonSerializer.Deserialize<TransferCheckpoint[]>(json);
                 return checkpoints?.FirstOrDefault(c => c.TransferId == transferId.ToString());
             }
@@ -814,7 +824,7 @@ namespace FlyShelf.Classes
             try
             {
                 if (!File.Exists(_checkpointFile)) return null;
-                string json = File.ReadAllText(_checkpointFile);
+                string json = FileRetryHelper.RunWithRetry(() => File.ReadAllText(_checkpointFile));
                 var checkpoints = JsonSerializer.Deserialize<TransferCheckpoint[]>(json);
                 if (checkpoints == null) return null;
 
@@ -852,7 +862,7 @@ namespace FlyShelf.Classes
                     TransferCheckpoint[] existing = Array.Empty<TransferCheckpoint>();
                     if (File.Exists(_checkpointFile))
                     {
-                        string existingJson = File.ReadAllText(_checkpointFile);
+                        string existingJson = FileRetryHelper.RunWithRetry(() => File.ReadAllText(_checkpointFile));
                         existing = JsonSerializer.Deserialize<TransferCheckpoint[]>(existingJson) ?? Array.Empty<TransferCheckpoint>();
                     }
 
@@ -865,6 +875,11 @@ namespace FlyShelf.Classes
 
                     filtered.Add(SessionToCheckpoint(failedSession));
 
+                    if (!DiskSpaceHelper.HasSufficientDiskSpace(_checkpointFile, 1_000_000))
+                    {
+                        Logger.LogAction("TRANSFER", "Insufficient disk space for checkpoint persist");
+                        return;
+                    }
                     string json = JsonSerializer.Serialize(filtered, new JsonSerializerOptions { WriteIndented = true });
                     string dir = Path.GetDirectoryName(_checkpointFile)!;
                     Directory.CreateDirectory(dir);
@@ -904,7 +919,7 @@ namespace FlyShelf.Classes
             try
             {
                 if (!File.Exists(_checkpointFile)) return;
-                string json = File.ReadAllText(_checkpointFile);
+                string json = FileRetryHelper.RunWithRetry(() => File.ReadAllText(_checkpointFile));
                 var checkpoints = JsonSerializer.Deserialize<TransferCheckpoint[]>(json);
                 if (checkpoints == null) return;
 

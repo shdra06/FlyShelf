@@ -28,6 +28,7 @@ namespace FlyShelf.Classes
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf");
         private static readonly string _anchorFilePath =
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", ".ntp_anchor");
+        private static readonly object _anchorLock = new();
 
         /// <summary>NTP servers to try in order until one succeeds.</summary>
         private static readonly string[] NtpServers = new[]
@@ -202,16 +203,21 @@ namespace FlyShelf.Classes
         /// </summary>
         private static void PersistAnchor(DateTimeOffset ntpTime)
         {
-            try
+            lock (_anchorLock)
             {
-                Directory.CreateDirectory(_appDataDir);
-                string content = $"{ntpTime.ToUniversalTime():O}|{Environment.TickCount64}";
-                File.WriteAllText(_anchorFilePath, content);
-                Logger.LogAction("CLOCK", "Persisted NTP anchor");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("CLOCK", $"Failed to persist NTP anchor: {ex.Message}");
+                try
+                {
+                    Directory.CreateDirectory(_appDataDir);
+                    string content = $"{ntpTime.ToUniversalTime():O}|{Environment.TickCount64}";
+                    string tmpPath = _anchorFilePath + ".tmp";
+                    File.WriteAllText(tmpPath, content);
+                    File.Move(tmpPath, _anchorFilePath, overwrite: true);
+                    Logger.LogAction("CLOCK", "Persisted NTP anchor");
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("CLOCK", $"Failed to persist NTP anchor: {ex.Message}");
+                }
             }
         }
 
@@ -220,38 +226,41 @@ namespace FlyShelf.Classes
         /// </summary>
         private static void LoadAnchor()
         {
-            try
+            lock (_anchorLock)
             {
-                if (!File.Exists(_anchorFilePath)) return;
+                try
+                {
+                    if (!File.Exists(_anchorFilePath)) return;
 
-                string content = File.ReadAllText(_anchorFilePath).Trim();
-                string[] parts = content.Split('|');
-                if (parts.Length != 2) return;
+                    string content = File.ReadAllText(_anchorFilePath).Trim();
+                    string[] parts = content.Split('|');
+                    if (parts.Length != 2) return;
 
-                if (!DateTimeOffset.TryParse(parts[0], CultureInfo.InvariantCulture,
-                    DateTimeStyles.RoundtripKind, out var storedTime))
-                    return;
+                    if (!DateTimeOffset.TryParse(parts[0], CultureInfo.InvariantCulture,
+                        DateTimeStyles.RoundtripKind, out var storedTime))
+                        return;
 
-                if (!long.TryParse(parts[1], out long storedTick))
-                    return;
+                    if (!long.TryParse(parts[1], out long storedTick))
+                        return;
 
-                // Sanity check: stored time should be reasonable (between 2024 and 2100)
-                if (storedTime.Year < 2024 || storedTime.Year > 2100) return;
+                    // Sanity check: stored time should be reasonable (between 2024 and 2100)
+                    if (storedTime.Year < 2024 || storedTime.Year > 2100) return;
 
-                // Sanity check: TickCount64 should have moved forward since the anchor was saved
-                // M-12 FIX: Also detect reboot — if storedTick is unreasonably far from current TickCount64,
-                // the anchor is stale (machine likely rebooted since it was saved)
-                if (Environment.TickCount64 < storedTick || Math.Abs(Environment.TickCount64 - storedTick) > 7 * 24 * 3600 * 1000L)
-                    return;
+                    // Sanity check: TickCount64 should have moved forward since the anchor was saved
+                    // M-12 FIX: Also detect reboot — if storedTick is unreasonably far from current TickCount64,
+                    // the anchor is stale (machine likely rebooted since it was saved)
+                    if (Environment.TickCount64 < storedTick || Math.Abs(Environment.TickCount64 - storedTick) > 7 * 24 * 3600 * 1000L)
+                        return;
 
-                _anchorNtpTime = storedTime;
-                _anchorTickCount = storedTick;
-                _anchorLoaded = true;
-                Logger.LogAction("CLOCK", "Loaded persisted NTP anchor");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("CLOCK", $"Failed to load NTP anchor: {ex.Message}");
+                    _anchorNtpTime = storedTime;
+                    _anchorTickCount = storedTick;
+                    _anchorLoaded = true;
+                    Logger.LogAction("CLOCK", "Loaded persisted NTP anchor");
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("CLOCK", $"Failed to load NTP anchor: {ex.Message}");
+                }
             }
         }
 

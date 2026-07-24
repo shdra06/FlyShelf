@@ -24,6 +24,7 @@ namespace FlyShelf.ViewModels
 {
     public partial class FlyShelfViewModel
     {
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, BitmapSource?> _shellIconCache = new();
         private static readonly char[] NewLineChars = { '\r', '\n' };
         private static readonly char[] SpaceSeparator = { ' ' };
         private static readonly string[] CommonExtensions = { ".txt", ".md", ".cs", ".ts", ".js", ".py", ".json", ".xml",
@@ -32,6 +33,8 @@ namespace FlyShelf.ViewModels
             ".xaml", ".csproj", ".sln", ".gradle", ".kt", ".swift", ".dart" };
         public void HandleDrop(IDataObject data, bool forceClipboardSync = false, bool skipCloudSync = false, string? sourceDevice = null, string? sourceDeviceType = null, string? transferMethod = null)
         {
+            try
+            {
             string[]? files = null;
             string? text = null;
             BitmapSource? bitmap = null;
@@ -45,7 +48,11 @@ namespace FlyShelf.ViewModels
                 if ((files == null || files.Length == 0) && data.GetDataPresent("FileNameW"))
                 {
                     var fName = data.GetData("FileNameW") as string[];
-                    if (fName != null && fName.Length > 0 && fName[0] != null) files = fName;
+                    // [FIX TEXT-DROP]: Only accept FileNameW if it's an actual file system path.
+                    // Chrome/Edge provide FileNameW for URL drags with temp shortcut paths.
+                    if (fName != null && fName.Length > 0 && !string.IsNullOrEmpty(fName[0])
+                        && (File.Exists(fName[0]) || Directory.Exists(fName[0])))
+                        files = fName;
                 }
                 
                 if ((files == null || files.Length == 0) && data.GetDataPresent("text/uri-list"))
@@ -71,7 +78,14 @@ namespace FlyShelf.ViewModels
                             }
                             if (File.Exists(p) || Directory.Exists(p)) parsedPaths.Add(p);
                         }
-                        if (parsedPaths.Count > 0) files = parsedPaths.ToArray();
+                        if (parsedPaths.Count > 0)
+                            files = parsedPaths.ToArray();
+                        else if (text == null)
+                        {
+                            // [FIX TEXT-DROP]: If uri-list contains no valid file paths (e.g. https:// URLs),
+                            // preserve the raw URI as text content — don't discard it.
+                            text = uriText.Trim();
+                        }
                     }
                 }
             }
@@ -125,10 +139,17 @@ namespace FlyShelf.ViewModels
             // Route all heavy tasks, zipping, file-saving and collection processing to background thread
             System.Threading.Tasks.Task.Run(() => 
                 HandleDropInternal(files, bitmap, text, forceClipboardSync, skipCloudSync, sourceDevice, sourceDeviceType, transferMethod));
+            }
+            catch (Exception ex)
+            {
+                Logger.LogCrash("HandleDrop", ex);
+            }
         }
 
         internal void HandleDropInternal(string[]? files, BitmapSource? bitmap, string? text, bool forceClipboardSync, bool skipCloudSync, string? sourceDevice = null, string? sourceDeviceType = null, string? transferMethod = null, string? sourceAppName = null, BitmapSource? sourceAppIcon = null)
         {
+            try
+            {
             // H-04/H-06: Freeze sourceAppIcon at entry so it's thread-safe for all downstream usage
             if (sourceAppIcon != null && sourceAppIcon.CanFreeze && !sourceAppIcon.IsFrozen)
                 sourceAppIcon.Freeze();
@@ -497,6 +518,11 @@ namespace FlyShelf.ViewModels
                             {
                                 var encoder = new PngBitmapEncoder();
                                 encoder.Frames.Add(BitmapFrame.Create(convertedBmp));
+                                if (!Classes.DiskSpaceHelper.HasSufficientDiskSpace(tempFile, 10_000_000))
+                                {
+                                    Classes.Logger.LogAction("IMAGE_SAVE", "Insufficient disk space");
+                                    return;
+                                }
                                 encoder.Save(fs);
                             }
 
@@ -1000,6 +1026,11 @@ namespace FlyShelf.ViewModels
                     FlyShelf.Classes.ClipboardHistoryManager.AppendToJournal(item);
                 });
             }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogCrash("HandleDropInternal", ex);
+            }
         }
 
         // P/Invoke declarations and SHFILEINFO struct centralized in NativeMethods.cs
@@ -1057,6 +1088,11 @@ namespace FlyShelf.ViewModels
             // so every file of the same type shows the same consistent icon (the default
             // app's file-type icon) rather than varying per-file association.
             string ext = System.IO.Path.GetExtension(filePath)?.ToLowerInvariant() ?? "";
+
+            // Check cache first — avoids redundant SHGetFileInfo calls for same extension
+            if (!string.IsNullOrEmpty(ext) && _shellIconCache.TryGetValue(ext, out var cached))
+                return cached;
+
             bool forceGenericIcon = ext is ".pdf" or ".doc" or ".docx" or ".xls" or ".xlsx"
                                          or ".ppt" or ".pptx" or ".odt" or ".ods" or ".odp"
                                          or ".rtf" or ".csv" or ".epub";
@@ -1081,6 +1117,7 @@ namespace FlyShelf.ViewModels
                                 BitmapSizeOptions.FromEmptyOptions());
 
                             bitmapSource.Freeze();
+                            if (!string.IsNullOrEmpty(ext)) _shellIconCache.TryAdd(ext, bitmapSource);
                             return bitmapSource;
                         }
                         finally
@@ -1110,6 +1147,7 @@ namespace FlyShelf.ViewModels
                             BitmapSizeOptions.FromEmptyOptions());
 
                         bitmapSource.Freeze();
+                        if (!string.IsNullOrEmpty(ext)) _shellIconCache.TryAdd(ext, bitmapSource);
                         return bitmapSource;
                     }
                     finally
@@ -1142,6 +1180,7 @@ namespace FlyShelf.ViewModels
                                 BitmapSizeOptions.FromEmptyOptions());
 
                             bitmapSource.Freeze();
+                            _shellIconCache.TryAdd(ext, bitmapSource);
                             return bitmapSource;
                         }
                         finally
@@ -1153,6 +1192,9 @@ namespace FlyShelf.ViewModels
                 catch { } // Best-effort: failure is acceptable
             }
 
+            // Cache null result to avoid retrying for extensions that have no icon
+            if (!string.IsNullOrEmpty(ext))
+                _shellIconCache.TryAdd(ext, null);
             return null;
         }
 

@@ -59,7 +59,7 @@ namespace FlyShelf.Classes
             {
                 if (File.Exists(_stateFilePath))
                 {
-                    string content = File.ReadAllText(_stateFilePath).Trim();
+                    string content = FileRetryHelper.RunWithRetry(() => File.ReadAllText(_stateFilePath)).Trim();
                     if (DateTime.TryParse(content, null, System.Globalization.DateTimeStyles.RoundtripKind, out var endTime))
                     {
                         if (endTime > DateTime.UtcNow)

@@ -224,14 +224,14 @@ namespace FlyShelf.Classes
                         await res.OutputStream.WriteAsync(preErrBytes, 0, preErrBytes.Length);
                         try { res.Close(); } catch { }
 
-                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                        _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                             FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ File rejected before assembly: exceeds 50 GB Free tier limit.");
                         });
                         return;
                     }
                 }
 
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                     FlyShelf.Windows.ToastWindow.ShowToast($"Assembling {rawName} ({chunkFiles.Length} chunks)... 📦");
                 });
 
@@ -258,7 +258,7 @@ namespace FlyShelf.Classes
                     res.ContentType = "application/json";
                     await res.OutputStream.WriteAsync(errBytes, 0, errBytes.Length);
 
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                    _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                         FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ File assembly rejected: exceeds 50 GB Free tier limit.");
                     });
                     return;
@@ -281,7 +281,7 @@ namespace FlyShelf.Classes
 
                 string sizeStr = fileInfo.Length > 1_073_741_824 ? $"{fileInfo.Length / 1_073_741_824.0:F1} GB" : $"{fileInfo.Length / 1_048_576.0:F1} MB";
 
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                     FlyShelf.Windows.ToastWindow.ShowToast($"✅ {rawName} ({sizeStr}) received!");
                     // Auto-copy to clipboard + insert into FlyShelf
                     try
@@ -446,7 +446,7 @@ namespace FlyShelf.Classes
                 if (converted && File.Exists(pdfPath))
                 {
                     // Also add the PDF to the clipboard shelf
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     {
                         var dataObj = new System.Windows.DataObject();
                         var dropList = new System.Collections.Specialized.StringCollection { pdfPath };
@@ -826,7 +826,7 @@ namespace FlyShelf.Classes
                     LicenseManager.RecordPdfMerge();
 
                     // Register to local clipboard shelf on dispatcher
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     {
                         var dataObj = new System.Windows.DataObject();
                         var dropList = new System.Collections.Specialized.StringCollection { outputPath };

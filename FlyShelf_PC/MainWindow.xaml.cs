@@ -65,7 +65,7 @@ namespace FlyShelf
         private EventHandler<Classes.AnimationRequestEventArgs>? _mascotAnimationRequestedHandler;
         private Action<Classes.ThemePackage?>? _themeChangedHandler;
         private System.ComponentModel.PropertyChangedEventHandler? _settingsChangedHandler;
-        private Action<bool>? _updateStatusChangedHandler;
+        private Action<bool>? _updateStatusChangedHandler = null; // Disabled — update notifications removed from clipboard
         private Action? _coastPrefetchHandler;
         private bool _isSuppressingSizeSync = false;
         private Guid _summonedDesktopId = Guid.Empty;
@@ -522,31 +522,10 @@ namespace FlyShelf
             // Apply Aero UI mode if enabled in settings
             ApplyAlternateUIMode();
 
-            // ═══ Update Available Badge ═══
-            // Subscribe to the static cross-window event from UpdateManager
-            _updateStatusChangedHandler = (hasUpdate) =>
-            {
-                Dispatcher.InvokeAsync(() =>
-                {
-                    if (UpdateBadge != null)
-                    {
-                        UpdateBadge.Visibility = hasUpdate ? Visibility.Visible : Visibility.Collapsed;
-                        if (hasUpdate && UpdateBadgeText != null)
-                        {
-                            UpdateBadgeText.Text = $"v{Classes.UpdateManager.GlobalLatestVersion}";
-                        }
-                    }
-                });
-            };
-            Classes.UpdateManager.GlobalUpdateStatusChanged += _updateStatusChangedHandler;
-
-            // Check if an update was already detected before this window loaded
-            if (Classes.UpdateManager.GlobalUpdateAvailable && UpdateBadge != null)
-            {
-                UpdateBadge.Visibility = Visibility.Visible;
-                if (UpdateBadgeText != null)
-                    UpdateBadgeText.Text = $"v{Classes.UpdateManager.GlobalLatestVersion}";
-            }
+            // ═══ Update Available Badge — DISABLED ═══
+            // Update notifications removed from clipboard per user request.
+            // The UpdateBadge element exists in XAML but stays Collapsed.
+            // _updateStatusChangedHandler and GlobalUpdateStatusChanged subscription are skipped.
 
             // ═══ POST-UPDATE HEALTH VERIFICATION ═══
             // If this is the first launch after an update, mark it as healthy
@@ -837,7 +816,9 @@ namespace FlyShelf
         private static int GetWindowLong(IntPtr hWnd, int nIndex) => GetWindowLongSafe(hWnd, nIndex);
         private static IntPtr SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong) => SetWindowLongSafe(hWnd, nIndex, dwNewLong);
         private static bool SetWindowPos(IntPtr hWnd, int hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags) => NativeMethods.SetWindowPos(hWnd, hWndInsertAfter, x, y, cx, cy, uFlags);
+#pragma warning disable CA2020
         private static void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo) => NativeMethods.keybd_event(bVk, bScan, dwFlags, (IntPtr)(long)dwExtraInfo);
+#pragma warning restore CA2020
         private static void keybd_event(byte bVk, byte bScan, int dwFlags, int dwExtraInfo) => NativeMethods.keybd_event(bVk, bScan, (uint)dwFlags, (IntPtr)dwExtraInfo);
 
         private const int HWND_TOPMOST = NativeMethods.HWND_TOPMOST;
@@ -1456,23 +1437,12 @@ namespace FlyShelf
                 OptimizeMemoryUsage();
             }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 
-            // ═══ STARTUP VERSION CHECK ═══
-            // Check for new version in the background (Store-compliant — read-only version.json check).
-            // Show a subtle notification banner at the top of the clipboard if an update is available.
-            Classes.UpdateManager.GlobalUpdateStatusChanged += OnGlobalUpdateStatusChanged;
-            // Also check if a previous session already detected an update
-            if (Classes.UpdateManager.GlobalUpdateAvailable)
-            {
-                UpdateNotificationBanner.Visibility = Visibility.Visible;
-                UpdateBannerText.Text = $"🚀 New version v{Classes.UpdateManager.GlobalLatestVersion} available — tap to update";
-            }
-            // Fire the check at lowest priority so it doesn't compete with startup
-            Dispatcher.InvokeAsync(async () =>
-            {
-                // Delay 10s to let the app fully warm up before making a network request
-                await System.Threading.Tasks.Task.Delay(10000);
-                await Classes.UpdateManager.CheckForNewVersionNotificationAsync();
-            }, System.Windows.Threading.DispatcherPriority.SystemIdle);
+            // ═══ STARTUP VERSION CHECK — DISABLED ═══
+            // Update notification banner removed from clipboard per user request.
+            // The UpdateNotificationBanner element exists in XAML but stays Collapsed.
+            // No version check is performed; no banner is ever shown.
+            // Classes.UpdateManager.GlobalUpdateStatusChanged += OnGlobalUpdateStatusChanged;
+            // Classes.UpdateManager.CheckForNewVersionNotificationAsync() — skipped.
         }
 
         // ═══ Theme/Wallpaper/Backdrop methods moved to MainWindow.Theme.cs ═══

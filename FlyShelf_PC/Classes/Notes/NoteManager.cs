@@ -280,14 +280,31 @@ namespace FlyShelf.Classes
             string filename = $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..6]}.png";
             string path = Path.Combine(dir, filename);
 
-            // Offload PNG encode + file I/O to background thread to avoid UI lag
-            await Task.Run(() =>
+            // [FIX C-2]: Add error handling for image save
+            try
             {
-                using var stream = new FileStream(path, FileMode.Create);
-                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
-                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
-                encoder.Save(stream);
-            });
+                if (!DiskSpaceHelper.HasSufficientDiskSpace(path, 5_000_000)) // 5MB buffer
+                {
+                    Logger.LogAction("NOTE_IMAGE", "Insufficient disk space for image save");
+                    return null;
+                }
+
+                // Offload PNG encode + file I/O to background thread to avoid UI lag
+                await Task.Run(() =>
+                {
+                    using var stream = new FileStream(path, FileMode.Create);
+                    var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                    encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
+                    encoder.Save(stream);
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NOTE_IMAGE_ERR", $"Failed to save image: {ex.Message}");
+                // Clean up partial file
+                try { if (File.Exists(path)) File.Delete(path); } catch { }
+                return null;
+            }
 
             return path;
         }

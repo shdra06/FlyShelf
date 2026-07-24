@@ -98,14 +98,9 @@ namespace FlyShelf
             // ─── FOCUS FIX: Force-activate and topmost-cycle to grab OS focus ───
             ActivateNotesWindow();
 
-            // ─── HEADER: Match the opaque notes dark theme ───
+            // ─── HEADER: Save original background (deferred application below) ───
             if (_originalHeaderBg == null)
                 _originalHeaderBg = HeaderAndFiltersStack.Background;
-            HeaderAndFiltersStack.Background = _notesHeaderBrush;
-            // Also apply ClearType hints to the header while notes are active
-            TextOptions.SetTextFormattingMode(HeaderAndFiltersStack, TextFormattingMode.Ideal);
-            TextOptions.SetTextRenderingMode(HeaderAndFiltersStack, TextRenderingMode.ClearType);
-            RenderOptions.SetClearTypeHint(HeaderAndFiltersStack, ClearTypeHint.Enabled);
 
             // Swap notes button to clipboard icon (acts as "go back" button)
             NotesToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Clipboard24 };
@@ -127,6 +122,30 @@ namespace FlyShelf
             {
                 ShelfListView.Visibility = Visibility.Collapsed;
                 NotesPanel.Visibility = Visibility.Visible;
+
+                // ─── HEADER: Animate color theme transition in sync with panel entrance ───
+                // Use a mutable SolidColorBrush so we can animate its Color property.
+                var currentBg = HeaderAndFiltersStack.Background as SolidColorBrush;
+                Color fromColor = (currentBg != null && !currentBg.IsFrozen) ? currentBg.Color
+                    : (currentBg != null ? currentBg.Color : Colors.Transparent);
+                var animBrush = new SolidColorBrush(fromColor);
+                HeaderAndFiltersStack.Background = animBrush;
+
+                var colorAnim = new System.Windows.Media.Animation.ColorAnimation(
+                    ThemeColors.DarkSurface,
+                    new Duration(TimeSpan.FromMilliseconds(200)))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.CubicEase
+                    {
+                        EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut
+                    }
+                };
+                animBrush.BeginAnimation(SolidColorBrush.ColorProperty, colorAnim);
+
+                // Apply ClearType hints to the header while notes are active
+                TextOptions.SetTextFormattingMode(HeaderAndFiltersStack, TextFormattingMode.Ideal);
+                TextOptions.SetTextRenderingMode(HeaderAndFiltersStack, TextRenderingMode.ClearType);
+                RenderOptions.SetClearTypeHint(HeaderAndFiltersStack, ClearTypeHint.Enabled);
 
                 // Animate in
                 var slideAnim = Classes.AnimationHelper.SlideIn(fromY: -12, durationMs: 200);
@@ -363,11 +382,41 @@ namespace FlyShelf
                 SortFilterBtn.ToolTip = "Filter by Category";
             }
 
-            // ─── HEADER: Restore original transparent/Mica background ───
-            HeaderAndFiltersStack.Background = _originalHeaderBg ?? Brushes.Transparent;
+            // ─── HEADER: Animate color back to original ───
             TextOptions.SetTextFormattingMode(HeaderAndFiltersStack, TextFormattingMode.Ideal);
             TextOptions.SetTextRenderingMode(HeaderAndFiltersStack, TextRenderingMode.Auto);
             RenderOptions.SetClearTypeHint(HeaderAndFiltersStack, ClearTypeHint.Auto);
+
+            Color restoreColor = (_originalHeaderBg is SolidColorBrush origBrush) ? origBrush.Color : Colors.Transparent;
+            if (immediate)
+            {
+                // Instant header restore when switching panels
+                HeaderAndFiltersStack.Background = _originalHeaderBg ?? Brushes.Transparent;
+            }
+            else
+            {
+                // Smooth animated header color restore
+                var currentBg = HeaderAndFiltersStack.Background as SolidColorBrush;
+                Color fromColor = (currentBg != null) ? currentBg.Color : ThemeColors.DarkSurface;
+                var animBrush = new SolidColorBrush(fromColor);
+                HeaderAndFiltersStack.Background = animBrush;
+
+                var colorAnim = new System.Windows.Media.Animation.ColorAnimation(
+                    restoreColor,
+                    new Duration(TimeSpan.FromMilliseconds(120)))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.CubicEase
+                    {
+                        EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn
+                    }
+                };
+                colorAnim.Completed += (_, _) =>
+                {
+                    // Replace the animated brush with the static original to avoid stale references
+                    HeaderAndFiltersStack.Background = _originalHeaderBg ?? Brushes.Transparent;
+                };
+                animBrush.BeginAnimation(SolidColorBrush.ColorProperty, colorAnim);
+            }
 
             if (immediate)
             {

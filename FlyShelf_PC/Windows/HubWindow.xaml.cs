@@ -34,11 +34,30 @@ namespace FlyShelf.Windows
         private System.Windows.Threading.DispatcherTimer? _peerFastRefreshTimer;
         private Action? _coastPrefetchHandler;
 
+        // ═══ ISOLATED CollectionView ═══
+        // Hub owns its own CollectionViewSource so filter changes here
+        // do NOT affect the main clipboard's default ICollectionView.
+        private System.Windows.Data.CollectionViewSource _hubCollectionViewSource = null!;
+
         public HubWindow(FlyShelfViewModel viewModel)
         {
             _viewModel = viewModel;
             DataContext = _viewModel;
             InitializeComponent();
+
+            // ═══ Create an ISOLATED collection view for the Hub ═══
+            // WPF's CollectionViewSource.GetDefaultView() returns a singleton per collection.
+            // Both Hub and MainWindow were sharing that singleton, so filter changes leaked.
+            // By creating a separate CollectionViewSource, the Hub gets its own ICollectionView.
+            _hubCollectionViewSource = new System.Windows.Data.CollectionViewSource
+            {
+                Source = _viewModel.DroppedItems
+            };
+            // Bind Hub controls to the isolated view instead of the shared default view
+            HubListView.ItemsSource = _hubCollectionViewSource.View;
+            if (ImageGridControl != null)
+                ImageGridControl.ItemsSource = _hubCollectionViewSource.View;
+
             _viewModel.DroppedItems.CollectionChanged += DroppedItems_CollectionChanged;
             // Theme override dictionary modification thrashes visual tree at construction,
             // so we only apply the theme in OnSourceInitialized when the handle is active.
@@ -97,7 +116,7 @@ namespace FlyShelf.Windows
             // Subscribe to future update detections
             UpdateManager.GlobalUpdateStatusChanged += OnHubGlobalUpdateStatusChanged;
 
-#if !DEBUG
+#if false // LogsNavItem removed during sidebar restructure
             // Release builds: hide developer-only UI (System Logs tab)
             if (LogsNavItem != null) LogsNavItem.Visibility = Visibility.Collapsed;
 #endif

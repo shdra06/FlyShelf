@@ -777,24 +777,38 @@ namespace FlyShelf.Controls
 
         private void NetPanel_DragOver(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            try
             {
-                e.Effects = DragDropEffects.Copy;
-                e.Handled = true;
+                if (e.Data.GetDataPresent(DataFormats.FileDrop))
+                {
+                    e.Effects = DragDropEffects.Copy;
+                    e.Handled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NETWORK", $"DragOver error: {ex.Message}");
             }
         }
 
         private void NetPanel_Drop(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            try
             {
-                var files = (string[])e.Data.GetData(DataFormats.FileDrop);
-                if (files != null && files.Length > 0)
+                if (e.Data.GetDataPresent(DataFormats.FileDrop))
                 {
-                    NetworkFileQueue.Instance?.StageFiles(files);
-                    RefreshQueue();
-                    ToastWindow.ShowToast($"📂 {files.Length} file(s) added to queue");
+                    var files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                    if (files != null && files.Length > 0)
+                    {
+                        NetworkFileQueue.Instance?.StageFiles(files);
+                        RefreshQueue();
+                        ToastWindow.ShowToast($"📂 {files.Length} file(s) added to queue");
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NETWORK", $"Drop error: {ex.Message}");
             }
         }
 

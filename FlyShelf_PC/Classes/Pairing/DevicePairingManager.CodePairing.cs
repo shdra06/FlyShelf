@@ -386,7 +386,7 @@ namespace FlyShelf.Classes
                         Logger.LogAction("PAIR HANDSHAKE", $"Ã¢Å“â€¦ Auto-registered new device from handshake: {devName} ({devType})");
                         anyNew = true;
 
-                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
                             FlyShelf.Windows.ToastWindow.ShowToast($"Ã°Å¸â€— {devName} joined your sync group!");
                         });

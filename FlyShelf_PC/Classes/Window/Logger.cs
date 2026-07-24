@@ -119,6 +119,46 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
+        /// Logs a critical crash/exception to a dedicated crash log file.
+        /// Unlike LogAction, this ALWAYS writes to disk even in Release builds.
+        /// Used only for unhandled exceptions and crash-level errors.
+        /// </summary>
+        public static void LogCrash(string context, Exception ex)
+        {
+            try
+            {
+                string crashLogDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
+                if (!Directory.Exists(crashLogDir))
+                    Directory.CreateDirectory(crashLogDir);
+
+                string crashLogFile = Path.Combine(crashLogDir, "crash_log.txt");
+
+                // Cap file size at 1MB — truncate old entries
+                try
+                {
+                    if (File.Exists(crashLogFile) && new FileInfo(crashLogFile).Length > 1_048_576)
+                    {
+                        var lines = File.ReadAllLines(crashLogFile);
+                        File.WriteAllLines(crashLogFile, lines.Skip(Math.Max(0, lines.Length - 200)));
+                    }
+                }
+                catch { }
+
+                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+                string entry = $"[{timestamp}] [CRASH] [{context}] {ex.GetType().Name}: {ex.Message}\n    Stack: {ex.StackTrace}\n";
+                if (ex.InnerException != null)
+                    entry += $"    Inner: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}\n";
+
+                File.AppendAllText(crashLogFile, entry);
+            }
+            catch
+            {
+                // Absolute last resort — can't even write crash log
+                System.Diagnostics.Debug.WriteLine($"CRASH LOG FAILED: [{context}] {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Rotates a log file if it exceeds MAX_LOG_FILE_SIZE.
         /// Shifts existing rotations: .1 → .2, .2 → .3, keeps max MAX_ROTATED_FILES.
         /// Must be called under _flushLock.

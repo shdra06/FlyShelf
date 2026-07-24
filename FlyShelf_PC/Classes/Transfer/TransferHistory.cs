@@ -384,6 +384,13 @@ namespace FlyShelf.Classes
                         catch { /* Best-effort backup */ }
                     }
 
+                    // [FIX H-3]: Disk space check before save
+                    if (!DiskSpaceHelper.HasSufficientDiskSpace(_historyFile, 2_000_000))
+                    {
+                        Logger.LogAction("TRANSFER_HISTORY", "Insufficient disk space for history save");
+                        return;
+                    }
+
                     // Atomic write via temp file
                     string tmp = _historyFile + ".tmp";
                     File.WriteAllText(tmp, json, Encoding.UTF8);
@@ -424,7 +431,7 @@ namespace FlyShelf.Classes
             {
                 if (!File.Exists(filePath)) return false;
 
-                string json = File.ReadAllText(filePath, Encoding.UTF8);
+                string json = FileRetryHelper.RunWithRetry(() => File.ReadAllText(filePath, Encoding.UTF8));
                 if (string.IsNullOrWhiteSpace(json)) return false;
 
                 var entries = JsonSerializer.Deserialize<List<TransferHistoryEntry>>(json, _jsonOptions);

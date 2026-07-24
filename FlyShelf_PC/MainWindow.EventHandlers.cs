@@ -37,7 +37,14 @@ namespace FlyShelf
                 return;
             }
 
-            _viewModel.HandleDrop(e.Data, true);
+            try
+            {
+                _viewModel.HandleDrop(e.Data, true);
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogCrash("Window_PreviewDrop", ex);
+            }
             e.Handled = true;
         }
 
@@ -62,18 +69,33 @@ namespace FlyShelf
 
         private void Window_DragEnter(object sender, DragEventArgs e)
         {
-            // [FIX DD-1]: Accept all drag formats unconditionally — COM queries can stall 50-135ms.
-            // The drop handler validates format presence anyway.
-            _isDragHovering = true;
-            IsDragHovering = !_isNotesActive && !_isTodoActive;
+            if (_isInternalDragSource)
+            {
+                e.Effects = DragDropEffects.None;
+                e.Handled = true;
+                return;
+            }
+            try
+            {
+                _isDragHovering = true;
+                IsDragHovering = !_isNotesActive && !_isTodoActive;
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogCrash("Window_DragEnter", ex);
+            }
             e.Effects = DragDropEffects.Copy;
             e.Handled = true;
         }
 
         private void Window_PreviewDragOver(object sender, DragEventArgs e)
         {
-            // Performance Fix: Do NOT query 'e.Data.GetDataPresent' across cross-process COM COM-wrappers 
-            // inside 'DragOver' because this fires hundreds of times a second and completely hangs the UI thread!
+            if (_isInternalDragSource)
+            {
+                e.Effects = DragDropEffects.None;
+                e.Handled = true;
+                return;
+            }
             e.Effects = DragDropEffects.Copy;
             e.Handled = true;
         }
@@ -1002,6 +1024,11 @@ namespace FlyShelf
 
                         encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rotated));
 
+                        if (!FlyShelf.Classes.DiskSpaceHelper.HasSufficientDiskSpace(filePath, 10_000_000))
+                        {
+                            FlyShelf.Classes.Logger.LogAction("IMAGE_SAVE", "Insufficient disk space");
+                            return;
+                        }
                         using (var fs = new System.IO.FileStream(filePath, System.IO.FileMode.Create, System.IO.FileAccess.Write))
                         {
                             encoder.Save(fs);

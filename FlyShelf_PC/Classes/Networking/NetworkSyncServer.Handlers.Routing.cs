@@ -820,7 +820,7 @@ namespace FlyShelf.Classes
                                     if (fileSize > LicenseManager.FREE_SYNC_SIZE_LIMIT && !LicenseManager.IsPro)
                                     {
                                         Logger.LogAction("WS", $"File receipt rejected — {fileName} ({fileSize} bytes) exceeds 50 GB limit on Free tier.");
-                                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                                        _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                                             FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming file {fileName} exceeds 50 GB Free tier limit.");
                                         });
 
@@ -878,7 +878,7 @@ namespace FlyShelf.Classes
                                     }
                                     else
                                     {
-                                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                                        _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                                             FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {fileName} from {sourceDeviceName} (via WS)... 📥");
                                         });
                                     }
@@ -910,7 +910,7 @@ namespace FlyShelf.Classes
                                                     if (progress < 1) progress = 1;
                                                     if (progress > 99) progress = 99;
                                                     string speedText = $"{FlyShelfViewModel.FormatBytesStatic(bytesReceived)} of {FlyShelfViewModel.FormatBytesStatic(fileSize)}";
-                                                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                                                    _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                                                     {
                                                         placeholder.TransferProgress = progress;
                                                         placeholder.TransferStatusText = $"Transferring... {progress:F0}% ({speedText})";
@@ -941,7 +941,7 @@ namespace FlyShelf.Classes
 
                                         if (placeholder != null)
                                         {
-                                            System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.DroppedItems.Remove(placeholder));
+                                            _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.DroppedItems.Remove(placeholder));
                                         }
                                         throw;
                                     }

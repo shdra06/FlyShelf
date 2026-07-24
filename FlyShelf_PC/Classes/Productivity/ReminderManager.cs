@@ -121,7 +121,8 @@ namespace FlyShelf.Classes
                         return;
                     }
 
-                    string json = File.ReadAllText(_remindersPath);
+                    // [FIX H-1]: Use RunWithRetry for file reads (consistent with other managers)
+                    string json = FileRetryHelper.RunWithRetry(() => File.ReadAllText(_remindersPath));
                     var loaded = JsonSerializer.Deserialize<List<ReminderItem>>(json, new JsonSerializerOptions
                     {
                         PropertyNameCaseInsensitive = true
@@ -149,7 +150,8 @@ namespace FlyShelf.Classes
                         if (File.Exists(bakPath))
                         {
                             Logger.LogAction("REMINDERS", "Attempting recovery from .bak file");
-                            string bakJson = File.ReadAllText(bakPath);
+                            // [FIX H-1]: Use RunWithRetry for backup file reads
+                            string bakJson = FileRetryHelper.RunWithRetry(() => File.ReadAllText(bakPath));
                             var bakLoaded = JsonSerializer.Deserialize<List<ReminderItem>>(bakJson, new JsonSerializerOptions
                             {
                                 PropertyNameCaseInsensitive = true
@@ -377,6 +379,13 @@ namespace FlyShelf.Classes
 
                     // Create backup before saving
                     try { if (File.Exists(_remindersPath)) File.Copy(_remindersPath, _remindersPath + ".bak", overwrite: true); } catch { } // Best-effort: failure is acceptable
+
+                    // [FIX H-2]: Disk space check before save
+                    if (!DiskSpaceHelper.HasSufficientDiskSpace(_remindersPath, 1_000_000))
+                    {
+                        Logger.LogAction("REMINDER", "Insufficient disk space for reminder save");
+                        return;
+                    }
 
                     string tmpPath = _remindersPath + ".tmp";
                     File.WriteAllText(tmpPath, json);

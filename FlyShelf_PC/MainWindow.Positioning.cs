@@ -188,6 +188,7 @@ namespace FlyShelf
             // while the second call succeeded, leaving residual SmoothScroll velocity.
             try
             {
+                _viewModel?.CollapseAllExpandedItems();
                 var sv = GetShelfScrollViewer();
                 Classes.SmoothScroll.ResetScrollState(sv);
                 if (sv != null)
@@ -984,23 +985,23 @@ namespace FlyShelf
 
             _scrollDecayTimer.Start();
 
-            // ═══ LIVE THUMBNAIL LOADING ═══
-            // v3.0.7 MSIX (proven smooth): loaded thumbnails ONLY after scroll stopped.
-            // Running RenderVisibleThumbnails during scroll adds TransformToAncestor()
-            // per visible item + potential bitmap loading — competing with scroll frames.
-            // Now: timer is ONLY started from _scrollHighQualityTimer after scroll stops.
+            // ═══ LIVE THUMBNAIL LOADING (scroll-speed-aware) ═══
+            // Load thumbnails during scroll at Background priority with 200ms throttle.
+            // RenderVisibleThumbnails gates on scroll velocity internally:
+            //   - Slow scroll (< 8 px/frame): load normally → images "appear" loaded
+            //   - Fast scroll (> 8 px/frame): skip loading → preserve scroll smoothness
             if (_scrollLiveLoadTimer == null)
             {
                 _scrollLiveLoadTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
                 {
-                    Interval = TimeSpan.FromMilliseconds(120)
+                    Interval = TimeSpan.FromMilliseconds(200)
                 };
                 _scrollLiveLoadTimer.Tick += (s, ev) =>
                 {
                     RenderVisibleThumbnails(onlyFirstTen: false);
                 };
             }
-            // Do NOT start the live load timer during scroll — let scroll frames have full CPU
+            if (!_scrollLiveLoadTimer.IsEnabled) _scrollLiveLoadTimer.Start();
 
             // Start or reset the snappier 30ms stoppage timer for final high-quality pass when scroll stops
             if (_scrollHighQualityTimer == null)
@@ -1090,11 +1091,18 @@ namespace FlyShelf
                     double viewportHeight = sv.ViewportHeight;
                     if (viewportHeight <= 0 || viewportWidth <= 0) return;
 
-                    // Prefetch overdraw: expand viewport by 800px above and below to proactively
-                    // load adjacent images well before they scroll into view. The large overdraw
-                    // combined with live loading during scroll creates the illusion that ALL
-                    // images are pre-loaded while keeping actual RAM usage low.
-                    Rect viewportRect = new Rect(0, -800, viewportWidth, viewportHeight + 1600);
+                    // ═══ SCROLL-SPEED-AWARE PREFETCH GATING ═══
+                    // During fast scrolling, skip thumbnail loading entirely to preserve
+                    // scroll smoothness. Only load when velocity drops below threshold.
+                    var scrollSv = GetShelfScrollViewer();
+                    double scrollVelocity = scrollSv != null ? Classes.SmoothScroll.GetCurrentVelocity(scrollSv) : 0;
+                    bool isFastScrolling = scrollVelocity > 25.0; // > 25 px/frame = aggressive swipe only
+
+                    // Prefetch overdraw: expand viewport by 1200px above and below.
+                    // Larger zone ensures images preload well before entering viewport.
+                    // During fast scroll, shrink to 400px (just enough for immediate needs).
+                    double prefetchOverdraw = isFastScrolling ? 400 : 1200;
+                    Rect viewportRect = new Rect(0, -prefetchOverdraw, viewportWidth, viewportHeight + prefetchOverdraw * 2);
                     int count = ShelfListView.Items.Count;
 
                     // ═══ FULL-COLLECTION SCAN ═══
@@ -1230,7 +1238,7 @@ namespace FlyShelf
 
                             // Concurrent load cap: max simultaneous thumbnail decodes to prevent RAM spike.
                             // Filtered views (e.g. "Images") have fewer total items, so allow more concurrency.
-                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality && !onlyFirstTen)
+                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality && !onlyFirstTen && !isFastScrolling)
                             {
                                 // Safety cap: max 8 concurrent thumbnail decodes to bound memory pressure.
                                 // STABILITY FIX: Only count items that still have realized containers

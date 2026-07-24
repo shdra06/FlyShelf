@@ -454,6 +454,33 @@ namespace FlyShelf.Classes
                         json = null;
                     }
 
+                    // [FIX C-1]: Corrupt JSON detected — try .bak then fall through to defaults
+                    if (string.IsNullOrEmpty(json))
+                    {
+                        Classes.Logger.LogAction("SETTINGS", "Corrupt settings file — falling back to defaults");
+                        // [FIX H-7]: Try .bak recovery before falling back to defaults
+                        string bakPath = path + ".bak";
+                        if (File.Exists(bakPath))
+                        {
+                            try
+                            {
+                                string bakJson = FileRetryHelper.RunWithRetry(() => File.ReadAllText(bakPath));
+                                if (!string.IsNullOrEmpty(bakJson))
+                                {
+                                    var bakSettings = JsonSerializer.Deserialize<AdvanceSettings>(bakJson);
+                                    if (bakSettings != null)
+                                    {
+                                        Logger.LogAction("SETTINGS", "Recovered settings from .bak backup");
+                                        Current.CopyFrom(bakSettings);
+                                        // Fall through to handler registration below
+                                    }
+                                }
+                            }
+                            catch { } // Backup also corrupt — fall through to defaults
+                        }
+                    }
+                    else
+                    {
                     var settings = JsonSerializer.Deserialize<AdvanceSettings>(json);
                     if (settings != null)
                     {
@@ -484,6 +511,7 @@ namespace FlyShelf.Classes
                             catch { } // Best-effort: failure is acceptable
                         }
                     }
+                    } // end else (json not null)
                 }
 
                 // Generate a random PIN for first-time users (replaces insecure static '55555' default)
@@ -557,9 +585,22 @@ namespace FlyShelf.Classes
                             // not at call-time. This prevents stale data if a property changes
                             // between the Save() call and the background thread executing.
                             var json = JsonSerializer.Serialize(Current, new JsonSerializerOptions { WriteIndented = true });
+                            if (!DiskSpaceHelper.HasSufficientDiskSpace(path, 1_000_000))
+                            {
+                                Logger.LogAction("SETTINGS", "Insufficient disk space");
+                                return;
+                            }
                             string tempPath = path + ".tmp";
                             RunWithRetry(() => File.WriteAllText(tempPath, json));
                             RunWithRetry(() => File.Move(tempPath, path, true));
+
+                            // [FIX H-7]: Create .bak backup after successful save (consistent with other managers)
+                            try
+                            {
+                                string bakPath = path + ".bak";
+                                File.Copy(path, bakPath, overwrite: true);
+                            }
+                            catch { } // Best-effort backup
                         }
                         catch (Exception ex)
                         {

@@ -962,7 +962,7 @@ $word.Quit()
                 await System.Threading.Tasks.Task.Delay(5000);
                 if (Application.Current != null && !Application.Current.Dispatcher.HasShutdownStarted)
                 {
-                    Dispatcher.InvokeAsync(() =>
+                    _ = Dispatcher.InvokeAsync(() =>
                     {
                         // Only revert if still showing the raw password (user didn't change it)
                         if (item.FileName == raw && item.IsPassword)

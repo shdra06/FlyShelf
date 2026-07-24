@@ -18,11 +18,12 @@ namespace FlyShelf.Classes
             string currentVer = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
 
             string verFile = Path.Combine(ExecutionDir, "version.txt");
-            if (File.Exists(verFile) && File.ReadAllText(verFile).Trim() == currentVer)
+            try
             {
-                // Already extracted the payloads for this version. Fast boot.
-                return;
+                if (File.ReadAllText(verFile).Trim() == currentVer)
+                    return; // Already extracted
             }
+            catch { /* File doesn't exist or can't be read — proceed with extraction */ }
 
             // Version changed or clean install. Rebuild payload directories natively.
             try { if (Directory.Exists(ExecutionDir)) Directory.Delete(ExecutionDir, true); } catch { } // Best-effort: failure is acceptable
@@ -30,7 +31,8 @@ namespace FlyShelf.Classes
 
             ExtractResource("FlyShelf.WebClient.zip", Path.Combine(ExecutionDir, "Resources", "WebClient"));
 
-            File.WriteAllText(verFile, currentVer);
+            try { File.WriteAllText(verFile, currentVer); }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"RuntimeHost version write failed: {ex.Message}"); }
         }
 
         private static void ExtractResource(string resourceName, string outDir)

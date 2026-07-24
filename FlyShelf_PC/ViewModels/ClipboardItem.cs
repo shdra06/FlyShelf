@@ -400,9 +400,17 @@ namespace FlyShelf.ViewModels
                         _rawContent = newValue.Length > SpillPreviewLength ? newValue[..SpillPreviewLength] + "…" : newValue;
                         _ = System.Threading.Tasks.Task.Run(() =>
                         {
-                            System.IO.File.WriteAllText(backingPath, newValue);
-                            // Only null out _rawContent after write completes successfully
-                            _rawContent = null;
+                            try
+                            {
+                                System.IO.File.WriteAllText(backingPath, newValue);
+                                // Only null out _rawContent after successful write
+                                _rawContent = null;
+                            }
+                            catch (Exception ex)
+                            {
+                                // [FIX C-3]: Don't null out _rawContent if write failed — keep in-memory copy
+                                Classes.Logger.LogCrash("ClipboardItem_SpillWrite", ex);
+                            }
                         });
                         _lowerContent = null; // invalidate cache
 

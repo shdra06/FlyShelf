@@ -52,9 +52,12 @@ namespace FlyShelf.Controls
                 }
 
                 // If clicking on a TextBox or action button, let it handle focus naturally — don't toggle or re-layout
-                if (skipToggle) return;
+                if (skipToggle)
+                {
+                    _todoDragItem = null;
+                    return;
+                }
 
-                // Clicking on non-TextBox area toggles expansion
                 bool targetState = !item.IsExpanded;
                 if (targetState)
                 {
@@ -67,6 +70,11 @@ namespace FlyShelf.Controls
             }
         }
 
+        private void TodoItem_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            _todoDragItem = null;
+        }
+
         private void TodoItem_PreviewMouseMove(object sender, MouseEventArgs e)
         {
             if (_todoDragItem == null || e.LeftButton != MouseButtonState.Pressed) return;
@@ -76,11 +84,20 @@ namespace FlyShelf.Controls
 
             if (Math.Abs(diff.X) > 5 || Math.Abs(diff.Y) > 5)
             {
-                if (sender is FrameworkElement fe)
+                if (sender is FrameworkElement fe && _todoDragItem != null)
                 {
-                    var data = new DataObject(DataFormats.Serializable, _todoDragItem);
-                    DragDrop.DoDragDrop(fe, data, DragDropEffects.Move);
-                    _todoDragItem = null;
+                    var itemToDrag = _todoDragItem;
+                    _todoDragItem = null; // Clear BEFORE starting DoDragDrop to avoid re-entrancy state issues
+
+                    try
+                    {
+                        var data = new DataObject(DataFormats.Serializable, itemToDrag);
+                        DragDrop.DoDragDrop(fe, data, DragDropEffects.Move);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("TODO_DRAG_ERR", $"DoDragDrop failed safely: {ex.Message}");
+                    }
                 }
             }
         }
@@ -101,36 +118,43 @@ namespace FlyShelf.Controls
         private void TodoItem_Drop(object sender, DragEventArgs e)
         {
             e.Handled = true;
-            if (_selectedTodoDay == null) return;
-
-            if (e.Data.GetData(DataFormats.Serializable) is TodoItem sourceItem
-                && sender is FrameworkElement fe
-                && fe.DataContext is TodoItem targetItem
-                && sourceItem != targetItem)
-            {
-                int sourceIndex = _selectedTodoDay.Items.IndexOf(sourceItem);
-                int targetIndex = _selectedTodoDay.Items.IndexOf(targetItem);
-
-                if (sourceIndex < 0 || targetIndex < 0) return;
-
-                _selectedTodoDay.Items.RemoveAt(sourceIndex);
-                // Recalculate target index after removal
-                targetIndex = _selectedTodoDay.Items.IndexOf(targetItem);
-                if (targetIndex < 0)
-                    _selectedTodoDay.Items.Add(sourceItem);
-                else
-                    _selectedTodoDay.Items.Insert(targetIndex, sourceItem);
-
-                // Update SortOrder indices for all items
-                for (int i = 0; i < _selectedTodoDay.Items.Count; i++)
-                {
-                    _selectedTodoDay.Items[i].SortOrder = i;
-                }
-
-                TodoManager.MarkDirty();
-            }
-
             _todoDragItem = null;
+
+            try
+            {
+                if (_selectedTodoDay == null) return;
+
+                if (e.Data.GetData(DataFormats.Serializable) is TodoItem sourceItem
+                    && sender is FrameworkElement fe
+                    && fe.DataContext is TodoItem targetItem
+                    && sourceItem != targetItem)
+                {
+                    int sourceIndex = _selectedTodoDay.Items.IndexOf(sourceItem);
+                    int targetIndex = _selectedTodoDay.Items.IndexOf(targetItem);
+
+                    if (sourceIndex < 0 || targetIndex < 0) return;
+
+                    _selectedTodoDay.Items.RemoveAt(sourceIndex);
+                    // Recalculate target index after removal
+                    targetIndex = _selectedTodoDay.Items.IndexOf(targetItem);
+                    if (targetIndex < 0)
+                        _selectedTodoDay.Items.Add(sourceItem);
+                    else
+                        _selectedTodoDay.Items.Insert(targetIndex, sourceItem);
+
+                    // Update SortOrder indices for all items
+                    for (int i = 0; i < _selectedTodoDay.Items.Count; i++)
+                    {
+                        _selectedTodoDay.Items[i].SortOrder = i;
+                    }
+
+                    TodoManager.MarkDirty();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("TODO_DROP_ERR", $"Drop failed safely: {ex.Message}");
+            }
         }
 
         // ═══════════════════════════════════════════════════════════

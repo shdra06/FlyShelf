@@ -563,22 +563,28 @@ namespace FlyShelf
                 _isApplyingFilter = true;
                 try
                 {
-                    view.Filter = obj =>
+                    // PERF: DeferRefresh batches the filter assignment into a single
+                    // view refresh, preventing WPF from re-evaluating the filter and
+                    // re-materializing containers multiple times.
+                    using (view.DeferRefresh())
                     {
-                        if (obj is FlyShelf.ViewModels.ClipboardItem item)
+                        view.Filter = obj =>
                         {
-                            return category switch
+                            if (obj is FlyShelf.ViewModels.ClipboardItem item)
                             {
-                                "Images" => item.IsImagePreview,
-                                "Pinned" => item.IsPinned,
-                                "PDF" => item.IsPdfPreview,
-                                "Docs" => item.IsDocPreview,
-                                "Password" => item.IsPassword,
-                                _ => true
-                            };
-                        }
-                        return false;
-                    };
+                                return category switch
+                                {
+                                    "Images" => item.IsImagePreview,
+                                    "Pinned" => item.IsPinned,
+                                    "PDF" => item.IsPdfPreview,
+                                    "Docs" => item.IsDocPreview,
+                                    "Password" => item.IsPassword,
+                                    _ => true
+                                };
+                            }
+                            return false;
+                        };
+                    }
                 }
                 finally
                 {
@@ -642,7 +648,14 @@ namespace FlyShelf
             try
             {
                 var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
-                if (view != null) view.Filter = null;
+                if (view != null)
+                {
+                    // PERF: DeferRefresh batches the filter clear into a single view refresh
+                    using (view.DeferRefresh())
+                    {
+                        view.Filter = null;
+                    }
+                }
                 if (ShelfListView != null && ShelfListView.Items.CanFilter)
                 {
                     ShelfListView.Items.Filter = null;

@@ -33,49 +33,115 @@ namespace FlyShelf.Windows
 
         /// <summary>
         /// Programmatically navigates to the specified tab by tag name.
-        /// Valid tags: Dashboard, History, Network, Settings, Logs, About, Tutorial
+        /// Valid tags: Dashboard, History, Network, Personalization, Settings, About
         /// </summary>
         public void NavigateToTab(string tag)
         {
             Dispatcher.Invoke(() =>
             {
-                foreach (var item in RootNavigation.MenuItems)
-                {
-                    if (item is Wpf.Ui.Controls.NavigationViewItem navItem)
-                    {
-                        navItem.IsActive = ((navItem.Tag as string) == tag);
-                    }
-                }
-
-                AnimateTabSwitch(DashboardGrid, tag == "Dashboard");
-                AnimateTabSwitch(HistoryGrid, tag == "History");
-                AnimateTabSwitch(NetworkGrid, tag == "Network");
-                AnimateTabSwitch(SettingsGrid, tag == "Settings");
-                AnimateTabSwitch(LogsGrid, tag == "Logs");
-                AnimateTabSwitch(AboutGrid, tag == "About");
-                AnimateTabSwitch(TutorialGrid, tag == "Tutorial");
-
-                if (tag == "Settings")
-                {
-                    PopulateThemeCombo();
-                    HighlightActiveColorTheme();
-                    UpdateAlignButtonsVisualState();
-                    if (WidgetPositioningSection != null)
-                    {
-                        WidgetPositioningSection.Visibility = SettingsManager.Current.EnableTaskbarWidget
-                            ? Visibility.Visible
-                            : Visibility.Collapsed;
-                    }
-                }
-                if (tag == "History")
-                {
-                    _hubThumbnailRetryCount = 0;
-                    Dispatcher.InvokeAsync(() => RenderHubVisibleThumbnails(),
-                        System.Windows.Threading.DispatcherPriority.Loaded);
-                }
+                // Check the matching sidebar RadioButton
+                SelectSidebarTab(tag);
+                SwitchToTab(tag);
             });
         }
 
+        private void SelectSidebarTab(string tag)
+        {
+            // Walk the sidebar StackPanel to find matching RadioButton
+            var sidebar = FindName("RootGrid") as System.Windows.Controls.Grid;
+            if (sidebar == null) return;
+            
+            foreach (var rb in FindVisualChildren<System.Windows.Controls.RadioButton>(this))
+            {
+                if (rb.GroupName == "NavTabs" && rb.Tag as string == tag)
+                {
+                    rb.IsChecked = true;
+                    break;
+                }
+            }
+        }
+
+        private static System.Collections.Generic.IEnumerable<T> FindVisualChildren<T>(DependencyObject parent) where T : DependencyObject
+        {
+            for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+                if (child is T t) yield return t;
+                foreach (var grandchild in FindVisualChildren<T>(child)) yield return grandchild;
+            }
+        }
+
+        private void SidebarNav_Checked(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.RadioButton rb)
+            {
+                string tag = rb.Tag as string;
+                if (string.IsNullOrEmpty(tag)) return;
+                SwitchToTab(tag);
+            }
+        }
+
+        private void SwitchToTab(string tag)
+        {
+            AnimateTabSwitch(DashboardGrid, tag == "Dashboard");
+            AnimateTabSwitch(HistoryGrid, tag == "History");
+            AnimateTabSwitch(NetworkGrid, tag == "Network");
+            AnimateTabSwitch(PersonalizationGrid, tag == "Personalization");
+            AnimateTabSwitch(SettingsGrid, tag == "Settings");
+            AnimateTabSwitch(AiGrid, tag == "AI");
+            AnimateTabSwitch(AboutGrid, tag == "About");
+            
+            if (tag == "Personalization")
+            {
+                PopulateThemeCombo();
+                HighlightActiveColorTheme();
+            }
+            if (tag == "Settings")
+            {
+                UpdateAlignButtonsVisualState();
+                if (WidgetPositioningSection != null)
+                {
+                    WidgetPositioningSection.Visibility = SettingsManager.Current.EnableTaskbarWidget
+                        ? Visibility.Visible
+                        : Visibility.Collapsed;
+                }
+            }
+            if (tag == "AI")
+            {
+                PopulateHubAiSettings();
+            }
+            if (tag == "Network")
+            {
+                RefreshDevices_Click(null, null);
+                RefreshQRCode();
+                RefreshPairedDevicesList();
+#if !MSIX_STORE
+                if (ServerDiagnosticsLog != null)
+                {
+                    ServerDiagnosticsLog.Text = GetServerDiagnostics();
+                }
+#endif
+                _pairingHandshakeTimer?.Start();
+            }
+            else
+            {
+                _pairingHandshakeTimer?.Stop();
+            }
+            if (tag == "About")
+            {
+#if !MSIX_STORE
+                RefreshLogs_Click(null, null);
+#endif
+            }
+            if (tag == "History")
+            {
+                _hubThumbnailRetryCount = 0;
+                Dispatcher.InvokeAsync(() => RenderHubVisibleThumbnails(),
+                    System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+        }
+
+        // Keep Nav_Click for backward compatibility (DashboardCard routing etc.)
         private void Nav_Click(object sender, MouseButtonEventArgs e)
         {
             if (e != null) e.Handled = true;
@@ -83,71 +149,15 @@ namespace FlyShelf.Windows
             {
                 string tag = fe.Tag as string;
                 if (string.IsNullOrEmpty(tag)) return;
-                foreach (var item in RootNavigation.MenuItems)
-                {
-                    if (item is Wpf.Ui.Controls.NavigationViewItem navItem)
-                    {
-                        navItem.IsActive = ((navItem.Tag as string) == tag);
-                    }
-                }
-                
-                AnimateTabSwitch(DashboardGrid, tag == "Dashboard");
-                AnimateTabSwitch(HistoryGrid, tag == "History");
-                AnimateTabSwitch(NetworkGrid, tag == "Network");
-                AnimateTabSwitch(SettingsGrid, tag == "Settings");
-                AnimateTabSwitch(AiGrid, tag == "AI");
-#if MSIX_STORE
-                AnimateTabSwitch(LogsGrid, false);
-#else
-                AnimateTabSwitch(LogsGrid, tag == "Logs");
-                if (tag == "Logs") RefreshLogs_Click(null, null);
-#endif
-                AnimateTabSwitch(AboutGrid, tag == "About");
-                AnimateTabSwitch(TutorialGrid, tag == "Tutorial");
-                
-                if (tag == "Settings")
-                {
-                    PopulateThemeCombo();
-                    HighlightActiveColorTheme();
-                    UpdateAlignButtonsVisualState();
-                    // Force-sync widget positioning section visibility
-                    if (WidgetPositioningSection != null)
-                    {
-                        WidgetPositioningSection.Visibility = SettingsManager.Current.EnableTaskbarWidget
-                            ? Visibility.Visible
-                            : Visibility.Collapsed;
-                    }
-                }
-                if (tag == "AI")
-                {
-                    PopulateHubAiSettings();
-                }
-                if (tag == "Network")
-                {
-                    RefreshDevices_Click(null, null);
-                    RefreshQRCode();
-                    RefreshPairedDevicesList();
-                    // Auto-populate server diagnostics
-#if !MSIX_STORE
-                    if (ServerDiagnosticsLog != null)
-                    {
-                        ServerDiagnosticsLog.Text = GetServerDiagnostics();
-                    }
-#endif
+                NavigateToTab(tag);
+            }
+        }
 
-                    _pairingHandshakeTimer?.Start();
-                }
-                else
-                {
-                    _pairingHandshakeTimer?.Stop();
-                }
-                if (tag == "History")
-                {
-                    // Render visible thumbnails when switching to the Clipboard/History tab
-                    _hubThumbnailRetryCount = 0;
-                    Dispatcher.InvokeAsync(() => RenderHubVisibleThumbnails(),
-                        System.Windows.Threading.DispatcherPriority.Loaded);
-                }
+        private void DashboardCard_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is string tag)
+            {
+                NavigateToTab(tag);
             }
         }
 
@@ -161,22 +171,6 @@ namespace FlyShelf.Windows
             AnimateTabSwitch(NetworkFileQueueTab, NetworkTabFileQueue?.IsChecked == true);
             AnimateTabSwitch(NetworkHistoryTab, NetworkTabHistory?.IsChecked == true);
             AnimateTabSwitch(NetworkNearbyTab, NetworkTabNearby?.IsChecked == true);
-        }
-
-        private void DashboardCard_Click(object sender, MouseButtonEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.Tag is string tag)
-            {
-                foreach (var item in RootNavigation.MenuItems)
-                {
-                    if (item is FrameworkElement navItem && navItem.Tag as string == tag)
-                    {
-                        navItem.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = MouseLeftButtonDownEvent });
-                        Nav_Click(navItem, null);
-                        break;
-                    }
-                }
-            }
         }
 
         private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)

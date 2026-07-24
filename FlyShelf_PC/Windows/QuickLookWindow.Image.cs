@@ -61,6 +61,11 @@ namespace FlyShelf.Windows
                         
                         encoder.Frames.Add(BitmapFrame.Create(rotated));
                         
+                        if (!FlyShelf.Classes.DiskSpaceHelper.HasSufficientDiskSpace(filePath, 10_000_000))
+                        {
+                            FlyShelf.Classes.Logger.LogAction("IMAGE_SAVE", "Insufficient disk space");
+                            return null;
+                        }
                         using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write))
                         {
                             encoder.Save(fs);

@@ -663,8 +663,19 @@ namespace FlyShelf.Windows
                         // Allows dragging directly into WhatsApp, Discord, Photoshop natively!
                         dataObject.SetData(DataFormats.FileDrop, new[] { _item.FilePath });
                         
-                        try { DragDrop.DoDragDrop(this, dataObject, DragDropEffects.Copy); }
-                        catch (System.Runtime.InteropServices.COMException comEx) { Classes.Logger.LogAction("QUICKLOOK_DRAG", $"OLE COMException: 0x{comEx.ErrorCode:X8}"); }
+                        MainWindow._isInternalDragSource = true;
+                        try 
+                        { 
+                            DragDrop.DoDragDrop(this, dataObject, DragDropEffects.Copy); 
+                        }
+                        catch (Exception ex) 
+                        { 
+                            Classes.Logger.LogAction("QUICKLOOK_DRAG", $"DoDragDrop failed: {ex.Message}"); 
+                        }
+                        finally
+                        {
+                            MainWindow._isInternalDragSource = false;
+                        }
                     }
                 }
             }

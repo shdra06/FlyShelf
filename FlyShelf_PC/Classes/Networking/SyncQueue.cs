@@ -217,6 +217,11 @@ namespace FlyShelf.Classes
                         Attempts = j.Attempts
                     }).ToArray();
 
+                    if (!DiskSpaceHelper.HasSufficientDiskSpace(_persistFile, 1_000_000))
+                    {
+                        Logger.LogAction("SYNC_QUEUE", "Insufficient disk space for persist");
+                        return;
+                    }
                     string dir = Path.GetDirectoryName(_persistFile)!;
                     Directory.CreateDirectory(dir);
                     string tmp = _persistFile + ".tmp";
@@ -235,7 +240,7 @@ namespace FlyShelf.Classes
             try
             {
                 if (!File.Exists(_persistFile)) return;
-                string json = File.ReadAllText(_persistFile);
+                string json = FileRetryHelper.RunWithRetry(() => File.ReadAllText(_persistFile));
                 var entries = JsonSerializer.Deserialize<PersistedSyncJob[]>(json);
                 if (entries == null) return;
 

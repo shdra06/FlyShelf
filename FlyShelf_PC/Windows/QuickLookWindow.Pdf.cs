@@ -151,26 +151,51 @@ namespace FlyShelf.Windows
                 };
 
                 // Simple drag-and-drop support
+                Point tileDragStart = default;
+                tile.PreviewMouseLeftButtonDown += (s, e) => {
+                    tileDragStart = e.GetPosition(null);
+                };
+
                 tile.MouseMove += (s, e) => {
                     if (e.LeftButton == MouseButtonState.Pressed && tile.ActionsOverlay.Visibility != Visibility.Visible)
                     {
-                        DragDrop.DoDragDrop(tile, tile, DragDropEffects.Move);
+                        Point currentPos = e.GetPosition(null);
+                        Vector diff = tileDragStart - currentPos;
+                        if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance || Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
+                        {
+                            try
+                            {
+                                DragDrop.DoDragDrop(tile, tile, DragDropEffects.Move);
+                            }
+                            catch (Exception ex)
+                            {
+                                Classes.Logger.LogAction("PDF_TILE_DRAG", $"DoDragDrop failed: {ex.Message}");
+                            }
+                        }
                     }
                 };
 
                 tile.Drop += (s, e) => {
-                    if (e.Data.GetData(typeof(PdfPageTile)) is PdfPageTile sourceTile)
+                    try
                     {
-                        int oldIndex = sourceTile.PageIndex;
-                        int newIndex = tile.PageIndex;
-                        if (oldIndex != newIndex)
+                        if (e.Data.GetData(typeof(PdfPageTile)) is PdfPageTile sourceTile)
                         {
-                            var item = _pdfPageEntries[oldIndex];
-                            _pdfPageEntries.RemoveAt(oldIndex);
-                            _pdfPageEntries.Insert(newIndex, item);
-                            _isPdfModified = true;
-                            RebuildPdfGrid();
+                            int oldIndex = sourceTile.PageIndex;
+                            int newIndex = tile.PageIndex;
+                            if (oldIndex != newIndex && oldIndex >= 0 && oldIndex < _pdfPageEntries.Count && newIndex >= 0 && newIndex <= _pdfPageEntries.Count)
+                            {
+                                var item = _pdfPageEntries[oldIndex];
+                                _pdfPageEntries.RemoveAt(oldIndex);
+                                if (newIndex > _pdfPageEntries.Count) newIndex = _pdfPageEntries.Count;
+                                _pdfPageEntries.Insert(newIndex, item);
+                                _isPdfModified = true;
+                                RebuildPdfGrid();
+                            }
                         }
+                    }
+                    catch (Exception ex)
+                    {
+                        Classes.Logger.LogAction("PDF_TILE_DROP", $"Drop failed: {ex.Message}");
                     }
                 };
                 tile.AllowDrop = true;

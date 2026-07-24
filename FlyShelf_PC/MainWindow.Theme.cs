@@ -535,7 +535,7 @@ namespace FlyShelf
                     }
 
                     // Extract dominant color for theme gradient asynchronously to prevent UI stutter
-                    System.Threading.Tasks.Task.Run(() =>
+                    _ = System.Threading.Tasks.Task.Run(() =>
                     {
                         try
                         {
@@ -668,6 +668,7 @@ namespace FlyShelf
             formatted.CopyPixels(pixels, stride, 0);
 
             // 3-pass horizontal+vertical box blur approximates Gaussian
+            // Uses sliding-window running sums for O(w·h) per pass instead of O(w·h·r)
             byte[] temp = new byte[pixels.Length];
             for (int pass = 0; pass < 3; pass++)
             {
@@ -675,50 +676,95 @@ namespace FlyShelf
                 for (int y = 0; y < h; y++)
                 {
                     int rowBase = y * stride;
+                    // Initialize running sums for first pixel's window [0, min(radius, w-1)]
+                    int bSum = 0, gSum = 0, rSum = 0, aSum = 0;
+                    int windowRight = Math.Min(radius, w - 1);
+                    for (int kx = 0; kx <= windowRight; kx++)
+                    {
+                        int idx = rowBase + kx * 4;
+                        bSum += pixels[idx];
+                        gSum += pixels[idx + 1];
+                        rSum += pixels[idx + 2];
+                        aSum += pixels[idx + 3];
+                    }
+
                     for (int x = 0; x < w; x++)
                     {
-                        int rSum = 0, gSum = 0, bSum = 0, aSum = 0, count = 0;
-                        int x0 = Math.Max(0, x - radius);
-                        int x1 = Math.Min(w - 1, x + radius);
-                        for (int kx = x0; kx <= x1; kx++)
-                        {
-                            int idx = rowBase + kx * 4;
-                            bSum += pixels[idx];
-                            gSum += pixels[idx + 1];
-                            rSum += pixels[idx + 2];
-                            aSum += pixels[idx + 3];
-                            count++;
-                        }
+                        int count = Math.Min(x + radius, w - 1) - Math.Max(x - radius, 0) + 1;
                         int outIdx = rowBase + x * 4;
                         temp[outIdx]     = (byte)(bSum / count);
                         temp[outIdx + 1] = (byte)(gSum / count);
                         temp[outIdx + 2] = (byte)(rSum / count);
                         temp[outIdx + 3] = (byte)(aSum / count);
+
+                        // Add incoming pixel on the right edge
+                        int addX = x + radius + 1;
+                        if (addX < w)
+                        {
+                            int addIdx = rowBase + addX * 4;
+                            bSum += pixels[addIdx];
+                            gSum += pixels[addIdx + 1];
+                            rSum += pixels[addIdx + 2];
+                            aSum += pixels[addIdx + 3];
+                        }
+                        // Remove outgoing pixel on the left edge
+                        int remX = x - radius;
+                        if (remX >= 0)
+                        {
+                            int remIdx = rowBase + remX * 4;
+                            bSum -= pixels[remIdx];
+                            gSum -= pixels[remIdx + 1];
+                            rSum -= pixels[remIdx + 2];
+                            aSum -= pixels[remIdx + 3];
+                        }
                     }
                 }
 
                 // Vertical pass
                 for (int x = 0; x < w; x++)
                 {
+                    int colBase = x * 4;
+                    // Initialize running sums for first pixel's window [0, min(radius, h-1)]
+                    int bSum = 0, gSum = 0, rSum = 0, aSum = 0;
+                    int windowBottom = Math.Min(radius, h - 1);
+                    for (int ky = 0; ky <= windowBottom; ky++)
+                    {
+                        int idx = ky * stride + colBase;
+                        bSum += temp[idx];
+                        gSum += temp[idx + 1];
+                        rSum += temp[idx + 2];
+                        aSum += temp[idx + 3];
+                    }
+
                     for (int y = 0; y < h; y++)
                     {
-                        int rSum = 0, gSum = 0, bSum = 0, aSum = 0, count = 0;
-                        int y0 = Math.Max(0, y - radius);
-                        int y1 = Math.Min(h - 1, y + radius);
-                        for (int ky = y0; ky <= y1; ky++)
-                        {
-                            int idx = ky * stride + x * 4;
-                            bSum += temp[idx];
-                            gSum += temp[idx + 1];
-                            rSum += temp[idx + 2];
-                            aSum += temp[idx + 3];
-                            count++;
-                        }
-                        int outIdx = y * stride + x * 4;
+                        int count = Math.Min(y + radius, h - 1) - Math.Max(y - radius, 0) + 1;
+                        int outIdx = y * stride + colBase;
                         pixels[outIdx]     = (byte)(bSum / count);
                         pixels[outIdx + 1] = (byte)(gSum / count);
                         pixels[outIdx + 2] = (byte)(rSum / count);
                         pixels[outIdx + 3] = (byte)(aSum / count);
+
+                        // Add incoming pixel on the bottom edge
+                        int addY = y + radius + 1;
+                        if (addY < h)
+                        {
+                            int addIdx = addY * stride + colBase;
+                            bSum += temp[addIdx];
+                            gSum += temp[addIdx + 1];
+                            rSum += temp[addIdx + 2];
+                            aSum += temp[addIdx + 3];
+                        }
+                        // Remove outgoing pixel on the top edge
+                        int remY = y - radius;
+                        if (remY >= 0)
+                        {
+                            int remIdx = remY * stride + colBase;
+                            bSum -= temp[remIdx];
+                            gSum -= temp[remIdx + 1];
+                            rSum -= temp[remIdx + 2];
+                            aSum -= temp[remIdx + 3];
+                        }
                     }
                 }
             }

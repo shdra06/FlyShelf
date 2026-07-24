@@ -4,6 +4,98 @@
 
     <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 
+    <!-- ═══ Sidebar Navigation Item (Windows 11 Settings style) ═══ -->
+    <Style x:Key="SidebarNavStyle" TargetType="RadioButton">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Margin" Value="0,1,0,1"/>
+        <Setter Property="Padding" Value="12,10,12,10"/>
+        <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+        <Setter Property="FontSize" Value="{StaticResource TypeSubtitle}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Grid>
+                        <!-- Active indicator (left accent bar) -->
+                        <Border x:Name="ActiveIndicator" Width="3" Height="16" CornerRadius="2"
+                                HorizontalAlignment="Left" VerticalAlignment="Center"
+                                Background="{DynamicResource ThemeAccent}" Opacity="0"
+                                Margin="-4,0,0,0"/>
+                        <!-- Background pill -->
+                        <Border x:Name="BgBorder" CornerRadius="6" 
+                                Background="Transparent"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="BgBorder" Property="Background" Value="#0AFFFFFF"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="BgBorder" Property="Background" Value="#12FFFFFF"/>
+                            <Setter TargetName="ActiveIndicator" Property="Opacity" Value="1"/>
+                            <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsChecked" Value="True"/>
+                                <Condition Property="IsMouseOver" Value="True"/>
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="BgBorder" Property="Background" Value="#18FFFFFF"/>
+                        </MultiTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═══ Centered Content Container ═══ -->
+    <!-- Prevents content from stretching edge-to-edge on wide/fullscreen displays -->
+    <Style x:Key="ContentContainerStyle" TargetType="Border">
+        <Setter Property="MaxWidth" Value="{StaticResource ContentMaxWidth}" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="{StaticResource SectionPadding}" />
+    </Style>
+
+    <!-- ═══ Section Header ═══ -->
+    <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource TypeTitle}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource ThemeTextPrimary}" />
+        <Setter Property="Margin" Value="0,20,0,8" />
+    </Style>
+
+    <!-- ═══ Section Description ═══ -->
+    <Style x:Key="SectionDescStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource TypeSmall}" />
+        <Setter Property="Foreground" Value="{DynamicResource ThemeTextMuted}" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- ═══ Image Grid Action Button ═══ -->
+    <Style x:Key="ImageGridActionBtn" TargetType="Button">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="6" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="ActionBg" Background="#40FFFFFF" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ActionBg" Property="Background" Value="#60FFFFFF" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Premium Theme-Aware Setting Card Style -->
     <Style x:Key="PremiumSettingStyle" TargetType="Border">
         <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
@@ -19,10 +111,10 @@
         <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" />
         <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="16" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusLG}" />
         <Setter Property="Padding" Value="20" />
         <Setter Property="Margin" Value="0,0,0,14" />
-        <Setter Property="Opacity" Value="0.92" />
+        <Setter Property="Opacity" Value="1" />
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" />
@@ -30,24 +122,14 @@
                 <Trigger.EnterActions>
                     <BeginStoryboard>
                         <Storyboard>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="-1" Duration="0:0:0.2">
-                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
-                            </DoubleAnimation>
-                            <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0.92" To="1" Duration="0:0:0.2">
-                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
-                            </DoubleAnimation>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="-1" Duration="{StaticResource Motion.Fast}" EasingFunction="{StaticResource Motion.EaseOut}" />
                         </Storyboard>
                     </BeginStoryboard>
                 </Trigger.EnterActions>
                 <Trigger.ExitActions>
                     <BeginStoryboard>
                         <Storyboard>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="0" Duration="0:0:0.25">
-                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
-                            </DoubleAnimation>
-                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0.92" Duration="0:0:0.25">
-                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
-                            </DoubleAnimation>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="0" Duration="{StaticResource Motion.Entrance}" EasingFunction="{StaticResource Motion.EaseInOut}" />
                         </Storyboard>
                     </BeginStoryboard>
                 </Trigger.ExitActions>
@@ -83,7 +165,7 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="ThumbBorder"
                                                          Storyboard.TargetProperty="Opacity"
-                                                         To="0.7" Duration="0:0:0.15"/>
+                                                         To="0.7" Duration="{StaticResource Motion.Fast}"/>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.EnterActions>
@@ -92,7 +174,7 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="ThumbBorder"
                                                          Storyboard.TargetProperty="Opacity"
-                                                         To="0.45" Duration="0:0:0.3"/>
+                                                         To="0.45" Duration="{StaticResource Motion.Slow}"/>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.ExitActions>
@@ -128,7 +210,7 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="ScrollBarRoot"
                                                          Storyboard.TargetProperty="Opacity"
-                                                         To="1.0" Duration="0:0:0.15"/>
+                                                         To="1.0" Duration="{StaticResource Motion.Fast}"/>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.EnterActions>
@@ -195,7 +277,7 @@
                             Background="{TemplateBinding Background}" 
                             BorderBrush="{TemplateBinding BorderBrush}" 
                             BorderThickness="{TemplateBinding BorderThickness}" 
-                            CornerRadius="8" 
+                            CornerRadius="{StaticResource RadiusSM}" 
                             Padding="{TemplateBinding Padding}" 
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"

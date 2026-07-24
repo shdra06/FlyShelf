@@ -130,7 +130,7 @@ namespace FlyShelf.Classes
                 return d.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
             }
         }
-        [JsonIgnore] public bool IsOverdue => _dueDate.HasValue && _dueDate.Value.Date < DateTime.Today && !_isDone;
+        [JsonIgnore] public bool IsOverdue => _dueDate.HasValue && _dueDate.Value.Date < DateTime.Today && !IsDone;
         [JsonIgnore]
         public string DueDateColor => IsOverdue ? "#FF4444" :
             (_dueDate?.Date == DateTime.Today ? "#F59E0B" : "#8B8BA7");
@@ -169,7 +169,7 @@ namespace FlyShelf.Classes
                     OnPropertyChanged(nameof(Description));
                     OnPropertyChanged(nameof(HasDescription));
                     // Auto-expand if description gets content; don't auto-collapse (user controls that)
-                    if (!string.IsNullOrWhiteSpace(_description) && !_isDescriptionVisible)
+                    if (!string.IsNullOrWhiteSpace(_description) && !IsDescriptionVisible)
                     {
                         IsDescriptionVisible = true;
                     }

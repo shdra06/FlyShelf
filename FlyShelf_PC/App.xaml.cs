@@ -198,7 +198,7 @@ public partial class App : Application
             Task.Run(async () =>
             {
                 await RunAITestAsync();
-                Dispatcher.InvokeAsync(() => Shutdown());
+                _ = Dispatcher.InvokeAsync(() => Shutdown());
             });
             return;
         }

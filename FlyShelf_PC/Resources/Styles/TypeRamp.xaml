@@ -10,4 +10,26 @@
     <sys:Double x:Key="TypeTitle">16</sys:Double>
     <sys:Double x:Key="TypeHeadline">20</sys:Double>
     <sys:Double x:Key="TypeDisplay">28</sys:Double>
+
+    <!-- ═══ SPACING SCALE (4px base grid) ═══ -->
+    <sys:Double x:Key="SpaceXS">4</sys:Double>
+    <sys:Double x:Key="SpaceSM">8</sys:Double>
+    <sys:Double x:Key="SpaceMD">12</sys:Double>
+    <sys:Double x:Key="SpaceLG">16</sys:Double>
+    <sys:Double x:Key="SpaceXL">24</sys:Double>
+    <sys:Double x:Key="Space2XL">32</sys:Double>
+
+    <!-- ═══ CONTENT WIDTH CONSTRAINTS ═══ -->
+    <sys:Double x:Key="ContentMaxWidth">860</sys:Double>
+
+    <!-- ═══ CORNER RADII ═══ -->
+    <CornerRadius x:Key="RadiusSM">8</CornerRadius>
+    <CornerRadius x:Key="RadiusMD">12</CornerRadius>
+    <CornerRadius x:Key="RadiusLG">16</CornerRadius>
+
+    <!-- ═══ STANDARD THICKNESSES ═══ -->
+    <Thickness x:Key="CardMargin">0,0,0,10</Thickness>
+    <Thickness x:Key="CardPadding">20,16,20,16</Thickness>
+    <Thickness x:Key="SectionPadding">28,20,28,20</Thickness>
+
 </ResourceDictionary>

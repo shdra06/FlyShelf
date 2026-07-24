@@ -19,6 +19,7 @@ namespace FlyShelf.ViewModels
     {
         // PERF: Cooldown guard for mascot delete animation — skip if called within 300ms
         private DateTime _lastDeleteAnimTime = DateTime.MinValue;
+        private static readonly object _pinnedLock = new();
         // PERF: Debounce ShelfVisibility notification during rapid deletes
         private System.Windows.Threading.DispatcherTimer? _shelfVisibilityDebounce;
 
@@ -323,16 +324,24 @@ namespace FlyShelf.ViewModels
                 string path = GetDbPath();
                 System.Threading.Tasks.Task.Run(() =>
                 {
-                    try
+                    lock (_pinnedLock)
                     {
-                        // Create backup before saving
-                        try { if (File.Exists(path)) File.Copy(path, path + ".bak", overwrite: true); } catch { } // Best-effort: failure is acceptable
-                        var json = System.Text.Json.JsonSerializer.Serialize(pinned);
-                        string tmpPath = path + ".tmp";
-                        File.WriteAllText(tmpPath, json);
-                        File.Move(tmpPath, path, overwrite: true);
+                        try
+                        {
+                            if (!Classes.DiskSpaceHelper.HasSufficientDiskSpace(path, 1_000_000))
+                            {
+                                Classes.Logger.LogAction("PINNED_SAVE", "Insufficient disk space");
+                                return;
+                            }
+                            // Create backup before saving
+                            try { if (File.Exists(path)) File.Copy(path, path + ".bak", overwrite: true); } catch { } // Best-effort: failure is acceptable
+                            var json = System.Text.Json.JsonSerializer.Serialize(pinned);
+                            string tmpPath = path + ".tmp";
+                            File.WriteAllText(tmpPath, json);
+                            File.Move(tmpPath, path, overwrite: true);
+                        }
+                        catch (Exception ex) { Classes.Logger.LogAction("PINNED_SAVE", $"Failed to serialize/write pinned items: {ex.Message}"); }
                     }
-                    catch (Exception ex) { Classes.Logger.LogAction("PINNED_SAVE", $"Failed to serialize/write pinned items: {ex.Message}"); }
                 });
             }
             catch (Exception ex) { Classes.Logger.LogAction("PINNED_SAVE", $"Failed to gather pinned items: {ex.Message}"); }
@@ -345,31 +354,34 @@ namespace FlyShelf.ViewModels
                 string path = GetDbPath();
                 var docs = await System.Threading.Tasks.Task.Run(() =>
                 {
-                    try
+                    lock (_pinnedLock)
                     {
-                        if (File.Exists(path))
-                        {
-                            var json = File.ReadAllText(path);
-                            return System.Text.Json.JsonSerializer.Deserialize<List<ClipboardItem>>(json);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Classes.Logger.LogAction("PINNED_LOAD", $"Failed to deserialize pinned items JSON: {ex.Message}");
-                        // Fallback: try loading from .bak file
                         try
                         {
-                            string bakPath = path + ".bak";
-                            if (File.Exists(bakPath))
+                            if (File.Exists(path))
                             {
-                                Classes.Logger.LogAction("PINNED_LOAD", "Attempting recovery from .bak file");
-                                var bakJson = File.ReadAllText(bakPath);
-                                return System.Text.Json.JsonSerializer.Deserialize<List<ClipboardItem>>(bakJson);
+                                var json = Classes.FileRetryHelper.RunWithRetry(() => File.ReadAllText(path));
+                                return System.Text.Json.JsonSerializer.Deserialize<List<ClipboardItem>>(json);
                             }
                         }
-                        catch (Exception bakEx) { Classes.Logger.LogAction("PINNED_LOAD", $"Backup recovery also failed: {bakEx.Message}"); }
+                        catch (Exception ex)
+                        {
+                            Classes.Logger.LogAction("PINNED_LOAD", $"Failed to deserialize pinned items JSON: {ex.Message}");
+                            // Fallback: try loading from .bak file
+                            try
+                            {
+                                string bakPath = path + ".bak";
+                                if (File.Exists(bakPath))
+                                {
+                                    Classes.Logger.LogAction("PINNED_LOAD", "Attempting recovery from .bak file");
+                                    var bakJson = Classes.FileRetryHelper.RunWithRetry(() => File.ReadAllText(bakPath));
+                                    return System.Text.Json.JsonSerializer.Deserialize<List<ClipboardItem>>(bakJson);
+                                }
+                            }
+                            catch (Exception bakEx) { Classes.Logger.LogAction("PINNED_LOAD", $"Backup recovery also failed: {bakEx.Message}"); }
+                        }
+                        return null;
                     }
-                    return null;
                 });
 
                 if (docs != null)
@@ -411,7 +423,7 @@ namespace FlyShelf.ViewModels
                             if (isGeneralFile && !string.IsNullOrEmpty(d.FilePath))
                             {
                                 var capturedD = d;
-                                System.Threading.Tasks.Task.Run(() => {
+                                _ = System.Threading.Tasks.Task.Run(() => {
                                     try
                                     {
                                         var icon = GetIcon(capturedD.FilePath);
@@ -424,7 +436,7 @@ namespace FlyShelf.ViewModels
                             {
                                 string imagePath = d.FilePath;
                                 var capturedD = d;
-                                System.Threading.Tasks.Task.Run(() => {
+                                _ = System.Threading.Tasks.Task.Run(() => {
                                     try 
                                     {
                                         // Always use 300px — this runs on a background thread
@@ -772,12 +784,15 @@ namespace FlyShelf.ViewModels
         {
             if (newItem == null || existing == null) return false;
 
-            // 1. Text-based items (Text, Code, Url)
+            // 1. Text-based items (Text, Code, Url) — same text from different apps
+            //    should be a duplicate regardless of ItemType classification.
+            //    e.g., copying "hello" from VS Code (Code) and Notepad (Text) are the same.
             bool isNewTextual = newItem.ItemType == ClipboardItemType.Text || newItem.ItemType == ClipboardItemType.Code || newItem.ItemType == ClipboardItemType.Url;
             bool isExistingTextual = existing.ItemType == ClipboardItemType.Text || existing.ItemType == ClipboardItemType.Code || existing.ItemType == ClipboardItemType.Url;
             
             if (isNewTextual && isExistingTextual)
             {
+                // Exact content match across all textual types
                 return !string.IsNullOrEmpty(newItem.RawContent) && newItem.RawContent == existing.RawContent;
             }
 
@@ -796,6 +811,14 @@ namespace FlyShelf.ViewModels
                 {
                     return string.Equals(newItem.FileName, existing.FileName, StringComparison.OrdinalIgnoreCase);
                 }
+            }
+
+            // 4. Cross-type RawContent fallback — catch duplicates where the same text
+            //    was classified differently due to source app context (e.g., one as Text, other as generic)
+            if (!string.IsNullOrEmpty(newItem.RawContent) && !string.IsNullOrEmpty(existing.RawContent)
+                && string.IsNullOrEmpty(newItem.FilePath) && string.IsNullOrEmpty(existing.FilePath))
+            {
+                return newItem.RawContent == existing.RawContent;
             }
 
             return false;
@@ -829,15 +852,16 @@ namespace FlyShelf.ViewModels
         }
 
         /// <summary>
-        /// Scans the first 10 entries of DroppedItems for a duplicate of newItem.
+        /// Scans the first 20 entries of DroppedItems for a duplicate of newItem.
         /// If found, removes the duplicate item from DroppedItems and backing database/files.
+        /// Uses 20 entries to match the WndProc incoming-copy dedup window.
         /// </summary>
         public void DeduplicateItem(ClipboardItem newItem)
         {
             if (newItem == null) return;
 
             ClipboardItem? duplicateToRemoval = null;
-            int checkCount = Math.Min(10, DroppedItems.Count);
+            int checkCount = Math.Min(20, DroppedItems.Count);
             for (int i = 0; i < checkCount; i++)
             {
                 var existing = DroppedItems[i];
@@ -852,7 +876,7 @@ namespace FlyShelf.ViewModels
 
             if (duplicateToRemoval != null)
             {
-                Classes.Logger.LogAction("DEDUP", $"Found duplicate in first 10 entries: Type={duplicateToRemoval.ItemType}, Path={duplicateToRemoval.FilePath}, Name={duplicateToRemoval.FileName}. Removing old duplicate.");
+                Classes.Logger.LogAction("DEDUP", $"Found duplicate in first 20 entries: Type={duplicateToRemoval.ItemType}, Path={duplicateToRemoval.FilePath}, Name={duplicateToRemoval.FileName}. Removing old duplicate.");
                 RemoveItem(duplicateToRemoval);
             }
         }

@@ -15,7 +15,7 @@
         WindowStyle="None" ResizeMode="NoResize" Background="Transparent" SystemBackdropType="Mica"
         ShowInTaskbar="False" Margin="0" Topmost="True" ShowActivated="False"
         AllowDrop="True" PreviewDrop="Window_PreviewDrop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
-        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Display" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True"
         Loaded="MicaWindow_Loaded" Deactivated="MicaWindow_Deactivated">
 
     <controls:MicaWindow.Resources>
@@ -88,7 +88,7 @@
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.IsTextPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <MenuItem.Header>
-                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Search24" FontSize="14" Margin="0,0,8,0"/><TextBlock Text="Search on Google"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Search24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0"/><TextBlock Text="Search on Google"/></StackPanel>
                     </MenuItem.Header>
                 </MenuItem>
 
@@ -99,7 +99,7 @@
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.CanConvertToPassword, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <MenuItem.Header>
-                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Shield24" FontSize="14" Margin="0,0,8,0"/><TextBlock Text="Mark as Password"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Shield24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0"/><TextBlock Text="Mark as Password"/></StackPanel>
                     </MenuItem.Header>
                 </MenuItem>
 
@@ -108,7 +108,7 @@
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.IsPassword, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <MenuItem.Header>
-                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Key24" FontSize="14" Margin="0,0,8,0"/><TextBlock Text="View/Edit Password"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Key24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0"/><TextBlock Text="View/Edit Password"/></StackPanel>
                     </MenuItem.Header>
                 </MenuItem>
 
@@ -117,7 +117,7 @@
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.IsPassword, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <MenuItem.Header>
-                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Edit24" FontSize="14" Margin="0,0,8,0"/><TextBlock Text="Rename Label"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Edit24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0"/><TextBlock Text="Rename Label"/></StackPanel>
                     </MenuItem.Header>
                 </MenuItem>
 
@@ -143,7 +143,7 @@
                 <!-- ═══ SMART ACTIONS ═══ -->
                 <MenuItem>
                     <MenuItem.Header>
-                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Rocket24" FontSize="14" Margin="0,0,8,0"/><TextBlock Text="Smart Actions"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Rocket24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0"/><TextBlock Text="Smart Actions"/></StackPanel>
                     </MenuItem.Header>
                     <MenuItem.Style>
                         <Style TargetType="MenuItem">
@@ -183,7 +183,7 @@
                 <!-- ═══ AI ACTIONS (Text items) ═══ -->
                 <MenuItem>
                     <MenuItem.Header>
-                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Sparkle24" FontSize="14" Margin="0,0,8,0" Foreground="#A78BFA"/><TextBlock Text="AI Actions"/></StackPanel>
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Sparkle24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0" Foreground="#A78BFA"/><TextBlock Text="AI Actions"/></StackPanel>
                     </MenuItem.Header>
                     <MenuItem.Style>
                         <Style TargetType="MenuItem">
@@ -262,7 +262,7 @@
                 <MenuItem x:Name="SendToDeviceMenu">
                     <MenuItem.Header>
                         <StackPanel Orientation="Horizontal">
-                            <ui:SymbolIcon Symbol="Send24" FontSize="14" Margin="0,0,8,0" Foreground="#10B981"/>
+                            <ui:SymbolIcon Symbol="Send24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0" Foreground="#10B981"/>
                             <TextBlock Text="Send to Device"/>
                         </StackPanel>
                     </MenuItem.Header>
@@ -293,9 +293,9 @@
     </controls:MicaWindow.Resources>
 
     <WindowChrome.WindowChrome>
-        <WindowChrome GlassFrameThickness="-1" CornerRadius="12" CaptionHeight="0" UseAeroCaptionButtons="False" ResizeBorderThickness="0" />
+        <WindowChrome GlassFrameThickness="-1" CornerRadius="{StaticResource RadiusMD}" CaptionHeight="0" UseAeroCaptionButtons="False" ResizeBorderThickness="0" />
     </WindowChrome.WindowChrome>
-    <Border CornerRadius="12" ClipToBounds="True">
+    <Border CornerRadius="{StaticResource RadiusMD}" ClipToBounds="True">
     <Grid x:Name="RootContent" Margin="0" MouseLeftButtonDown="Header_MouseLeftButtonDown" PreviewMouseDown="RootContent_PreviewMouseDown" Background="#01000000">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -358,7 +358,7 @@
         <StackPanel Grid.Row="0" x:Name="HeaderAndFiltersStack">
             <!-- ═══ UPDATE NOTIFICATION BANNER ═══ -->
             <Border x:Name="UpdateNotificationBanner" Visibility="Collapsed" 
-                    Margin="10,8,10,0" CornerRadius="8" Padding="10,6,6,6"
+                    Margin="10,8,10,0" CornerRadius="{StaticResource RadiusSM}" Padding="10,6,6,6"
                     Cursor="Hand" MouseLeftButtonDown="UpdateBanner_Click">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
@@ -380,10 +380,10 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <ui:SymbolIcon Grid.Column="0" Symbol="ArrowCircleUp24" FontSize="14" Foreground="{DynamicResource ThemeAccentLight}" 
+                    <ui:SymbolIcon Grid.Column="0" Symbol="ArrowCircleUp24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource ThemeAccentLight}" 
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <TextBlock Grid.Column="1" x:Name="UpdateBannerText" Text="🚀 New version available — tap to update" 
-                               FontSize="11" FontWeight="SemiBold" 
+                               FontSize="{StaticResource TypeSmall}" FontWeight="SemiBold" 
                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                     <Button Grid.Column="2" x:Name="UpdateBannerDismissBtn" Click="UpdateBannerDismiss_Click"
@@ -396,9 +396,9 @@
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="Button">
-                                            <Border x:Name="DismissBg" Width="20" Height="20" CornerRadius="12" 
+                                            <Border x:Name="DismissBg" Width="20" Height="20" CornerRadius="{StaticResource RadiusMD}" 
                                                     Background="Transparent">
-                                                <ui:SymbolIcon Symbol="Dismiss12" FontSize="10" 
+                                                <ui:SymbolIcon Symbol="Dismiss12" FontSize="{StaticResource TypeCaption}" 
                                                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
                                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
@@ -425,7 +425,7 @@
                 
                 <!-- Inline Search Bar (covers the left area up to the search icon) -->
                 <Border x:Name="SearchBarContainer" Grid.Column="0" Visibility="Collapsed" VerticalAlignment="Center"
-                        Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="8"
+                        Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="{StaticResource RadiusSM}"
                         BorderThickness="1"
                         Padding="4,0,4,0" Margin="0,0,6,0" Height="28" MinWidth="160" HorizontalAlignment="Stretch"
                         Panel.ZIndex="10" PreviewMouseLeftButtonDown="SearchBar_PreviewMouseDown"
@@ -450,7 +450,7 @@
                         </Grid.ColumnDefinitions>
                         <!-- Search input with integrated placeholder -->
                         <TextBox x:Name="SearchTextBox" Grid.Column="0" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
-                                 FontSize="12" VerticalAlignment="Center" VerticalContentAlignment="Center" 
+                                 FontSize="{StaticResource TypeBody}" VerticalAlignment="Center" VerticalContentAlignment="Center" 
                                  CaretBrush="{DynamicResource ThemeAccent}" Padding="0" Margin="0"
                                  HorizontalContentAlignment="Left" MinWidth="100"
                                  TextChanged="SearchTextBox_TextChanged" PreviewKeyDown="SearchTextBox_PreviewKeyDown"
@@ -467,7 +467,7 @@
                                                     <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="-2,0,0,0" Padding="0" VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
                                                     <TextBlock x:Name="PlaceholderText" Text="Search..." 
                                                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
-                                                               VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False" Margin="0"
+                                                               VerticalAlignment="Center" FontSize="{StaticResource TypeBody}" IsHitTestVisible="False" Margin="0"
                                                                Visibility="Collapsed"/>
                                                 </Grid>
                                                 <ControlTemplate.Triggers>
@@ -485,7 +485,7 @@
                         <ui:Button Grid.Column="1" Focusable="False" Appearance="Transparent" Foreground="{DynamicResource SubtleTextColor}" Click="ClearSearch_Click" ToolTip="Clear Search" 
                                    Margin="2,0,0,0" Padding="3,3" CornerRadius="4" Width="20" Height="20" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                    Background="Transparent" BorderThickness="0" AutomationProperties.Name="Clear search">
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss12" FontSize="9"/></ui:Button.Icon>
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss12" FontSize="{StaticResource TypeMicro}"/></ui:Button.Icon>
                         </ui:Button>
                     </Grid>
                 </Border>
@@ -523,9 +523,9 @@
                                                      <BeginStoryboard x:Name="BounceArrowStory">
                                                          <Storyboard RepeatBehavior="Forever" Storyboard.DesiredFrameRate="20">
                                                              <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                                              From="-4" To="4" Duration="0:0:0.6" AutoReverse="True">
+                                                                              From="-4" To="4" Duration="{StaticResource Motion.Slow}" AutoReverse="True">
                                                                  <DoubleAnimation.EasingFunction>
-                                                                     <SineEase EasingMode="EaseInOut"/>
+                                                                     <StaticResource ResourceKey="Motion.EaseInOut" />
                                                                  </DoubleAnimation.EasingFunction>
                                                              </DoubleAnimation>
                                                          </Storyboard>
@@ -599,7 +599,7 @@
 
                           <!-- ═══ Incognito Mode Badge (small indicator in header) ═══ -->
                           <Border x:Name="IncognitoBadge" Visibility="Collapsed" Cursor="Hand"
-                                  CornerRadius="8" Margin="0,0,6,0" Padding="6,4" VerticalAlignment="Center"
+                                  CornerRadius="{StaticResource RadiusSM}" Margin="0,0,6,0" Padding="6,4" VerticalAlignment="Center"
                                   MouseLeftButtonDown="IncognitoBadge_Click"
                                   ToolTip="Incognito mode active — clipboard monitoring paused. Click to disable.">
                               <Border.Background>
@@ -616,8 +616,8 @@
                               </Border.BorderBrush>
                               <Border.BorderThickness>1</Border.BorderThickness>
                               <StackPanel Orientation="Horizontal">
-                                  <ui:SymbolIcon Symbol="EyeOff24" FontSize="13" Foreground="{DynamicResource WarningColor}" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                  <TextBlock x:Name="IncognitoBadgeText" Text="Incognito" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource WarningColor}" VerticalAlignment="Center"/>
+                                  <ui:SymbolIcon Symbol="EyeOff24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource WarningColor}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                  <TextBlock x:Name="IncognitoBadgeText" Text="Incognito" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold" Foreground="{DynamicResource WarningColor}" VerticalAlignment="Center"/>
                               </StackPanel>
                           </Border>
 
@@ -628,7 +628,7 @@
 
                           <!-- ═══ Update Available Badge ═══ -->
                           <Border x:Name="UpdateBadge" Visibility="Collapsed" Cursor="Hand"
-                                  CornerRadius="8" Margin="0,0,6,0" Padding="6,4" VerticalAlignment="Center"
+                                  CornerRadius="{StaticResource RadiusSM}" Margin="0,0,6,0" Padding="6,4" VerticalAlignment="Center"
                                   MouseLeftButtonDown="UpdateBadge_Click"
                                   ToolTip="Update available — click to open Hub">
                               <Border.Background>
@@ -645,8 +645,8 @@
                               </Border.BorderBrush>
                               <Border.BorderThickness>1</Border.BorderThickness>
                               <StackPanel Orientation="Horizontal">
-                                  <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="13" Foreground="{DynamicResource SuccessColor}" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                  <TextBlock x:Name="UpdateBadgeText" Text="Update" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SuccessColor}" VerticalAlignment="Center"/>
+                                  <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource SuccessColor}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                  <TextBlock x:Name="UpdateBadgeText" Text="Update" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold" Foreground="{DynamicResource SuccessColor}" VerticalAlignment="Center"/>
                               </StackPanel>
                           </Border>
 
@@ -661,7 +661,7 @@
 
             <!-- Dynamic Inline Category Filter Panel — Premium Pill Chips -->
             <Border x:Name="SortFilterInlineBar" Margin="14,0,14,8" Visibility="Collapsed" Opacity="0"
-                    CornerRadius="12" Padding="6,5"
+                    CornerRadius="{StaticResource RadiusMD}" Padding="6,5"
                     Background="{DynamicResource MicaWPF.Brushes.SmokeFillColorDefault}"
                     BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1"
                     RenderTransformOrigin="0.5,0">
@@ -679,66 +679,66 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,2,0">
 
                     <!-- Images Chip -->
-                    <Border x:Name="FilterBtn_Images" CornerRadius="12" Margin="1,0" Cursor="Hand"
+                    <Border x:Name="FilterBtn_Images" CornerRadius="{StaticResource RadiusMD}" Margin="1,0" Cursor="Hand"
                             MouseLeftButtonDown="FilterCategory_Click" Tag="Images"
                             Background="{DynamicResource FilterImageBg}"
                             BorderBrush="{DynamicResource FilterImageBorder}" BorderThickness="1"
                             Padding="8,5" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Image24" Foreground="{DynamicResource TypeImageColor}" FontSize="13" Margin="0,0,4,0"/>
-                            <TextBlock Text="Images" FontSize="10.5" FontWeight="SemiBold"
+                            <ui:SymbolIcon Symbol="Image24" Foreground="{DynamicResource TypeImageColor}" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,4,0"/>
+                            <TextBlock Text="Images" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
 
                     <!-- Pinned Chip -->
-                    <Border x:Name="FilterBtn_Pinned" CornerRadius="12" Margin="1,0" Cursor="Hand"
+                    <Border x:Name="FilterBtn_Pinned" CornerRadius="{StaticResource RadiusMD}" Margin="1,0" Cursor="Hand"
                             MouseLeftButtonDown="FilterCategory_Click" Tag="Pinned"
                             Background="{DynamicResource FilterPinnedBg}"
                             BorderBrush="{DynamicResource FilterPinnedBorder}" BorderThickness="1"
                             Padding="8,5" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Pin24" Foreground="{DynamicResource PinActiveColor}" Filled="True" FontSize="13" Margin="0,0,4,0"/>
-                            <TextBlock Text="Pinned" FontSize="10.5" FontWeight="SemiBold"
+                            <ui:SymbolIcon Symbol="Pin24" Foreground="{DynamicResource PinActiveColor}" Filled="True" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,4,0"/>
+                            <TextBlock Text="Pinned" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
 
                     <!-- PDF Chip -->
-                    <Border x:Name="FilterBtn_Pdf" CornerRadius="12" Margin="1,0" Cursor="Hand"
+                    <Border x:Name="FilterBtn_Pdf" CornerRadius="{StaticResource RadiusMD}" Margin="1,0" Cursor="Hand"
                             MouseLeftButtonDown="FilterCategory_Click" Tag="PDF"
                             Background="{DynamicResource FilterPdfBg}"
                             BorderBrush="{DynamicResource FilterPdfBorder}" BorderThickness="1"
                             Padding="8,5" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="{DynamicResource DangerColor}" FontSize="13" Margin="0,0,4,0"/>
-                            <TextBlock Text="PDF" FontSize="10.5" FontWeight="SemiBold"
+                            <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="{DynamicResource DangerColor}" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,4,0"/>
+                            <TextBlock Text="PDF" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
 
                     <!-- Docs Chip -->
-                    <Border x:Name="FilterBtn_Docs" CornerRadius="12" Margin="1,0" Cursor="Hand"
+                    <Border x:Name="FilterBtn_Docs" CornerRadius="{StaticResource RadiusMD}" Margin="1,0" Cursor="Hand"
                             MouseLeftButtonDown="FilterCategory_Click" Tag="Docs"
                             Background="{DynamicResource FilterDocsBg}"
                             BorderBrush="{DynamicResource FilterDocsBorder}" BorderThickness="1"
                             Padding="8,5" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Document24" Foreground="{DynamicResource InfoColor}" FontSize="13" Margin="0,0,4,0"/>
-                            <TextBlock Text="Docs" FontSize="10.5" FontWeight="SemiBold"
+                            <ui:SymbolIcon Symbol="Document24" Foreground="{DynamicResource InfoColor}" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,4,0"/>
+                            <TextBlock Text="Docs" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
 
                     <!-- Password Chip -->
-                    <Border x:Name="FilterBtn_Password" CornerRadius="12" Margin="1,0" Cursor="Hand"
+                    <Border x:Name="FilterBtn_Password" CornerRadius="{StaticResource RadiusMD}" Margin="1,0" Cursor="Hand"
                             MouseLeftButtonDown="FilterCategory_Click" Tag="Password"
                             Background="{DynamicResource FilterPasswordBg}"
                             BorderBrush="{DynamicResource FilterPasswordBorder}" BorderThickness="1"
                             Padding="8,5" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="ShieldKeyhole24" Foreground="{DynamicResource TypeArchiveColor}" FontSize="13" Margin="0,0,4,0"/>
-                            <TextBlock Text="Keys" FontSize="10.5" FontWeight="SemiBold"
+                            <ui:SymbolIcon Symbol="ShieldKeyhole24" Foreground="{DynamicResource TypeArchiveColor}" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,4,0"/>
+                            <TextBlock Text="Keys" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
@@ -747,11 +747,11 @@
                     <Border Width="1" Height="20" Margin="3,0" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" VerticalAlignment="Center"/>
 
                     <!-- Dismiss Chip -->
-                    <Border CornerRadius="12" Margin="1,0" Cursor="Hand" MouseLeftButtonDown="FilterClear_Click"
+                    <Border CornerRadius="{StaticResource RadiusMD}" Margin="1,0" Cursor="Hand" MouseLeftButtonDown="FilterClear_Click"
                             Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
                             BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                             Padding="6,5" SnapsToDevicePixels="True" ToolTip="Clear Filter">
-                        <ui:SymbolIcon Symbol="Dismiss16" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" HorizontalAlignment="Center"/>
+                        <ui:SymbolIcon Symbol="Dismiss16" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" HorizontalAlignment="Center"/>
                     </Border>
 
                     </StackPanel>
@@ -761,7 +761,7 @@
 
             <!-- Sync Direction Control Bar — Inline popup for granular incoming/outgoing toggles -->
             <Border x:Name="SyncDirectionBar" Margin="14,0,14,8" Visibility="Collapsed" Opacity="0"
-                    CornerRadius="12" Padding="4"
+                    CornerRadius="{StaticResource RadiusMD}" Padding="4"
                     Background="{DynamicResource MicaWPF.Brushes.SmokeFillColorDefault}" 
                     BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                     RenderTransformOrigin="0.5,0">
@@ -773,7 +773,7 @@
                 </Border.Effect>
                 <UniformGrid Rows="1" HorizontalAlignment="Center" MaxWidth="420" Width="{Binding ActualWidth, ElementName=TopHeaderGrid}">
                     <!-- Incoming Toggle -->
-                    <Border x:Name="SyncBtn_Incoming" CornerRadius="8" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncIncoming_Click" Tag="Incoming"
+                    <Border x:Name="SyncBtn_Incoming" CornerRadius="{StaticResource RadiusSM}" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncIncoming_Click" Tag="Incoming"
                             Background="{DynamicResource SyncIncomingBg}" BorderBrush="{DynamicResource SyncIncomingBorder}" BorderThickness="1" Padding="6,5">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -781,15 +781,15 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center">
-                                <ui:SymbolIcon Symbol="ArrowDownload24" Foreground="{DynamicResource SyncIncomingColor}" FontSize="13" Margin="0,0,4,0"/>
-                                <TextBlock Text="In" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                                <ui:SymbolIcon Symbol="ArrowDownload24" Foreground="{DynamicResource SyncIncomingColor}" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,4,0"/>
+                                <TextBlock Text="In" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <Ellipse x:Name="SyncDot_Incoming" Grid.Column="1" Width="8" Height="8" Margin="6,0,2,0" VerticalAlignment="Center"
                                      Fill="#33888888" Stroke="#22FFFFFF" StrokeThickness="0.5"/>
                         </Grid>
                     </Border>
                     <!-- Outgoing Toggle -->
-                    <Border x:Name="SyncBtn_Outgoing" CornerRadius="8" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncOutgoing_Click" Tag="Outgoing"
+                    <Border x:Name="SyncBtn_Outgoing" CornerRadius="{StaticResource RadiusSM}" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncOutgoing_Click" Tag="Outgoing"
                             Background="{DynamicResource SyncOutgoingBg}" BorderBrush="{DynamicResource SyncOutgoingBorder}" BorderThickness="1" Padding="6,5">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -797,15 +797,15 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center">
-                                <ui:SymbolIcon Symbol="ArrowUpload24" Foreground="{DynamicResource InfoColor}" FontSize="13" Margin="0,0,4,0"/>
-                                <TextBlock Text="Out" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                                <ui:SymbolIcon Symbol="ArrowUpload24" Foreground="{DynamicResource InfoColor}" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,4,0"/>
+                                <TextBlock Text="Out" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <Ellipse x:Name="SyncDot_Outgoing" Grid.Column="1" Width="8" Height="8" Margin="6,0,2,0" VerticalAlignment="Center"
                                      Fill="#33888888" Stroke="#22FFFFFF" StrokeThickness="0.5"/>
                         </Grid>
                     </Border>
                     <!-- Both Master Toggle -->
-                    <Border x:Name="SyncBtn_Both" CornerRadius="8" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncBoth_Click" Tag="Both"
+                    <Border x:Name="SyncBtn_Both" CornerRadius="{StaticResource RadiusSM}" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncBoth_Click" Tag="Both"
                             Background="{DynamicResource SyncBothBg}" BorderBrush="{DynamicResource SyncBothBorder}" BorderThickness="1" Padding="6,5">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -813,18 +813,18 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center">
-                                <ui:SymbolIcon Symbol="ArrowSync24" Foreground="{DynamicResource TypeTextColor}" FontSize="13" Margin="0,0,4,0"/>
-                                <TextBlock Text="Both" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                                <ui:SymbolIcon Symbol="ArrowSync24" Foreground="{DynamicResource TypeTextColor}" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,4,0"/>
+                                <TextBlock Text="Both" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <Ellipse x:Name="SyncDot_Both" Grid.Column="1" Width="8" Height="8" Margin="6,0,2,0" VerticalAlignment="Center"
                                      Fill="#33888888" Stroke="#22FFFFFF" StrokeThickness="0.5"/>
                         </Grid>
                     </Border>
                     <!-- Dismiss -->
-                    <Border CornerRadius="8" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncBarDismiss_Click"
+                    <Border CornerRadius="{StaticResource RadiusSM}" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncBarDismiss_Click"
                             Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                             BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="0,5">
-                        <ui:SymbolIcon Symbol="Dismiss16" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" HorizontalAlignment="Center"/>
+                        <ui:SymbolIcon Symbol="Dismiss16" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" HorizontalAlignment="Center"/>
                     </Border>
                 </UniformGrid>
             </Border>
@@ -836,7 +836,7 @@
                    VerticalOffset="8" HorizontalOffset="-72" PopupAnimation="Fade"
                    Closed="OverflowPopup_Closed">
                 <!-- Floating Glassmorphism Container with Premium Toolbar Look -->
-                <Border CornerRadius="16" Padding="0" BorderThickness="1"
+                <Border CornerRadius="{StaticResource RadiusLG}" Padding="0" BorderThickness="1"
                         Background="{DynamicResource ThemeOverflowBg}"
                         BorderBrush="{DynamicResource ThemeOverflowBorder}">
                     <Border.Effect>
@@ -848,7 +848,7 @@
                     <StackPanel Orientation="Horizontal">
                         <!-- Emoji Picker -->
                         <ui:Button x:Name="EmojiBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,4,0" Padding="0" AutomationProperties.Name="Emoji picker">
-                            <emoji:TextBlock Text="😊" FontSize="16" 
+                            <emoji:TextBlock Text="😊" FontSize="{StaticResource TypeTitle}" 
                                              VerticalAlignment="Center" HorizontalAlignment="Center"
                                              Margin="0,-1,0,0"/>
                         </ui:Button>
@@ -897,7 +897,7 @@
 
             <!-- Clear Shelf Confirmation Popup (same style as SortFilterInlineBar) -->
             <Border x:Name="ClearConfirmPanel" Margin="14,0,14,8" Visibility="Collapsed" Opacity="0"
-                    CornerRadius="12" Padding="8,6"
+                    CornerRadius="{StaticResource RadiusMD}" Padding="8,6"
                     Background="{DynamicResource MicaWPF.Brushes.SmokeFillColorDefault}" 
                     BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                     RenderTransformOrigin="0.5,0">
@@ -908,24 +908,24 @@
                     <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.15" Color="#000000"/>
                 </Border.Effect>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <ui:SymbolIcon Symbol="Warning24" Foreground="{DynamicResource WarningColor}" FontSize="15" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="Clear all clips?" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"
+                    <ui:SymbolIcon Symbol="Warning24" Foreground="{DynamicResource WarningColor}" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Clear all clips?" FontSize="{StaticResource TypeSmall}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"
                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
                     <!-- Confirm button (red danger pill) -->
-                    <Border CornerRadius="8" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="ClearShelf_Confirm"
+                    <Border CornerRadius="{StaticResource RadiusSM}" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="ClearShelf_Confirm"
                             Background="{DynamicResource DangerBgSubtle}" BorderBrush="{DynamicResource DangerBorder}" BorderThickness="1" Padding="12,5">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Delete24" Foreground="{DynamicResource DangerColor}" Filled="True" FontSize="13" Margin="0,0,5,0"/>
-                            <TextBlock Text="Confirm" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource DangerColor}" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="Delete24" Foreground="{DynamicResource DangerColor}" Filled="True" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,5,0"/>
+                            <TextBlock Text="Confirm" FontSize="{StaticResource TypeSmall}" FontWeight="SemiBold" Foreground="{DynamicResource DangerColor}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <!-- Cancel button (neutral pill) -->
-                    <Border CornerRadius="8" Cursor="Hand" MouseLeftButtonDown="ClearShelf_Cancel"
+                    <Border CornerRadius="{StaticResource RadiusSM}" Cursor="Hand" MouseLeftButtonDown="ClearShelf_Cancel"
                             Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                             BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="12,5">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Dismiss24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="13" Margin="0,0,5,0"/>
-                            <TextBlock Text="Cancel" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="Dismiss24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,5,0"/>
+                            <TextBlock Text="Cancel" FontSize="{StaticResource TypeSmall}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -933,7 +933,7 @@
 
             <!-- ═══ Incognito Mode Toggle Strip (popup bar below header) ═══ -->
             <Border x:Name="IncognitoToggleBar" Margin="14,0,14,8" Visibility="Collapsed"
-                    CornerRadius="12" Padding="10,6"
+                    CornerRadius="{StaticResource RadiusMD}" Padding="10,6"
                     Background="{DynamicResource MicaWPF.Brushes.SmokeFillColorDefault}"
                     BorderThickness="1"
                     RenderTransformOrigin="0.5,0">
@@ -953,8 +953,8 @@
                     </Grid.ColumnDefinitions>
                     <!-- Left: Icon + Text -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <ui:SymbolIcon Symbol="EyeOff24" FontSize="15" Foreground="{DynamicResource WarningColor}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock x:Name="IncognitoToggleBarText" Text="Incognito Mode Active" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"
+                        <ui:SymbolIcon Symbol="EyeOff24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource WarningColor}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock x:Name="IncognitoToggleBarText" Text="Incognito Mode Active" FontSize="{StaticResource TypeSmall}" FontWeight="SemiBold" VerticalAlignment="Center"
                                    Foreground="{DynamicResource WarningColor}"/>
                     </StackPanel>
                     <!-- Right: Toggle Switch -->
@@ -966,7 +966,7 @@
                                 <Grid>
                                     <Border x:Name="Track" CornerRadius="9" Width="36" Height="18"
                                             Background="#60F59E0B" BorderBrush="#50F59E0B" BorderThickness="1"/>
-                                    <Border x:Name="Knob" Width="14" Height="14" CornerRadius="8"
+                                    <Border x:Name="Knob" Width="14" Height="14" CornerRadius="{StaticResource RadiusSM}"
                                             Background="White" HorizontalAlignment="Right" Margin="0,0,2,0"
                                             VerticalAlignment="Center"/>
                                 </Grid>
@@ -1028,7 +1028,7 @@
                   VirtualizingStackPanel.IsVirtualizing="True"
                   VirtualizingStackPanel.VirtualizationMode="Recycling"
                   VirtualizingPanel.ScrollUnit="Pixel"
-                  VirtualizingPanel.CacheLength="4,4"
+                  VirtualizingPanel.CacheLength="2,2"
                   VirtualizingPanel.CacheLengthUnit="Page"
                   SelectionMode="Extended" MouseMove="ShelfListView_MouseMove" PreviewMouseLeftButtonDown="ShelfListView_PreviewMouseLeftButtonDown"
                   PreviewMouseLeftButtonUp="ShelfListView_PreviewMouseLeftButtonUp"
@@ -1056,7 +1056,7 @@
                         <Setter.Value>
                             <ControlTemplate TargetType="{x:Type ListViewItem}">
                                 <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" 
-                                        BorderThickness="0" CornerRadius="12" Margin="4,1,14,2">
+                                        BorderThickness="0" CornerRadius="{StaticResource RadiusMD}" Margin="4,1,14,2">
                                     <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
                                 </Border>
                                 <ControlTemplate.Triggers>
@@ -1071,7 +1071,7 @@
             <ListView.ItemTemplate>
                 <DataTemplate>
                     <Grid>
-                        <Border Name="CardBorder" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Margin="0" Padding="0" RenderTransformOrigin="0.5,0.5" ClipToBounds="True"
+                        <Border Name="CardBorder" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="{StaticResource RadiusMD}" Margin="0" Padding="0" RenderTransformOrigin="0.5,0.5" ClipToBounds="True"
                                 UseLayoutRounding="True" SnapsToDevicePixels="True" RenderOptions.ClearTypeHint="Enabled">
                         <Border.Background>
                             <SolidColorBrush Color="{DynamicResource MicaWPF.Colors.SubtleFillColorSecondary}" Opacity="0.38" />
@@ -1091,12 +1091,14 @@
                                             <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/>
                                             <Condition Binding="{Binding DataContext.AllowHover, ElementName=ShelfListView}" Value="True"/>
                                         </MultiDataTrigger.Conditions>
+                                        <Setter Property="Background" Value="{DynamicResource ThemeOverlayBgHover}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource ThemeOverlayBorderHover}" />
                                         <MultiDataTrigger.EnterActions>
                                             <BeginStoryboard>
                                                 <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(TranslateTransform.Y)" To="-2" Duration="0:0:0.2">
+                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(TranslateTransform.Y)" To="-1.5" Duration="{StaticResource Motion.Fast}">
                                                         <DoubleAnimation.EasingFunction>
-                                                            <CubicEase EasingMode="EaseOut" />
+                                                            <StaticResource ResourceKey="Motion.EaseOut" />
                                                         </DoubleAnimation.EasingFunction>
                                                     </DoubleAnimation>
                                                 </Storyboard>
@@ -1105,9 +1107,9 @@
                                         <MultiDataTrigger.ExitActions>
                                             <BeginStoryboard>
                                                 <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(TranslateTransform.Y)" To="0" Duration="0:0:0.25">
+                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(TranslateTransform.Y)" To="0" Duration="{StaticResource Motion.Normal}">
                                                         <DoubleAnimation.EasingFunction>
-                                                            <CubicEase EasingMode="EaseInOut" />
+                                                            <StaticResource ResourceKey="Motion.EaseInOut" />
                                                         </DoubleAnimation.EasingFunction>
                                                     </DoubleAnimation>
                                                 </Storyboard>
@@ -1127,84 +1129,20 @@
                         <Grid>
 
                             <!-- Hover accent border glow — fades in on hover, gated by AllowHover -->
-                            <Border x:Name="HoverGlow" BorderThickness="1" CornerRadius="12" Opacity="0"
-                                    IsHitTestVisible="False" Panel.ZIndex="2" CacheMode="BitmapCache">
+                            <Border x:Name="HoverGlow" BorderThickness="1" CornerRadius="{StaticResource RadiusMD}" Opacity="0"
+                                    IsHitTestVisible="False" Panel.ZIndex="2">
                                 <Border.BorderBrush>
                                     <SolidColorBrush Color="{DynamicResource MicaWPF.Colors.SystemAccentColorLight1}" />
                                 </Border.BorderBrush>
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Style.Triggers>
-                                            <MultiDataTrigger>
-                                                <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True"/>
-                                                    <Condition Binding="{Binding DataContext.AllowHover, ElementName=ShelfListView}" Value="True"/>
-                                                </MultiDataTrigger.Conditions>
-                                                <MultiDataTrigger.EnterActions>
-                                                    <BeginStoryboard>
-                                                        <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                             To="0.4" Duration="0:0:0.15">
-                                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
-                                                            </DoubleAnimation>
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </MultiDataTrigger.EnterActions>
-                                                <MultiDataTrigger.ExitActions>
-                                                    <BeginStoryboard>
-                                                        <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                             To="0" Duration="0:0:0.2">
-                                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                                            </DoubleAnimation>
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </MultiDataTrigger.ExitActions>
-                                            </MultiDataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
                             </Border>
 
                             <!-- Hover brightness overlay — subtle white tint on hover -->
                             <Rectangle x:Name="HoverBrighten" RadiusX="14" RadiusY="14" Opacity="0"
-                                       Fill="White" IsHitTestVisible="False" Panel.ZIndex="1" CacheMode="BitmapCache">
-                                <Rectangle.Style>
-                                    <Style TargetType="Rectangle">
-                                        <Style.Triggers>
-                                            <MultiDataTrigger>
-                                                <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True"/>
-                                                    <Condition Binding="{Binding DataContext.AllowHover, ElementName=ShelfListView}" Value="True"/>
-                                                </MultiDataTrigger.Conditions>
-                                                <MultiDataTrigger.EnterActions>
-                                                    <BeginStoryboard>
-                                                        <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                             To="0.06" Duration="0:0:0.15">
-                                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
-                                                            </DoubleAnimation>
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </MultiDataTrigger.EnterActions>
-                                                <MultiDataTrigger.ExitActions>
-                                                    <BeginStoryboard>
-                                                        <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                             To="0" Duration="0:0:0.2">
-                                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                                            </DoubleAnimation>
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </MultiDataTrigger.ExitActions>
-                                            </MultiDataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Rectangle.Style>
+                                       Fill="White" IsHitTestVisible="False" Panel.ZIndex="1">
                             </Rectangle>
 
                             <!-- Inner highlight border for frosted glass effect -->
-                            <Border Name="InnerHighlightBorder" BorderThickness="1" CornerRadius="12" Padding="12">
+                            <Border Name="InnerHighlightBorder" BorderThickness="1" CornerRadius="{StaticResource RadiusMD}" Padding="12">
                                 <Border.BorderBrush>
                                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                         <GradientStop Color="{DynamicResource MicaWPF.Colors.ControlStrokeColorDefault}" Offset="0.0"/>
@@ -1241,8 +1179,8 @@
                                                 <MultiDataTrigger.EnterActions>
                                                     <BeginStoryboard>
                                                         <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18" FillBehavior="Stop">
-                                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Normal}" FillBehavior="Stop">
+                                                                <DoubleAnimation.EasingFunction><StaticResource ResourceKey="Motion.EaseOut" /></DoubleAnimation.EasingFunction>
                                                             </DoubleAnimation>
                                                         </Storyboard>
                                                     </BeginStoryboard>
@@ -1250,8 +1188,8 @@
                                                 <MultiDataTrigger.ExitActions>
                                                     <BeginStoryboard>
                                                         <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.12" FillBehavior="Stop">
-                                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseIn" /></DoubleAnimation.EasingFunction>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Fast}" FillBehavior="Stop">
+                                                                <DoubleAnimation.EasingFunction><StaticResource ResourceKey="Motion.EaseIn" /></DoubleAnimation.EasingFunction>
                                                             </DoubleAnimation>
                                                         </Storyboard>
                                                     </BeginStoryboard>
@@ -1287,7 +1225,7 @@
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorLight1}" PreviewMouseLeftButtonDown="SmartActionSpecific_Click" AutomationProperties.Name="{Binding SmartActionName}">
                                         <ui:Button.ToolTip><ToolTip Content="{Binding SmartActionName}" /></ui:Button.ToolTip>
                                         <ui:Button.Icon>
-                                            <ui:SymbolIcon FontSize="14">
+                                            <ui:SymbolIcon FontSize="{StaticResource TypeSubtitle}">
                                                 <ui:SymbolIcon.Style>
                                                     <Style TargetType="ui:SymbolIcon">
                                                         <Setter Property="Symbol" Value="Flash24"/><Setter Property="Filled" Value="True"/>
@@ -1317,7 +1255,7 @@
                                         </Style>
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SyncIncomingColor}" PreviewMouseLeftButtonDown="RunTerminalSpecific_Click" ToolTip="Run Script" AutomationProperties.Name="Run script">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1339,7 +1277,7 @@
                                         </Style>
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource DeviceLaptopColor}" PreviewMouseLeftButtonDown="OpenSpecific_Click" ToolTip="Open" AutomationProperties.Name="Open file">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Open24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Open24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1362,7 +1300,7 @@
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource PinActiveColor}" ToolTip="Show in Explorer" AutomationProperties.Name="Show in Explorer"
                                                PreviewMouseLeftButtonDown="OpenExplorer_Click">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1378,7 +1316,7 @@
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource PinActiveColor}" ToolTip="Open Folder" AutomationProperties.Name="Open folder"
                                                PreviewMouseLeftButtonDown="OpenExplorer_Click">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1407,7 +1345,7 @@
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource CyanAccentColor}" ToolTip="Convert to .zip" AutomationProperties.Name="Convert to zip archive"
                                                PreviewMouseLeftButtonDown="ConvertToZip_Click">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="FolderZip24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="FolderZip24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1436,7 +1374,7 @@
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SuccessColor}" ToolTip="Sync via LAN"
                                                PreviewMouseLeftButtonDown="SyncZipLan_Click">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Send24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Send24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1454,7 +1392,7 @@
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource DangerColor}"
                                                PreviewMouseLeftButtonDown="ConvertImageToPdfSpecific_Click" ToolTip="Convert Image to PDF">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1473,7 +1411,7 @@
                                         </Style>
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource TypeImageColor}" PreviewMouseLeftButtonDown="QuickLookSpecific_Click" ToolTip="Quick Look">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1491,7 +1429,7 @@
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SyncIncomingColor}" ToolTip="Search on Google" AutomationProperties.Name="Search on Google"
                                                PreviewMouseLeftButtonDown="GoogleSearchSpecific_Click">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1507,7 +1445,7 @@
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource WarningColor}" ToolTip="Peek password (5s)" AutomationProperties.Name="Peek password"
                                                PreviewMouseLeftButtonDown="PeekPasswordSpecific_Click">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Eye24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Eye24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1525,7 +1463,7 @@
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SanitizeColor}" ToolTip="Sanitize URL (Remove trackers)" AutomationProperties.Name="Sanitize URL"
                                                PreviewMouseLeftButtonDown="SanitizeUrlSpecific_Click">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Shield24" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Shield24" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1543,7 +1481,7 @@
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource WarningColor}" ToolTip="Protect as Password" AutomationProperties.Name="Protect as password"
                                                PreviewMouseLeftButtonDown="MakePasswordSpecific_Click">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Key24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Key24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1551,7 +1489,7 @@
                                 <Border Style="{StaticResource ActionPillStyle}" Margin="0,0,2,0" Padding="0">
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" PreviewMouseLeftButtonDown="PinSpecific_Click" ToolTip="{Binding PinLabel}" AutomationProperties.Name="{Binding PinLabel}">
                                         <ui:Button.Icon>
-                                            <ui:SymbolIcon FontSize="14">
+                                            <ui:SymbolIcon FontSize="{StaticResource TypeSubtitle}">
                                                 <ui:SymbolIcon.Style>
                                                     <Style TargetType="ui:SymbolIcon">
                                                         <Setter Property="Symbol" Value="Pin24"/><Setter Property="Filled" Value="True"/>
@@ -1583,14 +1521,14 @@
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource WarningColor}" ToolTip="Rename Password Label" AutomationProperties.Name="Rename password label"
                                                PreviewMouseLeftButtonDown="RenamePasswordSpecific_Click">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Edit24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Edit24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
                                 <!-- ═══ Delete ═══ -->
                                 <Border Style="{StaticResource ActionPillStyle}" Padding="0">
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource DangerColor}" PreviewMouseLeftButtonDown="DeleteSpecific_Click" ToolTip="Delete" AutomationProperties.Name="Delete item">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1598,7 +1536,7 @@
 
                             <!-- Standard File Icon (Images, Zips) -->
                             <Border Name="IconBorder" Grid.Row="0" Grid.Column="0" Margin="0,0,12,0"
-                                    CornerRadius="8" ClipToBounds="True">
+                                    CornerRadius="{StaticResource RadiusSM}" ClipToBounds="True">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Visibility" Value="Visible"/>
@@ -1623,7 +1561,7 @@
                                     </Style>
                                 </Border.Style>
                                 <Grid>
-                                    <Image Name="ItemIcon" Source="{Binding Icon}" Width="40" Height="40" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="Fant">
+                                    <Image Name="ItemIcon" Source="{Binding Icon}" Width="40" Height="40" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" CacheMode="BitmapCache">
                                         <Image.Style>
                                             <Style TargetType="Image">
                                                 <Setter Property="Visibility" Value="Visible"/>
@@ -1635,7 +1573,7 @@
                                             </Style>
                                         </Image.Style>
                                     </Image>
-                                    <Image Name="GifItemIcon" gif:AnimationBehavior.SourceUri="{Binding GifFilePath}" gif:AnimationBehavior.RepeatBehavior="Forever" gif:AnimationBehavior.AutoStart="True" Width="40" Height="40" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache" Loaded="GifItemIcon_Loaded" Unloaded="GifItemIcon_Unloaded" Visibility="{Binding IsGifPreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                    <Image Name="GifItemIcon" gif:AnimationBehavior.SourceUri="{Binding GifFilePath}" gif:AnimationBehavior.RepeatBehavior="Forever" gif:AnimationBehavior.AutoStart="True" Width="40" Height="40" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" CacheMode="BitmapCache" Loaded="GifItemIcon_Loaded" Unloaded="GifItemIcon_Unloaded" Visibility="{Binding IsGifPreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                 </Grid>
                             </Border>
 
@@ -1665,7 +1603,7 @@
                                  </Border.Style>
                                  <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5">
                                      <TextBlock Text="🖼" FontSize="22" HorizontalAlignment="Center"/>
-                                     <TextBlock Text="Image" FontSize="9" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
+                                     <TextBlock Text="Image" FontSize="{StaticResource TypeMicro}" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
                                                 HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                  </StackPanel>
                              </Border>
@@ -1687,7 +1625,7 @@
                                                     <Border Width="26" Height="26" CornerRadius="13"
                                                             Background="{DynamicResource ThemeOverlayButtonBg}" BorderBrush="{DynamicResource ThemeOverlayBorderStrong}" BorderThickness="1"
                                                             ToolTip="Rotate 90°">
-                                                        <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="13" Foreground="{DynamicResource TypeGroupColor}"
+                                                        <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource TypeGroupColor}"
                                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     </Border>
                                                 </ControlTemplate>
@@ -1706,8 +1644,8 @@
                                                 <MultiDataTrigger.EnterActions>
                                                     <BeginStoryboard>
                                                         <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.2" FillBehavior="Stop">
-                                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Entrance}" FillBehavior="Stop">
+                                                                <DoubleAnimation.EasingFunction><StaticResource ResourceKey="Motion.EaseOut" /></DoubleAnimation.EasingFunction>
                                                             </DoubleAnimation>
                                                         </Storyboard>
                                                     </BeginStoryboard>
@@ -1715,8 +1653,8 @@
                                                 <MultiDataTrigger.ExitActions>
                                                     <BeginStoryboard>
                                                         <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15" FillBehavior="Stop">
-                                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseIn"/></DoubleAnimation.EasingFunction>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Normal}" FillBehavior="Stop">
+                                                                <DoubleAnimation.EasingFunction><StaticResource ResourceKey="Motion.EaseIn" /></DoubleAnimation.EasingFunction>
                                                             </DoubleAnimation>
                                                         </Storyboard>
                                                     </BeginStoryboard>
@@ -1742,12 +1680,12 @@
                                                 <ControlTemplate TargetType="Button">
                                                     <Grid Width="26" Height="26" Background="Transparent">
                                                         <!-- Unchecked state: dark rounded square with red border -->
-                                                        <Border x:Name="UncheckedBg" Width="22" Height="22" CornerRadius="8"
+                                                        <Border x:Name="UncheckedBg" Width="22" Height="22" CornerRadius="{StaticResource RadiusSM}"
                                                                 Background="{DynamicResource ThemeOverlayBg}" BorderBrush="{DynamicResource DangerBorder}" BorderThickness="1.5"/>
                                                         <!-- Checked state: solid red with checkmark -->
-                                                        <Border x:Name="CheckedBg" Width="22" Height="22" CornerRadius="8"
+                                                        <Border x:Name="CheckedBg" Width="22" Height="22" CornerRadius="{StaticResource RadiusSM}"
                                                                 Background="{DynamicResource DangerColor}" BorderBrush="{DynamicResource DangerColor}" BorderThickness="1.5" Visibility="Collapsed"/>
-                                                        <TextBlock x:Name="CheckMark" Text="✓" FontSize="13" FontWeight="Bold"
+                                                        <TextBlock x:Name="CheckMark" Text="✓" FontSize="{StaticResource TypeSubtitle}" FontWeight="Bold"
                                                                    Foreground="{DynamicResource ThemeTextOnAccent}" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                    Margin="0,-1,0,0" Visibility="Collapsed"/>
                                                     </Grid>
@@ -1836,7 +1774,7 @@
                                                                 Background="{DynamicResource ChevronBg}" BorderBrush="{DynamicResource ChevronBorder}" BorderThickness="1.5">
                                                             <!-- PERF: DropShadowEffect removed — was per-item software shader -->
                                                             <!-- Toggle Icon: Blue chevron down when collapsed, Red chevron up when expanded -->
-                                                            <ui:SymbolIcon x:Name="ChevronIcon" Symbol="ChevronDown24" FontSize="13" Foreground="{DynamicResource InfoColor}"
+                                                            <ui:SymbolIcon x:Name="ChevronIcon" Symbol="ChevronDown24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource InfoColor}"
                                                                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0.5,0,0"/>
                                                         </Border>
                                                     </Grid>
@@ -1863,7 +1801,7 @@
                             </Button>
 
                             <!-- Semantic Icon Fallback — only shown when system Icon is NOT available -->
-                            <Border Name="SemanticIconBorder" Grid.Row="0" Grid.Column="0" Width="40" Height="40" Margin="0,0,12,0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="12" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
+                            <Border Name="SemanticIconBorder" Grid.Row="0" Grid.Column="0" Width="40" Height="40" Margin="0,0,12,0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="{StaticResource RadiusMD}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -2002,7 +1940,7 @@
 
                             <!-- Color Swatch Premium Preview — shown when a HEX, RGB, or HSL color is detected -->
                             <Border Name="ColorSwatchBorder" Grid.Row="0" Grid.Column="0" Width="40" Height="40" Margin="0,0,12,0"
-                                    Background="{Binding DetectedColorBrush}" CornerRadius="12" 
+                                    Background="{Binding DetectedColorBrush}" CornerRadius="{StaticResource RadiusMD}" 
                                     BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1.5">
                                 <Border.Style>
                                     <Style TargetType="Border">
@@ -2029,9 +1967,9 @@
                                         </Style.Triggers>
                                     </Style>
                                 </StackPanel.Style>
-                                    <Border CornerRadius="8" Padding="5,2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}">
+                                    <Border CornerRadius="{StaticResource RadiusSM}" Padding="5,2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}">
                                     <StackPanel Orientation="Horizontal">
-                                        <ui:SymbolIcon FontSize="10" Margin="0,0,3,0">
+                                        <ui:SymbolIcon FontSize="{StaticResource TypeCaption}" Margin="0,0,3,0">
                                             <ui:SymbolIcon.Style>
                                                 <Style TargetType="ui:SymbolIcon">
                                                     <Setter Property="Symbol" Value="Laptop24" />
@@ -2045,7 +1983,7 @@
                                                 </Style>
                                             </ui:SymbolIcon.Style>
                                         </ui:SymbolIcon>
-                                        <TextBlock Text="{Binding SourceAppName}" Foreground="{DynamicResource SubtleTextColor}" FontSize="9" Margin="0,0,2,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding SourceAppName}" Foreground="{DynamicResource SubtleTextColor}" FontSize="{StaticResource TypeMicro}" Margin="0,0,2,0" VerticalAlignment="Center">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -2057,7 +1995,7 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                        <TextBlock Text="·" Foreground="{DynamicResource SeparatorDotColor}" FontSize="9" Margin="0,0,2,0" VerticalAlignment="Center">
+                                        <TextBlock Text="·" Foreground="{DynamicResource SeparatorDotColor}" FontSize="{StaticResource TypeMicro}" Margin="0,0,2,0" VerticalAlignment="Center">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -2069,8 +2007,8 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                        <TextBlock Text="{Binding SourceDeviceName}" Foreground="{DynamicResource SubtleTextColor}" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center" />
-                                        <TextBlock Text="·" Foreground="{DynamicResource SeparatorDotColor}" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding SourceDeviceName}" Foreground="{DynamicResource SubtleTextColor}" FontSize="{StaticResource TypeMicro}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="·" Foreground="{DynamicResource SeparatorDotColor}" FontSize="{StaticResource TypeMicro}" Margin="0,0,4,0" VerticalAlignment="Center" />
                                         <TextBlock FontSize="8" FontWeight="SemiBold" VerticalAlignment="Center">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
@@ -2104,7 +2042,7 @@
                             <!-- The Text Body -->
                             <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Margin="0,4,0,4">
                                 <TextBlock Name="TitleText" 
-                                           Text="{Binding DisplayText}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" FontFamily="Segoe UI Emoji, Segoe UI" FontWeight="Medium" FontSize="13" LineHeight="19" TextWrapping="Wrap" 
+                                           Text="{Binding DisplayText}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" FontFamily="Segoe UI Emoji, Segoe UI" FontWeight="Medium" FontSize="{StaticResource TypeSubtitle}" LineHeight="19" TextWrapping="Wrap" 
                                            TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" />
 
                                 <!-- Markdown Tag — lightweight visual indicator, no inline rendering -->
@@ -2120,7 +2058,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <TextBlock Text="MD" FontSize="9" FontWeight="SemiBold" FontFamily="Cascadia Mono, Consolas"
+                                    <TextBlock Text="MD" FontSize="{StaticResource TypeMicro}" FontWeight="SemiBold" FontFamily="Cascadia Mono, Consolas"
                                                Foreground="#A6ADC8" VerticalAlignment="Center"/>
                                 </Border>
 
@@ -2155,7 +2093,7 @@
                                     </StackPanel.Style>
                                     <!-- App icon: only visible when extracted (current session), gracefully hidden after restart -->
                                     <Image Source="{Binding SourceAppIcon}" Width="14" Height="14" Stretch="Uniform" 
-                                           RenderOptions.BitmapScalingMode="Fant" VerticalAlignment="Center" Margin="0,0,4,0">
+                                           RenderOptions.BitmapScalingMode="HighQuality" CacheMode="BitmapCache" VerticalAlignment="Center" Margin="0,0,4,0">
                                         <Image.Style>
                                             <Style TargetType="Image">
                                                 <Style.Triggers>
@@ -2166,7 +2104,7 @@
                                             </Style>
                                         </Image.Style>
                                     </Image>
-                                    <TextBlock Text="{Binding SourceAppName}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                                    <TextBlock Text="{Binding SourceAppName}" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
                                                VerticalAlignment="Center" FontWeight="Regular" Opacity="0.8"/>
                                 </StackPanel>
                                 
@@ -2188,7 +2126,7 @@
                                             </Style>
                                         </ProgressBar.Style>
                                     </ProgressBar>
-                                    <TextBlock Text="{Binding TransferStatusText}" FontSize="10.5" Foreground="{DynamicResource SyncIncomingColor}" Margin="0,3,0,0" FontWeight="Medium" Opacity="0.9"/>
+                                    <TextBlock Text="{Binding TransferStatusText}" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource SyncIncomingColor}" Margin="0,3,0,0" FontWeight="Medium" Opacity="0.9"/>
                                 </StackPanel>
 
                                 <!-- Inline Audio Player Panel -->
@@ -2226,7 +2164,7 @@
 
                                     <!-- Time indicator text -->
                                     <TextBlock Grid.Column="2" Text="{Binding AudioPlaybackText}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
-                                               FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center" Margin="8,0,4,0"/>
+                                               FontSize="{StaticResource TypeSmall}" FontWeight="Medium" VerticalAlignment="Center" Margin="8,0,4,0"/>
                                 </Grid>
                             </StackPanel>
 
@@ -2235,7 +2173,7 @@
                         </Grid>
                         </Border>
                         <!-- Selection / focus ring — sits OUTSIDE ClipToBounds so border pixels are never clipped -->
-                        <Border Name="SelectionRing" BorderThickness="2" CornerRadius="12"
+                        <Border Name="SelectionRing" BorderThickness="2" CornerRadius="{StaticResource RadiusMD}"
                                 IsHitTestVisible="False" BorderBrush="Transparent"/>
                     </Grid>
                     <DataTemplate.Triggers>
@@ -2337,7 +2275,7 @@
                         Focusable="False" OverridesDefaultStyle="True" Content="Merge PDFs" AutomationProperties.Name="Merge selected PDFs">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="MergePillBg" CornerRadius="16" Padding="16,9" BorderThickness="1">
+                            <Border x:Name="MergePillBg" CornerRadius="{StaticResource RadiusLG}" Padding="16,9" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Background" Value="{DynamicResource FloatingMergeAccentBg}"/>
@@ -2354,9 +2292,9 @@
                                     </Style>
                                 </Border.Style>
                                 <StackPanel Orientation="Horizontal">
-                                    <ui:SymbolIcon Symbol="Layer24" FontSize="15"
+                                    <ui:SymbolIcon Symbol="Layer24" FontSize="{StaticResource TypeSubtitle}"
                                                    Foreground="{DynamicResource FloatingMergeAccentIcon}" Margin="0,0,8,0"/>
-                                    <TextBlock Text="{TemplateBinding Content}" FontWeight="SemiBold" FontSize="13"
+                                    <TextBlock Text="{TemplateBinding Content}" FontWeight="SemiBold" FontSize="{StaticResource TypeSubtitle}"
                                                Foreground="{DynamicResource FloatingMergeAccentText}" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
@@ -2369,7 +2307,7 @@
                         Focusable="False" OverridesDefaultStyle="True" Content="Instant Merge" AutomationProperties.Name="Instant merge selected PDFs" Margin="8,0,0,0">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="InstantMergePillBg" CornerRadius="16" Padding="14,9" BorderThickness="1">
+                            <Border x:Name="InstantMergePillBg" CornerRadius="{StaticResource RadiusLG}" Padding="14,9" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
@@ -2382,9 +2320,9 @@
                                     </Style>
                                 </Border.Style>
                                 <StackPanel Orientation="Horizontal">
-                                    <ui:SymbolIcon Symbol="Flash24" FontSize="14" 
+                                    <ui:SymbolIcon Symbol="Flash24" FontSize="{StaticResource TypeSubtitle}" 
                                                    Foreground="{DynamicResource ThemeAccentLight}" Margin="0,0,8,0"/>
-                                    <TextBlock Text="{TemplateBinding Content}" FontSize="12.5" FontWeight="SemiBold" 
+                                    <TextBlock Text="{TemplateBinding Content}" FontSize="{StaticResource TypeBody}" FontWeight="SemiBold" 
                                                Foreground="{DynamicResource ThemeTextPrimary}" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
@@ -2416,7 +2354,7 @@
                         Focusable="False" OverridesDefaultStyle="True" Content="Unpin Selected" AutomationProperties.Name="Unpin selected items">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="UnpinPillBg" CornerRadius="16" Padding="14,9" BorderThickness="1">
+                            <Border x:Name="UnpinPillBg" CornerRadius="{StaticResource RadiusLG}" Padding="14,9" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Background" Value="{DynamicResource FloatingUnpinBg}"/>
@@ -2433,9 +2371,9 @@
                                     </Style>
                                 </Border.Style>
                                 <StackPanel Orientation="Horizontal">
-                                    <ui:SymbolIcon Symbol="PinOff24" FontSize="14"
+                                    <ui:SymbolIcon Symbol="PinOff24" FontSize="{StaticResource TypeSubtitle}"
                                                    Foreground="{DynamicResource FloatingUnpinIcon}" Margin="0,0,7,0"/>
-                                    <TextBlock Text="{TemplateBinding Content}" FontWeight="Medium" FontSize="12.5"
+                                    <TextBlock Text="{TemplateBinding Content}" FontWeight="Medium" FontSize="{StaticResource TypeBody}"
                                                Foreground="{DynamicResource FloatingUnpinText}" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
@@ -2457,7 +2395,7 @@
                     </Style.Triggers>
                 </Style>
             </StackPanel.Style>
-            <Border Width="64" Height="64" CornerRadius="16" HorizontalAlignment="Center" Margin="0,0,0,16">
+            <Border Width="64" Height="64" CornerRadius="{StaticResource RadiusLG}" HorizontalAlignment="Center" Margin="0,0,0,16">
                 <Border.Background>
                     <DynamicResource ResourceKey="ThemeOverlayBg"/>
                 </Border.Background>
@@ -2471,7 +2409,7 @@
                             <Storyboard RepeatBehavior="Forever" Storyboard.DesiredFrameRate="15">
                                 <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" From="0" To="-6" Duration="0:0:1.5" AutoReverse="True">
                                     <DoubleAnimation.EasingFunction>
-                                        <SineEase EasingMode="EaseInOut" />
+                                        <StaticResource ResourceKey="Motion.EaseInOut" />
                                     </DoubleAnimation.EasingFunction>
                                 </DoubleAnimation>
                             </Storyboard>
@@ -2480,8 +2418,8 @@
                 </Border.Triggers>
                 <ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="28" Foreground="{DynamicResource ThemeEmptyIcon}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
-            <emoji:TextBlock Text="Your shelf is empty" Opacity="0.45" FontWeight="SemiBold" FontSize="14" TextAlignment="Center"/>
-            <emoji:TextBlock Opacity="0.28" FontSize="11.5" Margin="0,10,0,0" TextAlignment="Center" LineHeight="20">
+            <emoji:TextBlock Text="Your shelf is empty" Opacity="0.45" FontWeight="SemiBold" FontSize="{StaticResource TypeSubtitle}" TextAlignment="Center"/>
+            <emoji:TextBlock Opacity="0.28" FontSize="{StaticResource TypeSmall}" Margin="0,10,0,0" TextAlignment="Center" LineHeight="20">
                 <Run Text="⌨️ Press"/><Run Text=" Alt+C " FontWeight="SemiBold"/><Run Text="anywhere to open"/>
                 <LineBreak/>
                 <Run Text="🖱️ Shake mouse to summon"/>
@@ -2498,9 +2436,9 @@
                 Background="Transparent" Visibility="Visible">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" 
-                        CornerRadius="8" Padding="12,6,12,6">
-                    <emoji:TextBlock FontSize="11.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center">
-                        <Run Text="⌨️" FontSize="10"/><Run Text=" Press "/><Run Text="Alt+C" FontWeight="SemiBold"/><Run Text=" anywhere to summon clipboard"/>
+                        CornerRadius="{StaticResource RadiusSM}" Padding="12,6,12,6">
+                    <emoji:TextBlock FontSize="{StaticResource TypeSmall}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center">
+                        <Run Text="⌨️" FontSize="{StaticResource TypeCaption}"/><Run Text=" Press "/><Run Text="Alt+C" FontWeight="SemiBold"/><Run Text=" anywhere to summon clipboard"/>
                     </emoji:TextBlock>
                 </Border>
             </StackPanel>
@@ -2514,7 +2452,7 @@
               Background="#01000000">
 
             <!-- Themed gradient background -->
-            <Border CornerRadius="12" ClipToBounds="True">
+            <Border CornerRadius="{StaticResource RadiusMD}" ClipToBounds="True">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="0.3,1">
                         <GradientStop Color="{DynamicResource SystemAccentColorDark3}" Offset="0.0"/>
@@ -2525,7 +2463,7 @@
             </Border>
 
             <!-- Arctic frost overlay -->
-            <Border x:Name="AltArcticOverlay" CornerRadius="12" ClipToBounds="True" Visibility="Visible" IsHitTestVisible="False">
+            <Border x:Name="AltArcticOverlay" CornerRadius="{StaticResource RadiusMD}" ClipToBounds="True" Visibility="Visible" IsHitTestVisible="False">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="0.2,1">
                         <GradientStop Color="#FFF0F7FF" Offset="0.0"/>
@@ -2537,7 +2475,7 @@
             </Border>
 
             <!-- Subtle inner glow -->
-            <Border CornerRadius="12" IsHitTestVisible="False">
+            <Border CornerRadius="{StaticResource RadiusMD}" IsHitTestVisible="False">
                 <Border.Background>
                     <DynamicResource ResourceKey="ThemeOverlayBg"/>
                 </Border.Background>
@@ -2561,7 +2499,7 @@
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <Image Source="{DynamicResource ThemeLogoIcon}" Width="22" Height="22" Margin="0,0,8,0"
                                RenderOptions.BitmapScalingMode="HighQuality"/>
-                        <TextBlock Text="FlyShelf" FontWeight="Bold" FontSize="15"
+                        <TextBlock Text="FlyShelf" FontWeight="Bold" FontSize="{StaticResource TypeSubtitle}"
                                    Foreground="{DynamicResource AltTextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
 
@@ -2572,8 +2510,8 @@
                             MinWidth="80">
                         <Grid VerticalAlignment="Center">
                             <StackPanel x:Name="AltSearchPlaceholder" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <ui:SymbolIcon Symbol="Search24" FontSize="12" Foreground="{DynamicResource AltSearchFg}" Margin="0,0,5,0"/>
-                                <TextBlock Text="Search" FontSize="12" Foreground="{DynamicResource AltSearchFg}" VerticalAlignment="Center"/>
+                                <ui:SymbolIcon Symbol="Search24" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource AltSearchFg}" Margin="0,0,5,0"/>
+                                <TextBlock Text="Search" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource AltSearchFg}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <Grid x:Name="AltSearchContainer" Visibility="Collapsed" VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
@@ -2581,9 +2519,9 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <ui:SymbolIcon Grid.Column="0" Symbol="Search24" FontSize="12" Foreground="{DynamicResource AltSearchFg}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <ui:SymbolIcon Grid.Column="0" Symbol="Search24" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource AltSearchFg}" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                 <TextBox x:Name="AltSearchTextBox" Grid.Column="1" Padding="0" Margin="0"
-                                         FontSize="12" Foreground="{DynamicResource AltTextPrimary}" CaretBrush="{DynamicResource AltTextPrimary}"
+                                         FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource AltTextPrimary}" CaretBrush="{DynamicResource AltTextPrimary}"
                                          TextChanged="AltSearch_TextChanged" VerticalAlignment="Center" VerticalContentAlignment="Center"
                                          MinWidth="100" AutomationProperties.Name="Search clipboard history">
                                     <TextBox.Style>
@@ -2616,7 +2554,7 @@
                         <Border.Style><Style TargetType="Border"><Style.Triggers>
                             <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger>
                         </Style.Triggers></Style></Border.Style>
-                        <ui:SymbolIcon Symbol="Settings24" FontSize="14" Foreground="{DynamicResource AltTextSecondary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <ui:SymbolIcon Symbol="Settings24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource AltTextSecondary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
 
                     <!-- Close -->
@@ -2625,7 +2563,7 @@
                         <Border.Style><Style TargetType="Border"><Style.Triggers>
                             <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltCloseHoverBg}"/></Trigger>
                         </Style.Triggers></Style></Border.Style>
-                        <ui:SymbolIcon Symbol="Dismiss24" FontSize="14" Foreground="{DynamicResource AltTextSecondary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <ui:SymbolIcon Symbol="Dismiss24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource AltTextSecondary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                 </Grid>
 
@@ -2638,34 +2576,34 @@
 
                     <!-- LEFT SIDEBAR -->
                     <StackPanel Grid.Column="0" Width="36" Margin="6,4,0,0" VerticalAlignment="Top">
-                        <Border x:Name="AltSidebarAll" Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="{DynamicResource ThemeAccentBg}" ToolTip="All Items" Tag="All" MouseLeftButtonDown="AltCategoryFilter_Click">
+                        <Border x:Name="AltSidebarAll" Width="30" Height="30" CornerRadius="{StaticResource RadiusSM}" Margin="0,0,0,4" Cursor="Hand" Background="{DynamicResource ThemeAccentBg}" ToolTip="All Items" Tag="All" MouseLeftButtonDown="AltCategoryFilter_Click">
                             <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource ThemeAccentBgHover}"/></Trigger></Style.Triggers></Style></Border.Style>
-                            <ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="14" Foreground="{DynamicResource ThemeAccentLight}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource ThemeAccentLight}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <Border x:Name="AltSidebarText" Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Text" Tag="Text" MouseLeftButtonDown="AltCategoryFilter_Click">
+                        <Border x:Name="AltSidebarText" Width="30" Height="30" CornerRadius="{StaticResource RadiusSM}" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Text" Tag="Text" MouseLeftButtonDown="AltCategoryFilter_Click">
                             <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style>
-                            <ui:SymbolIcon Symbol="TextT24" FontSize="14" Foreground="{DynamicResource AltAccent_Text}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="TextT24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource AltAccent_Text}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <Border x:Name="AltSidebarImage" Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Images" Tag="Image" MouseLeftButtonDown="AltCategoryFilter_Click">
+                        <Border x:Name="AltSidebarImage" Width="30" Height="30" CornerRadius="{StaticResource RadiusSM}" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Images" Tag="Image" MouseLeftButtonDown="AltCategoryFilter_Click">
                             <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style>
-                            <ui:SymbolIcon Symbol="Image24" FontSize="14" Foreground="{DynamicResource AltAccent_Image}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="Image24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource AltAccent_Image}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <Border x:Name="AltSidebarPinned" Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Pinned" Tag="Pinned" MouseLeftButtonDown="AltCategoryFilter_Click">
+                        <Border x:Name="AltSidebarPinned" Width="30" Height="30" CornerRadius="{StaticResource RadiusSM}" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Pinned" Tag="Pinned" MouseLeftButtonDown="AltCategoryFilter_Click">
                             <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style>
-                            <ui:SymbolIcon Symbol="Pin24" FontSize="14" Foreground="{DynamicResource AltPinDot}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="Pin24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource AltPinDot}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <Border x:Name="AltSidebarPdf" Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="PDFs" Tag="PDF" MouseLeftButtonDown="AltCategoryFilter_Click">
+                        <Border x:Name="AltSidebarPdf" Width="30" Height="30" CornerRadius="{StaticResource RadiusSM}" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="PDFs" Tag="PDF" MouseLeftButtonDown="AltCategoryFilter_Click">
                             <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style>
-                            <ui:SymbolIcon Symbol="DocumentPdf24" FontSize="14" Foreground="{DynamicResource AltAccent_Pdf}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="DocumentPdf24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource AltAccent_Pdf}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <Border x:Name="AltSidebarDocument" Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Documents" Tag="Document" MouseLeftButtonDown="AltCategoryFilter_Click">
+                        <Border x:Name="AltSidebarDocument" Width="30" Height="30" CornerRadius="{StaticResource RadiusSM}" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Documents" Tag="Document" MouseLeftButtonDown="AltCategoryFilter_Click">
                             <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style>
-                            <ui:SymbolIcon Symbol="Document24" FontSize="14" Foreground="{DynamicResource AltAccent_Document}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="Document24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource AltAccent_Document}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <Border Width="20" Height="1" Margin="5,4,5,8" Background="{DynamicResource AltCardBorder}"/>
-                        <Border Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Convert to PDF" MouseLeftButtonDown="AltConvertPdf_Click">
+                        <Border Width="30" Height="30" CornerRadius="{StaticResource RadiusSM}" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Convert to PDF" MouseLeftButtonDown="AltConvertPdf_Click">
                             <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style>
-                            <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="14" Foreground="{DynamicResource AltAccent_Pdf}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource AltAccent_Pdf}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </StackPanel>
 
@@ -2674,7 +2612,7 @@
                               Background="Transparent" BorderThickness="0" Margin="4,4,2,14" Padding="0,0,0,50"
                               Focusable="True" FocusVisualStyle="{x:Null}" UseLayoutRounding="True" SnapsToDevicePixels="True"
                               AutomationProperties.Name="Clipboard items list"
-                              TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
+                              TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
                               ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                               ScrollViewer.CanContentScroll="True" VirtualizingStackPanel.IsVirtualizing="True"
                               VirtualizingStackPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel"
@@ -2700,7 +2638,7 @@
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="{x:Type ListViewItem}">
-                                            <Border x:Name="AltItemBorder" Background="{TemplateBinding Background}" BorderThickness="2" BorderBrush="Transparent" CornerRadius="12" Margin="2,1.5,10,1.5" ClipToBounds="True">
+                                            <Border x:Name="AltItemBorder" Background="{TemplateBinding Background}" BorderThickness="2" BorderBrush="Transparent" CornerRadius="{StaticResource RadiusMD}" Margin="2,1.5,10,1.5" ClipToBounds="True">
                                                 <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
                                             </Border>
                                             <ControlTemplate.Triggers>
@@ -2719,7 +2657,7 @@
                         </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <Border Name="AltCardBorder" CornerRadius="12" Padding="0" ClipToBounds="True" Background="{DynamicResource AltCardBg}" BorderBrush="{DynamicResource AltCardBorder}" BorderThickness="1">
+                                <Border Name="AltCardBorder" CornerRadius="{StaticResource RadiusMD}" Padding="0" ClipToBounds="True" Background="{DynamicResource AltCardBg}" BorderBrush="{DynamicResource AltCardBorder}" BorderThickness="1">
                                     <Border.Style><Style TargetType="Border"><Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
                                             <Setter Property="Background" Value="{DynamicResource AltCardBgHover}"/>
@@ -2738,17 +2676,17 @@
                                                     <Condition Binding="{Binding DataContext.AllowHover, ElementName=AltShelfListView}" Value="True"/>
                                                 </MultiDataTrigger.Conditions>
                                                 <Setter Property="IsHitTestVisible" Value="True"/><Setter Property="Opacity" Value="1"/>
-                                                <MultiDataTrigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15" FillBehavior="Stop"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard></MultiDataTrigger.EnterActions>
-                                                <MultiDataTrigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.1" FillBehavior="Stop"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseIn"/></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard></MultiDataTrigger.ExitActions>
+                                                <MultiDataTrigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Normal}" FillBehavior="Stop"><DoubleAnimation.EasingFunction><StaticResource ResourceKey="Motion.EaseOut" /></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard></MultiDataTrigger.EnterActions>
+                                                <MultiDataTrigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.1" FillBehavior="Stop"><DoubleAnimation.EasingFunction><StaticResource ResourceKey="Motion.EaseIn" /></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard></MultiDataTrigger.ExitActions>
                                                 </MultiDataTrigger></Style.Triggers>
                                             </Style></StackPanel.Style>
                                             <StackPanel.Resources><Style x:Key="AeroPill" TargetType="Border"><Setter Property="CornerRadius" Value="5"/><Setter Property="Background" Value="{DynamicResource AltBottomBarBg}"/><Setter Property="BorderBrush" Value="{DynamicResource AltCardBorder}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Width" Value="24"/><Setter Property="Height" Value="24"/><Setter Property="Margin" Value="0,0,1,0"/><Setter Property="Cursor" Value="Hand"/></Style></StackPanel.Resources>
-                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="QuickLookSpecific_Click"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="12" Foreground="{DynamicResource AltAccent_Image}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
-                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="OpenSpecific_Click"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Document"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="File"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Video"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Audio"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Archive"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Presentation"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Open24" FontSize="12" Foreground="{DynamicResource AltAccent_Document}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
-                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="GoogleSearchSpecific_Click"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Search24" FontSize="12" Foreground="{DynamicResource AltAccent_Url}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
-                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="PeekPasswordSpecific_Click" ToolTip="Peek password (5s)"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsPassword}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Eye24" Filled="True" FontSize="12" Foreground="{DynamicResource AltAccent_Password}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
-                                            <Border Style="{StaticResource AeroPill}" PreviewMouseLeftButtonDown="PinSpecific_Click"><ui:SymbolIcon FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="Pin24"/><Setter Property="Filled" Value="True"/><Setter Property="Foreground" Value="{DynamicResource AltPinDot}"/><Style.Triggers><DataTrigger Binding="{Binding IsPinned}" Value="True"><Setter Property="Symbol" Value="PinOff24"/><Setter Property="Foreground" Value="{DynamicResource AltTextTertiary}"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
-                                            <Border Style="{StaticResource AeroPill}" PreviewMouseLeftButtonDown="DeleteSpecific_Click"><ui:SymbolIcon Symbol="Delete24" Filled="True" FontSize="12" Foreground="{DynamicResource DangerColor}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
+                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="QuickLookSpecific_Click"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource AltAccent_Image}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
+                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="OpenSpecific_Click"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Document"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="File"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Video"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Audio"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Archive"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Presentation"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Open24" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource AltAccent_Document}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
+                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="GoogleSearchSpecific_Click"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Search24" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource AltAccent_Url}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
+                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="PeekPasswordSpecific_Click" ToolTip="Peek password (5s)"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsPassword}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Eye24" Filled="True" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource AltAccent_Password}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
+                                            <Border Style="{StaticResource AeroPill}" PreviewMouseLeftButtonDown="PinSpecific_Click"><ui:SymbolIcon FontSize="{StaticResource TypeBody}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="Pin24"/><Setter Property="Filled" Value="True"/><Setter Property="Foreground" Value="{DynamicResource AltPinDot}"/><Style.Triggers><DataTrigger Binding="{Binding IsPinned}" Value="True"><Setter Property="Symbol" Value="PinOff24"/><Setter Property="Foreground" Value="{DynamicResource AltTextTertiary}"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
+                                            <Border Style="{StaticResource AeroPill}" PreviewMouseLeftButtonDown="DeleteSpecific_Click"><ui:SymbolIcon Symbol="Delete24" Filled="True" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource DangerColor}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
                                         </StackPanel>
                                         <!-- PDF MERGE TOGGLE — top-left checkbox for PDF/Document/Image items -->
                                         <Button Grid.Column="0" Grid.ColumnSpan="2" VerticalAlignment="Top" HorizontalAlignment="Left"
@@ -2768,7 +2706,7 @@
                                                                             Background="{DynamicResource ThemeOverlayBorderStrong}" BorderBrush="{DynamicResource DangerBorder}" BorderThickness="1.5"/>
                                                                     <Border x:Name="CheckedBg" Width="18" Height="18" CornerRadius="4"
                                                                             Background="{DynamicResource DangerColor}" BorderBrush="{DynamicResource DangerColor}" BorderThickness="1.5" Visibility="Collapsed"/>
-                                                                    <TextBlock x:Name="CheckMark" Text="✓" FontSize="11" FontWeight="Bold"
+                                                                    <TextBlock x:Name="CheckMark" Text="✓" FontSize="{StaticResource TypeSmall}" FontWeight="Bold"
                                                                                Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                                Margin="0,-1,0,0" Visibility="Collapsed"/>
                                                                 </Grid>
@@ -2785,8 +2723,8 @@
                                                                 </ControlTemplate.Triggers>
                                                             </ControlTemplate>
                                                         </Setter.Value>
-                                                    </Setter>
-                                                    <Style.Triggers>
+                                                     </Setter>
+                                                     <Style.Triggers>
                                                         <!-- Show on hover for PDF -->
                                                         <MultiDataTrigger><MultiDataTrigger.Conditions>
                                                             <Condition Binding="{Binding IsPdfPreview}" Value="True"/>
@@ -2822,22 +2760,22 @@
                                         <Border Grid.Column="0" Width="3" CornerRadius="2" Margin="1,6,0,6" HorizontalAlignment="Left"><Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{DynamicResource AltAccent_Default}"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Background" Value="{DynamicResource AltAccent_Text}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Background" Value="{DynamicResource AltAccent_Code}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Background" Value="{DynamicResource AltAccent_Image}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Background" Value="{DynamicResource AltAccent_Pdf}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Background" Value="{DynamicResource AltAccent_Url}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Document"><Setter Property="Background" Value="{DynamicResource AltAccent_Document}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Archive"><Setter Property="Background" Value="{DynamicResource AltAccent_Archive}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Folder"><Setter Property="Background" Value="{DynamicResource AltAccent_Folder}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Video"><Setter Property="Background" Value="{DynamicResource AltAccent_Video}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Audio"><Setter Property="Background" Value="{DynamicResource AltAccent_Audio}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Password"><Setter Property="Background" Value="{DynamicResource AltAccent_Password}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Presentation"><Setter Property="Background" Value="{DynamicResource AltAccent_Presentation}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Background" Value="{DynamicResource AltAccent_QRCode}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Group"><Setter Property="Background" Value="{DynamicResource AltAccent_Group}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="File"><Setter Property="Background" Value="{DynamicResource AltAccent_File}"/></DataTrigger></Style.Triggers></Style></Border.Style></Border>
                                         <!-- ICON -->
                                         <Grid Grid.Column="1" Width="32" Height="32" Margin="8,8,6,8">
-                                            <Border CornerRadius="8" ClipToBounds="True"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><Image Source="{Binding Icon}" Width="32" Height="32" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="Fant"/></Border>
+                                            <Border CornerRadius="{StaticResource RadiusSM}" ClipToBounds="True"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><Image Source="{Binding Icon}" Width="32" Height="32" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/></Border>
                                             <!-- Expand/Collapse button for long text -->
-                                            <Border CornerRadius="8" Width="32" Height="32" Cursor="Hand" Tag="AeroExpandToggle"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsLongText}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Border.Background><SolidColorBrush Color="{DynamicResource ThemeAccentColor}" Opacity="0.08"/></Border.Background><Border.InputBindings><MouseBinding MouseAction="LeftClick" Command="{Binding ToggleExpandCommand}"/></Border.InputBindings><ui:SymbolIcon FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="ChevronDown24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Text}"/><Style.Triggers><DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter Property="Symbol" Value="ChevronUp24"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
+                                            <Border CornerRadius="{StaticResource RadiusSM}" Width="32" Height="32" Cursor="Hand" Tag="AeroExpandToggle"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsLongText}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Border.Background><SolidColorBrush Color="{DynamicResource ThemeAccentColor}" Opacity="0.08"/></Border.Background><Border.InputBindings><MouseBinding MouseAction="LeftClick" Command="{Binding ToggleExpandCommand}"/></Border.InputBindings><ui:SymbolIcon FontSize="{StaticResource TypeSubtitle}" HorizontalAlignment="Center" VerticalAlignment="Center"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="ChevronDown24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Text}"/><Style.Triggers><DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter Property="Symbol" Value="ChevronUp24"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
                                             <!-- Fallback icon for items without a custom icon (text, url, code, etc.) -->
-                                            <Border CornerRadius="8" Width="32" Height="32"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding IsLongText}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><Border.Background><SolidColorBrush Color="#000000" Opacity="0.05"/></Border.Background><ui:SymbolIcon FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="Document24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_File}"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Symbol" Value="TextDescription24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Text}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Symbol" Value="Code24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Code}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Symbol" Value="Image24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Image}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Symbol" Value="DocumentPdf24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Pdf}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Symbol" Value="Globe24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Url}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Password"><Setter Property="Symbol" Value="ShieldKeyhole24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Password}"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
+                                            <Border CornerRadius="{StaticResource RadiusSM}" Width="32" Height="32"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding IsLongText}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><Border.Background><SolidColorBrush Color="#000000" Opacity="0.05"/></Border.Background><ui:SymbolIcon FontSize="{StaticResource TypeSubtitle}" HorizontalAlignment="Center" VerticalAlignment="Center"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="Document24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_File}"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Symbol" Value="TextDescription24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Text}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Symbol" Value="Code24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Code}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Symbol" Value="Image24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Image}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Symbol" Value="DocumentPdf24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Pdf}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Symbol" Value="Globe24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Url}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Password"><Setter Property="Symbol" Value="ShieldKeyhole24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Password}"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
                                         </Grid>
                                         <!-- TEXT BODY -->
                                         <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="2,5,4,5">
-                                            <Border CornerRadius="8" ClipToBounds="True" Margin="0,0,8,4" HorizontalAlignment="Stretch"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Image Source="{Binding Icon, IsAsync=True}" MaxHeight="90" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="Fant"/></Border>
-                                            <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextTrimming="CharacterEllipsis" MaxHeight="18" LineHeight="18"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
-                                            <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextWrapping="Wrap" MaxHeight="{Binding CollapsedMaxHeight}" LineHeight="18"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
-                                            <TextBlock Text="{Binding FormatIdentifier}" FontSize="11" Margin="0,2,0,0" Foreground="{DynamicResource AltSubtitleFg}" TextTrimming="CharacterEllipsis" MaxHeight="15" LineHeight="15" Opacity="0.7"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                                            <Border CornerRadius="{StaticResource RadiusSM}" ClipToBounds="True" Margin="0,0,8,4" HorizontalAlignment="Stretch"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Image Source="{Binding Icon, IsAsync=True}" Height="90" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="HighQuality"/></Border>
+                                            <TextBlock Text="{Binding FileName}" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextTrimming="CharacterEllipsis" MaxHeight="18" LineHeight="18"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                                            <TextBlock Text="{Binding FileName}" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" LineHeight="18"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                                            <TextBlock Text="{Binding FormatIdentifier}" FontSize="{StaticResource TypeSmall}" Margin="0,2,0,0" Foreground="{DynamicResource AltSubtitleFg}" TextTrimming="CharacterEllipsis" MaxHeight="15" LineHeight="15" Opacity="0.7"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                                         </StackPanel>
                                         <!-- TIMESTAMP + PIN -->
                                         <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="4,0,10,0" HorizontalAlignment="Right">
-                                            <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:h:mm tt}'}" FontSize="10.5" Foreground="{DynamicResource AltTimestampFg}" HorizontalAlignment="Right"/>
+                                            <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:h:mm tt}'}" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource AltTimestampFg}" HorizontalAlignment="Right"/>
                                             <Ellipse Width="6" Height="6" HorizontalAlignment="Right" Margin="0,4,2,0"><Ellipse.Style><Style TargetType="Ellipse"><Setter Property="Visibility" Value="Collapsed"/><Setter Property="Fill" Value="{DynamicResource AltPinDot}"/><Style.Triggers><DataTrigger Binding="{Binding IsPinned}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Ellipse.Style></Ellipse>
                                         </StackPanel>
                                     </Grid>
@@ -2849,19 +2787,19 @@
                     <!-- Empty State -->
                     <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding DroppedItems.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
-                        <Border Width="56" Height="56" CornerRadius="12" HorizontalAlignment="Center" Margin="0,0,0,14"><Border.Background><SolidColorBrush Color="#000000" Opacity="0.06"/></Border.Background><ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="24" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                        <TextBlock Text="Your shelf is empty" Opacity="0.5" FontWeight="SemiBold" FontSize="14" TextAlignment="Center" Foreground="{DynamicResource AltTextPrimary}"/>
-                        <TextBlock Opacity="0.35" FontSize="11" Margin="0,8,0,0" TextAlignment="Center" LineHeight="20" Foreground="{DynamicResource AltTextSecondary}"><Run Text="Copy anything to see it here"/></TextBlock>
+                        <Border Width="56" Height="56" CornerRadius="{StaticResource RadiusMD}" HorizontalAlignment="Center" Margin="0,0,0,14"><Border.Background><SolidColorBrush Color="#000000" Opacity="0.06"/></Border.Background><ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="24" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                        <TextBlock Text="Your shelf is empty" Opacity="0.5" FontWeight="SemiBold" FontSize="{StaticResource TypeSubtitle}" TextAlignment="Center" Foreground="{DynamicResource AltTextPrimary}"/>
+                        <TextBlock Opacity="0.35" FontSize="{StaticResource TypeSmall}" Margin="0,8,0,0" TextAlignment="Center" LineHeight="20" Foreground="{DynamicResource AltTextSecondary}"><Run Text="Copy anything to see it here"/></TextBlock>
                     </StackPanel>
                 </Grid>
 
                 <!-- BOTTOM BAR -->
-                <Border Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Margin="8,0,8,8" Padding="10,6" CornerRadius="12" Background="{DynamicResource AltBottomBarBg}" BorderBrush="{DynamicResource AltBottomBarBorder}" BorderThickness="1">
+                <Border Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Margin="8,0,8,8" Padding="10,6" CornerRadius="{StaticResource RadiusMD}" Background="{DynamicResource AltBottomBarBg}" BorderBrush="{DynamicResource AltBottomBarBorder}" BorderThickness="1">
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Width="28" Height="28" CornerRadius="8" Background="Transparent" Cursor="Hand" ToolTip="More Options" MouseLeftButtonDown="AltMoreOptions_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="MoreHorizontal24" FontSize="14" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                        <Border Grid.Column="0" Width="28" Height="28" CornerRadius="{StaticResource RadiusSM}" Background="Transparent" Cursor="Hand" ToolTip="More Options" MouseLeftButtonDown="AltMoreOptions_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="MoreHorizontal24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Border x:Name="AltIncognitoBadge" Visibility="{Binding Visibility, ElementName=IncognitoBadge}" Width="28" Height="28" CornerRadius="8" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="IncognitoBadge_Click" ToolTip="{Binding Text, ElementName=IncognitoBadgeText}">
+                            <Border x:Name="AltIncognitoBadge" Visibility="{Binding Visibility, ElementName=IncognitoBadge}" Width="28" Height="28" CornerRadius="{StaticResource RadiusSM}" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="IncognitoBadge_Click" ToolTip="{Binding Text, ElementName=IncognitoBadgeText}">
                                 <Border.Background>
                                     <DynamicResource ResourceKey="WarningBgSubtle"/>
                                 </Border.Background>
@@ -2869,9 +2807,9 @@
                                     <DynamicResource ResourceKey="WarningBorder"/>
                                 </Border.BorderBrush>
                                 <Border.BorderThickness>1</Border.BorderThickness>
-                                <ui:SymbolIcon Symbol="EyeOff24" FontSize="14" Foreground="{DynamicResource WarningColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <ui:SymbolIcon Symbol="EyeOff24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource WarningColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
-                            <Border x:Name="AltUpdateBadge" Visibility="{Binding Visibility, ElementName=UpdateBadge}" Width="28" Height="28" CornerRadius="8" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="UpdateBadge_Click" ToolTip="Update available — click to open Hub">
+                            <Border x:Name="AltUpdateBadge" Visibility="{Binding Visibility, ElementName=UpdateBadge}" Width="28" Height="28" CornerRadius="{StaticResource RadiusSM}" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="UpdateBadge_Click" ToolTip="Update available — click to open Hub">
                                 <Border.Background>
                                     <DynamicResource ResourceKey="SuccessBgSubtle"/>
                                 </Border.Background>
@@ -2879,13 +2817,13 @@
                                     <DynamicResource ResourceKey="SuccessBorder"/>
                                 </Border.BorderBrush>
                                 <Border.BorderThickness>1</Border.BorderThickness>
-                                <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="14" Foreground="{DynamicResource SuccessColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource SuccessColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
-                            <Border x:Name="AltResearchBtn" Width="28" Height="28" CornerRadius="8" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Networking" MouseLeftButtonDown="AltResearch_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Wifi124" FontSize="14" Foreground="{DynamicResource ThemeAccentLight}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                            <Border Width="28" Height="28" CornerRadius="8" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Keyboard Shortcuts" MouseLeftButtonDown="AltShortcuts_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Keyboard24" FontSize="14" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                            <Border Width="28" Height="28" CornerRadius="8" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Sync" MouseLeftButtonDown="AltSync_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                            <Border Width="28" Height="28" CornerRadius="8" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Clear Shelf" MouseLeftButtonDown="AltClear_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource DangerBgHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Delete24" FontSize="13" Foreground="{DynamicResource DangerColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                            <Border Width="28" Height="28" CornerRadius="8" Background="Transparent" Cursor="Hand" ToolTip="Reminders" MouseLeftButtonDown="ReminderBtn_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Alert24" FontSize="13" Foreground="{DynamicResource AltPinDot}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <Border x:Name="AltResearchBtn" Width="28" Height="28" CornerRadius="{StaticResource RadiusSM}" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Networking" MouseLeftButtonDown="AltResearch_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Wifi124" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource ThemeAccentLight}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <Border Width="28" Height="28" CornerRadius="{StaticResource RadiusSM}" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Keyboard Shortcuts" MouseLeftButtonDown="AltShortcuts_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Keyboard24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <Border Width="28" Height="28" CornerRadius="{StaticResource RadiusSM}" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Sync" MouseLeftButtonDown="AltSync_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="ArrowSync24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <Border Width="28" Height="28" CornerRadius="{StaticResource RadiusSM}" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Clear Shelf" MouseLeftButtonDown="AltClear_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource DangerBgHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Delete24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource DangerColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <Border Width="28" Height="28" CornerRadius="{StaticResource RadiusSM}" Background="Transparent" Cursor="Hand" ToolTip="Reminders" MouseLeftButtonDown="ReminderBtn_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Alert24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource AltPinDot}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -2897,7 +2835,7 @@
         <!-- ═══════════════════════════════════════════════════════════ -->
         <Grid x:Name="ResearchPanel" Grid.Row="1" Visibility="Collapsed" Opacity="0" Margin="0"
               RenderTransformOrigin="0.5,0" PreviewMouseDown="ResearchPanel_PreviewMouseDown"
-              TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
+              TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
               RenderOptions.ClearTypeHint="Enabled" UseLayoutRounding="True" SnapsToDevicePixels="True">
             <Grid.RenderTransform><TranslateTransform Y="0"/></Grid.RenderTransform>
             <Grid.Background>
@@ -2915,7 +2853,7 @@
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <Grid x:Name="NotesPanel" Grid.Row="1" Visibility="Collapsed" Opacity="0" Margin="0"
               RenderTransformOrigin="0.5,0" PreviewMouseDown="NotesPanel_PreviewMouseDown"
-              TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
+              TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
               RenderOptions.ClearTypeHint="Enabled" UseLayoutRounding="True" SnapsToDevicePixels="True"
               Validation.ErrorTemplate="{x:Null}"
               Background="#1A1A2E">
@@ -2931,7 +2869,7 @@
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <Grid x:Name="TodoPanel" Grid.Row="1" Visibility="Collapsed" Opacity="0" Margin="0"
               RenderTransformOrigin="0.5,0" PreviewMouseDown="TodoPanel_PreviewMouseDown"
-              TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
+              TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
               RenderOptions.ClearTypeHint="Enabled" UseLayoutRounding="True" SnapsToDevicePixels="True"
               Validation.ErrorTemplate="{x:Null}"
               Background="Transparent">

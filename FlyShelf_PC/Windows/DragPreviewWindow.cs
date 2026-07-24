@@ -82,8 +82,8 @@ namespace FlyShelf.Windows
             {
                 Children =
                 {
-                    new ScaleTransform(0.85, 0.85),
-                    new TranslateTransform(0, 3)
+                    new ScaleTransform(0.8, 0.8),
+                    new TranslateTransform(0, 6)
                 }
             };
             _rootCard.RenderTransformOrigin = new Point(0, 0);
@@ -105,25 +105,36 @@ namespace FlyShelf.Windows
         }
 
         /// <summary>
-        /// Quick pop-in animation (120ms).
+        /// Pop-in animation (180ms) with BackEase overshoot for "picked up" feel.
         /// </summary>
         private void PlayEntranceAnimation()
         {
-            var duration = new Duration(TimeSpan.FromMilliseconds(120));
-            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            var duration = new Duration(TimeSpan.FromMilliseconds(180));
+            // [FIX DRAG-ANIM]: BackEase with slight overshoot for "picked up" feel
+            var ease = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.15 };
+            var fadeEase = new CubicEase { EasingMode = EasingMode.EaseOut };
 
             _rootCard.BeginAnimation(UIElement.OpacityProperty,
-                new DoubleAnimation(0, 0.95, duration) { EasingFunction = ease });
+                new DoubleAnimation(0, 0.95, duration) { EasingFunction = fadeEase });
 
             var scaleTransform = ((TransformGroup)_rootCard.RenderTransform).Children[0] as ScaleTransform;
             scaleTransform?.BeginAnimation(ScaleTransform.ScaleXProperty,
-                new DoubleAnimation(0.85, 1.0, duration) { EasingFunction = ease });
+                new DoubleAnimation(0.8, 1.0, duration) { EasingFunction = ease });
             scaleTransform?.BeginAnimation(ScaleTransform.ScaleYProperty,
-                new DoubleAnimation(0.85, 1.0, duration) { EasingFunction = ease });
+                new DoubleAnimation(0.8, 1.0, duration) { EasingFunction = ease });
 
             var translateTransform = ((TransformGroup)_rootCard.RenderTransform).Children[1] as TranslateTransform;
             translateTransform?.BeginAnimation(TranslateTransform.YProperty,
-                new DoubleAnimation(3, 0, duration) { EasingFunction = ease });
+                new DoubleAnimation(6, 0, duration) { EasingFunction = ease });
+
+            // Elevate shadow during drag for depth effect
+            if (_rootCard.Effect is DropShadowEffect shadow)
+            {
+                shadow.BeginAnimation(DropShadowEffect.BlurRadiusProperty,
+                    new DoubleAnimation(6, 16, duration) { EasingFunction = fadeEase });
+                shadow.BeginAnimation(DropShadowEffect.ShadowDepthProperty,
+                    new DoubleAnimation(2, 6, duration) { EasingFunction = fadeEase });
+            }
         }
 
         private bool _isClosed;
@@ -143,19 +154,31 @@ namespace FlyShelf.Windows
                 // Attempt a quick 80ms exit animation before aggressive cleanup
                 if (_rootCard.Opacity > 0 && Visibility == Visibility.Visible)
                 {
-                    var duration = new Duration(TimeSpan.FromMilliseconds(80));
+                    var duration = new Duration(TimeSpan.FromMilliseconds(100));
                     var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
 
                     var fadeOut = new DoubleAnimation(0, duration) { EasingFunction = ease };
                     var tg = _rootCard.RenderTransform as TransformGroup;
                     var scaleTransform = tg?.Children[0] as ScaleTransform;
+                    var translateTransform = tg?.Children[1] as TranslateTransform;
 
                     if (scaleTransform != null)
                     {
-                        var scaleXOut = new DoubleAnimation(0.9, duration) { EasingFunction = ease };
-                        var scaleYOut = new DoubleAnimation(0.9, duration) { EasingFunction = ease };
-                        scaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, scaleXOut);
-                        scaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty, scaleYOut);
+                        scaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty,
+                            new DoubleAnimation(0.92, duration) { EasingFunction = ease });
+                        scaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty,
+                            new DoubleAnimation(0.92, duration) { EasingFunction = ease });
+                    }
+
+                    // [FIX DRAG-ANIM]: Slide down slightly on exit for "dropped" feel
+                    translateTransform?.BeginAnimation(TranslateTransform.YProperty,
+                        new DoubleAnimation(5, duration) { EasingFunction = ease });
+
+                    // Reduce shadow on exit
+                    if (_rootCard.Effect is DropShadowEffect shadow)
+                    {
+                        shadow.BeginAnimation(DropShadowEffect.BlurRadiusProperty,
+                            new DoubleAnimation(3, duration) { EasingFunction = ease });
                     }
 
                     fadeOut.Completed += (_, _) => PerformAggressiveCleanup();
@@ -308,10 +331,10 @@ namespace FlyShelf.Windows
             var card = new Border
             {
                 MaxWidth = CardMaxWidth,
-                CornerRadius = new CornerRadius(CardCornerRadius),
-                Background = Helpers.BrushHelper.Frozen(Color.FromArgb(245, 22, 22, 30)),
-                BorderBrush = Helpers.BrushHelper.Frozen(Color.FromArgb(50, 255, 255, 255)),
-                BorderThickness = new Thickness(0.5),
+                CornerRadius = new CornerRadius(12), // [FIX DRAG-ANIM]: Rounder corners for modern look
+                Background = Helpers.BrushHelper.Frozen(Color.FromArgb(235, 20, 20, 28)), // Slightly more transparent
+                BorderBrush = Helpers.BrushHelper.Frozen(Color.FromArgb(35, 255, 255, 255)),
+                BorderThickness = new Thickness(0.8),
                 ClipToBounds = true,
                 Child = cardContent,
                 SnapsToDevicePixels = true,
@@ -320,7 +343,7 @@ namespace FlyShelf.Windows
                 {
                     BlurRadius = 6,
                     ShadowDepth = 2,
-                    Opacity = 0.45,
+                    Opacity = 0.55, // Slightly deeper shadow
                     Color = Colors.Black,
                     Direction = 270
                 }
@@ -348,7 +371,7 @@ namespace FlyShelf.Windows
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 };
-                RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.Fant);
+                RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
                 grid.Children.Add(img);
             }
             else
@@ -480,7 +503,7 @@ namespace FlyShelf.Windows
                             Height = 36,
                             Stretch = Stretch.UniformToFill
                         };
-                        RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.Fant);
+                        RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
                         iconBorder.Child = img;
                     }
                     else
@@ -658,7 +681,7 @@ namespace FlyShelf.Windows
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.Fant);
+            RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
             return img;
         }
 
@@ -697,11 +720,14 @@ namespace FlyShelf.Windows
         // ═══════════════════════════════════════════════════════════════
 
         private Border _pathModeBadge;
+        private static readonly Brush _pathModeBorderBrush = Helpers.BrushHelper.Frozen(Color.FromArgb(160, 137, 180, 250));
+        private static readonly Brush _defaultBorderBrush = Helpers.BrushHelper.Frozen(Color.FromArgb(35, 255, 255, 255));
 
         /// <summary>
         /// Toggles path mode visual indicator on the drag preview.
         /// When path mode is active, shows a "📋 Path" badge on the card
         /// and tints the border to indicate the drag payload is the file path.
+        /// Uses opacity animation instead of Add/Remove to avoid layout invalidation.
         /// </summary>
         public void SetPathMode(bool isPathMode)
         {
@@ -709,13 +735,16 @@ namespace FlyShelf.Windows
 
             try
             {
+                var animDuration = new Duration(TimeSpan.FromMilliseconds(100));
+                var animEase = new CubicEase { EasingMode = EasingMode.EaseOut };
+
                 if (isPathMode)
                 {
                     // Tint border to indicate path mode
-                    _rootCard.BorderBrush = Helpers.BrushHelper.Frozen(Color.FromArgb(160, 137, 180, 250)); // Accent blue
+                    _rootCard.BorderBrush = _pathModeBorderBrush;
                     _rootCard.BorderThickness = new Thickness(1.5);
 
-                    // Add path mode badge if not already present
+                    // Pre-create path mode badge on first use, hidden with Opacity = 0
                     if (_pathModeBadge == null && _rootCard.Child is Panel panel)
                     {
                         _pathModeBadge = new Border
@@ -726,6 +755,7 @@ namespace FlyShelf.Windows
                             HorizontalAlignment = HorizontalAlignment.Left,
                             VerticalAlignment = VerticalAlignment.Bottom,
                             Margin = new Thickness(4, 0, 0, 4),
+                            Opacity = 0,
                             Child = new TextBlock
                             {
                                 Text = "📋 Path",
@@ -736,22 +766,20 @@ namespace FlyShelf.Windows
                         };
                         panel.Children.Add(_pathModeBadge);
                     }
-                    else if (_pathModeBadge != null)
-                    {
-                        _pathModeBadge.Visibility = Visibility.Visible;
-                    }
+
+                    // Animate badge opacity in
+                    _pathModeBadge?.BeginAnimation(UIElement.OpacityProperty,
+                        new DoubleAnimation(1, animDuration) { EasingFunction = animEase });
                 }
                 else
                 {
                     // Revert border
-                    _rootCard.BorderBrush = Helpers.BrushHelper.Frozen(Color.FromArgb(50, 255, 255, 255));
-                    _rootCard.BorderThickness = new Thickness(0.5);
+                    _rootCard.BorderBrush = _defaultBorderBrush;
+                    _rootCard.BorderThickness = new Thickness(0.8);
 
-                    // Hide path mode badge
-                    if (_pathModeBadge != null)
-                    {
-                        _pathModeBadge.Visibility = Visibility.Collapsed;
-                    }
+                    // Animate badge opacity out
+                    _pathModeBadge?.BeginAnimation(UIElement.OpacityProperty,
+                        new DoubleAnimation(0, animDuration) { EasingFunction = animEase });
                 }
             }
             catch { } // Best-effort: visual feedback is non-critical

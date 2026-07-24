@@ -591,7 +591,46 @@ namespace FlyShelf.Windows
             if (sender is RadioButton rb && HubListView != null)
             {
                 _currentFilterTag = rb.Tag as string ?? "All";
+                
+                // Toggle image grid mode when "Image" filter is active
+                bool isImageMode = _currentFilterTag == "Image";
+                HubListView.Visibility = isImageMode ? Visibility.Collapsed : Visibility.Visible;
+                if (ImageGridScroll != null)
+                    ImageGridScroll.Visibility = isImageMode ? Visibility.Visible : Visibility.Collapsed;
+                
                 ApplyFilters();
+            }
+        }
+
+        private void ImageGrid_Copy(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is ClipboardItem clip)
+            {
+                try
+                {
+                    var dataObj = new System.Windows.DataObject();
+                    if (!string.IsNullOrEmpty(clip.FilePath) && System.IO.File.Exists(clip.FilePath))
+                    {
+                        var dropList = new System.Collections.Specialized.StringCollection();
+                        dropList.Add(clip.FilePath);
+                        dataObj.SetFileDropList(dropList);
+                        dataObj.SetData(System.Windows.DataFormats.Text, clip.FilePath);
+                    }
+                    else if (!string.IsNullOrEmpty(clip.RawContent))
+                    {
+                        dataObj.SetData(System.Windows.DataFormats.Text, clip.RawContent);
+                    }
+                    System.Windows.Clipboard.SetDataObject(dataObj, true);
+                }
+                catch { }
+            }
+        }
+
+        private void ImageGrid_Delete(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is ClipboardItem clip)
+            {
+                _viewModel?.DroppedItems?.Remove(clip);
             }
         }
 
@@ -617,8 +656,8 @@ namespace FlyShelf.Windows
         private void ApplyFilters()
         {
             if (HubListView == null) return;
-            if (HubListView.ItemsSource == null) return;
-            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(HubListView.ItemsSource) as ListCollectionView;
+            // Use the Hub's ISOLATED CollectionView (not GetDefaultView which is shared with MainWindow)
+            var view = _hubCollectionViewSource?.View as ListCollectionView;
             if (view == null) return;
             
             string queryClean = (SearchBox?.Text ?? "").Trim();

@@ -42,8 +42,10 @@ namespace FlyShelf.Controls
         /// <summary>Fired when the user clicks the Back button to close the todo panel.</summary>
         public event EventHandler? CloseRequested;
 
+#pragma warning disable CS0067
         /// <summary>Fired when the todo panel needs window activation without stealing focus.</summary>
         public event EventHandler? ActivateWithoutStealingFocusRequested;
+#pragma warning restore CS0067
 
         public TodoPanelControl()
         {

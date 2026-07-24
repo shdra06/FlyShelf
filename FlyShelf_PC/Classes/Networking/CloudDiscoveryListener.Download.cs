@@ -81,7 +81,7 @@ namespace FlyShelf.Classes
                     filePath = Path.Combine(extractPath, $"{Path.GetFileNameWithoutExtension(basePath)}_{counter++}{Path.GetExtension(basePath)}");
                 }
 
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     ClipboardItemType incomingType = ClipboardItemType.File;
                     string typeLower = (cloudItem.Type ?? "File").ToLowerInvariant();
@@ -200,7 +200,7 @@ namespace FlyShelf.Classes
                             if (attempt > 0)
                             {
                                 Logger.LogAction("FIREBASE SSE", $"Download retry {attempt + 1}/{maxRetries} after {retryDelays[attempt - 1]}ms...");
-                                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                                _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                                 {
                                     if (progressClip != null)
                                     {
@@ -249,7 +249,7 @@ namespace FlyShelf.Classes
                     {
                         string nextUrl = urlsToTry[urlsToTry.IndexOf(tryUrl) + 1];
                         Logger.LogAction("FIREBASE SSE", $"Primary URL failed — trying fallback: {nextUrl}");
-                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
                             if (progressClip != null)
                             {
@@ -336,7 +336,7 @@ namespace FlyShelf.Classes
                 // If integrity verification failed even after retry, abort
                 if (!integrityOk)
                 {
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     {
                         if (progressClip != null)
                             _viewModel.DroppedItems.Remove(progressClip);
@@ -345,7 +345,7 @@ namespace FlyShelf.Classes
                     return;
                 }
 
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+                _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
                 {
                     if (progressClip != null)
                         _viewModel.DroppedItems.Remove(progressClip);
@@ -409,7 +409,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("FIREBASE SSE", $"File Download Error: {ex.Message} | URL: {cloudItem.Raw}");
                 
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     if (progressClip != null)
                         _viewModel.DroppedItems.Remove(progressClip);
@@ -453,7 +453,7 @@ namespace FlyShelf.Classes
         private async Task<bool> RetryDownloadWithVerification(string url, string filePath, CloudItem cloudItem, ClipboardItem progressClip)
         {
             Logger.LogAction("INTEGRITY", $"🔄 Retrying download due to corruption: {cloudItem.Title}");
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 if (progressClip != null)
                 {

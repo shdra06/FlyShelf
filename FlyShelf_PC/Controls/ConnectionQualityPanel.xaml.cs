@@ -21,7 +21,7 @@ namespace FlyShelf.Controls
         private static readonly DateTime _sessionStart = DateTime.UtcNow;
 
         // Latency cache: DeviceId → latency ms
-        private readonly Dictionary<string, double> _latencyCache = new();
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, double> _latencyCache = new();
 
         private static readonly HttpClient _httpClient = new()
         {

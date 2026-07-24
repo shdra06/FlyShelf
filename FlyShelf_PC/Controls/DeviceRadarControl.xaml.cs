@@ -41,7 +41,7 @@ namespace FlyShelf.Controls
         private const double Radius = CanvasSize / 2 - 4;
 
         // Latency cache: DeviceId → latency ms
-        private readonly Dictionary<string, double> _latencyCache = new();
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, double> _latencyCache = new();
 
         public DeviceRadarControl()
         {

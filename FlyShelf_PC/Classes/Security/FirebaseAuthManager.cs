@@ -286,7 +286,7 @@ namespace FlyShelf.Classes
             {
                 if (!File.Exists(_tokenPath)) return;
 
-                string encrypted = File.ReadAllText(_tokenPath);
+                string encrypted = FileRetryHelper.RunWithRetry(() => File.ReadAllText(_tokenPath));
                 string json = SecureStorage.Decrypt(encrypted);
 
                 using var doc = JsonDocument.Parse(json);
@@ -315,7 +315,7 @@ namespace FlyShelf.Classes
         {
             try
             {
-                if (File.Exists(_tokenPath)) File.Delete(_tokenPath);
+                try { File.Delete(_tokenPath); } catch { } // Best-effort, TOCTOU-safe
             }
             catch { } // Best-effort: failure is acceptable
         }
