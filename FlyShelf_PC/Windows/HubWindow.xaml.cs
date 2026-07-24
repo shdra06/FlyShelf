@@ -241,6 +241,8 @@ namespace FlyShelf.Windows
                 Dispatcher.InvokeAsync(() =>
                 {
                     RefreshDevices_Click(null, null);
+                    // Initialize clustered category card counts
+                    RefreshClusteredCounts();
                     // Hook window-level smooth scrolling with elegant dedicated SmoothScrollPCApp
                     Classes.SmoothScrollPCApp.AttachToWindow(this);
 
@@ -361,6 +363,9 @@ namespace FlyShelf.Windows
                     _collectionChangedDebounce.Stop();
                     ApplyFilters();
                     UpdateEmptyState();
+                    // Refresh clustered category counts when items change
+                    if (_currentFilterTag == "All" && ClusteredPanel?.Visibility == Visibility.Visible)
+                        RefreshClusteredCounts();
                 };
             }
             _collectionChangedDebounce.Stop();

@@ -6,7 +6,7 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="Quick Look" Height="500" Width="400"
         WindowStyle="None" AllowsTransparency="False" Background="{DynamicResource ThemeWindowFallback}"
-        Topmost="True" ResizeMode="CanResizeWithGrip"
+        Topmost="True" ResizeMode="CanResize"
         WindowStartupLocation="CenterScreen" 
         MouseLeftButtonDown="Window_MouseLeftButtonDown"
         MouseDoubleClick="Window_MouseDoubleClick"
@@ -15,7 +15,7 @@
         Icon="/Resources/FlyShelfLogo.ico"
         TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
     <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" CornerRadius="12" GlassFrameThickness="-1" />
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="8" CornerRadius="12" GlassFrameThickness="-1" />
     </WindowChrome.WindowChrome>
     <Grid>
         <!-- Dynamic Frame -->
@@ -32,17 +32,32 @@
                     
                     <!-- Action Buttons (right side) -->
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
+                        <!-- Copy Image Button (image only) -->
+                        <ui:Button x:Name="CopyImageBtn" Click="CopyImageButton_Click" Appearance="Secondary" 
+                                   Foreground="{DynamicResource GeminiAccentColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Copy image to clipboard"
+                                   Visibility="Collapsed" AutomationProperties.Name="Copy image">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Copy24" Filled="True" FontSize="14"/>
+                                <TextBlock Text="Copy" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ui:Button>
                         <!-- Rotate Button (image only) -->
                         <ui:Button x:Name="RotateBtn" Click="RotateButton_Click" Appearance="Secondary" 
                                    Foreground="{DynamicResource InfoColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Rotate 90° clockwise"
                                    Visibility="Collapsed" AutomationProperties.Name="Rotate image">
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowRotateClockwise24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="ArrowRotateClockwise24" Filled="True" FontSize="14"/>
+                                <TextBlock Text="Rotate" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </ui:Button>
                         <!-- Doodle Button (image only) -->
                         <ui:Button x:Name="DoodleBtn" Click="DoodleButton_Click" Appearance="Secondary" 
                                    Foreground="#A78BFA" Padding="5,3" Margin="0,0,4,0" ToolTip="Draw / Annotate"
                                    Visibility="Collapsed" AutomationProperties.Name="Draw and annotate">
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="Edit24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Edit24" Filled="True" FontSize="14"/>
+                                <TextBlock Text="Draw" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </ui:Button>
                         <!-- Doodle Undo -->
                         <ui:Button x:Name="DoodleUndoBtn" Click="DoodleUndo_Click" Appearance="Secondary" 
@@ -66,7 +81,10 @@
                         <ui:Button x:Name="OcrBtn" Click="OcrButton_Click" Appearance="Secondary" 
                                    Foreground="{DynamicResource SuccessColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Extract &amp; Select Text (OCR)"
                                    Visibility="Collapsed" AutomationProperties.Name="Extract text OCR">
-                            <TextBlock Text="T" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI" Margin="3,0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="T" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI" Margin="3,0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                <TextBlock Text="OCR" FontSize="10.5" FontWeight="Medium" Margin="2,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </ui:Button>
                         <!-- Copy All OCR Text Button -->
                         <ui:Button x:Name="CopyAllOcrBtn" Click="CopyAllOcrButton_Click" Appearance="Secondary" 
@@ -130,7 +148,10 @@
                         <ui:Button x:Name="PinBtn" Click="PinButton_Click" Appearance="Secondary" 
                                    Foreground="{DynamicResource PinActiveColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Pin on top"
                                    AutomationProperties.Name="Pin window on top">
-                            <ui:Button.Icon><ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" Filled="True" FontSize="14"/>
+                                <TextBlock x:Name="PinLabel" Text="Pin" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </ui:Button>
                         <!-- Close -->
                         <ui:Button x:Name="CloseBtn" Click="CloseButton_Click" Appearance="Secondary" Foreground="{DynamicResource DangerColor}" Padding="5,3" ToolTip="Close" AutomationProperties.Name="Close preview">

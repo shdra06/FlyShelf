@@ -257,21 +257,26 @@ namespace FlyShelf.Windows
                             targetW = targetH * aspect;
                         }
 
-                        // Minimum size to keep controls visible
-                        double minW = 320;
-                        double minH = 240;
+                        // Minimum size to keep controls visible — absolute floor
+                        // For very thin images (e.g., 1920×100 banners), the aspect-ratio
+                        // scaling can produce tiny windows. Enforce a usable floor.
+                        double minW = 400;
+                        double minH = 300;
                         if (targetW < minW || targetH < minH)
                         {
                             if (aspect >= 1.0)
                             {
-                                targetW = minW;
-                                targetH = targetW / aspect;
+                                targetW = Math.Max(targetW, minW);
+                                targetH = Math.Max(targetW / aspect, minH);
                             }
                             else
                             {
-                                targetH = minH;
-                                targetW = targetH * aspect;
+                                targetH = Math.Max(targetH, minH);
+                                targetW = Math.Max(targetH * aspect, minW);
                             }
+                            // Re-cap to work area after floor enforcement
+                            if (targetW > maxW) targetW = maxW;
+                            if (targetH > maxH) targetH = maxH;
                         }
 
                         this.Width = targetW;
@@ -285,9 +290,13 @@ namespace FlyShelf.Windows
                         {
                             this.Height = targetH + 40; // Add header height back
                         }
+
+                        // Center on screen after dynamic sizing
+                        CenterOnScreen();
                         
                         _isImageLoaded = true;
                         RotateBtn.Visibility = Visibility.Visible;
+                        if (CopyImageBtn != null) CopyImageBtn.Visibility = Visibility.Visible;
                         if (DoodleBtn != null) DoodleBtn.Visibility = Visibility.Visible;
                         if (OcrBtn != null) OcrBtn.Visibility = Visibility.Visible;
 
@@ -587,6 +596,9 @@ namespace FlyShelf.Windows
             finally
             {
                 LoadingProgress.Visibility = Visibility.Collapsed;
+                // Center on screen after all dynamic sizing — ensures no content type
+                // spawns half off-screen regardless of the size computed above
+                CenterOnScreen();
             }
         }
 
@@ -600,11 +612,59 @@ namespace FlyShelf.Windows
                 ? (TryFindResource("WarningColor") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11)))
                 : (TryFindResource("ThemeTextMuted") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(136, 136, 136)));
             PinBtn.ToolTip = this.Topmost ? "Pinned on top" : "Unpinned";
+            if (PinLabel != null) PinLabel.Text = this.Topmost ? "Pinned" : "Pin";
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             this.Close();
+        }
+
+        /// <summary>
+        /// Centers the QuickLook window on the current screen work area.
+        /// Called after dynamic sizing so the window doesn't spawn half off-screen.
+        /// </summary>
+        private void CenterOnScreen()
+        {
+            var workArea = SystemParameters.WorkArea;
+            double newLeft = (workArea.Width - this.Width) / 2 + workArea.Left;
+            double newTop = (workArea.Height - this.Height) / 2 + workArea.Top;
+
+            // Clamp to screen bounds
+            if (newLeft < workArea.Left) newLeft = workArea.Left;
+            if (newTop < workArea.Top) newTop = workArea.Top;
+            if (newLeft + this.Width > workArea.Right) newLeft = workArea.Right - this.Width;
+            if (newTop + this.Height > workArea.Bottom) newTop = workArea.Bottom - this.Height;
+
+            this.Left = newLeft;
+            this.Top = newTop;
+        }
+
+        /// <summary>
+        /// Copies the current preview image to the system clipboard.
+        /// </summary>
+        private void CopyImageButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (PreviewImage?.Source is BitmapSource bitmapSource)
+                {
+                    Clipboard.SetImage(bitmapSource);
+                    // Brief visual feedback — change button text
+                    if (CopyImageBtn.Content is StackPanel sp && sp.Children.Count > 1 && sp.Children[1] is System.Windows.Controls.TextBlock tb)
+                    {
+                        string original = tb.Text;
+                        tb.Text = "Copied!";
+                        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
+                        timer.Tick += (s, args) => { timer.Stop(); tb.Text = original; };
+                        timer.Start();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogCrash("QuickLook_CopyImage", ex);
+            }
         }
 
         private void OpenFile_Click(object sender, RoutedEventArgs e)

@@ -592,14 +592,126 @@ namespace FlyShelf.Windows
             {
                 _currentFilterTag = rb.Tag as string ?? "All";
                 
-                // Toggle image grid mode when "Image" filter is active
+                bool isAllMode = _currentFilterTag == "All";
                 bool isImageMode = _currentFilterTag == "Image";
-                HubListView.Visibility = isImageMode ? Visibility.Collapsed : Visibility.Visible;
-                if (ImageGridScroll != null)
-                    ImageGridScroll.Visibility = isImageMode ? Visibility.Visible : Visibility.Collapsed;
                 
-                ApplyFilters();
+                // Show clustered overview for "All", filtered list/grid for specific categories
+                if (ClusteredPanel != null)
+                    ClusteredPanel.Visibility = isAllMode ? Visibility.Visible : Visibility.Collapsed;
+                
+                if (isAllMode)
+                {
+                    // In "All" mode, show clustered cards, hide list and grid
+                    HubListView.Visibility = Visibility.Collapsed;
+                    if (ImageGridScroll != null)
+                        ImageGridScroll.Visibility = Visibility.Collapsed;
+                    if (BackToOverviewBtn != null)
+                        BackToOverviewBtn.Visibility = Visibility.Collapsed;
+                    RefreshClusteredCounts();
+                }
+                else
+                {
+                    // In category mode, show appropriate view
+                    HubListView.Visibility = isImageMode ? Visibility.Collapsed : Visibility.Visible;
+                    if (ImageGridScroll != null)
+                        ImageGridScroll.Visibility = isImageMode ? Visibility.Visible : Visibility.Collapsed;
+                    if (BackToOverviewBtn != null)
+                        BackToOverviewBtn.Visibility = Visibility.Visible;
+                    ApplyFilters();
+                }
             }
+        }
+
+        /// <summary>
+        /// Handles clicking a category card in the clustered overview.
+        /// Finds and checks the corresponding filter pill RadioButton.
+        /// </summary>
+        private void ClusteredCard_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is string category)
+            {
+                // Find and check the matching filter RadioButton
+                foreach (var rb in FindVisualChildren<RadioButton>(HistoryGrid))
+                {
+                    if (rb.Tag as string == category && rb.Style != null)
+                    {
+                        rb.IsChecked = true; // This triggers Filter_Checked
+                        break;
+                    }
+                }
+                e.Handled = true;
+            }
+        }
+
+        /// <summary>
+        /// Returns to the clustered category overview from a filtered list view.
+        /// </summary>
+        private void BackToOverview_Click(object sender, RoutedEventArgs e)
+        {
+            // Find and check the "All" RadioButton to return to overview
+            foreach (var rb in FindVisualChildren<RadioButton>(HistoryGrid))
+            {
+                if (rb.Tag as string == "All")
+                {
+                    rb.IsChecked = true; // This triggers Filter_Checked → shows clustered
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Shows all items in a flat list (bypasses clustered view).
+        /// </summary>
+        private void ViewAllItems_Click(object sender, MouseButtonEventArgs e)
+        {
+            _currentFilterTag = "All";
+            if (ClusteredPanel != null)
+                ClusteredPanel.Visibility = Visibility.Collapsed;
+            HubListView.Visibility = Visibility.Visible;
+            if (ImageGridScroll != null)
+                ImageGridScroll.Visibility = Visibility.Collapsed;
+            if (BackToOverviewBtn != null)
+            {
+                BackToOverviewBtn.Visibility = Visibility.Visible;
+                // Re-parent the back button above the list — just show it
+            }
+            ApplyFilters();
+        }
+
+        /// <summary>
+        /// Counts items per category and updates the clustered card counts.
+        /// </summary>
+        private void RefreshClusteredCounts()
+        {
+            if (_viewModel?.DroppedItems == null) return;
+            
+            var items = _viewModel.DroppedItems;
+            int textCount = 0, imageCount = 0, codeCount = 0, pdfCount = 0, 
+                docCount = 0, urlCount = 0, videoCount = 0;
+
+            foreach (var item in items)
+            {
+                switch (item.ItemType)
+                {
+                    case ClipboardItemType.Text: textCount++; break;
+                    case ClipboardItemType.Image: 
+                    case ClipboardItemType.QRCode: imageCount++; break;
+                    case ClipboardItemType.Code: codeCount++; break;
+                    case ClipboardItemType.Pdf: pdfCount++; break;
+                    case ClipboardItemType.Document:
+                    case ClipboardItemType.Presentation: docCount++; break;
+                    case ClipboardItemType.Url: urlCount++; break;
+                    case ClipboardItemType.Video: videoCount++; break;
+                }
+            }
+
+            if (ClusteredTextCount != null) ClusteredTextCount.Text = $"{textCount} item{(textCount != 1 ? "s" : "")}";
+            if (ClusteredImageCount != null) ClusteredImageCount.Text = $"{imageCount} item{(imageCount != 1 ? "s" : "")}";
+            if (ClusteredCodeCount != null) ClusteredCodeCount.Text = $"{codeCount} item{(codeCount != 1 ? "s" : "")}";
+            if (ClusteredPdfCount != null) ClusteredPdfCount.Text = $"{pdfCount} item{(pdfCount != 1 ? "s" : "")}";
+            if (ClusteredDocCount != null) ClusteredDocCount.Text = $"{docCount} item{(docCount != 1 ? "s" : "")}";
+            if (ClusteredLinkCount != null) ClusteredLinkCount.Text = $"{urlCount} item{(urlCount != 1 ? "s" : "")}";
+            if (ClusteredVideoCount != null) ClusteredVideoCount.Text = $"{videoCount} item{(videoCount != 1 ? "s" : "")}";
         }
 
         private void ImageGrid_Copy(object sender, RoutedEventArgs e)
@@ -769,29 +881,37 @@ namespace FlyShelf.Windows
             
             if (_isSidebarCollapsed)
             {
-                // Collapse: show only icons
-                SidebarColumn.Width = new GridLength(52);
+                // Collapse: show only icons (64px fits icons cleanly on 8px grid)
+                SidebarColumn.Width = new GridLength(64);
                 SidebarCollapseIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.PanelLeftExpand24;
                 SidebarCollapseBtn.ToolTip = "Expand sidebar";
                 
-                // Hide text in nav items
+                // Hide brand text and badges (keep app icon visible)
+                if (SidebarBrandText != null)
+                    SidebarBrandText.Visibility = Visibility.Collapsed;
+                SidebarCollapseBtn.Visibility = Visibility.Collapsed;
+                
+                // Hide text in nav items + add tooltips + center icons
                 foreach (var rb in FindVisualChildren<RadioButton>(SidebarBorder)
                     .Where(r => r.GroupName == "NavTabs"))
                 {
                     if (rb.Content is StackPanel sp && sp.Children.Count > 1)
                     {
+                        // Extract label text for tooltip
+                        string tooltipText = "";
                         for (int i = 1; i < sp.Children.Count; i++)
+                        {
+                            if (sp.Children[i] is System.Windows.Controls.TextBlock tb)
+                                tooltipText = tb.Text;
                             sp.Children[i].Visibility = Visibility.Collapsed;
-                        // Center the icon
+                        }
+                        // Center the icon with proper padding for 64px width
                         if (sp.Children[0] is FrameworkElement icon)
-                            icon.Margin = new Thickness(0);
+                            icon.Margin = new Thickness(4, 0, 0, 0);
+                        // Add tooltip with nav label
+                        if (!string.IsNullOrEmpty(tooltipText))
+                            rb.ToolTip = tooltipText;
                     }
-                }
-                // Hide header brand text and footer
-                foreach (var child in FindVisualChildren<StackPanel>(SidebarBorder))
-                {
-                    // Skip nav panels
-                    if (child.Parent is RadioButton) continue;
                 }
             }
             else
@@ -801,7 +921,12 @@ namespace FlyShelf.Windows
                 SidebarCollapseIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.PanelLeftContract24;
                 SidebarCollapseBtn.ToolTip = "Collapse sidebar";
                 
-                // Restore text in nav items
+                // Restore brand text and collapse button
+                if (SidebarBrandText != null)
+                    SidebarBrandText.Visibility = Visibility.Visible;
+                SidebarCollapseBtn.Visibility = Visibility.Visible;
+                
+                // Restore text in nav items + remove tooltips
                 foreach (var rb in FindVisualChildren<RadioButton>(SidebarBorder)
                     .Where(r => r.GroupName == "NavTabs"))
                 {
@@ -812,6 +937,8 @@ namespace FlyShelf.Windows
                         // Restore icon margin
                         if (sp.Children[0] is FrameworkElement icon)
                             icon.Margin = new Thickness(0, 0, 12, 0);
+                        // Remove tooltip
+                        rb.ToolTip = null;
                     }
                 }
             }
