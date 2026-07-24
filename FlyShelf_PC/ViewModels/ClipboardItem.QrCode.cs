@@ -181,247 +181,179 @@ namespace FlyShelf.ViewModels
                 return;
             }
 
-            System.Threading.Tasks.Task.Run(() =>
-
-
-
+            Task.Run(() =>
             {
-
-
-
                 try
-
-
-
                 {
-
-
-
                     if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath)) return;
 
-
-
-                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-
-
-
-                        FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word...")
-
-
-
-                    );
-
-
-
                     string outputPath = Path.Combine(
-
-
-
                         Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(),
-
-
-
                         Path.GetFileNameWithoutExtension(FilePath) + "_Converted.docx");
 
+                    bool converted = false;
 
+                    // ═══════════════════════════════════════════════════════
+                    // STRATEGY 1: Word COM — fully silent, best quality
+                    // Word converts PDF→DOCX natively with all dialogs
+                    // suppressed. No user interaction needed.
+                    // ═══════════════════════════════════════════════════════
+                    if (Type.GetTypeFromProgID("Word.Application") != null)
+                    {
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                            FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word (via Word)...")
+                        );
 
-                    // Use Word COM to open PDF and save as DOCX (Word 2013+ supports this natively)
-
-
-
-                    string script = $@"
-
-
-
+                        string script = $@"
 $word = New-Object -ComObject Word.Application
-
-
-
 $word.Visible = $false
-
-
-
-$doc = $word.Documents.Open('{FilePath.Replace("'", "''")}')
-
-
-
-$doc.SaveAs([ref]'{outputPath.Replace("'", "''")}', [ref]16)
-
-
-
-$doc.Close()
-
-
-
-$word.Quit();
-
-
-
+$word.DisplayAlerts = 0
+$word.AutomationSecurity = 3
+$word.Options.DoNotPromptForConvert = $true
+$word.Options.ConfirmConversions = $false
+try {{
+    # ConfirmConversions=$false (2nd param) suppresses the PDF conversion dialog
+    $doc = $word.Documents.Open('{FilePath.Replace("'", "''")}', $false)
+    $doc.SaveAs([ref]'{outputPath.Replace("'", "''")}', [ref]16)
+    $doc.Close([ref]0)
+}} catch {{
+    # Conversion failed — let the native fallback handle it
+}} finally {{
+    $word.Quit([ref]0)
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($word) | Out-Null
+}}
 ";
+                        // [SECURITY]: Write script to temp file (prevent injection via FilePath)
+                        string scriptPath = Path.Combine(Path.GetTempPath(), $"flyshelf_convert_{Guid.NewGuid():N}.ps1");
+                        File.WriteAllText(scriptPath, script);
 
-
-
-                    // [SECURITY FIX]: Write script to temp file to prevent command injection via FilePath (CWE-78)
-                    string scriptPath = Path.Combine(Path.GetTempPath(), $"flyshelf_convert_{Guid.NewGuid():N}.ps1");
-                    File.WriteAllText(scriptPath, script);
-
-                    var psi = new System.Diagnostics.ProcessStartInfo
-
-
-
-                    {
-
-
-
-                        FileName = "powershell.exe",
-
-
-
-                        Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File \"{scriptPath}\"",
-
-
-
-                        CreateNoWindow = true,
-
-
-
-                        UseShellExecute = false
-
-
-
-                    };
-
-
-
-                    using (var process = Process.Start(psi))
-
-
-
-                    {
-
-
-
-                        process?.WaitForExit(60000);
-                        if (process != null && !process.HasExited)
+                        var psi = new ProcessStartInfo
                         {
-                            try { process.Kill(); } catch { } // Best-effort: failure is acceptable
-                            FlyShelf.Classes.Logger.LogAction("PDF2WORD", "Killed stuck conversion process after 60s timeout");
+                            FileName = "powershell.exe",
+                            Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File \"{scriptPath}\"",
+                            CreateNoWindow = true,
+                            UseShellExecute = false
+                        };
+
+                        using (var process = Process.Start(psi))
+                        {
+                            // 45 second timeout — Word needs time for complex PDFs
+                            process?.WaitForExit(45000);
+                            if (process != null && !process.HasExited)
+                            {
+                                try { process.Kill(true); } catch { }
+                                Classes.Logger.LogAction("PDF2WORD", "Word COM timed out (45s) — falling through to native converter");
+                            }
                         }
 
+                        try { File.Delete(scriptPath); } catch { }
 
-
+                        // Check if Word actually produced a valid file
+                        if (File.Exists(outputPath) && new FileInfo(outputPath).Length > 1024)
+                        {
+                            converted = true;
+                            Classes.Logger.LogAction("PDF2WORD", "Converted via Word COM successfully");
+                        }
                     }
 
-                    // Clean up temp script file
-                    try { File.Delete(scriptPath); } catch { }
-
-
-
-                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-
-
-
+                    // ═══════════════════════════════════════════════════════
+                    // STRATEGY 2: Native PdfPig + OpenXML — no dependencies
+                    // Runs if: Word not installed, user ignored dialog, or
+                    // Word failed to produce a valid file.
+                    // ═══════════════════════════════════════════════════════
+                    if (!converted)
                     {
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                            FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word (native)...")
+                        );
 
+                        // Delete any partial Word output before native attempt
+                        try { if (File.Exists(outputPath)) File.Delete(outputPath); } catch { }
 
+                        converted = FlyShelf.Classes.PdfToWordConverter.Convert(FilePath, outputPath);
 
-                        if (File.Exists(outputPath))
+                        if (converted)
+                            Classes.Logger.LogAction("PDF2WORD", "Converted via native PdfPig+OpenXML");
+                    }
 
+                    // ═══════════════════════════════════════════════════════
+                    // STRATEGY 3: LibreOffice headless — last resort fallback
+                    // ═══════════════════════════════════════════════════════
+                    if (!converted)
+                    {
+                        string loPath = @"C:\Program Files\LibreOffice\program\soffice.exe";
+                        if (!File.Exists(loPath))
+                            loPath = @"C:\Program Files (x86)\LibreOffice\program\soffice.exe";
 
-
+                        if (File.Exists(loPath))
                         {
+                            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting via LibreOffice...")
+                            );
 
+                            string outDir = Path.GetDirectoryName(outputPath) ?? Path.GetTempPath();
+                            var loPsi = new ProcessStartInfo
+                            {
+                                FileName = loPath,
+                                Arguments = $"--headless --norestore --convert-to docx --outdir \"{outDir}\" \"{FilePath}\"",
+                                CreateNoWindow = true,
+                                UseShellExecute = false
+                            };
 
+                            using var loProcess = Process.Start(loPsi);
+                            loProcess?.WaitForExit(30000);
+                            if (loProcess != null && !loProcess.HasExited)
+                            {
+                                try { loProcess.Kill(); } catch { }
+                            }
 
+                            // LibreOffice generates output with original name + .docx
+                            string loOutput = Path.Combine(outDir,
+                                Path.GetFileNameWithoutExtension(FilePath) + ".docx");
+                            if (File.Exists(loOutput) && new FileInfo(loOutput).Length > 100)
+                            {
+                                // Rename to our expected output path
+                                if (loOutput != outputPath)
+                                {
+                                    try { File.Move(loOutput, outputPath, true); } catch { }
+                                }
+                                converted = true;
+                                Classes.Logger.LogAction("PDF2WORD", "Converted via LibreOffice headless");
+                            }
+                        }
+                    }
+
+                    // ═══════════════════════════════════════════════════════
+                    // RESULT — drop into clipboard + open in explorer
+                    // ═══════════════════════════════════════════════════════
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    {
+                        if (converted && File.Exists(outputPath))
+                        {
                             var dataObj = new System.Windows.DataObject();
-
-
-
                             dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { outputPath });
-
-
-
                             var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
-
-
-
                             var vm = mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
-
-
-
                             vm?.HandleDrop(dataObj, true);
 
-
-
-                            // Open containing folder with the file selected
-
-
-
-                            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{outputPath}\"");
-
-
+                            Process.Start("explorer.exe", $"/select,\"{outputPath}\"");
 
                             FlyShelf.Windows.ToastWindow.ShowToast($"✅ Converted: {Path.GetFileName(outputPath)}");
                             FlyShelf.Classes.LicenseManager.RecordDocConversion();
-
-
-
                         }
-
-
-
                         else
-
-
-
                         {
-
-
-
-                            FlyShelf.Windows.ToastWindow.ShowToast("❌ Conversion failed — Microsoft Word required");
-
-
-
+                            FlyShelf.Windows.ToastWindow.ShowToast("❌ Conversion failed — no converter available");
                         }
-
-
-
                     });
-
-
-
                 }
-
-
-
                 catch (Exception ex)
-
-
-
                 {
-
-
-
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-
-
-
                         FlyShelf.Windows.ToastWindow.ShowToast($"❌ PDF to Word error: {ex.Message}")
-
-
-
                     );
-
-
-
                 }
-
-
-
             });
-
-
-
 #endif
         }
 

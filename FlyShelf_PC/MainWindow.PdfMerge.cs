@@ -443,77 +443,11 @@ namespace FlyShelf
             await System.Threading.Tasks.Task.CompletedTask; // suppress async warning
             FlyShelf.Windows.ToastWindow.ShowToast("⚠️ PDF to Word conversion is not available in the Store version.");
 #else
-            try
-            {
-                var clipItem = GetClipItemFromSender(sender);
-                if (clipItem == null || string.IsNullOrEmpty(clipItem.FilePath)) return;
-
-                FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word...");
-
-                string outputPath = System.IO.Path.Combine(
-                    System.IO.Path.GetDirectoryName(clipItem.FilePath) ?? System.IO.Path.GetTempPath(),
-                    System.IO.Path.GetFileNameWithoutExtension(clipItem.FilePath) + "_Converted.docx");
-
-                await System.Threading.Tasks.Task.Run(() =>
-                {
-                    try
-                    {
-                        // Use Word COM to open PDF and save as DOCX (Word 2013+ supports this natively)
-                        // [SECURITY FIX]: Use -EncodedCommand (Base64) instead of inline -Command
-                        // to prevent PowerShell injection via crafted filenames (CWE-78).
-                        string script = $@"
-$word = New-Object -ComObject Word.Application
-$word.Visible = $false
-$doc = $word.Documents.Open('{clipItem.FilePath.Replace("'", "''")}')
-$doc.SaveAs([ref]'{outputPath.Replace("'", "''")}', [ref]16)
-$doc.Close()
-$word.Quit()
-[System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null
-";
-                        string encodedScript = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
-                        var psi = new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = "powershell.exe",
-                            Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -EncodedCommand {encodedScript}",
-                            CreateNoWindow = true,
-                            UseShellExecute = false
-                        };
-                        var proc = System.Diagnostics.Process.Start(psi);
-                        if (proc != null)
-                        {
-                            if (!proc.WaitForExit(60000))
-                            {
-                                try { proc.Kill(); } catch { } // Best-effort: failure is acceptable
-                            }
-                            proc.Dispose();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        FlyShelf.Classes.Logger.LogAction("PDF2WORD", $"Conversion error: {ex.Message}");
-                    }
-                });
-
-                if (System.IO.File.Exists(outputPath))
-                {
-                    // Add converted file to shelf
-                    var newItem = new ClipboardItem(outputPath);
-                    _viewModel.DroppedItems.Insert(0, newItem);
-                    _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-
-                    // Open containing folder with the file selected
-                    _ = System.Threading.Tasks.Task.Run(() => { try { System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{outputPath}\""); } catch { } });
-                    FlyShelf.Windows.ToastWindow.ShowToast($"✅ Converted: {System.IO.Path.GetFileName(outputPath)}");
-                }
-                else
-                {
-                    FlyShelf.Windows.ToastWindow.ShowToast("❌ Conversion failed — Microsoft Word required");
-                }
-            }
-            catch (Exception ex)
-            {
-                FlyShelf.Windows.ToastWindow.ShowToast($"❌ PDF to Word error: {ex.Message}");
-            }
+            await System.Threading.Tasks.Task.CompletedTask; // suppress async warning
+            // Delegate to ClipboardItem's smart dual-strategy converter
+            // (Word COM foreground → native PdfPig+OpenXML → LibreOffice fallback)
+            var clipItem = GetClipItemFromSender(sender);
+            clipItem?.ConvertPdfToWordTask();
 #endif
         }
 

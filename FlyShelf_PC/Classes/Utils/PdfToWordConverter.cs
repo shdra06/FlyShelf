@@ -44,7 +44,7 @@ namespace FlyShelf.Classes
 
                 // ═══ Set page size and margins (A4, normal margins) ═══
                 var sectionProps = new SectionProperties(
-                    new PageSize { Width = 12240, Height = 15840 }, // Letter (8.5x11")
+                    new DocumentFormat.OpenXml.Wordprocessing.PageSize { Width = 12240, Height = 15840 }, // Letter (8.5x11")
                     new PageMargin
                     {
                         Top = 1440, Right = 1440, Bottom = 1440, Left = 1440,
@@ -337,7 +337,7 @@ namespace FlyShelf.Classes
         private static void AddStyles(MainDocumentPart mainPart)
         {
             var stylesPart = mainPart.AddNewPart<StyleDefinitionsPart>();
-            var styles = new Styles();
+            var styles = new DocumentFormat.OpenXml.Wordprocessing.Styles();
 
             // Default paragraph style
             var defaultStyle = new Style
