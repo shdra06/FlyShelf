@@ -145,22 +145,34 @@ namespace FlyShelf.Classes
         private static void FilterVisibleDays()
         {
             int maxDays = LicenseManager.GetNoteHistoryDays();
-            ObservableCollection<NoteDay> newDays;
+            List<NoteDay> source;
             if (maxDays < int.MaxValue)
             {
                 DateTime cutoff = DateTime.Today.AddDays(-maxDays);
-                var visible = _allDays.Where(d => d.Date.Date >= cutoff.Date).ToList();
-                if (_allDays.Count > visible.Count)
+                source = _allDays.Where(d => d.Date.Date >= cutoff.Date).ToList();
+                if (_allDays.Count > source.Count)
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                         UpgradePrompt.ShowNoteHistoryLimit());
                 }
-                newDays = new ObservableCollection<NoteDay>(visible);
             }
             else
             {
-                newDays = new ObservableCollection<NoteDay>(_allDays);
+                source = new List<NoteDay>(_allDays);
             }
+
+            // Filter out empty days (no content at all) — today is always kept
+            var today = DateTime.Today;
+            var filtered = source.Where(d =>
+            {
+                if (d.Date.Date == today) return true; // Always show today
+                bool hasBullets = d.Bullets.Any(b => !string.IsNullOrWhiteSpace(b.Header) || !string.IsNullOrWhiteSpace(b.Content) || b.HasImage);
+                bool hasFreeform = !string.IsNullOrWhiteSpace(d.FreeformContent) || d.FreeformImages.Count > 0
+                    || (d.FreeformSections != null && d.FreeformSections.Any(s => !string.IsNullOrWhiteSpace(s.Content) || s.Images.Count > 0));
+                return hasBullets || hasFreeform;
+            }).ToList();
+
+            var newDays = new ObservableCollection<NoteDay>(filtered);
             if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == true)
             {
                 _days = newDays;

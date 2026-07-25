@@ -20,6 +20,7 @@ namespace FlyShelf.Windows
         public ReminderHistoryWindow()
         {
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
             NativeMethods.ApplyWindowBackdropAndBackground(this);
 
             RemindersList.ItemsSource = _filteredReminders;
@@ -181,6 +182,7 @@ namespace FlyShelf.Windows
 
         protected override void OnClosed(EventArgs e)
         {
+            FlyShelf.Classes.SmoothScrollFeature.Detach(this);
             if (_collectionChangedHandler != null)
             {
                 ReminderManager.Reminders.CollectionChanged -= _collectionChangedHandler;

@@ -72,6 +72,7 @@ namespace FlyShelf.Windows
         public NetworkLogsWindow()
         {
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
             Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             LogItems.ItemsSource = _filteredLogs;
             this.PreviewKeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Escape) this.Close(); };
@@ -437,6 +438,7 @@ namespace FlyShelf.Windows
 
         private void Window_Closing(object sender, CancelEventArgs e)
         {
+            FlyShelf.Classes.SmoothScrollFeature.Detach(this);
             _isClosing = true;
             _pollTimer?.Dispose();
             // M-12: _httpClient is now static readonly — do not dispose per-instance

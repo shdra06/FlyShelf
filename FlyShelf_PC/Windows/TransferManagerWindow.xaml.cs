@@ -21,6 +21,7 @@ namespace FlyShelf.Windows
         public TransferManagerWindow()
         {
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
             NativeMethods.ApplyWindowBackdropAndBackground(this);
 
             _vm = new TransferManagerViewModel();
@@ -49,6 +50,7 @@ namespace FlyShelf.Windows
 
         private void Window_Closing(object sender, CancelEventArgs e)
         {
+            FlyShelf.Classes.SmoothScrollFeature.Detach(this);
             // Hide instead of closing so we can re-show later
             e.Cancel = true;
             _vm.Cleanup();

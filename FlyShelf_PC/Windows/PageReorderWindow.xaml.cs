@@ -75,6 +75,7 @@ namespace FlyShelf.Windows
         public PageReorderWindow(PdfMergeItem item)
         {
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
             FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _item = item;
 
@@ -111,7 +112,7 @@ namespace FlyShelf.Windows
 
             RebuildGrid(false);
             _ = LoadThumbnailsAsync(_item.FilePath, _item.TotalPages);
-            Closed += (s, e) => { _thumbnails = null; }; // PERF: release thumbnail memory on close
+            Closed += (s, e) => { _thumbnails = null; FlyShelf.Classes.SmoothScrollFeature.Detach(this); }; // PERF: release thumbnail memory on close
             this.PreviewKeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Escape) this.Close(); };
         }
 

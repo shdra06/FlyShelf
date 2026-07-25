@@ -31,6 +31,8 @@ namespace FlyShelf.Windows
         {
             _targetWindow = targetWindow;
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
+            this.Closed += (s, e) => FlyShelf.Classes.SmoothScrollFeature.Detach(this);
             FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             LoadEmojis();
             BuildCategoryTabs();

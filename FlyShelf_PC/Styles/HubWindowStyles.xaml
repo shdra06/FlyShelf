@@ -122,8 +122,8 @@
         <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource RadiusLG}" />
-        <Setter Property="Padding" Value="20" />
-        <Setter Property="Margin" Value="0,0,0,14" />
+        <Setter Property="Padding" Value="16,12" />
+        <Setter Property="Margin" Value="0,0,0,8" />
         <Setter Property="Opacity" Value="1" />
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -369,4 +369,8 @@
         </Style.Triggers>
     </Style>
 
+    <!-- ═══ Global Popup Animation ═══ -->
+    <Style TargetType="{x:Type Popup}">
+        <Setter Property="PopupAnimation" Value="Fade"/>
+    </Style>
 </ResourceDictionary>

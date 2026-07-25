@@ -621,6 +621,12 @@ namespace FlyShelf.Windows
                 {
                     // In category mode, show appropriate view
                     HubListView.Visibility = isImageMode ? Visibility.Collapsed : Visibility.Visible;
+                    if (!isImageMode)
+                    {
+                        HubListView.Opacity = 0;
+                        var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150));
+                        HubListView.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+                    }
                     if (ImageGridScroll != null)
                         ImageGridScroll.Visibility = isImageMode ? Visibility.Visible : Visibility.Collapsed;
                     if (BackToOverviewBtn != null)

@@ -30,6 +30,8 @@ namespace FlyShelf.Windows
         public AiSetupPopup(Window owner = null)
         {
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
+            this.Closed += (s, e) => FlyShelf.Classes.SmoothScrollFeature.Detach(this);
 
             if (owner != null)
             {

@@ -17,6 +17,8 @@ namespace FlyShelf.Windows
         public ReminderCreateWindow()
         {
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
+            this.Closed += (s, e) => FlyShelf.Classes.SmoothScrollFeature.Detach(this);
             BuildTimeSlots();
 
             _selectedDate = DateTime.Today;

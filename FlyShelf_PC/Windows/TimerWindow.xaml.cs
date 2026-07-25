@@ -39,6 +39,7 @@ namespace FlyShelf.Windows
         public TimerWindow(string contextString = null, string taskName = null)
         {
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
             TaskName = taskName ?? "";
             
             // Cache brushes NOW — avoids FindResource calls during tick which crash
@@ -365,6 +366,7 @@ namespace FlyShelf.Windows
 
         protected override void OnClosed(EventArgs e)
         {
+            FlyShelf.Classes.SmoothScrollFeature.Detach(this);
             _timer?.Stop();
             base.OnClosed(e);
         }

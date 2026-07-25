@@ -11,6 +11,7 @@ namespace FlyShelf.Windows
         public PreviewPopup(string text, double x, double y)
         {
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
             PreviewText.Text = text;
 
             // Position near the hovered card
@@ -42,6 +43,7 @@ namespace FlyShelf.Windows
 
         protected override void OnClosed(EventArgs e)
         {
+            FlyShelf.Classes.SmoothScrollFeature.Detach(this);
             _autoCloseTimer?.Stop();
             base.OnClosed(e);
         }

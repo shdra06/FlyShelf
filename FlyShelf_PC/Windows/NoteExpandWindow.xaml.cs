@@ -35,6 +35,8 @@ namespace FlyShelf.Windows
         public NoteExpandWindow(FreeformSection section, string dayLabel = "Note")
         {
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
+            this.Closed += (s, e) => FlyShelf.Classes.SmoothScrollFeature.Detach(this);
             _section = section ?? throw new ArgumentNullException(nameof(section));
 
             _saveTimer = new System.Windows.Threading.DispatcherTimer

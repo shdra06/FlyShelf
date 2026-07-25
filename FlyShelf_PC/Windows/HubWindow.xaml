@@ -731,7 +731,7 @@
                         <RadioButton Checked="Filter_Checked" Tag="Image" Style="{StaticResource FilterChipStyle}">
                             <StackPanel Orientation="Horizontal">
                                 <ui:SymbolIcon Symbol="Image24" Foreground="{DynamicResource TypeImageColor}"/>
-                                <TextBlock Text="Images"/>
+                                <TextBlock Text="Img"/>
                             </StackPanel>
                         </RadioButton>
                         <RadioButton Checked="Filter_Checked" Tag="Pdf" Style="{StaticResource FilterChipStyle}">
@@ -2334,7 +2334,7 @@
                             <Grid Margin="0,0,0,12">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
@@ -2461,7 +2461,7 @@
                             <Grid Margin="0,0,0,12">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
@@ -2493,7 +2493,7 @@
                                                 <TextBlock Text="Run at Startup" FontWeight="Bold" FontSize="{StaticResource TypeSubtitle}" Foreground="#34D399" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="Launch FlyShelf automatically when you log into Windows." 
-                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,8,0" TextWrapping="Wrap" LineHeight="17"/>
                                         </StackPanel>
                                         <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=AutoStartEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Launch at Windows startup" />
                                     </Grid>
@@ -2520,7 +2520,7 @@
                                                 <TextBlock Text="Notifications" FontWeight="Bold" FontSize="{StaticResource TypeSubtitle}" Foreground="#FBBF24" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="Show toast notifications for clipboard events, sync status, and other app activity." 
-                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,8,0" TextWrapping="Wrap" LineHeight="17"/>
                                         </StackPanel>
                                         <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableNotifications, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Enable notifications" />
                                     </Grid>
@@ -2547,7 +2547,7 @@
                                                 <TextBlock Text="Source App Label" FontWeight="Bold" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="Show which app the clipboard content was copied from (e.g. Chrome, VS Code) on each card." 
-                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,8,0" TextWrapping="Wrap" LineHeight="17"/>
                                         </StackPanel>
                                         <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=ShowSourceAppLabel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Show source app label" />
                                     </Grid>
@@ -2606,7 +2606,7 @@
                                                 <TextBlock Text="Summon Animations" FontWeight="Bold" FontSize="{StaticResource TypeSubtitle}" Foreground="#22D3EE" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="Play smooth fade-in and scale animations when opening and closing the clipboard (uncheck for instant 0ms response)." 
-                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,8,0" TextWrapping="Wrap" LineHeight="17"/>
                                         </StackPanel>
                                         <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableSummonAnimations, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Enable summon animations" />
                                     </Grid>
@@ -2615,7 +2615,7 @@
 
 
                             <!-- ═══ SECTION 2: CLIPBOARD & BEHAVIOR ═══ -->
-                            <StackPanel Margin="0,24,0,6">
+                            <StackPanel Margin="0,18,0,4">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="📋" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="Clipboard &amp; Behavior" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
@@ -2627,7 +2627,7 @@
                             <Grid Margin="0,0,0,12">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
@@ -2652,7 +2652,7 @@
                                                 <TextBlock Text="Shake to Open" FontWeight="Bold" FontSize="{StaticResource TypeSubtitle}" Foreground="#A78BFA" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="Rapidly shake your mouse while holding left-click to summon FlyShelf at your cursor position." 
-                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,8,0" TextWrapping="Wrap" LineHeight="17"/>
                                         </StackPanel>
                                         <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableShakeToOpen, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Enable shake to open" />
                                     </Grid>
@@ -2679,7 +2679,7 @@
                                                 <TextBlock Text="Auto Cleanup" FontWeight="Bold" FontSize="{StaticResource TypeSubtitle}" Foreground="#FBBF24" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="Automatically delete unpinned entries older than the retention period. Pinned items are never deleted." 
-                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,8,0" TextWrapping="Wrap" LineHeight="17"/>
                                         </StackPanel>
                                         <ComboBox x:Name="RetentionCombo" Grid.Column="1" VerticalAlignment="Center" MinWidth="120" SelectionChanged="RetentionCombo_SelectionChanged">
                                             <ComboBoxItem Content="7 days" Tag="7"/>
@@ -2712,7 +2712,7 @@
                                             <TextBlock Text="Incognito Mode" FontWeight="Bold" FontSize="{StaticResource TypeSubtitle}" Foreground="#FBBF24" VerticalAlignment="Center"/>
                                         </StackPanel>
                                         <TextBlock Text="Temporarily pause clipboard monitoring. Nothing copied during this period will be captured or stored. Perfect for handling sensitive data." 
-                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,8,0" TextWrapping="Wrap" LineHeight="17"/>
                                         <TextBlock x:Name="IncognitoStatusText" Text="" FontSize="{StaticResource TypeSmall}" Foreground="#F59E0B" Margin="38,6,0,0" Visibility="Collapsed" FontWeight="SemiBold"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Orientation="Horizontal">
@@ -2729,7 +2729,7 @@
 
 
                             <!-- ═══ SECTION 3: SIZE & LAYOUT ═══ -->
-                            <StackPanel Margin="0,24,0,6">
+                            <StackPanel Margin="0,18,0,4">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="📐" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="Size &amp; Layout" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
@@ -2741,7 +2741,7 @@
                             <Grid Margin="0,0,0,12">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
@@ -2908,7 +2908,7 @@
 
 
                             <!-- ═══ SECTION 4: WIDGET ═══ -->
-                            <StackPanel Margin="0,24,0,6">
+                            <StackPanel Margin="0,18,0,4">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="🧩" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="Widget" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
@@ -2920,7 +2920,7 @@
                             <Grid Margin="0,0,0,12">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
@@ -2945,7 +2945,7 @@
                                                 <TextBlock Text="Taskbar Widget" FontWeight="Bold" FontSize="{StaticResource TypeSubtitle}" Foreground="#38BDF8" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="Show the FlyShelf quick-access widget embedded in your taskbar. System tray icon stays visible regardless." 
-                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,8,0" TextWrapping="Wrap" LineHeight="17"/>
                                         </StackPanel>
                                         <ui:ToggleSwitch x:Name="TaskbarWidgetToggle" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableTaskbarWidget, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Checked="TaskbarWidgetToggle_Changed" Unchecked="TaskbarWidgetToggle_Changed" AutomationProperties.Name="Enable taskbar widget" />
                                     </Grid>
@@ -2972,7 +2972,7 @@
                                                 <TextBlock Text="Desktop Mascot" FontWeight="Bold" FontSize="{StaticResource TypeSubtitle}" Foreground="#C084FC" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="Show your pet mascot companion on the desktop. The mascot reacts to clipboard events, idles when inactive, and can be dragged around freely." 
-                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,8,0" TextWrapping="Wrap" LineHeight="17"/>
                                         </StackPanel>
                                         <ui:ToggleSwitch x:Name="DesktopMascotToggle" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableDesktopMascot, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Enable desktop mascot" />
                                     </Grid>
@@ -3010,7 +3010,7 @@
                                     <!-- Pixels fine-tune offset slider (for modes -1, 0, 1, 2) -->
                                     <StackPanel x:Name="PixelOffsetContainer">
                                         <TextBlock Text="Fine-tune Offset (Pixels)" FontWeight="SemiBold" FontSize="11.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="38,4,16,4"/>
-                                        <Grid Margin="38,0,16,0">
+                                        <Grid Margin="38,0,8,0">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
@@ -3030,7 +3030,7 @@
                                     <!-- Percentage position slider (for custom mode 3) -->
                                     <StackPanel x:Name="PercentagePositionContainer" Visibility="Collapsed">
                                         <TextBlock Text="Custom Position (Percentage of Taskbar)" FontWeight="SemiBold" FontSize="11.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="38,4,16,4"/>
-                                        <Grid Margin="38,0,16,0">
+                                        <Grid Margin="38,0,8,0">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
@@ -3082,7 +3082,7 @@
                             <Grid Margin="0,0,0,12">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
@@ -3206,7 +3206,7 @@
                                             <TextBlock Text="Aero Clipboard UI" FontWeight="Bold" FontSize="{StaticResource TypeSubtitle}" Foreground="#38BDF8" VerticalAlignment="Center"/>
                                         </StackPanel>
                                         <TextBlock Text="Switch to a clean minimal clipboard design with compact accent-bar cards and themed gradient backgrounds." 
-                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="38,0,8,0" TextWrapping="Wrap" LineHeight="17"/>
                                     </StackPanel>
                                     <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=UseAlternateClipboardUI, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Use alternate clipboard UI" />
                                 </Grid>
@@ -3234,9 +3234,9 @@
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="12"/>
+                                            <ColumnDefinition Width="8"/>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="12"/>
+                                            <ColumnDefinition Width="8"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
 

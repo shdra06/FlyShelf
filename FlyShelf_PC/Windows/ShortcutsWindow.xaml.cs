@@ -15,6 +15,7 @@ namespace FlyShelf.Windows
         public ShortcutsWindow()
         {
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
             NativeMethods.ApplyWindowBackdropAndBackground(this);
 
             // Bind the observable collection
@@ -215,6 +216,7 @@ namespace FlyShelf.Windows
 
         protected override void OnClosed(EventArgs e)
         {
+            FlyShelf.Classes.SmoothScrollFeature.Detach(this);
             ShortcutManager.Shortcuts.CollectionChanged -= _shortcutsChangedHandler;
             base.OnClosed(e);
         }

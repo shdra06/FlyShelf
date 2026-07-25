@@ -72,6 +72,8 @@ namespace FlyShelf.Windows
         public PdfMergeWindow(List<ClipboardItem> pdfsToMerge, FlyShelfViewModel vm)
         {
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
+            this.Closed += (s, e) => FlyShelf.Classes.SmoothScrollFeature.Detach(this);
             FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _viewModel = vm;
             MergeItems = new ObservableCollection<PdfMergeItem>(

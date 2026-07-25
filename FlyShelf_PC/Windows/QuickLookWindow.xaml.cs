@@ -74,13 +74,14 @@ namespace FlyShelf.Windows
         public QuickLookWindow(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null, bool autoTriggerOcr = false)
         {
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
             FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _item = item;
             _ocrResult = preLoadedOcr;
             _autoTriggerOcr = autoTriggerOcr;
 
             // Free PDF thumbnail BitmapImages (unmanaged memory) when window closes
-            Closed += (s, ev) => _pdfThumbnails.Clear();
+            Closed += (s, ev) => { _pdfThumbnails.Clear(); FlyShelf.Classes.SmoothScrollFeature.Detach(this); };
 
             PreviewImage.Visibility = Visibility.Collapsed;
             if (ImageModeGrid != null) ImageModeGrid.Visibility = Visibility.Collapsed;

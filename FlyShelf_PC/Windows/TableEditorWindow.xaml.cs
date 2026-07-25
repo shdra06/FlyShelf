@@ -49,6 +49,8 @@ namespace FlyShelf.Windows
         public TableEditorWindow(string input, string imagePath, string extractionMethod)
         {
             InitializeComponent();
+            FlyShelf.Classes.SmoothScrollFeature.Attach(this);
+            this.Closed += (s, e) => FlyShelf.Classes.SmoothScrollFeature.Detach(this);
             NativeMethods.ApplyWindowBackdropAndBackground(this);
 
             _imagePath = imagePath;
