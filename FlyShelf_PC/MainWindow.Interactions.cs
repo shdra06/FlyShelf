@@ -125,11 +125,12 @@ namespace FlyShelf
                     var clipboardObj = itemContainer2.DataContext as ClipboardItem;
                     if (clipboardObj != null)
                     {
-                        await CopyItemAndPaste(clipboardObj, hideWindow: true);
-
                         // ═══ Contextual Tip: Double-click to open ═══
+                        // Show before paste+hide so the tip appears anchored to the card
                         if (!string.IsNullOrEmpty(clipboardObj.FilePath))
-                            Windows.TipBadge.Show("doubleclick_hint", "🖱️ Double-click to open files directly");
+                            Windows.TipBadge.Show("doubleclick_hint", "🖱️ Double-click to open files directly", itemContainer2);
+
+                        await CopyItemAndPaste(clipboardObj, hideWindow: true);
 
                         e.Handled = true;
                     }

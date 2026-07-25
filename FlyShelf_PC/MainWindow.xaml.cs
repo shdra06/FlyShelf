@@ -591,7 +591,7 @@ namespace FlyShelf
                 PopulateSendToDeviceMenu(cm);
 
                 // ═══ Contextual Tip: First context menu ═══
-                Windows.TipBadge.Show("context_menu_first_use", "⚡ Try Smart Actions for auto-detect features");
+                Windows.TipBadge.Show("context_menu_first_use", "⚡ Try Smart Actions for auto-detect features", cm.PlacementTarget as UIElement);
             }
         }
 

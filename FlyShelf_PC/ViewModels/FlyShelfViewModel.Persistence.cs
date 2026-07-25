@@ -209,9 +209,7 @@ namespace FlyShelf.ViewModels
                 SavePinnedItems();
                 PersistHistory();
 
-                // ═══ Contextual Tip: First pin ═══
-                if (item.IsPinned)
-                    FlyShelf.Windows.TipBadge.Show("pin_first_use", "📌 Pinned items stay at the top");
+                // Pin state is self-evident from UI — no floating tip needed
                 
                 // Pinned items stay wherever they are — no sorting
             }
