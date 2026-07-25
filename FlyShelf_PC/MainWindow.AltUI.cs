@@ -485,6 +485,13 @@ namespace FlyShelf
                             }
                             else if (!item.IsPinned)
                             {
+                                // Skip eviction when Hub is visible — shared ClipboardItem objects
+                                if (_hubWindowInstance != null && _hubWindowInstance.IsVisible)
+                                {
+                                    item.LeftViewportTime = null;
+                                    continue;
+                                }
+
                                 // Evict after 5 seconds off-screen to free memory
                                 if (item.LeftViewportTime == null)
                                     item.LeftViewportTime = DateTime.Now;

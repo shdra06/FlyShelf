@@ -618,6 +618,10 @@ namespace FlyShelf.Windows
                     if (BackToOverviewBtn != null)
                         BackToOverviewBtn.Visibility = Visibility.Visible;
                     ApplyFilters();
+                    
+                    // On-demand image thumbnail loading when switching to Image mode
+                    if (isImageMode)
+                        LoadMissingImageThumbnails();
                 }
             }
         }
@@ -648,12 +652,25 @@ namespace FlyShelf.Windows
         /// </summary>
         private void BackToOverview_Click(object sender, RoutedEventArgs e)
         {
-            // Find and check the "All" RadioButton to return to overview
+            _currentFilterTag = "All";
+            
+            // Show clustered overview, hide list/grid
+            if (ClusteredPanel != null)
+                ClusteredPanel.Visibility = Visibility.Visible;
+            HubListView.Visibility = Visibility.Collapsed;
+            if (ImageGridScroll != null)
+                ImageGridScroll.Visibility = Visibility.Collapsed;
+            if (BackToOverviewBtn != null)
+                BackToOverviewBtn.Visibility = Visibility.Collapsed;
+            
+            RefreshClusteredCounts();
+            
+            // Sync the "All" radio pill
             foreach (var rb in FindVisualChildren<RadioButton>(HistoryGrid))
             {
                 if (rb.Tag as string == "All")
                 {
-                    rb.IsChecked = true; // This triggers Filter_Checked → shows clustered
+                    rb.IsChecked = true;
                     break;
                 }
             }
@@ -870,6 +887,51 @@ namespace FlyShelf.Windows
                 // The Icon property is already lazy-loaded via PropertyChanged
                 // This scroll event ensures the UI re-evaluates bindings
             }
+        }
+
+        /// <summary>
+        /// Loads missing thumbnails for image items that were skipped at startup.
+        /// Called on-demand when user switches to Image filter mode.
+        /// </summary>
+        private void LoadMissingImageThumbnails()
+        {
+            var vm = DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
+            if (vm == null) return;
+
+            // Collect image items that need thumbnails
+            var imageItems = vm.DroppedItems
+                .Where(i => (i.ItemType == FlyShelf.ViewModels.ClipboardItemType.Image || i.ItemType == FlyShelf.ViewModels.ClipboardItemType.QRCode)
+                    && i.Icon == null
+                    && !string.IsNullOrEmpty(i.FilePath)
+                    && System.IO.File.Exists(i.FilePath))
+                .ToList();
+
+            if (imageItems.Count == 0) return;
+
+            // Load thumbnails on background thread with concurrency limit
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                var semaphore = new System.Threading.SemaphoreSlim(3, 3);
+                var tasks = imageItems.Select(async item =>
+                {
+                    await semaphore.WaitAsync();
+                    try
+                    {
+                        var bmp = FlyShelf.ViewModels.FlyShelfViewModel.LoadImageThumbnail(item.FilePath, 300);
+                        if (bmp != null)
+                        {
+                            Application.Current?.Dispatcher?.InvokeAsync(() =>
+                            {
+                                item.Icon = bmp;
+                                item.IsLoadedHighQuality = true;
+                            });
+                        }
+                    }
+                    catch { } // Best-effort
+                    finally { semaphore.Release(); }
+                });
+                await System.Threading.Tasks.Task.WhenAll(tasks);
+            });
         }
 
         // ═══ SIDEBAR COLLAPSE ═══

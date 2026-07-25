@@ -874,26 +874,33 @@ namespace FlyShelf
             {
                 if (_viewModel?.DroppedItems != null)
                 {
-                    int imageCount = 0;
-                    foreach (var item in _viewModel.DroppedItems)
+                    // Skip eviction when Hub window is visible — both windows share
+                    // the same ClipboardItem objects, and nulling icons here blanks out
+                    // thumbnails the Hub is actively displaying.
+                    bool hubVisible = _hubWindowInstance != null && _hubWindowInstance.IsVisible;
+                    if (!hubVisible)
                     {
-                        if (item == null) continue;
-
-                        if (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
+                        int imageCount = 0;
+                        foreach (var item in _viewModel.DroppedItems)
                         {
-                            imageCount++;
-                            if (imageCount <= 6)
-                            {
-                                // Keep the top 6 images loaded in RAM to hide the sudden appearance on summon
-                                continue;
-                            }
+                            if (item == null) continue;
 
-                            if (!item.IsPinned)
+                            if (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
                             {
-                                item.Icon = null;
-                                item.IsLoadedHighQuality = false;
-                                item.IsLoadingHighQuality = false;
-                                item.LeftViewportTime = null;
+                                imageCount++;
+                                if (imageCount <= 6)
+                                {
+                                    // Keep the top 6 images loaded in RAM to hide the sudden appearance on summon
+                                    continue;
+                                }
+
+                                if (!item.IsPinned)
+                                {
+                                    item.Icon = null;
+                                    item.IsLoadedHighQuality = false;
+                                    item.IsLoadingHighQuality = false;
+                                    item.LeftViewportTime = null;
+                                }
                             }
                         }
                     }

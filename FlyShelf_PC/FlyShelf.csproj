@@ -105,6 +105,7 @@
   <ItemGroup>
     <Resource Include="Resources\**\*.png" />
     <Resource Include="Resources\**\*.ico" />
+    <Resource Include="Resources\**\*.jpg" />
   </ItemGroup>
 
   <Target Name="GenerateFirebaseSecrets" BeforeTargets="BeforeBuild">
