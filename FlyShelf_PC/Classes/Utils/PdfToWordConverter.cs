@@ -177,7 +177,7 @@ namespace FlyShelf.Classes
                     Text = word.Text,
                     X = word.BoundingBox.Left,
                     Y = Math.Round(word.BoundingBox.Bottom, 1),
-                    FontSize = Math.Round(word.Letters.FirstOrDefault()?.PointSize ?? 11, 1),
+                    FontSize = Math.Round(word.Letters.Count > 0 ? word.Letters[0].PointSize : 11, 1),
                     IsBold = word.Letters.Any(l =>
                         l.FontName?.Contains("Bold", StringComparison.OrdinalIgnoreCase) == true),
                     IsItalic = word.Letters.Any(l =>
@@ -421,7 +421,7 @@ namespace FlyShelf.Classes
                 // Font size (in half-points)
                 int halfPoints = (int)(block.FontSize * 2);
                 if (halfPoints > 0 && halfPoints != 22)
-                    runProps.AppendChild(new FontSize { Val = halfPoints.ToString() });
+                    runProps.AppendChild(new FontSize { Val = halfPoints.ToString(System.Globalization.CultureInfo.InvariantCulture) });
 
                 if (block.IsBold)
                     runProps.AppendChild(new Bold());

@@ -79,6 +79,7 @@ namespace FlyShelf.ViewModels
             get => _fileName;
             set
             {
+                if (_suppressPropertyNotifications) { _fileName = value; return; }
                 if (_fileName != value)
                 {
                     _fileName = value;
@@ -106,11 +107,11 @@ namespace FlyShelf.ViewModels
                 if (_displayText != null) return _displayText;
                 if (_fileName.Length <= DisplayTextTruncationLimit)
                 {
-                    _displayText = _fileName;
+                    _displayText = _fileName.TrimStart('\r', '\n');
                 }
                 else
                 {
-                    _displayText = string.Concat(_fileName.AsSpan(0, DisplayTextTruncationLimit), "…");
+                    _displayText = _fileName.AsSpan(0, DisplayTextTruncationLimit).ToString().TrimStart('\r', '\n') + "…";
                 }
                 return _displayText;
             }

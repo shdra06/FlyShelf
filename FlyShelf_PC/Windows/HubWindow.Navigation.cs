@@ -138,6 +138,7 @@ namespace FlyShelf.Windows
                 _hubThumbnailRetryCount = 0;
                 Dispatcher.InvokeAsync(() => RenderHubVisibleThumbnails(),
                     System.Windows.Threading.DispatcherPriority.Loaded);
+                Dispatcher.InvokeAsync(() => SearchBox?.Focus(), System.Windows.Threading.DispatcherPriority.Input);
             }
         }
 

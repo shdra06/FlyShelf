@@ -256,7 +256,7 @@ namespace FlyShelf.Windows
                 if (!System.IO.Directory.Exists(logsDir)) System.IO.Directory.CreateDirectory(logsDir);
                 System.Diagnostics.Process.Start("explorer.exe", logsDir);
             }
-            catch { } // Best-effort: failure is acceptable
+            catch { ToastWindow.ShowToast("❌ Could not open folder", 2000); }
         }
 
 #if !MSIX_STORE
@@ -274,7 +274,7 @@ namespace FlyShelf.Windows
                 _networkLogsWindow = new NetworkLogsWindow();
                 WindowHelper.ShowInForeground(_networkLogsWindow);
             }
-            catch { } // Best-effort: failure is acceptable
+            catch { ToastWindow.ShowToast("❌ Could not open folder", 2000); }
         }
 #endif // !MSIX_STORE
 
@@ -682,6 +682,16 @@ namespace FlyShelf.Windows
         private void ViewAllItems_Click(object sender, MouseButtonEventArgs e)
         {
             _currentFilterTag = "All";
+            
+            foreach (var rb in FindVisualChildren<RadioButton>(HistoryGrid))
+            {
+                if (rb.Tag as string == "All" && rb.Style != null)
+                {
+                    rb.IsChecked = true;
+                    break;
+                }
+            }
+
             if (ClusteredPanel != null)
                 ClusteredPanel.Visibility = Visibility.Collapsed;
             HubListView.Visibility = Visibility.Visible;
@@ -751,7 +761,7 @@ namespace FlyShelf.Windows
                     }
                     System.Windows.Clipboard.SetDataObject(dataObj, true);
                 }
-                catch { }
+                catch (Exception ex) { ToastWindow.ShowToast("❌ Clipboard busy — try again", 2000); }
             }
         }
 
@@ -845,15 +855,17 @@ namespace FlyShelf.Windows
                         {
                             var page = doc.AddPage();
                             using var img = PdfSharp.Drawing.XImage.FromFile(path);
-                            page.Width = img.PointWidth;
-                            page.Height = img.PointHeight;
+                            page.Width = PdfSharp.Drawing.XUnit.FromPoint(img.PointWidth);
+                            page.Height = PdfSharp.Drawing.XUnit.FromPoint(img.PointHeight);
                             using var gfx = PdfSharp.Drawing.XGraphics.FromPdfPage(page);
-                            gfx.DrawImage(img, 0, 0, page.Width, page.Height);
+                            gfx.DrawImage(img, 0, 0, page.Width.Point, page.Height.Point);
                         }
                         catch { /* skip invalid images */ }
                     }
                     doc.Save(saveDialog.FileName);
                 });
+
+                Dispatcher.Invoke(() => ToastWindow.ShowToast("✅ PDF saved successfully!", 2500));
 
                 // Deselect all after merge
                 foreach (var item in selected)
@@ -941,10 +953,28 @@ namespace FlyShelf.Windows
         {
             _isSidebarCollapsed = !_isSidebarCollapsed;
             
+            var target = _isSidebarCollapsed ? 64.0 : 220.0;
+            var current = SidebarColumn.Width.Value;
+            var step = (_isSidebarCollapsed ? -1 : 1) * 13;
+            var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(10) };
+            timer.Tick += (s, ev) => {
+                current += step;
+                if ((_isSidebarCollapsed && current <= target) || (!_isSidebarCollapsed && current >= target)) {
+                    current = target;
+                    ((System.Windows.Threading.DispatcherTimer)s).Stop();
+                    // Run icon/label visibility changes AFTER animation
+                    UpdateSidebarVisuals();
+                }
+                SidebarColumn.Width = new GridLength(current);
+            };
+            timer.Start();
+        }
+
+        private void UpdateSidebarVisuals()
+        {
             if (_isSidebarCollapsed)
             {
                 // Collapse: show only icons (64px fits icons cleanly on 8px grid)
-                SidebarColumn.Width = new GridLength(64);
                 SidebarCollapseIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.PanelLeftExpand24;
                 SidebarCollapseBtn.ToolTip = "Expand sidebar";
                 
@@ -979,7 +1009,6 @@ namespace FlyShelf.Windows
             else
             {
                 // Expand: show full sidebar
-                SidebarColumn.Width = new GridLength(220);
                 SidebarCollapseIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.PanelLeftContract24;
                 SidebarCollapseBtn.ToolTip = "Collapse sidebar";
                 

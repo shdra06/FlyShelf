@@ -76,10 +76,10 @@
                 <Trigger.EnterActions>
                     <BeginStoryboard>
                         <Storyboard>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="-2" Duration="0:0:0.2">
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="-2" Duration="{StaticResource Motion.Normal}">
                                 <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
                             </DoubleAnimation>
-                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.2">
+                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Normal}">
                                 <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
                             </DoubleAnimation>
                         </Storyboard>
@@ -88,10 +88,10 @@
                 <Trigger.ExitActions>
                     <BeginStoryboard>
                         <Storyboard>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="0" Duration="0:0:0.25">
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="0" Duration="{StaticResource Motion.Entrance}">
                                 <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
                             </DoubleAnimation>
-                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0.92" Duration="0:0:0.25">
+                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0.92" Duration="{StaticResource Motion.Entrance}">
                                 <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
                             </DoubleAnimation>
                         </Storyboard>
@@ -179,7 +179,7 @@
 
     <Style x:Key="SpeedBadgeStyle" TargetType="Border">
         <Setter Property="Background" Value="#18FFFFFF" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusMD}" />
         <Setter Property="Padding" Value="8,3" />
         <Setter Property="Margin" Value="4,0" />
         <Setter Property="VerticalAlignment" Value="Center" />
@@ -349,12 +349,12 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="TabBd"
                                                          Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)"
-                                                         To="1.03" Duration="0:0:0.15">
+                                                         To="1.03" Duration="{StaticResource Motion.Fast}">
                                             <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="TabBd"
                                                          Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)"
-                                                         To="1.03" Duration="0:0:0.15">
+                                                         To="1.03" Duration="{StaticResource Motion.Fast}">
                                             <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                     </Storyboard>
@@ -365,12 +365,12 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="TabBd"
                                                          Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)"
-                                                         To="1" Duration="0:0:0.2">
+                                                         To="1" Duration="{StaticResource Motion.Normal}">
                                             <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="TabBd"
                                                          Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)"
-                                                         To="1" Duration="0:0:0.2">
+                                                         To="1" Duration="{StaticResource Motion.Normal}">
                                             <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                     </Storyboard>

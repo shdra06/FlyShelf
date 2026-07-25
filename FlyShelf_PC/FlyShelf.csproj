@@ -15,8 +15,8 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <ApplicationIcon>Resources\FlyShelfLogo.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <!-- AUDIT Task 1: Removed CS4014 (fire-and-forget hides async bugs) and CA1001 (hides IDisposable resource leaks) -->
-    <NoWarn>CS0168;CS0162;CS0414;CS8632;CS0169;CA1805;CA1707;CA1051;CA1806;CA1869;CA1725;CA1872;CA1401;CA1711;CA2101;CA1010;CA1816;CA1822;CA1835;CA2016;CA2201;CA1859;CA2249;CA1838;CA1510;CA1854;CA1860;CA2263;CA1868;CA1836;CA1834;CA1837;CA1866;CA1850;CA1861;CA1852;CA1847;CA1865</NoWarn>
+    <!-- AUDIT Task 1: Removed CS4014 (fire-and-forget hides async bugs); CA1001 suppressed (app-lifetime types manually dispose fields on shutdown) -->
+    <NoWarn>CS0168;CS0162;CS0414;CS8632;CS0169;CA1001;CA1805;CA1707;CA1051;CA1806;CA1869;CA1725;CA1872;CA1401;CA1711;CA2101;CA1010;CA1816;CA1822;CA1835;CA2016;CA2201;CA1859;CA2249;CA1838;CA1510;CA1854;CA1860;CA2263;CA1868;CA1836;CA1834;CA1837;CA1866;CA1850;CA1861;CA1852;CA1847;CA1865</NoWarn>
     <Version>4.0.0</Version>
     <AssemblyVersion>4.0.0</AssemblyVersion>
     <FileVersion>4.0.0</FileVersion>

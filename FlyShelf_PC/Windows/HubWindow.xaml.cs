@@ -27,6 +27,16 @@ namespace FlyShelf.Windows
         private Action<string>? _peerDisconnectedHandler;
         private Action<string, string>? _transportSwitchedHandler;
 
+        private static readonly RoutedCommand FocusSearchCommand = new RoutedCommand();
+        private static readonly RoutedCommand ToggleSidebarCommand = new RoutedCommand();
+        private static readonly RoutedCommand Tab1Command = new RoutedCommand();
+        private static readonly RoutedCommand Tab2Command = new RoutedCommand();
+        private static readonly RoutedCommand Tab3Command = new RoutedCommand();
+        private static readonly RoutedCommand Tab4Command = new RoutedCommand();
+        private static readonly RoutedCommand Tab5Command = new RoutedCommand();
+        private static readonly RoutedCommand Tab6Command = new RoutedCommand();
+        private static readonly RoutedCommand Tab7Command = new RoutedCommand();
+
         // ΓòÉΓòÉΓòÉ Hub Thumbnail Rendering ΓòÉΓòÉΓòÉ
         private System.Windows.Threading.DispatcherTimer? _hubScrollHighQualityTimer;
 
@@ -44,6 +54,30 @@ namespace FlyShelf.Windows
             _viewModel = viewModel;
             DataContext = _viewModel;
             InitializeComponent();
+
+            // Keyboard shortcuts
+            this.CommandBindings.Add(new CommandBinding(FocusSearchCommand, (s, e) => { SearchBox?.Focus(); }));
+            this.InputBindings.Add(new InputBinding(FocusSearchCommand, new KeyGesture(Key.F, ModifierKeys.Control)));
+
+            this.CommandBindings.Add(new CommandBinding(ToggleSidebarCommand, (s, e) => { SidebarCollapse_Click(null, null); }));
+            this.InputBindings.Add(new InputBinding(ToggleSidebarCommand, new KeyGesture(Key.B, ModifierKeys.Control)));
+
+            var tabs = new (RoutedCommand cmd, Key key, string tag)[] {
+                (Tab1Command, Key.D1, "History"),
+                (Tab2Command, Key.D2, "Dashboard"),
+                (Tab3Command, Key.D3, "Network"),
+                (Tab4Command, Key.D4, "Personalization"),
+                (Tab5Command, Key.D5, "Settings"),
+                (Tab6Command, Key.D6, "AI"),
+                (Tab7Command, Key.D7, "About")
+            };
+            foreach (var t in tabs)
+            {
+                this.CommandBindings.Add(new CommandBinding(t.cmd, (s, e) => NavigateToTab(t.tag)));
+                this.InputBindings.Add(new InputBinding(t.cmd, new KeyGesture(t.key, ModifierKeys.Control)));
+            }
+
+            this.PreviewKeyDown += HubWindow_PreviewKeyDown;
 
             // ═══ Create an ISOLATED collection view for the Hub ═══
             // WPF's CollectionViewSource.GetDefaultView() returns a singleton per collection.
@@ -556,6 +590,34 @@ namespace FlyShelf.Windows
         // ═══ UpdateAlignButtonsVisualState, Align*_Click, TaskbarWidgetToggle_Changed → HubWindow.UIHandlers.cs ═══
         // ═══ Hub Thumbnail Rendering → HubWindow.Thumbnails.cs ═══
         // ═══ ReplayOnboarding_Click → HubWindow.Navigation.cs ═══
+
+        private void HubWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (HistoryGrid != null && HistoryGrid.Visibility == Visibility.Visible)
+            {
+                if (e.Key == Key.Delete)
+                {
+                    if (HubListView?.SelectedItem is ClipboardItem item)
+                    {
+                        _viewModel.RemoveItem(item);
+                        e.Handled = true;
+                    }
+
+                }
+                else if (e.Key == Key.Space)
+                {
+                    if (SearchBox != null && SearchBox.IsFocused) return;
+                    if (e.OriginalSource is System.Windows.Controls.TextBox) return;
+
+                    if (HubListView?.SelectedItem is ClipboardItem item)
+                    {
+                        (Application.Current.MainWindow as MainWindow)?.ShowQuickLookForItem(item);
+                        e.Handled = true;
+                    }
+
+                }
+            }
+        }
     }
 }
 

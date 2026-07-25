@@ -53,7 +53,7 @@
     <Style x:Key="AltCloseButtonStyle" TargetType="Border">
         <Setter Property="Width" Value="30"/>
         <Setter Property="Height" Value="30"/>
-        <Setter Property="CornerRadius" Value="15"/>
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusLG}"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Style.Triggers>

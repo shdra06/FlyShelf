@@ -49,11 +49,27 @@ namespace FlyShelf
                 // Activate the window so it receives keyboard input
                 this.Activate();
 
-                // Hide toolbar buttons so the search bar gets full width (keep MoreBtn + Close visible)
+                // Hide toolbar buttons so the search bar gets full width (keep filter + close visible)
                 SearchToggleBtn.Visibility = Visibility.Collapsed;
                 NotesToggleBtn.Visibility = Visibility.Collapsed;
                 TodoToggleBtn.Visibility = Visibility.Collapsed;
-                SortFilterBtn.Visibility = Visibility.Collapsed;
+                ResearchToggleBtn.Visibility = Visibility.Collapsed; // Replace networking with filter during search
+                // SortFilterBtn stays visible — users can filter search results by category
+
+                // ── Adjust search bar sizing for mini clipboard mode ──
+                bool isMini = _viewModel?.CurrentMode == 0;
+                if (isMini)
+                {
+                    // Mini mode: narrower search bar, hide more buttons to save space
+                    SearchBarContainer.MinWidth = 80;
+                    SearchBarContainer.Margin = new Thickness(0, 0, 4, 0);
+                    if (MoreBtn != null) MoreBtn.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    SearchBarContainer.MinWidth = 160;
+                    SearchBarContainer.Margin = new Thickness(0, 0, 6, 0);
+                }
 
                 // ── Clear any stale animations and force-reset transform + opacity ──
                 var scaleTransform = SearchBarContainer.RenderTransform as ScaleTransform;
@@ -232,6 +248,10 @@ namespace FlyShelf
 
                 // ── Restore toolbar buttons respecting current mode ──
                 UpdateToolbarButtonsVisibility();
+
+                // ── Reset search bar sizing (may have been reduced for mini mode) ──
+                SearchBarContainer.MinWidth = 160;
+                SearchBarContainer.Margin = new Thickness(0, 0, 6, 0);
 
                 // Smooth collapse animation
                 var easeOut = new CubicEase { EasingMode = EasingMode.EaseIn };

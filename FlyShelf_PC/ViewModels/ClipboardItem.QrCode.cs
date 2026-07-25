@@ -204,7 +204,46 @@ namespace FlyShelf.ViewModels
                             FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word (via Word)...")
                         );
 
+                        // PowerShell script with auto-dialog dismissal for Word's PDF conversion prompt
                         string script = $@"
+# ═══ Auto-dismiss Word's PDF conversion dialog ═══
+# Word shows a modal dialog for PDF→DOCX that can't be suppressed via COM settings.
+# We spawn a background job that polls for the dialog and clicks OK automatically.
+$dialogJob = Start-Job -ScriptBlock {{
+    Add-Type @'
+    using System;
+    using System.Runtime.InteropServices;
+    public class WinApi {{
+        [DllImport(""user32.dll"", SetLastError = true)]
+        public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+        [DllImport(""user32.dll"")]
+        public static extern IntPtr FindWindowEx(IntPtr hWndParent, IntPtr hWndChildAfter, string lpszClass, string lpszWindow);
+        [DllImport(""user32.dll"")]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
+        [DllImport(""user32.dll"", CharSet = CharSet.Auto)]
+        public static extern int SendMessage(IntPtr hWnd, uint Msg, int wParam, int lParam);
+        public const uint BM_CLICK = 0x00F5;
+    }}
+'@
+    for ($i = 0; $i -lt 60; $i++) {{
+        Start-Sleep -Milliseconds 500
+        # Look for Word's dialog by title 'Microsoft Word'
+        $hwnd = [WinApi]::FindWindow('#32770', 'Microsoft Word')
+        if ($hwnd -ne [IntPtr]::Zero) {{
+            # Find the OK button (Button class, text 'OK' or '&OK')
+            $okBtn = [WinApi]::FindWindowEx($hwnd, [IntPtr]::Zero, 'Button', 'OK')
+            if ($okBtn -eq [IntPtr]::Zero) {{
+                $okBtn = [WinApi]::FindWindowEx($hwnd, [IntPtr]::Zero, 'Button', '&OK')
+            }}
+            if ($okBtn -ne [IntPtr]::Zero) {{
+                [WinApi]::SetForegroundWindow($hwnd)
+                [WinApi]::SendMessage($okBtn, [WinApi]::BM_CLICK, 0, 0)
+                break
+            }}
+        }}
+    }}
+}}
+
 $word = New-Object -ComObject Word.Application
 $word.Visible = $false
 $word.DisplayAlerts = 0
@@ -212,8 +251,9 @@ $word.AutomationSecurity = 3
 $word.Options.DoNotPromptForConvert = $true
 $word.Options.ConfirmConversions = $false
 try {{
-    # ConfirmConversions=$false (2nd param) suppresses the PDF conversion dialog
-    $doc = $word.Documents.Open('{FilePath.Replace("'", "''")}', $false)
+    # ConfirmConversions=$false (2nd param) suppresses most dialogs
+    # but Word's PDF conversion dialog is special — the background job handles it
+    $doc = $word.Documents.Open('{FilePath.Replace("'", "''")}', $false, $false, $false)
     $doc.SaveAs([ref]'{outputPath.Replace("'", "''")}', [ref]16)
     $doc.Close([ref]0)
 }} catch {{
@@ -221,6 +261,8 @@ try {{
 }} finally {{
     $word.Quit([ref]0)
     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($word) | Out-Null
+    Stop-Job $dialogJob -ErrorAction SilentlyContinue
+    Remove-Job $dialogJob -Force -ErrorAction SilentlyContinue
 }}
 ";
                         // [SECURITY]: Write script to temp file (prevent injection via FilePath)
@@ -237,12 +279,12 @@ try {{
 
                         using (var process = Process.Start(psi))
                         {
-                            // 45 second timeout — Word needs time for complex PDFs
-                            process?.WaitForExit(45000);
+                            // 60 second timeout — includes dialog dismissal time + Word processing
+                            process?.WaitForExit(60000);
                             if (process != null && !process.HasExited)
                             {
                                 try { process.Kill(true); } catch { }
-                                Classes.Logger.LogAction("PDF2WORD", "Word COM timed out (45s) — falling through to native converter");
+                                Classes.Logger.LogAction("PDF2WORD", "Word COM timed out (60s) — falling through to native converter");
                             }
                         }
 

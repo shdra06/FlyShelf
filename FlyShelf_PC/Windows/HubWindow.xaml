@@ -77,10 +77,10 @@
                         <!-- Brand text -->
                         <StackPanel x:Name="SidebarBrandText" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="FlyShelf" FontSize="15" FontWeight="Bold" 
+                                <TextBlock Text="FlyShelf" FontSize="{StaticResource TypeTitle}" FontWeight="Bold" 
                                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
                                            VerticalAlignment="Center"/>
-                                <TextBlock Text="Hub" FontSize="15" FontWeight="Light" 
+                                <TextBlock Text="Hub" FontSize="{StaticResource TypeTitle}" FontWeight="Light" 
                                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
                                            VerticalAlignment="Center" Margin="5,0,0,0" Opacity="0.7"/>
 
@@ -130,9 +130,7 @@
                         </Button>
                         <!-- Status indicator -->
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Ellipse Width="6" Height="6" Margin="0,0,8,0">
-                                <Ellipse.Fill><SolidColorBrush Color="#10B981"/></Ellipse.Fill>
-                            </Ellipse>
+                            <Ellipse Width="6" Height="6" Margin="0,0,8,0" Fill="{DynamicResource SuccessColor}"/>
                             <TextBlock Text="Connected" FontSize="{StaticResource TypeSmall}" 
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
                                        Opacity="0.6"/>
@@ -144,7 +142,7 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Margin="8,0,8,0">
                     <StackPanel>
-                        <RadioButton Tag="History" IsChecked="True" GroupName="NavTabs"
+                        <RadioButton Tag="History" IsChecked="True" GroupName="NavTabs" ToolTip="Clipboard"
                                      Style="{StaticResource SidebarNavStyle}" 
                                      Checked="SidebarNav_Checked">
                             <StackPanel Orientation="Horizontal">
@@ -152,7 +150,7 @@
                                 <TextBlock Text="Clipboard" VerticalAlignment="Center"/>
                             </StackPanel>
                         </RadioButton>
-                        <RadioButton Tag="Dashboard" GroupName="NavTabs"
+                        <RadioButton Tag="Dashboard" GroupName="NavTabs" ToolTip="Dashboard"
                                      Style="{StaticResource SidebarNavStyle}" 
                                      Checked="SidebarNav_Checked">
                             <StackPanel Orientation="Horizontal">
@@ -160,7 +158,7 @@
                                 <TextBlock Text="Dashboard" VerticalAlignment="Center"/>
                             </StackPanel>
                         </RadioButton>
-                        <RadioButton Tag="Network" GroupName="NavTabs"
+                        <RadioButton Tag="Network" GroupName="NavTabs" ToolTip="Network"
                                      Style="{StaticResource SidebarNavStyle}" 
                                      Checked="SidebarNav_Checked">
                             <StackPanel Orientation="Horizontal">
@@ -173,7 +171,7 @@
                         <Border Height="1" Margin="4,10,4,10" Opacity="0.12"
                                 Background="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
 
-                        <RadioButton Tag="Personalization" GroupName="NavTabs"
+                        <RadioButton Tag="Personalization" GroupName="NavTabs" ToolTip="Personalization"
                                      Style="{StaticResource SidebarNavStyle}" 
                                      Checked="SidebarNav_Checked">
                             <StackPanel Orientation="Horizontal">
@@ -181,7 +179,7 @@
                                 <TextBlock Text="Personalization" VerticalAlignment="Center"/>
                             </StackPanel>
                         </RadioButton>
-                        <RadioButton Tag="Settings" GroupName="NavTabs"
+                        <RadioButton Tag="Settings" GroupName="NavTabs" ToolTip="Settings"
                                      Style="{StaticResource SidebarNavStyle}" 
                                      Checked="SidebarNav_Checked">
                             <StackPanel Orientation="Horizontal">
@@ -189,15 +187,15 @@
                                 <TextBlock Text="Settings" VerticalAlignment="Center"/>
                             </StackPanel>
                         </RadioButton>
-                        <RadioButton Tag="AI" GroupName="NavTabs"
+                        <RadioButton Tag="AI" GroupName="NavTabs" ToolTip="AI"
                                      Style="{StaticResource SidebarNavStyle}" 
                                      Checked="SidebarNav_Checked">
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="BrainCircuit24" FontSize="{StaticResource TypeTitle}" Foreground="#10B981" Margin="0,0,12,0"/>
+                                <ui:SymbolIcon Symbol="BrainCircuit24" FontSize="{StaticResource TypeTitle}" Foreground="#EC4899" Margin="0,0,12,0"/>
                                 <TextBlock Text="AI" VerticalAlignment="Center"/>
                             </StackPanel>
                         </RadioButton>
-                        <RadioButton Tag="About" GroupName="NavTabs"
+                        <RadioButton Tag="About" GroupName="NavTabs" ToolTip="About &amp; Updates"
                                      Style="{StaticResource SidebarNavStyle}" 
                                      Checked="SidebarNav_Checked">
                             <StackPanel Orientation="Horizontal">
@@ -566,11 +564,11 @@
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0" IsHitTestVisible="False"
                                                 x:Name="SearchPlaceholderPanel">
                                         <ui:SymbolIcon Symbol="Search24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,0,8,0"/>
-                                        <TextBlock Text="Search clips..." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12.5"/>
+                                        <TextBlock Text="Search clips..." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}"/>
                                     </StackPanel>
                                     <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0" 
                                              Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
-                                             FontSize="12.5" Padding="14,10" CaretBrush="{DynamicResource ThemeAccent}"
+                                             FontSize="{StaticResource TypeBody}" Padding="14,10" CaretBrush="{DynamicResource ThemeAccent}"
                                              TextChanged="SearchBox_TextChanged"
                                              AutomationProperties.Name="Search clipboard items">
                                         <TextBox.Template>
@@ -580,6 +578,27 @@
                                             </ControlTemplate>
                                         </TextBox.Template>
                                     </TextBox>
+                                    <Button x:Name="SearchClearBtn" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0" Click="SearchClear_Click" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="4">
+                                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="#1AFFFFFF"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <ui:SymbolIcon Symbol="Dismiss12" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                    </Button>
                                 </Grid>
                             </Border>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
@@ -619,7 +638,7 @@
                                         <!-- ═══ FILTER BAR — Segmented Pill Control ═══ -->
                     <Border Grid.Row="1" Margin="0,0,0,10" Padding="3"
                             Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
-                            CornerRadius="10"
+                            CornerRadius="{StaticResource RadiusMD}"
                             BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" 
                             BorderThickness="1">
                     <StackPanel Orientation="Horizontal">
@@ -664,7 +683,7 @@
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="RadioButton">
-                                            <Border x:Name="ChipBorder" CornerRadius="7" Padding="12,5" 
+                                            <Border x:Name="ChipBorder" CornerRadius="{StaticResource RadiusSM}" Padding="12,5" 
                                                     Background="Transparent" 
                                                     BorderBrush="Transparent" BorderThickness="0"
                                                     SnapsToDevicePixels="True">
@@ -909,6 +928,14 @@
                             </TextBlock>
                         </StackPanel>
                     </ScrollViewer>
+
+                    <StackPanel x:Name="SearchNoResultsPanel" Grid.Row="2" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Search24" FontSize="48" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                        <TextBlock Text="No clips match your search" FontSize="{StaticResource TypeTitle}" FontWeight="SemiBold" 
+                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" HorizontalAlignment="Center" Margin="0,12,0,4"/>
+                        <TextBlock Text="Try a different keyword or clear the search" FontSize="{StaticResource TypeBody}" 
+                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
+                    </StackPanel>
 
                     <ListView x:Name="HubListView" Grid.Row="2" ItemsSource="{Binding DroppedItems}" Background="Transparent" BorderThickness="0"
                               Visibility="Collapsed"

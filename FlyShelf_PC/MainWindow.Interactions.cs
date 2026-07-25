@@ -1428,7 +1428,15 @@ namespace FlyShelf
 
             if (SortFilterBtn != null)
             {
-                SortFilterBtn.Visibility = (_isTodoActive || _isSearchActive) ? Visibility.Collapsed : Visibility.Visible;
+                // Show filter when search is active (replaces networking button) or normally when not in todo
+                SortFilterBtn.Visibility = _isTodoActive ? Visibility.Collapsed : Visibility.Visible;
+            }
+
+            // Networking button: hide in mini mode always, and hide when search is active
+            // (filter tabs take its place during search for better UX)
+            if (ResearchToggleBtn != null)
+            {
+                ResearchToggleBtn.Visibility = (isMini || _isSearchActive || _isTodoActive) ? Visibility.Collapsed : Visibility.Visible;
             }
 
             if (MoreBtn != null)
