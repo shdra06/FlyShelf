@@ -86,7 +86,7 @@ namespace FlyShelf.Classes
         // All these features are 100% offline — generous limits cost us nothing
         // and build goodwill. Only power users hit these.
         public const int FREE_HISTORY_CAP = 1000;
-        public const int PRO_HISTORY_CAP = 5000;
+        public const int PRO_HISTORY_CAP = 10000;
         public const int FREE_PDF_MERGE_DAILY = 20;
         public const int FREE_PDF_SAVE_DAILY = 20;
         public const int FREE_DOC_CONVERT_DAILY = 20;
@@ -94,7 +94,7 @@ namespace FlyShelf.Classes
         public const int FREE_QR_SCAN_DAILY = 5;
         public const int FREE_OCR_DAILY = 20;
         public const int FREE_TABLE_EXTRACT_DAILY = 5;
-        public const int FREE_PIN_LIMIT = 25;
+        public const int FREE_PIN_LIMIT = 50;
         public const int FREE_TODO_DAILY = 10;
         public const int FREE_NOTE_DAYS = 60;
         public const int FREE_NOTE_IMAGES_PER_CARD = 1;

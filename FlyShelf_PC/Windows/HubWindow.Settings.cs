@@ -220,9 +220,11 @@ namespace FlyShelf.Windows
 
         private void RunDiagnostics_Click(object sender, RoutedEventArgs e)
         {
+            var btn = sender as System.Windows.Controls.Button;
             try
             {
-                ToastWindow.ShowToast("🔍 Network diagnostics started...");
+                if (btn != null) btn.IsEnabled = false;
+                ToastWindow.ShowToast("🔍 Network diagnostics started...");
                 System.Threading.Tasks.Task.Run(() =>
                 {
                     try
@@ -231,6 +233,7 @@ namespace FlyShelf.Windows
                         Dispatcher.Invoke(() =>
                         {
                             ToastWindow.ShowToast("🔍  Network diagnostics captured!");
+                            if (btn != null) btn.IsEnabled = true;
 #if !MSIX_STORE
                             RefreshLogs_Click(null, null);
 #endif
@@ -238,13 +241,18 @@ namespace FlyShelf.Windows
                     }
                     catch (Exception ex)
                     {
-                        Dispatcher.Invoke(() => ToastWindow.ShowToast($"❌ Diagnostics failed: {ex.Message}"));
+                        Dispatcher.Invoke(() =>
+                        {
+                            ToastWindow.ShowToast($"❌ Diagnostics failed: {ex.Message}");
+                            if (btn != null) btn.IsEnabled = true;
+                        });
                     }
                 });
             }
             catch (Exception ex)
             {
                 ToastWindow.ShowToast($"❌ Diagnostics failed: {ex.Message}");
+                if (btn != null) btn.IsEnabled = true;
             }
         }
 
@@ -1039,8 +1047,11 @@ namespace FlyShelf.Windows
 
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
+            bool hasText = !string.IsNullOrEmpty(SearchBox.Text);
             if (SearchPlaceholderPanel != null)
-                SearchPlaceholderPanel.Visibility = string.IsNullOrEmpty(SearchBox.Text) ? Visibility.Visible : Visibility.Collapsed;
+                SearchPlaceholderPanel.Visibility = hasText ? Visibility.Collapsed : Visibility.Visible;
+            if (SearchClearBtn != null)
+                SearchClearBtn.Visibility = hasText ? Visibility.Visible : Visibility.Collapsed;
             
             if (HubListView != null)
             {
@@ -1051,6 +1062,15 @@ namespace FlyShelf.Windows
                 }
                 else { _hubSearchDebounceTimer.Stop(); }
                 _hubSearchDebounceTimer.Start();
+            }
+        }
+
+        private void SearchClear_Click(object sender, RoutedEventArgs e)
+        {
+            if (SearchBox != null)
+            {
+                SearchBox.Text = string.Empty;
+                SearchBox.Focus();
             }
         }
 
@@ -1117,6 +1137,14 @@ namespace FlyShelf.Windows
                 return false;
             };
             view.Refresh();
+
+            // Show/hide no-results empty state
+            if (SearchNoResultsPanel != null)
+            {
+                bool hasSearch = !string.IsNullOrWhiteSpace(SearchBox?.Text);
+                bool hasResults = view.Cast<object>().Any();
+                SearchNoResultsPanel.Visibility = (hasSearch && !hasResults) ? Visibility.Visible : Visibility.Collapsed;
+            }
         }
 
         internal void PinSpecific_Click(object sender, MouseButtonEventArgs e)

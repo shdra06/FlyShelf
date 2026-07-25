@@ -333,7 +333,7 @@ namespace FlyShelf
             try
             {
                 var now = DateTime.UtcNow;
-                if ((now - _lastClipboardCaptureTime).TotalMilliseconds < 80)
+                if ((now - _lastClipboardCaptureTime).TotalMilliseconds < 50)
                 {
                     Classes.Logger.LogAction("CLIPBOARD", "Skipped clipboard update: Cooldown (80ms) active.");
                     return;

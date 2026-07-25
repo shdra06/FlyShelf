@@ -371,16 +371,38 @@ namespace FlyShelf.ViewModels
                 try
                 {
                     bool result = TryWordComConvertCore(inputPath, outputPdf);
-                    tcs.SetResult(result);
+                    tcs.TrySetResult(result);
                 }
                 catch (Exception ex)
                 {
-                    tcs.SetException(ex);
+                    tcs.TrySetException(ex);
                 }
             });
             staThread.SetApartmentState(System.Threading.ApartmentState.STA);
             staThread.IsBackground = true;
             staThread.Start();
+
+            // 30-second timeout — if Word COM hangs (modal dialog, deadlock),
+            // abandon the thread and fall through to native/LibreOffice fallback.
+            Task.Run(async () =>
+            {
+                await Task.Delay(30000);
+                if (!tcs.Task.IsCompleted)
+                {
+                    Classes.Logger.LogAction("DOC2PDF", "Word COM STA thread timed out after 30s — killing");
+                    try
+                    {
+                        // Kill any orphaned Word process started by this thread
+                        foreach (var p in Process.GetProcessesByName("WINWORD"))
+                        {
+                            try { if (p.MainWindowTitle == "") p.Kill(); } catch { }
+                        }
+                    }
+                    catch { }
+                    tcs.TrySetResult(false);
+                }
+            });
+
             return tcs.Task;
         }
 

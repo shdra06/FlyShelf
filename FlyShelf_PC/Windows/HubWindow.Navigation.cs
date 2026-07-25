@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using FlyShelf.Classes;
@@ -45,15 +46,24 @@ namespace FlyShelf.Windows
             });
         }
 
+        private System.Collections.Generic.List<System.Windows.Controls.RadioButton>? _cachedNavTabs;
+
+        private System.Collections.Generic.List<System.Windows.Controls.RadioButton> GetNavTabs()
+        {
+            if (_cachedNavTabs == null || _cachedNavTabs.Count == 0)
+            {
+                _cachedNavTabs = FindVisualChildren<System.Windows.Controls.RadioButton>(this)
+                    .Where(rb => rb.GroupName == "NavTabs")
+                    .ToList();
+            }
+            return _cachedNavTabs;
+        }
+
         private void SelectSidebarTab(string tag)
         {
-            // Walk the sidebar StackPanel to find matching RadioButton
-            var sidebar = FindName("RootGrid") as System.Windows.Controls.Grid;
-            if (sidebar == null) return;
-            
-            foreach (var rb in FindVisualChildren<System.Windows.Controls.RadioButton>(this))
+            foreach (var rb in GetNavTabs())
             {
-                if (rb.GroupName == "NavTabs" && rb.Tag as string == tag)
+                if (rb.Tag as string == tag)
                 {
                     rb.IsChecked = true;
                     break;

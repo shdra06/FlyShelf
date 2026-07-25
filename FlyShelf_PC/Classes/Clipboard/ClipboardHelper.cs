@@ -15,7 +15,7 @@ namespace FlyShelf.Classes
         /// </summary>
         internal const string FLYSHELF_INTERNAL_FORMAT = "FlyShelf_Internal_v1";
 
-        public static bool SafeSetText(string text, bool suppressEcho = true, int echoDelayMs = 500)
+        public static bool SafeSetText(string text, bool suppressEcho = true, int echoDelayMs = 200)
         {
             return ExecuteOnDispatcher(() =>
             {
@@ -97,7 +97,7 @@ namespace FlyShelf.Classes
             });
         }
 
-        public static bool SafeSetFileDropList(StringCollection files, bool suppressEcho = true, int echoDelayMs = 500)
+        public static bool SafeSetFileDropList(StringCollection files, bool suppressEcho = true, int echoDelayMs = 200)
         {
             return ExecuteOnDispatcher(() =>
             {
@@ -138,7 +138,7 @@ namespace FlyShelf.Classes
             });
         }
 
-        public static bool SafeSetDataObject(object data, bool copy, bool suppressEcho = true, int echoDelayMs = 500)
+        public static bool SafeSetDataObject(object data, bool copy, bool suppressEcho = true, int echoDelayMs = 200)
         {
             return ExecuteOnDispatcher(() =>
             {
@@ -179,7 +179,7 @@ namespace FlyShelf.Classes
             });
         }
 
-        public static bool SafeSetImage(BitmapSource image, bool suppressEcho = true, int echoDelayMs = 500)
+        public static bool SafeSetImage(BitmapSource image, bool suppressEcho = true, int echoDelayMs = 200)
         {
             return ExecuteOnDispatcher(() =>
             {

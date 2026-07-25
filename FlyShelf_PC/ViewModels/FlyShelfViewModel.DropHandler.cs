@@ -462,7 +462,7 @@ namespace FlyShelf.ViewModels
                     // Images with estimated raw size > 15MB (uncompressed BGRA32): reject entirely to prevent massive writes.
                     const int MAX_SUPPORTED_WIDTH  = 3840; // 4K
                     const int MAX_SUPPORTED_HEIGHT = 2160;
-                    const long MAX_RAW_BYTES = 15L * 1024 * 1024; // 15 MB uncompressed cap
+                    const long MAX_RAW_BYTES = 120L * 1024 * 1024; // 120 MB uncompressed cap (supports up to 8K)
 
                     int srcW = bitmap.PixelWidth;
                     int srcH = bitmap.PixelHeight;
@@ -1047,7 +1047,7 @@ namespace FlyShelf.ViewModels
             try
             {
                 var fi = new FileInfo(filePath);
-                if (fi.Length > 10_000_000) // 10 MB cap — thumbnails don't need 100 MB files
+                if (fi.Length > 50_000_000) // 50 MB cap — thumbnails don't need files larger than this
                 {
                     System.Diagnostics.Debug.WriteLine($"[DROP] Skipped thumbnail — file too large ({fi.Length} bytes): {filePath}");
                     return null;
