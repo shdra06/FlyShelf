@@ -113,7 +113,21 @@ namespace FlyShelf.Controls
                     {
                         ic.UpdateLayout(); // Required: nested sub-ItemsControl containers aren't realized by Loaded priority alone
                         var subContainer = ic.ItemContainerGenerator.ContainerFromItem(sub);
-                        if (subContainer is ContentPresenter subCp)
+                        
+                        if (subContainer == null)
+                        {
+                            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
+                            {
+                                var delayedContainer = ic.ItemContainerGenerator.ContainerFromItem(sub);
+                                if (delayedContainer is ContentPresenter delayedCp)
+                                {
+                                    var delayedTb = FindVisualChild<TextBox>(delayedCp, "SubBulletTextBox");
+                                    delayedTb?.Focus();
+                                    if (delayedTb != null) Keyboard.Focus(delayedTb);
+                                }
+                            }));
+                        }
+                        else if (subContainer is ContentPresenter subCp)
                         {
                             var tb = FindVisualChild<TextBox>(subCp, "SubBulletTextBox");
                             tb?.Focus();
@@ -623,7 +637,7 @@ namespace FlyShelf.Controls
             {
                 double delta = e.Delta > 0 ? 20 : -20;
                 double newWidth = Math.Clamp(bullet.ImageDisplayWidth + delta, 60, 600);
-                bullet.ImageDisplayWidth = newWidth;
+                bullet.ImageDisplayWidth = Math.Min(newWidth, Math.Max(200, this.ActualWidth - 80));
                 NoteManager.MarkDirty();
                 e.Handled = true;
             }
@@ -635,7 +649,7 @@ namespace FlyShelf.Controls
             {
                 double delta = e.Delta > 0 ? 20 : -20;
                 double newWidth = Math.Clamp(bullet.ImageDisplayWidth2 + delta, 60, 600);
-                bullet.ImageDisplayWidth2 = newWidth;
+                bullet.ImageDisplayWidth2 = Math.Min(newWidth, Math.Max(200, this.ActualWidth - 80));
                 NoteManager.MarkDirty();
                 e.Handled = true;
             }

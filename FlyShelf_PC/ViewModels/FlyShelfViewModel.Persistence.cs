@@ -174,11 +174,11 @@ namespace FlyShelf.ViewModels
             {
                 if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return;
                 
-                string tempDir = Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar);
+                string tempDir = Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
                 string appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf").TrimEnd(Path.DirectorySeparatorChar);
-                string syncedFilesDir = Path.Combine(appDataDir, "SyncedFiles").TrimEnd(Path.DirectorySeparatorChar);
+                string syncedFilesDir = Path.Combine(appDataDir, "SyncedFiles").TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
                 
-                string fileDir = Path.GetDirectoryName(filePath)?.TrimEnd(Path.DirectorySeparatorChar) ?? "";
+                string fileDir = (Path.GetDirectoryName(filePath)?.TrimEnd(Path.DirectorySeparatorChar) ?? "") + Path.DirectorySeparatorChar;
                 
                 if (fileDir.StartsWith(tempDir, StringComparison.OrdinalIgnoreCase) ||
                     fileDir.StartsWith(syncedFilesDir, StringComparison.OrdinalIgnoreCase))
@@ -805,11 +805,7 @@ namespace FlyShelf.ViewModels
             // 3. Fallback to FileName if file paths are not available (e.g. for some custom items)
             if (!string.IsNullOrEmpty(newItem.FileName) && !string.IsNullOrEmpty(existing.FileName) && newItem.ItemType == existing.ItemType)
             {
-                // Avoid false positives for generic screenshots or empty names
-                if (!newItem.FileName.StartsWith("Screenshot", StringComparison.OrdinalIgnoreCase))
-                {
-                    return string.Equals(newItem.FileName, existing.FileName, StringComparison.OrdinalIgnoreCase);
-                }
+                return string.Equals(newItem.FileName, existing.FileName, StringComparison.OrdinalIgnoreCase);
             }
 
             // 4. Cross-type RawContent fallback — catch duplicates where the same text
@@ -828,24 +824,27 @@ namespace FlyShelf.ViewModels
         /// </summary>
         private bool IsImageDuplicate(ClipboardItem item1, ClipboardItem item2)
         {
-            if (string.IsNullOrEmpty(item1.FilePath) || string.IsNullOrEmpty(item2.FilePath))
-                return false;
-
-            if (!File.Exists(item1.FilePath) || !File.Exists(item2.FilePath))
-                return false;
-
-            try
+            // Compare by dimensions/hash if file paths are empty
+            if (!string.IsNullOrEmpty(item1.FormattedSize) && item1.FormattedSize == item2.FormattedSize)
             {
-                var fi1 = new FileInfo(item1.FilePath);
-                var fi2 = new FileInfo(item2.FilePath);
-
-                // If they have the exact same file size and dimensions, they are duplicate images
-                if (fi1.Length == fi2.Length && item1.FormattedSize == item2.FormattedSize)
+                // If both have file paths, check size too
+                if (!string.IsNullOrEmpty(item1.FilePath) && !string.IsNullOrEmpty(item2.FilePath) && 
+                    File.Exists(item1.FilePath) && File.Exists(item2.FilePath))
                 {
+                    try
+                    {
+                        var fi1 = new FileInfo(item1.FilePath);
+                        var fi2 = new FileInfo(item2.FilePath);
+                        if (fi1.Length == fi2.Length) return true;
+                    }
+                    catch { }
+                }
+                else
+                {
+                    // At least one is missing a file path, but dimensions match
                     return true;
                 }
             }
-            catch { } // Best-effort: failure is acceptable
 
             return false;
         }

@@ -119,7 +119,8 @@ namespace FlyShelf.Classes
                 }
 
                 // Create the model: LanguageModel.CreateAsync()
-                var createAsyncMethod = _modelType.GetMethod("CreateAsync", BindingFlags.Public | BindingFlags.Static);
+                var createAsyncMethod = _modelType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                    .FirstOrDefault(m => m.Name == "CreateAsync" && m.GetParameters().Length == 0);
                 if (createAsyncMethod == null)
                     throw new InvalidOperationException("Could not find CreateAsync method on LanguageModel.");
 
@@ -132,7 +133,8 @@ namespace FlyShelf.Classes
                 try
                 {
                     // Generate response: model.GenerateResponseAsync(prompt)
-                    var generateMethod = model.GetType().GetMethod("GenerateResponseAsync", new Type[] { typeof(string) });
+                    var generateMethod = ((object)model).GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                        .FirstOrDefault(m => m.Name == "GenerateResponseAsync" && m.GetParameters().Length == 1);
                     if (generateMethod == null)
                         throw new InvalidOperationException("Could not find GenerateResponseAsync method on LanguageModel.");
 

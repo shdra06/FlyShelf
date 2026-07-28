@@ -36,17 +36,18 @@ namespace FlyShelf
             anim.Freeze();
             return anim;
         }
-        private static System.Windows.Rect GetWorkAreaForPoint(double x, double y)
+        private System.Windows.Rect GetWorkAreaForPoint(double x, double y)
         {
+            var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
             // Use Win32 MonitorFromPoint + GetMonitorInfo for correct multi-monitor work area
-            var pt = new Classes.NativeMethods.POINT { X = (int)x, Y = (int)y };
+            var pt = new Classes.NativeMethods.POINT { X = (int)(x * dpi.DpiScaleX), Y = (int)(y * dpi.DpiScaleY) };
             IntPtr hMonitor = Classes.NativeMethods.MonitorFromPoint(pt, Classes.NativeMethods.MonitorFromWindowFlags.DEFAULTTONEAREST);
             var mi = new Classes.NativeMethods.MONITORINFOEX();
             mi.cbSize = Marshal.SizeOf<Classes.NativeMethods.MONITORINFOEX>();
             if (Classes.NativeMethods.GetMonitorInfo(hMonitor, ref mi))
             {
                 var rc = mi.rcWork;
-                return new System.Windows.Rect(rc.Left, rc.Top, rc.Right - rc.Left, rc.Bottom - rc.Top);
+                return new System.Windows.Rect(rc.Left / dpi.DpiScaleX, rc.Top / dpi.DpiScaleY, (rc.Right - rc.Left) / dpi.DpiScaleX, (rc.Bottom - rc.Top) / dpi.DpiScaleY);
             }
             return SystemParameters.WorkArea; // fallback
         }
@@ -310,11 +311,8 @@ namespace FlyShelf
             {
                 try
                 {
-                    // PERF: Reuse thread-local COM instance instead of creating new ones per-call.
-                    // This prevents COM object leaks when tasks timeout and get abandoned,
-                    // matching the pattern in IsWindowOnCurrentVirtualDesktop.
-                    _threadLocalVdm ??= (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
-                    var bgVdm = _threadLocalVdm;
+                    // COM object must be created per-call inside Task.Run
+                    var bgVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
                     
                     // Capture _lastActiveExternalWindowWasOnCurrentAtSummon for callback use
                     if (capturedLastExternal != IntPtr.Zero && IsWindow(capturedLastExternal))
@@ -367,8 +365,7 @@ namespace FlyShelf
                 }
                 catch (Exception ex)
                 {
-                    // COM call failed — reset thread-local instance so next call creates fresh one
-                    _threadLocalVdm = null;
+                    // COM call failed
                     Classes.Logger.LogAction("DESKTOP_ERR", $"Failed to capture summoned desktop ID: {ex.Message}");
                 }
             });
@@ -871,11 +868,13 @@ namespace FlyShelf
             {
                 // Otherwise, register event handler to focus as soon as they are ready:
                 EventHandler? statusHandler = null;
+                var timeoutTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
                 statusHandler = (s, ev) =>
                 {
                     if (ShelfListView.ItemContainerGenerator.Status == System.Windows.Controls.Primitives.GeneratorStatus.ContainersGenerated)
                     {
                         ShelfListView.ItemContainerGenerator.StatusChanged -= statusHandler;
+                        timeoutTimer.Stop();
                         Dispatcher.InvokeAsync(() =>
                         {
                             var lazyContainer = ShelfListView.ItemContainerGenerator.ContainerFromIndex(index) as ListViewItem;
@@ -900,6 +899,12 @@ namespace FlyShelf
                         }, System.Windows.Threading.DispatcherPriority.Input);
                     }
                 };
+                timeoutTimer.Tick += (s, ev) =>
+                {
+                    timeoutTimer.Stop();
+                    ShelfListView.ItemContainerGenerator.StatusChanged -= statusHandler;
+                };
+                timeoutTimer.Start();
                 ShelfListView.ItemContainerGenerator.StatusChanged += statusHandler;
                 ShelfListView.Focus();
             }

@@ -674,7 +674,10 @@ namespace FlyShelf.Classes
                     // Always update the path so the correct theme wallpaper is ready.
                     // The display mode handler (mica/glass/desktop/theme) controls whether
                     // the wallpaper is actually shown or hidden.
-                    SettingsManager.Current.ClipboardWallpaperPath = wallpaperPath;
+                    if (SettingsManager.Current.ThemeDisplayMode == "theme")
+                    {
+                        SettingsManager.Current.ClipboardWallpaperPath = wallpaperPath;
+                    }
                     Logger.LogAction("COLOR_THEME", $"Applied wallpaper for '{themeName}': {wallpaperPath}");
                 }
             }
@@ -1183,10 +1186,37 @@ namespace FlyShelf.Classes
         // INTERNAL: FileSystemWatcher for hot-reload
         // ═══════════════════════════════════════════════════════════════
 
+        private FileSystemEventHandler? _fswChangedHandler;
+        private RenamedEventHandler? _fswRenamedHandler;
+        private System.Timers.ElapsedEventHandler? _fswElapsedHandler;
+
         private void StartWatcher()
         {
             try
             {
+                if (_watcher != null)
+                {
+                    if (_fswChangedHandler != null)
+                    {
+                        _watcher.Changed -= _fswChangedHandler;
+                        _watcher.Created -= _fswChangedHandler;
+                        _watcher.Deleted -= _fswChangedHandler;
+                    }
+                    if (_fswRenamedHandler != null)
+                    {
+                        _watcher.Renamed -= _fswRenamedHandler;
+                    }
+                    _watcher.EnableRaisingEvents = false;
+                    _watcher.Dispose();
+                }
+                if (_fswDebounceTimer != null)
+                {
+                    if (_fswElapsedHandler != null)
+                        _fswDebounceTimer.Elapsed -= _fswElapsedHandler;
+                    _fswDebounceTimer.Stop();
+                    _fswDebounceTimer.Dispose();
+                }
+
                 _watcher = new FileSystemWatcher(_themesDir)
                 {
                     NotifyFilter = NotifyFilters.DirectoryName | NotifyFilters.FileName | NotifyFilters.LastWrite,
@@ -1196,7 +1226,7 @@ namespace FlyShelf.Classes
 
                 // [FIX M-42]: Store debounce timer as field for proper disposal
                 _fswDebounceTimer = new System.Timers.Timer(500) { AutoReset = false };
-                _fswDebounceTimer.Elapsed += (s, e) =>
+                _fswElapsedHandler = (s, e) =>
                 {
                     try
                     {
@@ -1218,12 +1248,15 @@ namespace FlyShelf.Classes
                     }
                     catch { } // Best-effort: failure is acceptable
                 };
+                _fswDebounceTimer.Elapsed += _fswElapsedHandler;
 
                 // [FIX M-06]: Lock around timer operations to prevent FSW race
-                _watcher.Changed += (s, e) => { lock (_fswLock) { _fswDebounceTimer.Stop(); _fswDebounceTimer.Start(); } };
-                _watcher.Created += (s, e) => { lock (_fswLock) { _fswDebounceTimer.Stop(); _fswDebounceTimer.Start(); } };
-                _watcher.Deleted += (s, e) => { lock (_fswLock) { _fswDebounceTimer.Stop(); _fswDebounceTimer.Start(); } };
-                _watcher.Renamed += (s, e) => { lock (_fswLock) { _fswDebounceTimer.Stop(); _fswDebounceTimer.Start(); } };
+                _fswChangedHandler = (s, e) => { lock (_fswLock) { _fswDebounceTimer.Stop(); _fswDebounceTimer.Start(); } };
+                _fswRenamedHandler = (s, e) => { lock (_fswLock) { _fswDebounceTimer.Stop(); _fswDebounceTimer.Start(); } };
+                _watcher.Changed += _fswChangedHandler;
+                _watcher.Created += _fswChangedHandler;
+                _watcher.Deleted += _fswChangedHandler;
+                _watcher.Renamed += _fswRenamedHandler;
 
                 Logger.LogAction("THEME", "FileSystemWatcher active — themes hot-reload enabled");
             }
@@ -1336,8 +1369,30 @@ namespace FlyShelf.Classes
 
         public void Dispose()
         {
-            _watcher?.Dispose();
-            _fswDebounceTimer?.Dispose(); // [FIX M-42]: Dispose debounce timer
+            if (_watcher != null)
+            {
+                if (_fswChangedHandler != null)
+                {
+                    _watcher.Changed -= _fswChangedHandler;
+                    _watcher.Created -= _fswChangedHandler;
+                    _watcher.Deleted -= _fswChangedHandler;
+                }
+                if (_fswRenamedHandler != null)
+                {
+                    _watcher.Renamed -= _fswRenamedHandler;
+                }
+                _watcher.EnableRaisingEvents = false;
+                _watcher.Dispose();
+                _watcher = null;
+            }
+            if (_fswDebounceTimer != null)
+            {
+                if (_fswElapsedHandler != null)
+                    _fswDebounceTimer.Elapsed -= _fswElapsedHandler;
+                _fswDebounceTimer.Stop();
+                _fswDebounceTimer.Dispose();
+                _fswDebounceTimer = null;
+            }
         }
     }
 }

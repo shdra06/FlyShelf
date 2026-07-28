@@ -650,7 +650,14 @@
                     <ScrollViewer x:Name="NotesFreeformArea" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel>
                             <!-- FREEFORM SECTIONS: Multiple text cards -->
-                            <ItemsControl x:Name="NotesFreeformSectionsList" AlternationCount="2">
+                            <ItemsControl x:Name="NotesFreeformSectionsList" AlternationCount="2"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VirtualizingStackPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border x:Name="FreeformSectionCard" CornerRadius="8" Margin="4,2,4,3" Padding="0" ClipToBounds="True"

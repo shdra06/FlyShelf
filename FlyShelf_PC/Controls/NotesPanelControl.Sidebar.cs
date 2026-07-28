@@ -104,31 +104,31 @@ namespace FlyShelf.Controls
             NotesDaySidebar.ItemsSource = NoteManager.Days;
         }
 
+        private Border? _lastSelectedContainer;
+
         private void UpdateSidebarSelectionVisuals()
         {
             if (NotesDaySidebar == null) return;
 
-            for (int i = 0; i < NotesDaySidebar.Items.Count; i++)
+            // Reset previously selected item
+            if (_lastSelectedContainer != null)
             {
-                var item = NotesDaySidebar.Items[i];
-                var container = NotesDaySidebar.ItemContainerGenerator.ContainerFromItem(item);
-                if (container is ContentPresenter cp)
+                _lastSelectedContainer.Background = FrozenBrush(Color.FromArgb(0x06, 0xFF, 0xFF, 0xFF));
+                _lastSelectedContainer.BorderBrush = FrozenBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF));
+                _lastSelectedContainer = null;
+            }
+
+            if (_selectedNoteDay == null) return;
+
+            var container = NotesDaySidebar.ItemContainerGenerator.ContainerFromItem(_selectedNoteDay);
+            if (container is ContentPresenter cp)
+            {
+                var mainBorder = FindVisualChild<Border>(cp, "NotesDayBorder");
+                if (mainBorder != null)
                 {
-                    var mainBorder = FindVisualChild<Border>(cp, "NotesDayBorder");
-                    if (mainBorder != null)
-                    {
-                        bool isSelected = item == _selectedNoteDay;
-                        if (isSelected)
-                        {
-                            mainBorder.Background = FrozenBrush(ThemeColors.VioletAccentA2A);
-                            mainBorder.BorderBrush = FrozenBrush(ThemeColors.VioletAccentA60);
-                        }
-                        else
-                        {
-                            mainBorder.Background = FrozenBrush(Color.FromArgb(0x06, 0xFF, 0xFF, 0xFF));
-                            mainBorder.BorderBrush = FrozenBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF));
-                        }
-                    }
+                    mainBorder.Background = FrozenBrush(ThemeColors.VioletAccentA2A);
+                    mainBorder.BorderBrush = FrozenBrush(ThemeColors.VioletAccentA60);
+                    _lastSelectedContainer = mainBorder;
                 }
             }
         }

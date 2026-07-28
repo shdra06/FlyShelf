@@ -917,7 +917,16 @@ namespace FlyShelf.ViewModels
             try { _disposeCts?.Cancel(); _disposeCts?.Dispose(); } catch { }
             _disposeCts = null;
 
+            if (Icon is System.Windows.Media.Imaging.BitmapImage bitmapImage && !bitmapImage.IsFrozen && bitmapImage.StreamSource != null)
+            {
+                try { bitmapImage.StreamSource.Dispose(); } catch { }
+            }
             Icon = null;
+
+            if (SourceAppIcon is System.Windows.Media.Imaging.BitmapImage srcImage && !srcImage.IsFrozen && srcImage.StreamSource != null)
+            {
+                try { srcImage.StreamSource.Dispose(); } catch { }
+            }
             SourceAppIcon = null;
             _rawContent = string.Empty;
             _zippedArchivePath = string.Empty;
@@ -935,6 +944,8 @@ namespace FlyShelf.ViewModels
                 _rawContentBackingFile = null;
                 _backingFileVerified = false;
             }
+
+            GC.SuppressFinalize(this);
         }
 
         /// <summary>Cancellation source for background tasks. Cancelled in Dispose().</summary>

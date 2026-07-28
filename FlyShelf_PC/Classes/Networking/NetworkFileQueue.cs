@@ -145,8 +145,12 @@ namespace FlyShelf.Classes
             // Deduplicate by path — don't re-add files already queued
             // Thread safety: snapshot the collection to avoid cross-thread InvalidOperationException
             bool alreadyStaged = false;
-            var snapshot = StagedFiles.ToArray();
-            alreadyStaged = snapshot.Any(f =>
+            StagedFile[] snapshot = null;
+            System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                snapshot = StagedFiles.ToArray();
+            });
+            alreadyStaged = snapshot != null && snapshot.Any(f =>
                 string.Equals(f.FilePath, filePath, StringComparison.OrdinalIgnoreCase) &&
                 (f.Status == "Queued" || f.Status == "Sending"));
 
@@ -257,7 +261,8 @@ namespace FlyShelf.Classes
 
                 // Monitor session state for completion
                 var tcs = new TaskCompletionSource<bool>();
-                session.StateChanged += (s, state) =>
+                EventHandler<TransferState>? stateHandler = null;
+                stateHandler = (s, state) =>
                 {
                     // Update progress on staged file
                     if (session.FileSize > 0)
@@ -269,21 +274,25 @@ namespace FlyShelf.Classes
                     {
                         file.Status = "Sent";
                         file.Progress = 1.0;
+                        session.StateChanged -= stateHandler;
                         tcs.TrySetResult(true);
                     }
                     else if (state == TransferState.Failed)
                     {
                         file.Status = "Failed";
                         file.ErrorMessage = session.ErrorMessage ?? "Transfer failed";
+                        session.StateChanged -= stateHandler;
                         tcs.TrySetResult(false);
                     }
                     else if (state == TransferState.Cancelled)
                     {
-                        file.Status = "Failed";
-                        file.ErrorMessage = "Transfer cancelled";
+                        file.Status = "Cancelled";
+                        file.ErrorMessage = "Cancelled by user";
+                        session.StateChanged -= stateHandler;
                         tcs.TrySetResult(false);
                     }
                 };
+                session.StateChanged += stateHandler;
 
                 // Wait for terminal state with a generous timeout
                 var timeoutTask = Task.Delay(TimeSpan.FromMinutes(60));

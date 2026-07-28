@@ -235,6 +235,10 @@ namespace FlyShelf.Classes
 
         /// <summary>
         /// Appends a new item to the journal (fast — async I/O, no blocking).
+        private static System.Threading.Tasks.Task? _lastJournalWrite;
+
+        /// <summary>
+        /// Appends a new item to the fast append-only JSONL journal.
         /// </summary>
         public static void AppendToJournal(ViewModels.ClipboardItem item)
         {
@@ -246,8 +250,15 @@ namespace FlyShelf.Classes
                 var json = JsonSerializer.Serialize(entry);
                 var line = json + "\n";
 
-                // Fire-and-forget async I/O — doesn't block caller
-                _ = System.Threading.Tasks.Task.Run(() =>
+                lock (_lock)
+                {
+                    if (File.Exists(_journalPath) && new FileInfo(_journalPath).Length > 500 * 1024)
+                    {
+                        ScheduleCompaction();
+                    }
+                }
+
+                _lastJournalWrite = System.Threading.Tasks.Task.Run(() =>
                 {
                     lock (_lock)
                     {
@@ -256,7 +267,6 @@ namespace FlyShelf.Classes
                             RunWithRetry(() => File.AppendAllText(_journalPath, line));
                             _journalEntryCount++;
 
-                            // Auto-compact when journal gets large
                             if (_journalEntryCount >= COMPACTION_THRESHOLD)
                             {
                                 ScheduleCompaction();
@@ -272,6 +282,14 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("JOURNAL_WRITE_ERROR", $"Failed to prepare journal entry: {ex.Message}");
+            }
+        }
+
+        public static async System.Threading.Tasks.Task FlushAsync()
+        {
+            if (_lastJournalWrite != null)
+            {
+                try { await _lastJournalWrite; } catch { }
             }
         }
 
@@ -514,7 +532,7 @@ namespace FlyShelf.Classes
                     itemType == ViewModels.ClipboardItemType.QRCode)
                 {
                     if (!string.IsNullOrEmpty(filePath) && 
-                        filePath.Contains(_imagesDir) && 
+                        System.IO.Path.GetFullPath(filePath).StartsWith(System.IO.Path.GetFullPath(_imagesDir), StringComparison.OrdinalIgnoreCase) && 
                         File.Exists(filePath))
                     {
                         RunWithRetry(() => File.Delete(filePath));

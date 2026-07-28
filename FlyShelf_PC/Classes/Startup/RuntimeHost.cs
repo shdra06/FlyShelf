@@ -26,7 +26,7 @@ namespace FlyShelf.Classes
             catch { /* File doesn't exist or can't be read — proceed with extraction */ }
 
             // Version changed or clean install. Rebuild payload directories natively.
-            try { if (Directory.Exists(ExecutionDir)) Directory.Delete(ExecutionDir, true); } catch { } // Best-effort: failure is acceptable
+            try { if (Directory.Exists(ExecutionDir)) Directory.Delete(ExecutionDir, true); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"RuntimeHost cleanup failed: {ex.Message}"); }
             Directory.CreateDirectory(ExecutionDir);
 
             ExtractResource("FlyShelf.WebClient.zip", Path.Combine(ExecutionDir, "Resources", "WebClient"));
@@ -41,7 +41,7 @@ namespace FlyShelf.Classes
 
             using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName))
             {
-                if (stream == null) return;
+                if (stream == null) throw new InvalidOperationException("WebClient.zip resource not found");
                 
                 string tempZip = Path.Combine(ExecutionDir, resourceName);
                 using (var fs = new FileStream(tempZip, FileMode.Create))

@@ -727,9 +727,21 @@ namespace FlyShelf
             byte[] pixels = new byte[stride * h];
 
             // CopyPixels is safe on frozen BitmapImage from any thread
-            var formatted = new System.Windows.Media.Imaging.FormatConvertedBitmap(source, PixelFormats.Pbgra32, null, 0);
-            formatted.Freeze();
-            formatted.CopyPixels(pixels, stride, 0);
+            if (!source.IsFrozen && source.Dispatcher != null)
+            {
+                source.Dispatcher.Invoke(() =>
+                {
+                    var formatted = new System.Windows.Media.Imaging.FormatConvertedBitmap(source, PixelFormats.Pbgra32, null, 0);
+                    formatted.Freeze();
+                    formatted.CopyPixels(pixels, stride, 0);
+                });
+            }
+            else
+            {
+                var formatted = new System.Windows.Media.Imaging.FormatConvertedBitmap(source, PixelFormats.Pbgra32, null, 0);
+                formatted.Freeze();
+                formatted.CopyPixels(pixels, stride, 0);
+            }
 
             // 3-pass horizontal+vertical box blur approximates Gaussian
             // Uses sliding-window running sums for O(w·h) per pass instead of O(w·h·r)

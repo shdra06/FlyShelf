@@ -939,6 +939,9 @@ namespace FlyShelf.Classes
 
                 try
                 {
+                    string brokenPath = targetPath + ".broken";
+                    if (File.Exists(brokenPath)) File.Delete(brokenPath);
+                    File.Move(targetPath, brokenPath);
                     File.Copy(backupPath, targetPath, overwrite: true);
                     Logger.LogAction("UPDATE", $"✅ Rollback complete: restored {backupPath} → {targetPath}");
                 }

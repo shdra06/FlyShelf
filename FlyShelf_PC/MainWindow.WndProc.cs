@@ -288,7 +288,7 @@ namespace FlyShelf
                     // By using a dedicated STA thread, we release the clipboard lock faster
                     // and keep the main UI thread completely free.
                     // Gate: only one STA thread at a time — prevents unbounded thread creation
-                    if (!await _clipboardStaSemaphore.WaitAsync(0)) return;
+                    if (!await _clipboardStaSemaphore.WaitAsync(500)) return;
                     try
                     {
                     var staThread = new System.Threading.Thread(() =>
@@ -308,7 +308,10 @@ namespace FlyShelf
                     staThread.IsBackground = true;
                     staThread.Priority = System.Threading.ThreadPriority.AboveNormal;
                     staThread.Start();
-                    staThread.Join(); // Wait for STA thread to complete before releasing semaphore
+                    if (!staThread.Join(5000))
+                    {
+                        Classes.Logger.LogAction("CLIPBOARD", "STA thread timed out after 5000ms.");
+                    }
                     }
                     finally
                     {
@@ -376,6 +379,17 @@ namespace FlyShelf
                         bitmap = data.GetData(typeof(System.Windows.Media.Imaging.BitmapSource)) as System.Windows.Media.Imaging.BitmapSource;
                     if (bitmap == null && data.GetDataPresent(DataFormats.Dib))
                         bitmap = data.GetData(DataFormats.Dib) as System.Windows.Media.Imaging.BitmapSource;
+                    if (bitmap == null && data.GetDataPresent("PNG"))
+                    {
+                        try
+                        {
+                            if (data.GetData("PNG") is System.IO.MemoryStream ms)
+                            {
+                                bitmap = System.Windows.Media.Imaging.BitmapFrame.Create(ms, System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+                            }
+                        }
+                        catch (Exception pngEx) { Classes.Logger.LogAction("CLIPBOARD", $"PNG extraction failed: {pngEx.Message}"); }
+                    }
                     if (bitmap != null && bitmap.CanFreeze) bitmap.Freeze(); // Make thread-safe
                 }
                 catch (Exception bmpEx)

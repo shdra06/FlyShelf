@@ -133,41 +133,78 @@ namespace FlyShelf.Controls
 
                 // Active transfers with section header
                 var activeList = mgr.ActiveTransfers.ToList();
-                if (activeList.Count > 0)
+                bool rebuildActive = NetPanelActiveTransfers.Children.Count != (activeList.Count == 0 ? 0 : activeList.Count + 1);
+
+                if (rebuildActive)
                 {
-                    var header = new TextBlock
+                    NetPanelActiveTransfers.Children.Clear();
+                    if (activeList.Count > 0)
                     {
-                        Text = $"ACTIVE TRANSFERS ({activeList.Count})",
-                        FontSize = 10,
-                        FontWeight = FontWeights.SemiBold,
-                        Foreground = new SolidColorBrush(ThemeColors.IndigoMid),
-                        Margin = new Thickness(4, 8, 0, 4)
-                    };
-                    NetPanelActiveTransfers.Children.Add(header);
-                    foreach (var session in activeList)
+                        var header = new TextBlock
+                        {
+                            Text = $"ACTIVE TRANSFERS ({activeList.Count})",
+                            FontSize = 10,
+                            FontWeight = FontWeights.SemiBold,
+                            Foreground = new SolidColorBrush(ThemeColors.IndigoMid),
+                            Margin = new Thickness(4, 8, 0, 4)
+                        };
+                        NetPanelActiveTransfers.Children.Add(header);
+                        foreach (var session in activeList)
+                        {
+                            var card = CreateTransferSessionCard(session, isActive: true);
+                            NetPanelActiveTransfers.Children.Add(card);
+                        }
+                    }
+                }
+                else if (activeList.Count > 0)
+                {
+                    for (int i = 0; i < activeList.Count; i++)
                     {
-                        var card = CreateTransferSessionCard(session, isActive: true);
-                        NetPanelActiveTransfers.Children.Add(card);
+                        var session = activeList[i];
+                        if (NetPanelActiveTransfers.Children[i + 1] is Border card && card.Child is StackPanel outerStack)
+                        {
+                            if (outerStack.Children[0] is Grid contentGrid && contentGrid.Children[1] is StackPanel infoStack && infoStack.Children.Count > 2 && infoStack.Children[2] is TextBlock statusText)
+                            {
+                                string statusStr;
+                                if (session.IsActive) statusStr = $"{session.ProgressText}  •  {session.SpeedText}  •  {session.EtaText}";
+                                else if (session.IsPaused) statusStr = $"⏸ Paused at {LanTransferSession.FormatBytes(session.BytesTransferred)} / {LanTransferSession.FormatBytes(session.FileSize)}";
+                                else if (session.IsFailed) statusStr = $"❌ {session.ErrorMessage ?? "Failed"} — {LanTransferSession.FormatBytes(session.BytesTransferred)} saved";
+                                else if (session.IsCompleted) statusStr = $"✅ {LanTransferSession.FormatBytes(session.FileSize)} — {session.PeakSpeedText} peak";
+                                else statusStr = session.StateDisplayText;
+
+                                statusText.Text = statusStr;
+                            }
+                            if (outerStack.Children.Count > 1 && outerStack.Children[1] is ProgressBar pb)
+                            {
+                                pb.Value = session.ProgressPercent;
+                            }
+                        }
                     }
                 }
 
                 // Recent/completed transfers with section header
                 var recentList = mgr.CompletedTransfers.Take(10).ToList();
-                if (recentList.Count > 0)
+                bool rebuildRecent = NetPanelRecentTransfers.Children.Count != (recentList.Count == 0 ? 0 : recentList.Count + 1);
+
+                if (rebuildRecent)
                 {
-                    var header = new TextBlock
+                    NetPanelRecentTransfers.Children.Clear();
+                    if (recentList.Count > 0)
                     {
-                        Text = "RECENT TRANSFERS",
-                        FontSize = 10,
-                        FontWeight = FontWeights.SemiBold,
-                        Foreground = new SolidColorBrush(ThemeColors.SlateDark),
-                        Margin = new Thickness(4, 8, 0, 4)
-                    };
-                    NetPanelRecentTransfers.Children.Add(header);
-                    foreach (var session in recentList)
-                    {
-                        var card = CreateTransferSessionCard(session, isActive: false);
-                        NetPanelRecentTransfers.Children.Add(card);
+                        var header = new TextBlock
+                        {
+                            Text = "RECENT TRANSFERS",
+                            FontSize = 10,
+                            FontWeight = FontWeights.SemiBold,
+                            Foreground = new SolidColorBrush(ThemeColors.SlateDark),
+                            Margin = new Thickness(4, 8, 0, 4)
+                        };
+                        NetPanelRecentTransfers.Children.Add(header);
+                        foreach (var session in recentList)
+                        {
+                            var card = CreateTransferSessionCard(session, isActive: false);
+                            NetPanelRecentTransfers.Children.Add(card);
+                        }
                     }
                 }
             }
