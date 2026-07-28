@@ -357,9 +357,10 @@ namespace FlyShelf.Classes
                     targetVelocity = Math.Clamp(targetVelocity, -MaxVelocity, MaxVelocity);
 
                     // Detect if user is scrolling AGAINST current motion.
-                    // Only trigger for significant opposing velocity — residual micro-velocity
-                    // (< 2.5) should NOT cause braking or upward scrolling feels sluggish.
-                    bool isReversal = Math.Abs(state.Velocity) > 2.5 &&
+                    // Touchpad uses higher threshold (4.0) — at lower velocities, residual
+                    // momentum shouldn't trigger braking or upward scrolling feels sluggish.
+                    double reversalThreshold = state.IsTouchpad ? 4.0 : 2.5;
+                    bool isReversal = Math.Abs(state.Velocity) > reversalThreshold &&
                                      Math.Sign(targetVelocity) != Math.Sign(state.Velocity);
 
                     if (isReversal)
@@ -374,8 +375,11 @@ namespace FlyShelf.Classes
                     }
                     else
                     {
-                        // PHASE 2 (or same-direction): Responsive acceleration blend
-                        state.Velocity += (targetVelocity - state.Velocity) * 0.55;
+                        // PHASE 2 (or same-direction): Input-appropriate blend factor.
+                        // Touchpad uses softer 0.35 for buttery continuity (Chrome/macOS-like).
+                        // Mouse uses snappier 0.55 for responsive notch-to-motion feel.
+                        double blendFactor = state.IsTouchpad ? 0.35 : 0.55;
+                        state.Velocity += (targetVelocity - state.Velocity) * blendFactor;
                     }
 
                     state.Velocity = Math.Clamp(state.Velocity, -MaxVelocity, MaxVelocity);
@@ -420,7 +424,7 @@ namespace FlyShelf.Classes
                 // point of the curve regardless of when it renders.
 
                 long nowMs = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
-                bool userStopped = (nowMs - state.LastInputTime) > 60;
+                bool userStopped = (nowMs - state.LastInputTime) > 40;  // 40ms — touchpad drivers stop within 20-30ms of finger lift
 
                 // ─── ACTIVE INPUT PHASE (finger on touchpad) ───
                 if (!userStopped || state.PendingImpulse != 0)
@@ -438,8 +442,11 @@ namespace FlyShelf.Classes
                         double directDisplacement = -state.PendingImpulse * (TargetFrameMs / 1.0);
                         state.TrueOffset += directDisplacement;
                         state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
-                        sv.ScrollToVerticalOffset(state.TrueOffset);
-                        state.LastSetOffset = state.TrueOffset;
+                        // Pixel-snap + delta guard: avoid redundant layout passes from sub-pixel writes
+                        double snappedOffset = Math.Round(state.TrueOffset);
+                        if (Math.Abs(snappedOffset - sv.VerticalOffset) >= 0.5)
+                            sv.ScrollToVerticalOffset(snappedOffset);
+                        state.LastSetOffset = snappedOffset;
                         // Let velocity build naturally from micro-scrolls
                         state.Velocity = 0;
                         anyAnimating = true;
@@ -451,17 +458,23 @@ namespace FlyShelf.Classes
                         state.TrueOffset += displacement;
                         state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
 
-                        sv.ScrollToVerticalOffset(state.TrueOffset);
-                        state.LastSetOffset = state.TrueOffset;
+                        // Pixel-snap + delta guard: VirtualizingStackPanel snaps internally,
+                        // so sub-pixel writes cause redundant layout passes without visible change.
+                        double snappedOffset = Math.Round(state.TrueOffset);
+                        if (Math.Abs(snappedOffset - sv.VerticalOffset) >= 0.5)
+                            sv.ScrollToVerticalOffset(snappedOffset);
+                        state.LastSetOffset = snappedOffset;
 
-                        // Velocity-adaptive friction during active input
+                        // Velocity-adaptive friction during active input.
+                        // Wider transition band (2-20 px/frame) eliminates mid-speed resonance
+                        // where the old narrow band (3-12) caused friction oscillation jitter.
                         double friction;
                         if (state.IsTouchpad)
                         {
                             double absV = Math.Abs(state.Velocity);
                             double slowFriction = 0.96;  // Smooth control for slow/medium scrolling
                             double fastFriction = 0.93;  // Fluid momentum for fast swipes
-                            double t = Math.Clamp((absV - 3.0) / 9.0, 0.0, 1.0);
+                            double t = Math.Clamp((absV - 2.0) / 18.0, 0.0, 1.0);
                             t = t * t * (3.0 - 2.0 * t); // Smoothstep
                             friction = slowFriction + (fastFriction - slowFriction) * t;
                         }
@@ -510,7 +523,8 @@ namespace FlyShelf.Classes
                             double absV = Math.Abs(state.Velocity);
                             double slowFriction = 0.96;
                             double fastFriction = 0.93;
-                            double t = Math.Clamp((absV - 3.0) / 9.0, 0.0, 1.0);
+                            // Wider transition band (2-20 px/frame) — must match active phase
+                            double t = Math.Clamp((absV - 2.0) / 18.0, 0.0, 1.0);
                             t = t * t * (3.0 - 2.0 * t);
                             double frictionPerFrame = slowFriction + (fastFriction - slowFriction) * t;
                             // Convert per-frame friction to per-ms: f_ms = f_frame^(1/16.667)

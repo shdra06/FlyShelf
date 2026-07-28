@@ -55,7 +55,7 @@ namespace FlyShelf
         private bool _anchorValid;
         private DateTime _lastMergeToggleTime = DateTime.MinValue;
         private IntPtr _lastActiveExternalWindow = IntPtr.Zero;
-        private DateTime _lastScrollTime = DateTime.MinValue;
+        private long _lastScrollTimeTick;
         private double _scrollVelocity = 0;
         private Point _lastPhysicalMousePosition = new Point(-999, -999);
         private string _currentLoadedWallpaperPath = "";
@@ -483,8 +483,11 @@ namespace FlyShelf
                             DismissMergeState();
                         }
 
-                        // Safety net: reapply filters deferred as well (skip if guard is active)
-                        if (!_isApplyingFilter) ReapplyActiveFilters();
+                        // PERF: Safety net reapply — the throttle inside ReapplyActiveFilters
+                        // will skip this if the synchronous call above already ran (< 50ms ago).
+                        // This prevents the double-evaluation that was freezing the UI.
+                        if (!_isApplyingFilter && (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox?.Text))))
+                            ReapplyActiveFilters();
 
                         // Hide Alt+C watermark once clipboard has enough items to fill the view
                         UpdateAltCWatermarkVisibility();

@@ -942,9 +942,9 @@ namespace FlyShelf
 
             if (e.VerticalChange == 0) return;
 
-            var now = DateTime.UtcNow;
-            double elapsedMs = (now - _lastScrollTime).TotalMilliseconds;
-            _lastScrollTime = now;
+            long nowTick = Environment.TickCount64;  // No GC allocation (unlike DateTime.UtcNow)
+            double elapsedMs = nowTick - _lastScrollTimeTick;
+            _lastScrollTimeTick = nowTick;
 
             double change = Math.Abs(e.VerticalChange);
             double instVelocity = elapsedMs > 0 ? change / elapsedMs : change;
@@ -959,7 +959,8 @@ namespace FlyShelf
                 _scrollVelocity = 0.7 * _scrollVelocity + 0.3 * instVelocity;
             }
 
-            // Mark that active scrolling is happening, and suppress hover buttons immediately
+            // Mark that active scrolling is happening, and suppress hover buttons.
+            // Only fire PropertyChanged on state TRANSITIONS to avoid 60 binding re-evaluations/sec.
             if (!_viewModel.IsScrolling) _viewModel.IsScrolling = true;
             if (_viewModel.AllowHover) _viewModel.AllowHover = false;
 
@@ -1093,10 +1094,12 @@ namespace FlyShelf
 
                     // ═══ SCROLL-SPEED-AWARE PREFETCH GATING ═══
                     // During fast scrolling, skip thumbnail loading entirely to preserve
-                    // scroll smoothness. Only load when velocity drops below threshold.
+                    // scroll smoothness. Lower threshold (12 px/frame) backs off sooner
+                    // during touchpad flicks, avoiding TransformToAncestor layout passes
+                    // that interrupt the CompositionTarget.Rendering cadence.
                     var scrollSv = GetShelfScrollViewer();
                     double scrollVelocity = scrollSv != null ? Classes.SmoothScroll.GetCurrentVelocity(scrollSv) : 0;
-                    bool isFastScrolling = scrollVelocity > 25.0; // > 25 px/frame = aggressive swipe only
+                    bool isFastScrolling = scrollVelocity > 12.0; // > 12 px/frame = moderate-to-fast scroll
 
                     // Prefetch overdraw: expand viewport by 1200px above and below.
                     // Larger zone ensures images preload well before entering viewport.

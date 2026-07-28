@@ -44,16 +44,16 @@
                     <!-- Hardcoded fallback colors (default dark theme) prevent WPF-UI's accent color
                          from flashing during startup before theme dictionaries are merged.
                          The outer DynamicResource Brush setters still update these once themes load. -->
-                    <SolidColorBrush x:Key="ButtonBackground" Color="#16FFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="#20FFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBackground" Color="{DynamicResource ThemeHeaderBtnBgColor}"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="{DynamicResource ThemeHeaderBtnBorderColor}"/>
 
-                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#2AFFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#40FFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFFFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{DynamicResource ThemeHeaderBtnBgHoverColor}"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{DynamicResource ThemeHeaderBtnBorderHoverColor}"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{DynamicResource ThemeHeaderBtnFgHoverColor}"/>
                     
-                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#12FFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#30FFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#DDFFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{DynamicResource ThemeHeaderBtnBgPressedColor}"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="{DynamicResource ThemeHeaderBtnBorderPressedColor}"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{DynamicResource ThemeHeaderBtnFgPressedColor}"/>
                 </Style.Resources>
             </Style>
 
@@ -785,7 +785,7 @@
                                 <TextBlock Text="In" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <Ellipse x:Name="SyncDot_Incoming" Grid.Column="1" Width="8" Height="8" Margin="6,0,2,0" VerticalAlignment="Center"
-                                     Fill="#33888888" Stroke="#22FFFFFF" StrokeThickness="0.5"/>
+                                     Fill="{DynamicResource ThemeTextMuted}" Opacity="0.5" Stroke="{DynamicResource ThemeOverlayBorder}" StrokeThickness="0.5"/>
                         </Grid>
                     </Border>
                     <!-- Outgoing Toggle -->
@@ -801,7 +801,7 @@
                                 <TextBlock Text="Out" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <Ellipse x:Name="SyncDot_Outgoing" Grid.Column="1" Width="8" Height="8" Margin="6,0,2,0" VerticalAlignment="Center"
-                                     Fill="#33888888" Stroke="#22FFFFFF" StrokeThickness="0.5"/>
+                                     Fill="{DynamicResource ThemeTextMuted}" Opacity="0.5" Stroke="{DynamicResource ThemeOverlayBorder}" StrokeThickness="0.5"/>
                         </Grid>
                     </Border>
                     <!-- Both Master Toggle -->
@@ -817,7 +817,7 @@
                                 <TextBlock Text="Both" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <Ellipse x:Name="SyncDot_Both" Grid.Column="1" Width="8" Height="8" Margin="6,0,2,0" VerticalAlignment="Center"
-                                     Fill="#33888888" Stroke="#22FFFFFF" StrokeThickness="0.5"/>
+                                     Fill="{DynamicResource ThemeTextMuted}" Opacity="0.5" Stroke="{DynamicResource ThemeOverlayBorder}" StrokeThickness="0.5"/>
                         </Grid>
                     </Border>
                     <!-- Dismiss -->
@@ -972,8 +972,8 @@
                                 </Grid>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsChecked" Value="False">
-                                        <Setter TargetName="Track" Property="Background" Value="#30808080"/>
-                                        <Setter TargetName="Track" Property="BorderBrush" Value="#30808080"/>
+                                        <Setter TargetName="Track" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
+                                        <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
                                         <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Left"/>
                                         <Setter TargetName="Knob" Property="Margin" Value="2,0,0,0"/>
                                     </Trigger>
@@ -2050,7 +2050,7 @@
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Setter Property="Visibility" Value="Collapsed"/>
-                                            <Setter Property="Background" Value="#30A6ADC8"/>
+                                            <Setter Property="Background" Value="{DynamicResource ThemeOverlayBg}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsMarkdownPreview}" Value="True">
                                                     <Setter Property="Visibility" Value="Visible"/>
@@ -2059,7 +2059,7 @@
                                         </Style>
                                     </Border.Style>
                                     <TextBlock Text="MD" FontSize="{StaticResource TypeMicro}" FontWeight="SemiBold" FontFamily="Cascadia Mono, Consolas"
-                                               Foreground="#A6ADC8" VerticalAlignment="Center"/>
+                                               Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center"/>
                                 </Border>
 
                                 <!-- Source App Label — small subtle "Copied from [app]" indicator -->
@@ -2770,7 +2770,7 @@
                                         <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="2,5,4,5">
                                             <Border CornerRadius="{StaticResource RadiusSM}" ClipToBounds="True" Margin="0,0,8,4" HorizontalAlignment="Stretch"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Image Source="{Binding Icon, IsAsync=True}" Height="90" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="HighQuality"/></Border>
                                             <TextBlock Text="{Binding FileName}" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextTrimming="CharacterEllipsis" MaxHeight="18" LineHeight="18"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
-                                            <TextBlock Text="{Binding FileName}" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" LineHeight="18"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                                            <TextBlock Text="{Binding DisplayText}" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" LineHeight="18"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                                             <TextBlock Text="{Binding FormatIdentifier}" FontSize="{StaticResource TypeSmall}" Margin="0,2,0,0" Foreground="{DynamicResource AltSubtitleFg}" TextTrimming="CharacterEllipsis" MaxHeight="15" LineHeight="15" Opacity="0.7"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                                         </StackPanel>
                                         <!-- TIMESTAMP + PIN -->
@@ -2836,14 +2836,9 @@
         <Grid x:Name="ResearchPanel" Grid.Row="1" Visibility="Collapsed" Opacity="0" Margin="0"
               RenderTransformOrigin="0.5,0" PreviewMouseDown="ResearchPanel_PreviewMouseDown"
               TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
-              RenderOptions.ClearTypeHint="Enabled" UseLayoutRounding="True" SnapsToDevicePixels="True">
+              RenderOptions.ClearTypeHint="Enabled" UseLayoutRounding="True" SnapsToDevicePixels="True"
+              Background="{DynamicResource ThemeCodePreviewBg}">
             <Grid.RenderTransform><TranslateTransform Y="0"/></Grid.RenderTransform>
-            <Grid.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="#0C0F1A" Offset="0"/>
-                    <GradientStop Color="#111827" Offset="1"/>
-                </LinearGradientBrush>
-            </Grid.Background>
             <!-- Decomposition Phase 2: Networking panel extracted to Controls/NetworkingPanelControl -->
             <local:NetworkingPanelControl x:Name="NetworkingContent" />
         </Grid>
@@ -2856,7 +2851,7 @@
               TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
               RenderOptions.ClearTypeHint="Enabled" UseLayoutRounding="True" SnapsToDevicePixels="True"
               Validation.ErrorTemplate="{x:Null}"
-              Background="#1A1A2E">
+              Background="{DynamicResource ThemeCodePreviewBg}">
             <Grid.RenderTransform>
                 <TranslateTransform Y="0"/>
             </Grid.RenderTransform>
