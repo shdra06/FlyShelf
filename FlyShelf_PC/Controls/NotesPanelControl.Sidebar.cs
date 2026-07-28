@@ -47,7 +47,6 @@ namespace FlyShelf.Controls
             _selectedMonth = -1;
             _selectedYear = -1;
             _notesCharLimitWarned = false; // Reset warning flag for the new note
-            _freeformBulletMode = false;   // Reset inline-bullet mode for new note
 
             // Clear search if active
             var mainWin = GetMainWindow();
@@ -331,6 +330,10 @@ namespace FlyShelf.Controls
             {
                 GetMainWindow()?.CloseSearch();
                 SelectNoteDay(result.Day);
+                if (result.Bullet != null)
+                {
+                    result.Bullet.IsCollapsed = false;
+                }
             }
         }
 

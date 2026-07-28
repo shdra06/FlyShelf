@@ -354,7 +354,7 @@ namespace FlyShelf.Classes
                     var pairingKey = DevicePairingManager.EnsurePairingKey();
                     if (!string.IsNullOrEmpty(pairingKey))
                         req.Headers.TryAddWithoutValidation("X-Pairing-Key", pairingKey);
-                    var resp = await _latencyClient.SendAsync(req);
+                    using var resp = await _latencyClient.SendAsync(req);
                     sw.Stop();
                     info.LatencyMs = (int)sw.ElapsedMilliseconds;
                 }

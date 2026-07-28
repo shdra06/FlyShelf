@@ -687,6 +687,7 @@ public partial class App : Application
             {
                 try
                 {
+                    if (_mainWinInstance != null) return;
                     _isCreatingMainWindow = true;
                     _mainWinInstance = new MainWindow();
                     MainWindow = _mainWinInstance;
@@ -1078,6 +1079,7 @@ public partial class App : Application
 
     private void LaunchClipboardManager(double x, double y, bool isPersistent, int mode, bool stealFocus = true)
     {
+        if (!FlyShelf.Classes.SettingsManager.Current.HasCompletedOnboarding) return;
         if (_mainWinInstance == null)
         {
             if (_isCreatingMainWindow) return; // another creation in progress (H9 race guard)

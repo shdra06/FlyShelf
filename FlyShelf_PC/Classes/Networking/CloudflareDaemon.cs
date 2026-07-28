@@ -273,7 +273,7 @@ namespace FlyShelf.Classes
                             try
                             {
                                 Logger.LogAction("CLOUDFLARE", $"Verifying local server (attempt {v + 1}/3)...");
-                                var localResp = await verifyClient.GetAsync($"http://localhost:{_localPort}/api/health");
+                                using var localResp = await verifyClient.GetAsync($"http://localhost:{_localPort}/api/health");
                                 if (localResp.IsSuccessStatusCode)
                                 {
                                     verified = true;
@@ -332,7 +332,7 @@ namespace FlyShelf.Classes
                                 try
                                 {
                                     await Task.Delay(3000);
-                                    var pubResp = await verifyClient.GetAsync($"{GlobalUrl}/api/health");
+                                    using var pubResp = await verifyClient.GetAsync($"{GlobalUrl}/api/health");
                                     if (pubResp.IsSuccessStatusCode)
                                     {
                                         verified = true;
@@ -424,7 +424,7 @@ namespace FlyShelf.Classes
                 {
                     // Ping localhost instead of public URL — avoids DNS resolution failures
                     var client = _healthClient;
-                    var resp = await client.GetAsync($"http://localhost:{_localPort}/api/health");
+                    using var resp = await client.GetAsync($"http://localhost:{_localPort}/api/health");
                     if (resp.IsSuccessStatusCode)
                     {
                         Interlocked.Exchange(ref _healthFailCount, 0); // Healthy
@@ -458,7 +458,7 @@ namespace FlyShelf.Classes
                     try
                     {
                         var publicClient = _healthClient;
-                        var publicResp = await publicClient.GetAsync(GlobalUrl + "/api/health");
+                        using var publicResp = await publicClient.GetAsync(GlobalUrl + "/api/health");
                         if (!publicResp.IsSuccessStatusCode)
                         {
                             Logger.LogAction("CLOUDFLARE", "Public URL health check failed — tunnel may be stale");
@@ -521,7 +521,7 @@ namespace FlyShelf.Classes
             try
             {
                 var client = _healthClient;
-                var resp = await client.GetAsync($"http://localhost:{_localPort}/api/health");
+                using var resp = await client.GetAsync($"http://localhost:{_localPort}/api/health");
                 if (resp.IsSuccessStatusCode)
                 {
                     Logger.LogAction("CLOUDFLARE HEALTH", "✅ Force check passed — tunnel is alive");
@@ -573,7 +573,7 @@ namespace FlyShelf.Classes
             if (now - _lastRetryScheduledTicks < 2000) return;
             _lastRetryScheduledTicks = now;
             // PERF: LongRunning — retry loop can chain indefinitely, should not occupy ThreadPool thread
-            _ = Task.Factory.StartNew(async () =>
+            _ = Task.Run(async () =>
             {
                 try { await Task.Delay(delayMs); } catch { return; }
                 if (!_stopped)
@@ -581,7 +581,7 @@ namespace FlyShelf.Classes
                     Logger.LogAction("CLOUDFLARE", $"Auto-retry #{_consecutiveFailures} after {delayMs}ms...");
                     await StartTunnelCore();
                 }
-            }, TaskCreationOptions.LongRunning);
+            });
         }
 
         private async Task<bool> DownloadCloudflaredAsync(string exePath)
@@ -600,7 +600,7 @@ namespace FlyShelf.Classes
                 try
                 {
                     Logger.LogAction("CLOUDFLARE", $"Downloading secure tunnel client from: {url}");
-                    var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+                    using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
                     response.EnsureSuccessStatusCode();
 
                     long totalBytes = response.Content.Headers.ContentLength ?? -1;

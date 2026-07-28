@@ -98,6 +98,7 @@ namespace FlyShelf.ViewModels
                         throw new InvalidOperationException($"File too large for OCR ({fi.Length} bytes): {FilePath}");
                     return File.ReadAllBytes(FilePath);
                 });
+                if (string.IsNullOrEmpty(FilePath)) return;
                 string ext = Path.GetExtension(FilePath).ToLowerInvariant();
                 string mimeType = ext switch
                 {
@@ -246,7 +247,9 @@ namespace FlyShelf.ViewModels
                         var decoder = await global::Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream.AsRandomAccessStream());
                         var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
 
-                        // ── Pixel format conversion ──
+                        try
+                        {
+                            // ── Pixel format conversion ──
                         if (softwareBitmap.BitmapPixelFormat != global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8 ||
                             softwareBitmap.BitmapAlphaMode != global::Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied)
                         {
@@ -382,8 +385,13 @@ namespace FlyShelf.ViewModels
                                 });
                             }
                         }
-                    }
-                }
+                        } // close try
+                        finally
+                        {
+                            softwareBitmap?.Dispose();
+                        }
+                    } // close using
+                } // close outer try
                 catch (Exception ex)
                 {
                     FlyShelf.Classes.Logger.LogAction("AUTO_OCR_FAIL", $"Failed to run background OCR: {ex.Message}");

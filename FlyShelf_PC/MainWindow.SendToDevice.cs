@@ -196,7 +196,7 @@ namespace FlyShelf
             request.Headers.TryAddWithoutValidation("X-Pairing-Key", pairingKey);
             request.Headers.TryAddWithoutValidation("X-FlyShelf-Client", "DesktopApp");
 
-            var response = await client.SendAsync(request);
+            using var response = await client.SendAsync(request);
 
             if (response.IsSuccessStatusCode)
             {

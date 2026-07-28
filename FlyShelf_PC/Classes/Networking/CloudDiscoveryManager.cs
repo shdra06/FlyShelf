@@ -79,7 +79,7 @@ namespace FlyShelf.Classes
 
                 string url = await AuthUrl($"members/{pairingKey}/{uid}.json");
                 var content = new StringContent("true", Encoding.UTF8, "application/json");
-                var response = await _client.PutAsync(url, content);
+                using var response = await _client.PutAsync(url, content);
                 if (response.IsSuccessStatusCode)
                 {
                     Logger.LogAction("ROOM_MEMBER", $"Registered room membership successfully for pairing key: {pairingKey}");
@@ -218,7 +218,7 @@ namespace FlyShelf.Classes
                 string myDeviceId = SettingsManager.Current.DeviceId ?? "";
 
                 string url = (await AuthUrl($"clipboard/{pairingKey}.json"));
-                var response = await _client.GetAsync(url);
+                using var response = await _client.GetAsync(url);
                 if (!response.IsSuccessStatusCode) return;
 
                 string json = await response.Content.ReadAsStringAsync();
@@ -270,7 +270,7 @@ namespace FlyShelf.Classes
             try
             {
                 string deleteUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryKey}.json"));
-                await _client.DeleteAsync(deleteUrl);
+                using var response = await _client.DeleteAsync(deleteUrl);
             }
             catch (Exception ex) { Logger.LogAction("FIREBASE", $"DeleteFirebaseEntry failed: {ex.Message}"); }
         }
@@ -289,7 +289,7 @@ namespace FlyShelf.Classes
 
                 string statusUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}/downloadStatus/{myDeviceId}.json"));
                 string statusJson = $"{{\"status\":\"downloading\",\"startedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
-                await _client.PutAsync(statusUrl, new StringContent(statusJson, Encoding.UTF8, "application/json"));
+                using var response = await _client.PutAsync(statusUrl, new StringContent(statusJson, Encoding.UTF8, "application/json"));
                 Logger.LogAction("SYNC_STATUS", $"Signaled DOWNLOADING: {entryId}");
             }
             catch (Exception ex)
@@ -314,21 +314,21 @@ namespace FlyShelf.Classes
                 // Step 1: Mark this device as having downloaded the file
                 string markUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}/downloadedBy/{myDeviceId}.json"));
                 var markContent = new StringContent(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture), Encoding.UTF8, "application/json");
-                await _client.PutAsync(markUrl, markContent);
+                using var markResponse = await _client.PutAsync(markUrl, markContent);
 
                 // Step 1b: Signal "downloaded" status so sender knows this device is done
                 try
                 {
                     string statusUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}/downloadStatus/{myDeviceId}.json"));
                     string statusJson = $"{{\"status\":\"downloaded\",\"completedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
-                    await _client.PutAsync(statusUrl, new StringContent(statusJson, Encoding.UTF8, "application/json"));
+                    using var statusResponse = await _client.PutAsync(statusUrl, new StringContent(statusJson, Encoding.UTF8, "application/json"));
                     Logger.LogAction("SYNC_STATUS", $"Signaled DOWNLOADED: {entryId}");
                 }
                 catch (Exception ex) { Logger.LogAction("SYNC_STATUS", $"Download status signal failed: {ex.Message}"); }
 
                 // Step 2: Read the full entry to check if all targets have downloaded
                 string entryUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}.json"));
-                var response = await _client.GetAsync(entryUrl);
+                using var response = await _client.GetAsync(entryUrl);
                 if (!response.IsSuccessStatusCode) return;
 
                 string json = await response.Content.ReadAsStringAsync();
@@ -365,7 +365,7 @@ namespace FlyShelf.Classes
                     try
                     {
                         string devicesUrl = (await AuthUrl($"active_devices/{pairingKey}.json"));
-                        var devResponse = await _client.GetAsync(devicesUrl);
+                        using var devResponse = await _client.GetAsync(devicesUrl);
                         if (devResponse.IsSuccessStatusCode)
                         {
                             string devJson = await devResponse.Content.ReadAsStringAsync();
@@ -388,7 +388,7 @@ namespace FlyShelf.Classes
                                     if (!isOnline || offlineFor > OFFLINE_GRACE_MS)
                                     {
                                         string offlineUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}/downloadedBy/{devId}.json"));
-                                        await _client.PutAsync(offlineUrl, new StringContent("-1", Encoding.UTF8, "application/json"));
+                                        using var putResp = await _client.PutAsync(offlineUrl, new StringContent("-1", Encoding.UTF8, "application/json"));
                                         downloaded.Add(devId);
                                         Logger.LogAction("SYNC_TRACK", $"Auto-completed offline device ({offlineFor / 60_000}min offline): {devId}");
                                     }
@@ -437,7 +437,7 @@ namespace FlyShelf.Classes
                 if (string.IsNullOrEmpty(pairingKey)) return "";
 
                 string url = (await AuthUrl($"active_devices/{pairingKey}/{senderDeviceId}.json"));
-                var response = await _client.GetAsync(url);
+                using var response = await _client.GetAsync(url);
                 if (!response.IsSuccessStatusCode) return "";
 
                 string json = await response.Content.ReadAsStringAsync();
@@ -468,7 +468,7 @@ namespace FlyShelf.Classes
                 if (string.IsNullOrEmpty(pairingKey)) return "";
 
                 string url = (await AuthUrl($"active_devices/{pairingKey}.json"));
-                var response = await _client.GetAsync(url);
+                using var response = await _client.GetAsync(url);
                 if (!response.IsSuccessStatusCode) return "";
 
                 string json = await response.Content.ReadAsStringAsync();
@@ -517,7 +517,7 @@ namespace FlyShelf.Classes
                 if (string.IsNullOrEmpty(pairingKey)) return "";
 
                 string url = (await AuthUrl($"active_devices/{pairingKey}.json"));
-                var response = await _client.GetAsync(url);
+                using var response = await _client.GetAsync(url);
                 if (!response.IsSuccessStatusCode) return "";
 
                 string json = await response.Content.ReadAsStringAsync();

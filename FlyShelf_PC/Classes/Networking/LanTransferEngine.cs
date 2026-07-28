@@ -793,7 +793,7 @@ namespace FlyShelf.Classes
 
                 // Open file with ReadWrite + share to allow concurrent chunk writers
                 using var fs = new FileStream(session.FilePath,
-                    FileMode.Open, FileAccess.Write, FileShare.ReadWrite,
+                    FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite,
                     RECEIVE_BUFFER_SIZE,
                     FileOptions.Asynchronous | FileOptions.RandomAccess);
 

@@ -105,7 +105,7 @@ namespace FlyShelf.Classes
                     return;
                 }
 
-                var response = await _client.PutAsync(tunnelNodeUrl, content);
+                using var response = await _client.PutAsync(tunnelNodeUrl, content);
                 
                 if (response.IsSuccessStatusCode)
                 {
@@ -159,7 +159,7 @@ namespace FlyShelf.Classes
                     string pairingKey = DevicePairingManager.EnsurePairingKey();
                     if (string.IsNullOrEmpty(pairingKey)) return devices;
                     string url = (await AuthUrl($"active_devices/{pairingKey}.json"));
-                    var response = await _client.GetAsync(url);
+                    using var response = await _client.GetAsync(url);
 
                     // Auto-retry on 401: invalidate token and try once more
                     if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized && attempt == 0)
@@ -229,7 +229,7 @@ namespace FlyShelf.Classes
                 string pairingKey = DevicePairingManager.EnsurePairingKey();
                 if (string.IsNullOrEmpty(pairingKey)) return;
                 string url = (await AuthUrl($"active_devices/{pairingKey}.json"));
-                var response = await _client.GetAsync(url);
+                using var response = await _client.GetAsync(url);
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
@@ -265,7 +265,7 @@ namespace FlyShelf.Classes
                                     continue;
                                 }
                                 string deleteUrl = (await AuthUrl($"active_devices/{pairingKey}/{prop.Name}.json"));
-                                await _client.DeleteAsync(deleteUrl);
+                                using var delResp1 = await _client.DeleteAsync(deleteUrl);
                                 Logger.LogAction("FIREBASE CLEANUP", $"Removed stale old-format device: {prop.Name}");
                             }
                             else if (isModernFormat && !pairedIds.Contains(prop.Name))
@@ -280,7 +280,7 @@ namespace FlyShelf.Classes
                                 if (deviceTs > 0 && (nowMs - deviceTs) > MODERN_STALE_THRESHOLD_MS)
                                 {
                                     string deleteUrl = (await AuthUrl($"active_devices/{pairingKey}/{prop.Name}.json"));
-                                    await _client.DeleteAsync(deleteUrl);
+                                    using var delResp2 = await _client.DeleteAsync(deleteUrl);
                                     Logger.LogAction("FIREBASE CLEANUP", $"Removed stale unpaired device: {prop.Name} (offline {(nowMs - deviceTs) / 3_600_000}h)");
                                 }
                             }
@@ -311,7 +311,7 @@ namespace FlyShelf.Classes
                 try
                 {
                     string url = (await AuthUrl($"device_groups/{pairingKey}.json"));
-                    var httpResponse = await _client.GetAsync(url);
+                    using var httpResponse = await _client.GetAsync(url);
 
                     // Auto-retry on 401: invalidate token and try once more
                     if (httpResponse.StatusCode == System.Net.HttpStatusCode.Unauthorized && attempt == 0)
@@ -376,7 +376,7 @@ namespace FlyShelf.Classes
                 var payload = new { name, deviceNames, ownerUid };
                 var json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                await _client.PutAsync(url, content);
+                using var response = await _client.PutAsync(url, content);
                 Logger.LogAction("FIREBASE", $"Saved group '{name}' with {deviceNames.Count} devices");
             }
             catch (Exception ex)
@@ -397,7 +397,7 @@ namespace FlyShelf.Classes
                 }
 
                 string url = (await AuthUrl($"device_groups/{pairingKey}/{groupId}.json"));
-                await _client.DeleteAsync(url);
+                using var response = await _client.DeleteAsync(url);
                 Logger.LogAction("FIREBASE", $"Deleted group {groupId}");
             }
             catch (Exception ex)

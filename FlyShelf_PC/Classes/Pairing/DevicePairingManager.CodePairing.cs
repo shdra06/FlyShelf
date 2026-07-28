@@ -459,8 +459,11 @@ namespace FlyShelf.Classes
         {
             try
             {
+                List<PairedDevice> snapshot;
+                lock (_lock) { snapshot = _pairedDevices.ToList(); }
+
                 Directory.CreateDirectory(Path.GetDirectoryName(_storagePath));
-                string json = JsonSerializer.Serialize(_pairedDevices, new JsonSerializerOptions { WriteIndented = true });
+                string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
                 string encrypted = SecureStorage.Encrypt(json);
                 string tempPath = _storagePath + ".tmp";
                 File.WriteAllText(tempPath, encrypted);

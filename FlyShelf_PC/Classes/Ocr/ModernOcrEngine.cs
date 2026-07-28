@@ -163,12 +163,17 @@ namespace FlyShelf.Classes
         /// </summary>
         private static (string text, List<OcrWordResult> words)? RecognizeCore(SoftwareBitmap bitmap)
         {
+            dynamic factoryObj = null;
+            dynamic ibFactory = null;
+            dynamic imageBuffer = null;
+            dynamic textRecognizer = null;
+
             // ── Step 1: Check model readiness via static method ──
             // TextRecognizer.GetReadyState() → AIFeatureReadyState enum
             dynamic readyState;
             try
             {
-                var factoryObj = ActivateFactory("Microsoft.Windows.AI.Imaging.TextRecognizer");
+                factoryObj = ActivateFactory("Microsoft.Windows.AI.Imaging.TextRecognizer");
                 if (factoryObj == null)
                 {
                     Logger.LogAction("MODERN_OCR", "Failed to activate TextRecognizer factory");
@@ -220,10 +225,9 @@ namespace FlyShelf.Classes
             }
 
             // ── Step 2: Create TextRecognizer instance via CreateAsync ──
-            dynamic textRecognizer;
             try
             {
-                var factoryObj = ActivateFactory("Microsoft.Windows.AI.Imaging.TextRecognizer");
+                factoryObj = ActivateFactory("Microsoft.Windows.AI.Imaging.TextRecognizer");
                 dynamic createOp = factoryObj.CreateAsync();
                 textRecognizer = AwaitWinRTAsync(createOp);
 
@@ -240,12 +244,11 @@ namespace FlyShelf.Classes
             }
 
             // ── Step 3: Create ImageBuffer from SoftwareBitmap ──
-            dynamic imageBuffer;
             try
             {
                 // ImageBuffer.CreateBufferAttachedToBitmap(bitmap)
                 // or ImageBuffer.CreateForSoftwareBitmap(bitmap) depending on SDK version
-                var ibFactory = ActivateFactory("Microsoft.Graphics.Imaging.ImageBuffer");
+                ibFactory = ActivateFactory("Microsoft.Graphics.Imaging.ImageBuffer");
                 if (ibFactory == null)
                 {
                     Logger.LogAction("MODERN_OCR", "Failed to activate ImageBuffer factory");
@@ -360,6 +363,11 @@ namespace FlyShelf.Classes
                         disposable.Dispose();
                 }
                 catch { } // Best-effort: failure is acceptable
+
+                try { if (factoryObj != null) Marshal.ReleaseComObject(factoryObj); } catch { }
+                try { if (ibFactory != null) Marshal.ReleaseComObject(ibFactory); } catch { }
+                try { if (imageBuffer != null) Marshal.ReleaseComObject(imageBuffer); } catch { }
+                try { if (textRecognizer != null) Marshal.ReleaseComObject(textRecognizer); } catch { }
             }
         }
 
@@ -435,6 +443,7 @@ namespace FlyShelf.Classes
                 if (DateTime.UtcNow - startTime > timeout)
                 {
                     Logger.LogAction("MODERN_OCR", "Async operation timed out after 30s");
+                    try { asyncOp.Cancel(); } catch { }
                     return null;
                 }
 

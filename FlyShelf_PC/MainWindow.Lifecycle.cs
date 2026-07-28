@@ -825,7 +825,7 @@ namespace FlyShelf
             }
         }
         private static readonly object _timerLock = new object();
-        private static System.Threading.Timer? _clipboardWriteResetTimer;
+        private static System.Windows.Threading.DispatcherTimer? _clipboardWriteResetTimer;
         
         internal static void SetWritingClipboard(bool value)
         {
@@ -834,15 +834,18 @@ namespace FlyShelf
                 System.Threading.Interlocked.Increment(ref _clipboardWriteRefCount);
                 lock (_timerLock)
                 {
-                    _clipboardWriteResetTimer?.Dispose();
-                    _clipboardWriteResetTimer = new System.Threading.Timer(_ =>
+                    _clipboardWriteResetTimer?.Stop();
+                    _clipboardWriteResetTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2000) };
+                    _clipboardWriteResetTimer.Tick += (s, e) =>
                     {
+                        _clipboardWriteResetTimer?.Stop();
                         if (System.Threading.Volatile.Read(ref _clipboardWriteRefCount) > 0)
                         {
                             Classes.Logger.LogAction("CLIPBOARD", "⚠️ _isWritingClipboard was stuck true — auto-reset after 2s safety timeout");
                             System.Threading.Interlocked.Exchange(ref _clipboardWriteRefCount, 0);
                         }
-                    }, null, 2000, System.Threading.Timeout.Infinite);
+                    };
+                    _clipboardWriteResetTimer.Start();
                 }
             }
             else
@@ -858,7 +861,7 @@ namespace FlyShelf
                 {
                     lock (_timerLock)
                     {
-                        _clipboardWriteResetTimer?.Dispose();
+                        _clipboardWriteResetTimer?.Stop();
                         _clipboardWriteResetTimer = null;
                     }
                 }

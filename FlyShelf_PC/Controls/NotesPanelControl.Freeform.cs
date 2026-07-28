@@ -196,12 +196,13 @@ namespace FlyShelf.Controls
             if (e.Key == Key.Enter && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
             {
                 e.Handled = true;
-                if (!_freeformBulletMode)
+                if (sender is TextBox tb)
                 {
-                    // ─ Enable inline bullet mode ─
-                    _freeformBulletMode = true;
-                    if (sender is TextBox tb)
+                    bool isBulletMode = tb.Tag is bool b && b;
+                    if (!isBulletMode)
                     {
+                        // ─ Enable inline bullet mode ─
+                        tb.Tag = true;
                         // If not at start of an empty line, break to a new line first
                         int caret = tb.CaretIndex;
                         string prefix = (caret > 0 && tb.Text.Length > 0 && tb.Text[caret - 1] != '\n')
@@ -209,13 +210,10 @@ namespace FlyShelf.Controls
                         tb.SelectedText = prefix;
                         tb.CaretIndex = caret + prefix.Length;
                     }
-                }
-                else
-                {
-                    // ─ Disable inline bullet mode: remove • from current line, cursor stays ─
-                    _freeformBulletMode = false;
-                    if (sender is TextBox tb)
+                    else
                     {
+                        // ─ Disable inline bullet mode: remove • from current line, cursor stays ─
+                        tb.Tag = false;
                         int caret = tb.CaretIndex;
                         string text = tb.Text;
 
@@ -235,16 +233,13 @@ namespace FlyShelf.Controls
             }
 
             // While in bullet mode, Enter continues the list with a new bullet
-            if (e.Key == Key.Enter && _freeformBulletMode)
+            if (e.Key == Key.Enter && sender is TextBox tbEnter && tbEnter.Tag is bool isBul && isBul)
             {
                 e.Handled = true;
-                if (sender is TextBox tb)
-                {
-                    int caret = tb.CaretIndex;
-                    const string bullet = "\n\u2022 ";
-                    tb.SelectedText = bullet;
-                    tb.CaretIndex = caret + bullet.Length;
-                }
+                int caret = tbEnter.CaretIndex;
+                const string bullet = "\n\u2022 ";
+                tbEnter.SelectedText = bullet;
+                tbEnter.CaretIndex = caret + bullet.Length;
             }
         }
 

@@ -76,6 +76,7 @@ namespace FlyShelf
             var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(150));
             fadeOut.Completed += (s, e) =>
             {
+                if (_isAiSettingsActive) return;
                 AiSettingsPanel.Visibility = Visibility.Collapsed;
                 ShelfListView.Visibility = Visibility.Visible;
             };

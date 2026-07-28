@@ -622,7 +622,7 @@ namespace FlyShelf.Classes
             finReq.Content = new StringContent("", Encoding.UTF8, "application/json");
 
             using var finCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            var finResp = await _sharedClient.SendAsync(finReq, finCts.Token);
+            using var finResp = await _sharedClient.SendAsync(finReq, finCts.Token);
 
             sw.Stop();
             if (finResp.IsSuccessStatusCode)

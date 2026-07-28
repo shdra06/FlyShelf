@@ -67,7 +67,7 @@ namespace FlyShelf.Classes
                 try
                 {
                     using var headReq = new HttpRequestMessage(HttpMethod.Head, $"{activeUrl}/api/health");
-                    var headRes = await _httpClient.SendAsync(headReq);
+                    using var headRes = await _httpClient.SendAsync(headReq);
                     latencySw.Stop();
                     result.LatencyMs = latencySw.ElapsedMilliseconds;
                 }
@@ -78,7 +78,7 @@ namespace FlyShelf.Classes
                     var latencySw2 = Stopwatch.StartNew();
                     try
                     {
-                        await _httpClient.GetAsync($"{activeUrl}/api/health");
+                        using var res = await _httpClient.GetAsync($"{activeUrl}/api/health");
                         latencySw2.Stop();
                         result.LatencyMs = latencySw2.ElapsedMilliseconds;
                     }
@@ -94,7 +94,7 @@ namespace FlyShelf.Classes
                 using var content = new ByteArrayContent(_payload);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
 
-                var response = await _httpClient.PostAsync($"{activeUrl}/api/speedtest", content);
+                using var response = await _httpClient.PostAsync($"{activeUrl}/api/speedtest", content);
                 uploadSw.Stop();
 
                 double elapsedSeconds = uploadSw.Elapsed.TotalSeconds;

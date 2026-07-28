@@ -642,6 +642,7 @@ namespace FlyShelf.Controls
 
                 Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
                 {
+                    if (_selectedNoteDay == null) return;
                     var menu = new ContextMenu();
 
                     // Helper: colored emoji icon (using Emoji.Wpf for full-color rendering)

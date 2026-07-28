@@ -314,6 +314,7 @@ namespace FlyShelf.Classes
         public static void SaveHistoryDebounced(List<ViewModels.ClipboardItem> items)
         {
             int generation = System.Threading.Interlocked.Increment(ref _saveGeneration);
+            var snapshot = items.ToList();
 
             // [FIX M-47]: Wrap timer callback in try/catch to prevent timer leak on throw
             var newTimer = new Timer(_ =>
@@ -323,12 +324,12 @@ namespace FlyShelf.Classes
                     // Only run if no newer save was requested while we were waiting
                     if (generation != _saveGeneration) return;
 
-                    var snapshot = items;
+                    var currentSnapshot = snapshot;
                     // Enforce cap before saving
-                    if (snapshot.Count > MAX_HISTORY_ITEMS)
-                        snapshot = snapshot.Take(MAX_HISTORY_ITEMS).ToList();
+                    if (currentSnapshot.Count > MAX_HISTORY_ITEMS)
+                        currentSnapshot = currentSnapshot.Take(MAX_HISTORY_ITEMS).ToList();
 
-                    CompactNow(snapshot);
+                    CompactNow(currentSnapshot);
                 }
                 catch (Exception ex)
                 {
@@ -648,9 +649,16 @@ namespace FlyShelf.Classes
 
             if (isFileBased)
             {
-                if (string.IsNullOrEmpty(item.FilePath) || (!File.Exists(item.FilePath) && !Directory.Exists(item.FilePath)))
+                try
                 {
-                    return false; // Skip dead or deleted file entries
+                    if (string.IsNullOrEmpty(item.FilePath) || (!File.Exists(item.FilePath) && !Directory.Exists(item.FilePath)))
+                    {
+                        return false; // Skip dead or deleted file entries
+                    }
+                }
+                catch (Exception)
+                {
+                    return false;
                 }
             }
             return true;

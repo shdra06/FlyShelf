@@ -399,7 +399,7 @@ namespace FlyShelf.Classes
                         // TM-3 FIX: Normalize dates to local timezone (mirrors NoteManager)
                         foreach (var d in loaded)
                         {
-                            d.Date = d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date;
+                            d.Date = DateTime.SpecifyKind(d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date, DateTimeKind.Local);
                         }
 
                         _allDays = loaded.OrderByDescending(d => d.Date).ToList();
@@ -431,7 +431,7 @@ namespace FlyShelf.Classes
                             {
                                 foreach (var d in bakLoaded)
                                 {
-                                    d.Date = d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date;
+                                    d.Date = DateTime.SpecifyKind(d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date, DateTimeKind.Local);
                                 }
                                 _allDays = bakLoaded.OrderByDescending(d => d.Date).ToList();
                                 _days = new ObservableCollection<TodoDay>(_allDays);
@@ -567,63 +567,80 @@ namespace FlyShelf.Classes
             }
         }
 
+        public static Task? LastSaveTask;
+
         public static void SaveNow()
         {
-            // TM-3 FIX: Guard against saving before load completes (mirrors NoteManager)
+            if (!_isLoaded) return;
+
+            Action performSave = () =>
+            {
+                List<TodoDay> snapshot;
+                string jsonStr;
+                try
+                {
+                    snapshot = _days.ToList();
+                    lock (_lock)
+                    {
+                        var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
+                        _allDays.RemoveAll(d => !visibleDates.Contains(d.Date.Date));
+                        foreach (var snapDay in snapshot)
+                        {
+                            int idx = _allDays.FindIndex(d => d.Date.Date == snapDay.Date.Date);
+                            if (idx >= 0) _allDays[idx] = snapDay;
+                            else _allDays.Add(snapDay);
+                        }
+                        _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
+
+                        var serializableList = _allDays.ToList();
+                        jsonStr = SerializeSnapshot(serializableList);
+                    }
+                }
+                catch
+                {
+                    return;
+                }
+                LastSaveTask = Task.Run(() => SaveSnapshotJson(snapshot, jsonStr));
+            };
+
+            var app = System.Windows.Application.Current;
+            if (app?.Dispatcher?.CheckAccess() == false)
+            {
+                app.Dispatcher.InvokeAsync(performSave);
+            }
+            else
+            {
+                performSave();
+            }
+        }
+
+        public static void SaveNowSync()
+        {
             if (!_isLoaded) return;
 
             List<TodoDay> snapshot;
+            string jsonStr;
             try
             {
-                // Must read ObservableCollection on UI thread if it was created there
-                var app = System.Windows.Application.Current;
-                if (app?.Dispatcher?.CheckAccess() == false)
+                snapshot = _days.ToList();
+                lock (_lock)
                 {
-                    // Called from timer/background thread — dispatch to UI thread for snapshot
-                    app.Dispatcher.InvokeAsync(() =>
+                    var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
+                    _allDays.RemoveAll(d => !visibleDates.Contains(d.Date.Date));
+                    foreach (var snapDay in snapshot)
                     {
-                        List<TodoDay> snap;
-                        try { snap = _days.ToList(); } catch { return; }
-                        // Serialize immediately on the UI thread so the snapshot is truly atomic
-                        string jsonStr;
-                        try
-                        {
-                            jsonStr = SerializeSnapshot(snap);
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.LogAction("TODOS", $"Failed to serialize todos snapshot: {ex.Message}");
-                            return;
-                        }
-                        // TM-3 FIX: Run merge + file I/O on a background thread
-                        Task.Run(() => SaveSnapshotJson(snap, jsonStr));
-                    });
-                    return;
-                }
-                else
-                {
-                    try { snapshot = _days.ToList(); } catch { return; }
+                        int idx = _allDays.FindIndex(d => d.Date.Date == snapDay.Date.Date);
+                        if (idx >= 0) _allDays[idx] = snapDay;
+                        else _allDays.Add(snapDay);
+                    }
+                    _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
+
+                    var serializableList = _allDays.ToList();
+                    jsonStr = SerializeSnapshot(serializableList);
                 }
             }
-            catch
-            {
-                try { snapshot = _days.ToList(); } catch { return; }
-            }
-
-            // Serialize on this thread before handing off to background
-            string json;
-            try
-            {
-                json = SerializeSnapshot(snapshot);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("TODOS", $"Failed to serialize todos snapshot: {ex.Message}");
-                return;
-            }
-
-            // TM-3 FIX: Run merge + file I/O on a background thread
-            Task.Run(() => SaveSnapshotJson(snapshot, json));
+            catch { return; }
+            SaveSnapshotJson(snapshot, jsonStr);
         }
 
         /// <summary>Serialize a snapshot list to JSON string (called on the thread that owns the data).</summary>
@@ -640,49 +657,8 @@ namespace FlyShelf.Classes
         /// Mirrors NoteManager.SaveSnapshotJson — ensures _allDays is always the complete truth.</summary>
         private static void SaveSnapshotJson(List<TodoDay> snapshot, string preSerializedJson)
         {
-            string json;
-            // TM-3 FIX: Merge both lock acquisitions into one so _allDays cannot be mutated
-            // between the merge step and the serialization step.
-            lock (_lock)
-            {
-                // Merge snapshot back into _allDays
-                var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
-
-                // 1. Remove days from _allDays if they are no longer present in the snapshot (user deleted them)
-                _allDays.RemoveAll(d => !visibleDates.Contains(d.Date.Date));
-
-                // 2. Add or update days from snapshot
-                foreach (var snapDay in snapshot)
-                {
-                    int idx = _allDays.FindIndex(d => d.Date.Date == snapDay.Date.Date);
-                    if (idx >= 0)
-                    {
-                        _allDays[idx] = snapDay;
-                    }
-                    else
-                    {
-                        _allDays.Add(snapDay);
-                    }
-                }
-
-                // Sort newest first
-                _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
-
-                // Re-serialize _allDays (which is now the complete truth) inside the lock
-                try
-                {
-                    json = JsonSerializer.Serialize(_allDays, new JsonSerializerOptions
-                    {
-                        WriteIndented = false,
-                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogAction("TODOS", $"Failed to serialize todos: {ex.Message}");
-                    return;
-                }
-            }
+            if (snapshot.Count == 0) { Logger.LogAction("TODOS", "Skipping save — empty snapshot"); return; }
+            string json = preSerializedJson;
 
             // TM-1 FIX: _fileLock ensures concurrent file writes don't race on .tmp/.bak files
             lock (_fileLock)
@@ -796,34 +772,44 @@ namespace FlyShelf.Classes
         {
             lock (_lock)
             {
-                var yesterday = DateTime.Today.AddDays(-1);
-                var yesterdayDay = _days.FirstOrDefault(d => d.Date.Date == yesterday);
-                if (yesterdayDay == null) return 0;
-
-                var incomplete = yesterdayDay.Items.Where(i => !i.IsDone && !string.IsNullOrWhiteSpace(i.Text)).ToList();
-                if (incomplete.Count == 0) return 0;
-
                 var today = EnsureToday();
                 int migrated = 0;
 
-                foreach (var item in incomplete)
-                {
-                    // Don't migrate if an identical task already exists today
-                    if (today.Items.Any(t => t.Text == item.Text)) continue;
+                var pastDays = _days.Where(d => d.Date.Date < DateTime.Today).ToList();
 
-                    var newItem = new TodoItem
+                foreach (var pastDay in pastDays)
+                {
+                    var incomplete = pastDay.Items.Where(i => !i.IsDone && !string.IsNullOrWhiteSpace(i.Text)).ToList();
+                    if (incomplete.Count == 0) continue;
+
+                    foreach (var item in incomplete)
                     {
-                        Text = item.Text,
-                        Priority = item.Priority,
-                        DueDate = item.DueDate,
-                        Tags = new List<string>(item.Tags),
-                        Color = item.Color,
-                        Description = item.Description,
-                        Recurrence = item.Recurrence,
-                        CreatedAt = DateTime.Now
-                    };
-                    today.Items.Add(newItem);
-                    migrated++;
+                        // Don't migrate if an identical task already exists today
+                        if (today.Items.Any(t => t.Text == item.Text)) continue;
+
+                        var newItem = new TodoItem
+                        {
+                            Text = item.Text,
+                            Priority = item.Priority,
+                            DueDate = item.DueDate,
+                            Tags = new List<string>(item.Tags),
+                            Color = item.Color,
+                            Description = item.Description,
+                            Recurrence = item.Recurrence,
+                            CreatedAt = DateTime.Now
+                        };
+
+                        if (item.SubTasks?.Count > 0)
+                        {
+                            foreach (var sub in item.SubTasks)
+                            {
+                                newItem.SubTasks.Add(new TodoItem { Text = sub.Text, IsDone = sub.IsDone });
+                            }
+                        }
+
+                        today.Items.Add(newItem);
+                        migrated++;
+                    }
                 }
 
                 if (migrated > 0) ScheduleSave();

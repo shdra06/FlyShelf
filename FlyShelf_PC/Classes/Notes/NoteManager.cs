@@ -83,7 +83,7 @@ namespace FlyShelf.Classes
                         // Normalize all dates to local timezone to prevent UTC timezone shift bugs
                         foreach (var d in loaded)
                         {
-                            d.Date = d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date;
+                            d.Date = DateTime.SpecifyKind(d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date, DateTimeKind.Local);
                             d.MigrateFreeformIfNeeded(); // Migrate legacy FreeformContent → FreeformSections
                         }
 
@@ -119,7 +119,7 @@ namespace FlyShelf.Classes
                             {
                                 foreach (var d in loadedBackup)
                                 {
-                                    d.Date = d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date;
+                                    d.Date = DateTime.SpecifyKind(d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date, DateTimeKind.Local);
                                     d.MigrateFreeformIfNeeded();
                                 }
                                 _allDays = loadedBackup.OrderByDescending(d => d.Date).ToList();
@@ -345,66 +345,94 @@ namespace FlyShelf.Classes
             }
         }
 
+        public static Task? LastSaveTask;
+
         /// <summary>Immediately persist to disk (atomic write).</summary>
         public static void SaveNow()
         {
-            // DEADLOCK FIX: Snapshot the collection OUTSIDE the lock.
-            // Previously, Dispatcher.Invoke() was called while holding _lock,
-            // causing AB-BA deadlock when the UI thread also needed _lock.
             if (!_isLoaded) return;
 
-            // NM-2a FIX: Serialize to JSON on the calling thread so the snapshot is
-            // truly atomic with respect to the ObservableCollection. Only the file
-            // I/O runs on a background thread.
-            List<NoteDay> snapshot;
-            try
+            Action performSave = () =>
             {
-                // Must read ObservableCollection on UI thread if it was created there
-                if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == false)
-                {
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                    {
-                        List<NoteDay> snap;
-                        try { snap = _days.ToList(); } catch { return; }
-                        // NM-2a FIX: Serialize immediately on the UI thread
-                        string jsonStr;
-                        try
-                        {
-                            jsonStr = SerializeSnapshot(snap);
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.LogAction("NOTES", $"Failed to serialize notes snapshot: {ex.Message}");
-                            return;
-                        }
-                        Task.Run(() => SaveSnapshotJson(snap, jsonStr));
-                    });
-                    return;
-                }
-                else
+                List<NoteDay> snapshot;
+                string jsonStr;
+                try
                 {
                     snapshot = _days.ToList();
-                }
-            }
-            catch
-            {
-                try { snapshot = _days.ToList(); } catch { return; }
-            }
+                    
+                    lock (_lock)
+                    {
+                        var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
+                        int maxDays = LicenseManager.GetNoteHistoryDays();
+                        DateTime? cutoff = maxDays < int.MaxValue ? (DateTime?)DateTime.Today.AddDays(-maxDays) : null;
 
-            // NM-2a FIX: Serialize on this thread before handing off to background
-            string json;
+                        _allDays.RemoveAll(d => {
+                            if (cutoff.HasValue && d.Date.Date < cutoff.Value.Date) return false;
+                            return !visibleDates.Contains(d.Date.Date);
+                        });
+
+                        foreach (var snapDay in snapshot)
+                        {
+                            int idx = _allDays.FindIndex(d => d.Date.Date == snapDay.Date.Date);
+                            if (idx >= 0) _allDays[idx] = snapDay;
+                            else _allDays.Add(snapDay);
+                        }
+                        _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
+
+                        var serializableList = _allDays.ToList();
+                        jsonStr = SerializeSnapshot(serializableList);
+                    }
+                }
+                catch
+                {
+                    return;
+                }
+                LastSaveTask = Task.Run(() => SaveSnapshotJson(snapshot, jsonStr));
+            };
+
+            if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == false)
+            {
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(performSave);
+            }
+            else
+            {
+                performSave();
+            }
+        }
+
+        public static void SaveNowSync()
+        {
+            if (!_isLoaded) return;
+            List<NoteDay> snapshot;
+            string jsonStr;
             try
             {
-                json = SerializeSnapshot(snapshot);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("NOTES", $"Failed to serialize notes snapshot: {ex.Message}");
-                return;
-            }
+                snapshot = _days.ToList();
+                lock (_lock)
+                {
+                    var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
+                    int maxDays = LicenseManager.GetNoteHistoryDays();
+                    DateTime? cutoff = maxDays < int.MaxValue ? (DateTime?)DateTime.Today.AddDays(-maxDays) : null;
 
-            // Run merge + file I/O on a background thread so it doesn't block the UI thread
-            Task.Run(() => SaveSnapshotJson(snapshot, json));
+                    _allDays.RemoveAll(d => {
+                        if (cutoff.HasValue && d.Date.Date < cutoff.Value.Date) return false;
+                        return !visibleDates.Contains(d.Date.Date);
+                    });
+
+                    foreach (var snapDay in snapshot)
+                    {
+                        int idx = _allDays.FindIndex(d => d.Date.Date == snapDay.Date.Date);
+                        if (idx >= 0) _allDays[idx] = snapDay;
+                        else _allDays.Add(snapDay);
+                    }
+                    _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
+
+                    var serializableList = _allDays.ToList();
+                    jsonStr = SerializeSnapshot(serializableList);
+                }
+            }
+            catch { return; }
+            SaveSnapshotJson(snapshot, jsonStr);
         }
 
         /// <summary>Serialize a snapshot list to JSON string (called on the thread that owns the data).</summary>
@@ -420,54 +448,9 @@ namespace FlyShelf.Classes
         /// <summary>Merge snapshot into _allDays, re-serialize under lock, and write to disk.</summary>
         private static void SaveSnapshotJson(List<NoteDay> snapshot, string preSerializedJson)
         {
-            string json;
-            // NM-2 FIX: Merge both lock acquisitions into one so _allDays cannot be mutated
-            // between the merge step and the serialization step.
-            lock (_lock)
-            {
-                // Merge snapshot back into _allDays
-                var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
-                int maxDays = LicenseManager.GetNoteHistoryDays();
-                DateTime? cutoff = maxDays < int.MaxValue ? (DateTime?)DateTime.Today.AddDays(-maxDays) : null;
+            if (snapshot.Count == 0) { Logger.LogAction("NOTES_SAVE", "Skipping save — empty snapshot"); return; }
+            string json = preSerializedJson;
 
-                // 1. Remove visible days from _allDays if they are no longer present in the snapshot (user deleted them)
-                _allDays.RemoveAll(d => {
-                    if (cutoff.HasValue && d.Date.Date < cutoff.Value.Date) return false; // Keep hidden history
-                    return !visibleDates.Contains(d.Date.Date); // Delete if it was visible but user removed it
-                });
-
-                // 2. Add or update days from snapshot
-                foreach (var snapDay in snapshot)
-                {
-                    int idx = _allDays.FindIndex(d => d.Date.Date == snapDay.Date.Date);
-                    if (idx >= 0)
-                    {
-                        _allDays[idx] = snapDay;
-                    }
-                    else
-                    {
-                        _allDays.Add(snapDay);
-                    }
-                }
-
-                // Sort newest first
-                _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
-
-                // Re-serialize _allDays (which now includes hidden history) inside the lock
-                try
-                {
-                    json = JsonSerializer.Serialize(_allDays, new JsonSerializerOptions
-                    {
-                        WriteIndented = false,
-                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogAction("NOTES", $"Failed to serialize notes: {ex.Message}");
-                    return;
-                }
-            }
 
             if (!_fileLock.Wait(TimeSpan.FromSeconds(30)))
             {
@@ -534,7 +517,8 @@ namespace FlyShelf.Classes
                     bool matchContent = FuzzyMatcher.IsMatch(q, bullet.Content ?? "");
                     bool matchHeader = FuzzyMatcher.IsMatch(q, bullet.Header ?? "");
                     bool matchTags = bullet.Tags.Any(t => FuzzyMatcher.IsMatch(q, t));
-                    if (matchContent || matchHeader || matchTags)
+                    bool matchSub = bullet.SubBullets.Any(sb => FuzzyMatcher.IsMatch(q, sb.Text ?? ""));
+                    if (matchContent || matchHeader || matchTags || matchSub)
                     {
                         results.Add((day, bullet));
                         if (results.Count >= MAX_SEARCH_RESULTS) return results;

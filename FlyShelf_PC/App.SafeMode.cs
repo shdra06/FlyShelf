@@ -176,7 +176,7 @@ public partial class App
                         return IntPtr.Zero;
                     });
 
-                    safeWindow.Closed += (s2, ev2) =>
+                    safeWindow.Closing += (s2, ev2) =>
                     {
                         try { FlyShelf.Classes.NativeMethods.UnregisterHotKey(hwnd, 9000); } catch { } // Best-effort: failure is acceptable
                     };

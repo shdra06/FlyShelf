@@ -459,7 +459,7 @@ namespace FlyShelf.ViewModels
                     {
                         var pinnedDispatcher = Application.Current?.Dispatcher;
                         if (pinnedDispatcher != null)
-                            await pinnedDispatcher.InvokeAsync(() => DroppedItems.AddRange(pinnedToAdd));
+                            await pinnedDispatcher.InvokeAsync(() => { DroppedItems.AddRange(pinnedToAdd); InvalidateUnpinnedCount(); });
                     }
                 }
             }
@@ -791,7 +791,8 @@ namespace FlyShelf.ViewModels
             if (isNewTextual && isExistingTextual)
             {
                 // Exact content match across all textual types
-                return !string.IsNullOrEmpty(newItem.RawContent) && newItem.RawContent == existing.RawContent;
+                return !string.IsNullOrEmpty(newItem.RawContent) && !string.IsNullOrEmpty(existing.RawContent) && 
+                       newItem.RawContent.Trim().Replace("\r\n", "\n") == existing.RawContent.Trim().Replace("\r\n", "\n");
             }
 
             // 2. File-based items (File, Document, Pdf, Archive, Video, Audio, Presentation, Folder, Image)
@@ -859,7 +860,7 @@ namespace FlyShelf.ViewModels
             if (newItem == null) return;
 
             ClipboardItem? duplicateToRemoval = null;
-            int checkCount = Math.Min(20, DroppedItems.Count);
+            int checkCount = Math.Min(100, DroppedItems.Count);
             for (int i = 0; i < checkCount; i++)
             {
                 var existing = DroppedItems[i];

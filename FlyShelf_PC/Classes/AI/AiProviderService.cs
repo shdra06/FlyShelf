@@ -284,6 +284,7 @@ namespace FlyShelf.Classes
             }
             catch (Exception ex)
             {
+                if (ex is OperationCanceledException || ct.IsCancellationRequested) throw;
                 // Fallback chain on error
                 Logger.LogAction("AI", $"Provider '{provider}' failed: {ex.Message}, falling back...");
                 result = await FallbackAsync(userPrompt, systemPrompt, tokens, ct);
@@ -364,8 +365,9 @@ namespace FlyShelf.Classes
 
             var responseJson = await response.Content.ReadAsStringAsync(ct);
             using var doc = JsonDocument.Parse(responseJson);
-            return doc.RootElement
-                .GetProperty("candidates")[0]
+            var candidates = doc.RootElement.GetProperty("candidates");
+            if (candidates.GetArrayLength() == 0) return null;
+            return candidates[0]
                 .GetProperty("content")
                 .GetProperty("parts")[0]
                 .GetProperty("text")
@@ -415,8 +417,9 @@ namespace FlyShelf.Classes
 
             var responseJson = await response.Content.ReadAsStringAsync(ct);
             using var doc = JsonDocument.Parse(responseJson);
-            return doc.RootElement
-                .GetProperty("choices")[0]
+            var choices = doc.RootElement.GetProperty("choices");
+            if (choices.GetArrayLength() == 0) return null;
+            return choices[0]
                 .GetProperty("message")
                 .GetProperty("content")
                 .GetString() ?? "";
@@ -594,9 +597,13 @@ namespace FlyShelf.Classes
             var contentArray = doc.RootElement.GetProperty("content");
             if (contentArray.GetArrayLength() == 0) throw new InvalidOperationException("Claude returned no response.");
 
-            var text = contentArray[0].GetProperty("text").GetString();
-            Logger.LogAction("AI", $"Claude response received ({text?.Length ?? 0} chars)");
-            return text ?? "";
+            if (contentArray[0].TryGetProperty("text", out var textProp))
+            {
+                var text = textProp.GetString();
+                Logger.LogAction("AI", $"Claude response received ({text?.Length ?? 0} chars)");
+                return text ?? "";
+            }
+            return "";
         }
 
         /// <summary>

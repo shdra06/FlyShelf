@@ -553,7 +553,7 @@ namespace FlyShelf.Classes
                 string announceUrl = $"{peer.ActiveUrl.TrimEnd('/')}/api/peer_announce";
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-                var resp = await _sharedClient.PostAsync(announceUrl, content, cts.Token);
+                using var resp = await _sharedClient.PostAsync(announceUrl, content, cts.Token);
 
                 if (resp.IsSuccessStatusCode)
                 {

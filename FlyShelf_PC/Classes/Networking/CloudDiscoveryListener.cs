@@ -115,7 +115,7 @@ namespace FlyShelf.Classes
                 }
 
                 string url = await AuthUrl($"active_devices/{pairingKey}.json");
-                var response = await _queryClient.GetAsync(url);
+                using var response = await _queryClient.GetAsync(url);
 
                 if (!response.IsSuccessStatusCode)
                 {

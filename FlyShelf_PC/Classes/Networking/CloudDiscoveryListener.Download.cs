@@ -50,6 +50,7 @@ namespace FlyShelf.Classes
         {
             ClipboardItem? progressClip = null;
             string filePath = ""; // Declared here so catch block can reference it for cleanup
+            HttpResponseMessage? response = null;
             try
             {
                 string senderName = SanitizeFileName(cloudItem.SourceDeviceName, "CloudSync");
@@ -117,7 +118,6 @@ namespace FlyShelf.Classes
                 }
 
                 // AUTHENTICATION: /download requires pairing key or PIN
-                HttpResponseMessage? response = null;
                 int maxRetries = 2;
                 int[] retryDelays = { 500, 1500 };
 
@@ -215,6 +215,7 @@ namespace FlyShelf.Classes
                             if (!string.IsNullOrEmpty(pairingKey))
                                 request.Headers.TryAddWithoutValidation("X-Pairing-Key", pairingKey);
                             request.Headers.TryAddWithoutValidation("X-FlyShelf-Client", "DesktopSync");
+                            response?.Dispose(); // Dispose previous if any
                             response = await downloadClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
 
                             if (response.IsSuccessStatusCode)
@@ -420,6 +421,10 @@ namespace FlyShelf.Classes
                 
                 Logger.LogAction("FIREBASE SSE", $"Download failed but keeping Firebase entry for other devices: {cloudItem.Title} [{cloudItem.Id}]");
             }
+            finally
+            {
+                response?.Dispose();
+            }
         }
 
         /// <summary>
@@ -471,7 +476,7 @@ namespace FlyShelf.Classes
                 if (!string.IsNullOrEmpty(retryPairingKey))
                     retryRequest.Headers.TryAddWithoutValidation("X-Pairing-Key", retryPairingKey);
                 retryRequest.Headers.TryAddWithoutValidation("X-FlyShelf-Client", "DesktopSync");
-                var retryResponse = await retryClient.SendAsync(retryRequest);
+                using var retryResponse = await retryClient.SendAsync(retryRequest);
                 if (retryResponse.IsSuccessStatusCode)
                 {
                     using var retryContent = await retryResponse.Content.ReadAsStreamAsync();

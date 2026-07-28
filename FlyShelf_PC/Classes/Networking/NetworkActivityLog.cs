@@ -62,7 +62,15 @@ namespace FlyShelf.Classes
         public string CloudflareStatus { get => _cloudflareStatus; set { _cloudflareStatus = value; OnPropertyChanged(); } }
 
         private string _lastActivity = "—";
-        public string LastActivity { get => _lastActivity; set { _lastActivity = value; OnPropertyChanged(); } }
+        public string LastActivity 
+        { 
+            get => Volatile.Read(ref _lastActivity); 
+            set 
+            { 
+                Volatile.Write(ref _lastActivity, value); 
+                OnPropertyChanged(); 
+            } 
+        }
 
         // Categories that qualify for the live network monitor
         private static readonly string[] NET_CATEGORIES = {

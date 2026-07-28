@@ -36,7 +36,7 @@ namespace FlyShelf.Classes
             {
                 // Return cached key if pairing key hasn't changed
                 if (_cachedKey != null && _cachedPairingKey == pairingKey)
-                    return _cachedKey;
+                    return (byte[])_cachedKey.Clone();
 
                 _cachedKey = Rfc2898DeriveBytes.Pbkdf2(
                     pairingKey,
@@ -45,7 +45,7 @@ namespace FlyShelf.Classes
                     HashAlgorithmName.SHA256,
                     KEY_SIZE_BYTES);
                 _cachedPairingKey = pairingKey;
-                return _cachedKey;
+                return (byte[])_cachedKey.Clone();
             }
         }
 

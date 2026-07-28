@@ -951,6 +951,7 @@ namespace FlyShelf.Classes
         {
             if (!IsPro || string.IsNullOrEmpty(_data.LicenseKey)) return;
 
+            if (SettingsManager.Current == null) return;
             string deviceId = _data.DeviceId;
             if (string.IsNullOrEmpty(deviceId))
                 deviceId = SettingsManager.Current.DeviceId;
@@ -987,9 +988,12 @@ namespace FlyShelf.Classes
                     {
                         // Success — update token and timestamp
                         string newToken = root.GetProperty("token").GetString() ?? _data.ActivationToken;
-                        _data.ActivationToken = newToken;
-                        _data.LastValidated = NetworkClock.GetTrustedUtcNow().time.ToString("o", CultureInfo.InvariantCulture);
-                        Save();
+                        lock (_lock)
+                        {
+                            _data.ActivationToken = newToken;
+                            _data.LastValidated = NetworkClock.GetTrustedUtcNow().time.ToString("o", CultureInfo.InvariantCulture);
+                            Save();
+                        }
                         Logger.LogAction("LICENSE_SERVER", "✅ JWT revalidation successful — token refreshed");
                         return;
                     }

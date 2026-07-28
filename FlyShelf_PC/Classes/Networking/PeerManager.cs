@@ -314,7 +314,7 @@ namespace FlyShelf.Classes
                 // FIX 6: Reuse shared HttpClient instead of creating new one every 30s (prevents socket exhaustion)
                 string url = await CloudDiscoveryManager.AuthUrlPublic($"active_devices/{_myPairingKey}.json");
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var resp = await _sharedClient.GetAsync(url, cts.Token);
+                using var resp = await _sharedClient.GetAsync(url, cts.Token);
                 if (!resp.IsSuccessStatusCode) return;
 
                 string json = await resp.Content.ReadAsStringAsync();
@@ -445,7 +445,7 @@ namespace FlyShelf.Classes
                             requestedBy = _myDeviceId
                         });
                         using var reqCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                        await _sharedClient.PutAsync(requestUrl, new StringContent(body, Encoding.UTF8, "application/json"), reqCts.Token);
+                        using var reqResp = await _sharedClient.PutAsync(requestUrl, new StringContent(body, Encoding.UTF8, "application/json"), reqCts.Token);
                     }
                     catch (Exception ex) { Logger.LogAction("PEER", $"URL request to peer failed: {ex.Message}"); }
                 }

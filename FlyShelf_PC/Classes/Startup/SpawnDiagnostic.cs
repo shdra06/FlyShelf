@@ -263,7 +263,8 @@ namespace FlyShelf.Classes
                     "ShelfVis,ShelfOp," +
                     "LockedBottom,LastHeight");
 
-                foreach (var f in _frames)
+                var framesSnapshot = _frames.ToList();
+                foreach (var f in framesSnapshot)
                 {
                     csv.AppendLine(CultureInfo.InvariantCulture, $"{f.FrameIndex},{f.TimeSinceSpawnMs:F3},{f.DeltaFromLastFrameMs:F3}," +
                         $"{f.Phase},{f.Event}," +
@@ -291,10 +292,11 @@ namespace FlyShelf.Classes
                 report.AppendLine("═══ ANOMALY DETECTION ═══");
                 int anomalyCount = 0;
 
-                for (int i = 1; i < _frames.Count; i++)
+                var framesSnapshot2 = _frames.ToList();
+                for (int i = 1; i < framesSnapshot2.Count; i++)
                 {
-                    var prev = _frames[i - 1];
-                    var curr = _frames[i];
+                    var prev = framesSnapshot2[i - 1];
+                    var curr = framesSnapshot2[i];
 
                     // 1. Position jump while visible
                     double posJump = Math.Abs(curr.WindowTop - prev.WindowTop);
@@ -380,7 +382,8 @@ namespace FlyShelf.Classes
                 report.AppendLine("Frame | Time(ms) | Δms   | Phase          | Opacity | SlideY  | Top      | Height  | Event/Notes");
                 report.AppendLine("------+----------+-------+----------------+---------+---------+----------+---------+------------------");
 
-                foreach (var f in _frames)
+                var framesSnapshot3 = _frames.ToList();
+                foreach (var f in framesSnapshot3)
                 {
                     string notes = "";
                     if (!string.IsNullOrEmpty(f.Event)) notes = f.Event;

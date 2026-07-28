@@ -167,7 +167,7 @@ namespace FlyShelf.ViewModels
                     var initialBatch = sortedItems.Take(InitialBatchSize).ToList();
                     var vmDispatcher2 = Application.Current?.Dispatcher;
                     if (vmDispatcher2 != null)
-                        await vmDispatcher2.InvokeAsync(() => DroppedItems.AddRange(initialBatch));
+                        await vmDispatcher2.InvokeAsync(() => { DroppedItems.AddRange(initialBatch); InvalidateUnpinnedCount(); });
 
                     // Stream the remaining items in background chunks to keep UI 100% responsive
                     var remainingItems = sortedItems.Skip(InitialBatchSize).ToList();
@@ -181,7 +181,7 @@ namespace FlyShelf.ViewModels
                                 await System.Threading.Tasks.Task.Delay(StreamingChunkDelayMs); // Yield UI thread budget
                                 var vmDispatcher3 = Application.Current?.Dispatcher;
                                 if (vmDispatcher3 != null)
-                                    await vmDispatcher3.InvokeAsync(() => DroppedItems.AddRange(chunk));
+                                    await vmDispatcher3.InvokeAsync(() => { DroppedItems.AddRange(chunk); InvalidateUnpinnedCount(); });
                             }
                         });
                     }

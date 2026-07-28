@@ -112,7 +112,7 @@ namespace FlyShelf.Classes
                             }
                             string tempPath = path + ".tmp";
                             File.WriteAllText(tempPath, encrypted);
-                            File.Move(tempPath, path, true);
+                            FileRetryHelper.RunWithRetry(() => File.Move(tempPath, path, true), 3, 100);
                         }
                         catch (Exception ex)
                         {

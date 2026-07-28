@@ -268,6 +268,7 @@ namespace FlyShelf.Classes
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
                 if (resumeFrom == 0) // Only pre-allocate fresh files; resumed files already exist
                 {
+                    if (!DiskSpaceHelper.HasSufficientDiskSpace(filePath, fileSize)) { Logger.LogAction("TRANSFER", "Insufficient disk space for chunked file pre-allocation."); session.MarkFailed("Insufficient disk space"); return; }
                     using (var preAlloc = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
                     {
                         preAlloc.SetLength(fileSize);
@@ -275,6 +276,7 @@ namespace FlyShelf.Classes
                 }
                 else if (!File.Exists(filePath) || new FileInfo(filePath).Length < fileSize)
                 {
+                    if (!DiskSpaceHelper.HasSufficientDiskSpace(filePath, fileSize)) { Logger.LogAction("TRANSFER", "Insufficient disk space for chunked file pre-allocation."); session.MarkFailed("Insufficient disk space"); return; }
                     // Resumed but file is missing or truncated — re-create and lose progress
                     using (var preAlloc = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
                     {

@@ -391,6 +391,8 @@ namespace FlyShelf.Classes
 
         private static void ShowLimitDialog(string title, string message, string upgradeMessage, string emoji, Window? owner)
         {
+            System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+            {
             // Prevent stacking — if a limit dialog is already open, just bring it forward
             if (_activeDialog != null && _activeDialog.IsLoaded)
             {
@@ -674,6 +676,7 @@ namespace FlyShelf.Classes
             outerBorder.Child = rootGrid;
             dialog.Content = outerBorder;
             WindowHelper.ShowDialogInForeground(dialog);
+            });
         }
 
         // ═════════════════════════════════════════════════════════════

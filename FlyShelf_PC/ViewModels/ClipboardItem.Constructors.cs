@@ -464,7 +464,7 @@ namespace FlyShelf.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    FormattedSize = "Unknown";  // OK: item might not be in visual tree yet
+                    Application.Current?.Dispatcher?.InvokeAsync(() => FormattedSize = "Unknown");  // OK: item might not be in visual tree yet
                     Classes.Logger.LogAction("CLIPBOARD_ITEM_INIT_ERR", ex.Message);
                 }
 
@@ -571,7 +571,11 @@ namespace FlyShelf.ViewModels
                             Int32Rect.Empty,
                             BitmapSizeOptions.FromEmptyOptions());
                         bitmapSource.Freeze();
-                        if (!string.IsNullOrEmpty(ext)) _shellIconCache.TryAdd(ext, bitmapSource);
+                        if (!string.IsNullOrEmpty(ext))
+                        {
+                            if (_shellIconCache.Count > 500) _shellIconCache.Clear();
+                            _shellIconCache.TryAdd(ext, bitmapSource);
+                        }
                         return bitmapSource;
                     }
                     finally
@@ -582,7 +586,11 @@ namespace FlyShelf.ViewModels
             }
             catch { } // Best-effort: failure is acceptable
             // Cache null result to avoid retrying for extensions that have no icon
-            if (!string.IsNullOrEmpty(ext)) _shellIconCache.TryAdd(ext, null);
+            if (!string.IsNullOrEmpty(ext))
+            {
+                if (_shellIconCache.Count > 500) _shellIconCache.Clear();
+                _shellIconCache.TryAdd(ext, null);
+            }
             return null;
         }
 

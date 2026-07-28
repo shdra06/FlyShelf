@@ -221,21 +221,31 @@ namespace FlyShelf.Classes
 
         // ═══ Search & Filter ═══
 
+        private List<TransferHistoryEntry> GetSnapshot()
+        {
+            List<TransferHistoryEntry> snapshot = new();
+            var app = System.Windows.Application.Current;
+            if (app != null && app.Dispatcher != null)
+            {
+                app.Dispatcher.Invoke(() => { snapshot = Entries.ToList(); });
+                return snapshot;
+            }
+            return Entries.ToList();
+        }
+
         /// <summary>
         /// Searches entries by file name or peer name (case-insensitive).
         /// </summary>
         public IEnumerable<TransferHistoryEntry> Search(string query)
         {
-            if (string.IsNullOrWhiteSpace(query)) return Entries;
+            var snapshot = GetSnapshot();
+            if (string.IsNullOrWhiteSpace(query)) return snapshot;
 
             string q = query.Trim();
-            lock (_lock)
-            {
-                return Entries.Where(e =>
-                    (!string.IsNullOrEmpty(e.FileName) && e.FileName.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
-                    (!string.IsNullOrEmpty(e.PeerName) && e.PeerName.Contains(q, StringComparison.OrdinalIgnoreCase))
-                ).ToList();
-            }
+            return snapshot.Where(e =>
+                (!string.IsNullOrEmpty(e.FileName) && e.FileName.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(e.PeerName) && e.PeerName.Contains(q, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
         }
 
         /// <summary>
@@ -243,14 +253,12 @@ namespace FlyShelf.Classes
         /// </summary>
         public IEnumerable<TransferHistoryEntry> FilterByDevice(string deviceId)
         {
-            if (string.IsNullOrEmpty(deviceId)) return Entries;
+            var snapshot = GetSnapshot();
+            if (string.IsNullOrEmpty(deviceId)) return snapshot;
 
-            lock (_lock)
-            {
-                return Entries.Where(e =>
-                    string.Equals(e.PeerDeviceId, deviceId, StringComparison.OrdinalIgnoreCase)
-                ).ToList();
-            }
+            return snapshot.Where(e =>
+                string.Equals(e.PeerDeviceId, deviceId, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
         }
 
         /// <summary>
@@ -258,14 +266,12 @@ namespace FlyShelf.Classes
         /// </summary>
         public IEnumerable<TransferHistoryEntry> FilterByStatus(string status)
         {
-            if (string.IsNullOrEmpty(status)) return Entries;
+            var snapshot = GetSnapshot();
+            if (string.IsNullOrEmpty(status)) return snapshot;
 
-            lock (_lock)
-            {
-                return Entries.Where(e =>
-                    string.Equals(e.Status, status, StringComparison.OrdinalIgnoreCase)
-                ).ToList();
-            }
+            return snapshot.Where(e =>
+                string.Equals(e.Status, status, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
         }
 
         // ═══ Export ═══
@@ -275,12 +281,11 @@ namespace FlyShelf.Classes
         /// </summary>
         public string ExportCsv()
         {
-            lock (_lock)
-            {
-                var sb = new StringBuilder();
-                sb.AppendLine("Id,FileName,FileSize,Direction,PeerName,PeerDeviceId,Status,StartedAt,CompletedAt,DurationSeconds,AverageSpeedBps,PeakSpeedBps,ErrorMessage");
+            var snapshot = GetSnapshot();
+            var sb = new StringBuilder();
+            sb.AppendLine("Id,FileName,FileSize,Direction,PeerName,PeerDeviceId,Status,StartedAt,CompletedAt,DurationSeconds,AverageSpeedBps,PeakSpeedBps,ErrorMessage");
 
-                foreach (var e in Entries)
+            foreach (var e in snapshot)
                 {
                     sb.AppendLine(string.Join(",",
                         CsvEscape(e.Id),
@@ -299,8 +304,7 @@ namespace FlyShelf.Classes
                     ));
                 }
 
-                return sb.ToString();
-            }
+            return sb.ToString();
         }
 
         private static string CsvEscape(string value)
@@ -317,23 +321,20 @@ namespace FlyShelf.Classes
 
         public int TotalSentCount
         {
-            get { lock (_lock) { return Entries.Count(e => e.Direction == "Sent"); } }
+            get { return GetSnapshot().Count(e => e.Direction == "Sent"); }
         }
 
         public int TotalReceivedCount
         {
-            get { lock (_lock) { return Entries.Count(e => e.Direction == "Received"); } }
+            get { return GetSnapshot().Count(e => e.Direction == "Received"); }
         }
 
         public long TotalBytesSent
         {
             get
             {
-                lock (_lock)
-                {
-                    return Entries.Where(e => e.Direction == "Sent" && e.Status == "Completed")
-                        .Sum(e => e.FileSize);
-                }
+                return GetSnapshot().Where(e => e.Direction == "Sent" && e.Status == "Completed")
+                    .Sum(e => e.FileSize);
             }
         }
 
@@ -341,11 +342,8 @@ namespace FlyShelf.Classes
         {
             get
             {
-                lock (_lock)
-                {
-                    return Entries.Where(e => e.Direction == "Received" && e.Status == "Completed")
-                        .Sum(e => e.FileSize);
-                }
+                return GetSnapshot().Where(e => e.Direction == "Received" && e.Status == "Completed")
+                    .Sum(e => e.FileSize);
             }
         }
 
@@ -356,21 +354,11 @@ namespace FlyShelf.Classes
         /// </summary>
         public void Save()
         {
+            var snapshot = GetSnapshot();
             lock (_lock)
             {
                 try
                 {
-                    // Snapshot the collection on the current thread
-                    List<TransferHistoryEntry> snapshot;
-                    try
-                    {
-                        snapshot = Entries.ToList();
-                    }
-                    catch
-                    {
-                        // Collection may be modified on dispatcher — safe fallback
-                        snapshot = new List<TransferHistoryEntry>();
-                    }
 
                     string json = JsonSerializer.Serialize(snapshot, _jsonOptions);
                     string dir = Path.GetDirectoryName(_historyFile)!;

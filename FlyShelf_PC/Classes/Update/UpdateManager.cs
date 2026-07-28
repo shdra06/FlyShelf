@@ -286,7 +286,7 @@ namespace FlyShelf.Classes
             // then dispose the old one. Prevents a race where another thread reads
             // a disposed CTS between the Dispose() and assignment.
             var old = Interlocked.Exchange(ref _downloadCts, new CancellationTokenSource());
-            old?.Dispose();
+            if (old != null) { Task.Delay(1000).ContinueWith(_ => { try { old.Dispose(); } catch { } }); }
             var ct = _downloadCts.Token;
 
             try

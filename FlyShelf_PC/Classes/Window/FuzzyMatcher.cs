@@ -35,8 +35,8 @@ namespace FlyShelf.Classes
             if (string.IsNullOrWhiteSpace(query) || string.IsNullOrWhiteSpace(text))
                 return false;
 
-            string q = query.Trim();
-            string t = text;
+            string q = query.Trim().Normalize(System.Text.NormalizationForm.FormC);
+            string t = text.Normalize(System.Text.NormalizationForm.FormC);
 
             // 1. Exact substring (case-insensitive) — fastest path
             if (t.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
@@ -50,7 +50,7 @@ namespace FlyShelf.Classes
                 bool allFound = true;
                 for (int i = 0; i < queryWords.Length; i++)
                 {
-                    if (tLower.IndexOf(queryWords[i], StringComparison.Ordinal) < 0)
+                    if (tLower.IndexOf(queryWords[i], StringComparison.OrdinalIgnoreCase) < 0)
                     {
                         allFound = false;
                         break;
@@ -110,10 +110,10 @@ namespace FlyShelf.Classes
         internal static bool IsMatchWithLower(string query, string text, string precomputedLower)
         {
             if (string.IsNullOrEmpty(query) || string.IsNullOrEmpty(text)) return false;
-            string q = query.Trim();
+            string q = query.Trim().Normalize(System.Text.NormalizationForm.FormC);
             if (q.Length == 0) return true;
             // Fast path: exact substring match
-            if (precomputedLower.Contains(q.ToLowerInvariant(), StringComparison.Ordinal)) return true;
+            if (precomputedLower.Contains(q.ToLowerInvariant(), StringComparison.OrdinalIgnoreCase)) return true;
             // Fuzzy path
             string[] queryWords = SplitWords(q);
             if (queryWords.Length == 0) return true;
@@ -121,7 +121,7 @@ namespace FlyShelf.Classes
             bool allPresent = true;
             foreach (var w in queryWords)
             {
-                if (!precomputedLower.Contains(w, StringComparison.Ordinal)) { allPresent = false; break; }
+                if (!precomputedLower.Contains(w, StringComparison.OrdinalIgnoreCase)) { allPresent = false; break; }
             }
             if (allPresent) return true;
             // Trigram fuzzy fallback
@@ -148,8 +148,8 @@ namespace FlyShelf.Classes
             if (string.IsNullOrWhiteSpace(query) || string.IsNullOrWhiteSpace(text))
                 return 0.0;
 
-            string q = query.Trim();
-            string t = text;
+            string q = query.Trim().Normalize(System.Text.NormalizationForm.FormC);
+            string t = text.Normalize(System.Text.NormalizationForm.FormC);
 
             // 1.0 — Exact full match
             if (t.Equals(q, StringComparison.OrdinalIgnoreCase))
@@ -171,7 +171,7 @@ namespace FlyShelf.Classes
                 int wordsFound = 0;
                 for (int i = 0; i < queryWords.Length; i++)
                 {
-                    if (tLower.IndexOf(queryWords[i], StringComparison.Ordinal) >= 0)
+                    if (tLower.IndexOf(queryWords[i], StringComparison.OrdinalIgnoreCase) >= 0)
                         wordsFound++;
                 }
                 if (wordsFound == queryWords.Length)
@@ -212,12 +212,12 @@ namespace FlyShelf.Classes
         internal static double ScoreWithLower(string query, string text, string precomputedLower)
         {
             if (string.IsNullOrEmpty(query) || string.IsNullOrEmpty(text)) return 0;
-            string q = query.Trim();
+            string q = query.Trim().Normalize(System.Text.NormalizationForm.FormC);
             if (q.Length == 0) return 1.0;
             double score = 0;
             string qLower = q.ToLowerInvariant();
             // Exact match bonus
-            int idx = precomputedLower.IndexOf(qLower, StringComparison.Ordinal);
+            int idx = precomputedLower.IndexOf(qLower, StringComparison.OrdinalIgnoreCase);
             if (idx >= 0)
             {
                 score = 1.0;

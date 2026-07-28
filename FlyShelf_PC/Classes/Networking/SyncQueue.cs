@@ -113,9 +113,11 @@ namespace FlyShelf.Classes
                         // Fire concurrently — don't block the dequeue loop
                         _ = Task.Run(async () =>
                         {
-                            await _concurrency.WaitAsync(ct);
+                            bool acquired = false;
                             try
                             {
+                                await _concurrency.WaitAsync(ct);
+                                acquired = true;
                                 await ProcessJob(job, ct);
                             }
                             catch (Exception ex)
@@ -124,7 +126,7 @@ namespace FlyShelf.Classes
                             }
                             finally
                             {
-                                _concurrency.Release();
+                                if (acquired) _concurrency.Release();
                                 DebouncedPersist(); // Update disk after each job completes
                             }
                         }, ct);
@@ -190,8 +192,8 @@ namespace FlyShelf.Classes
         private static void DebouncedPersist()
         {
             long now = Environment.TickCount64;
-            if (now - _lastPersistTick < PERSIST_DEBOUNCE_MS) return;
-            _lastPersistTick = now;
+            if (now - Interlocked.Read(ref _lastPersistTick) < PERSIST_DEBOUNCE_MS) return;
+            Interlocked.Exchange(ref _lastPersistTick, now);
             _ = Task.Run(PersistToDisk);
         }
 

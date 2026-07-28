@@ -223,7 +223,7 @@ namespace FlyShelf.Classes
                             {
                                 isDuplicate = true;
                                 // Keep the longer text (more chars = more info)
-                                if (newWord.Text.Length > merged[i].Text.Length)
+                                if (newWord.Text != null && merged[i].Text != null && newWord.Text.Length > merged[i].Text.Length)
                                     merged[i] = newWord;
                                 break;
                             }
@@ -321,9 +321,7 @@ namespace FlyShelf.Classes
             {
                 // Invert first → becomes light background with dark text → then enhance
                 var inverted = InvertColors(input);
-                var enhanced = EnhanceForOcr(inverted);
-                inverted.Dispose();
-                return enhanced;
+                try { return EnhanceForOcr(inverted); } catch { inverted?.Dispose(); throw; }
             }
             else
             {

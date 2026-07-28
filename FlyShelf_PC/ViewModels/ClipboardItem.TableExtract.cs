@@ -542,7 +542,7 @@ namespace FlyShelf.ViewModels
                         catch
                         {
                             // Fallback: copy to clipboard
-                            try { System.Windows.Clipboard.SetText(result); } catch { }
+                            try { FlyShelf.Classes.ClipboardHelper.SafeSetTextAllowCapture(result); } catch { }
                             FlyShelf.Windows.ToastWindow.ShowToast("✅ AI table data copied to clipboard!");
                         }
                     });
