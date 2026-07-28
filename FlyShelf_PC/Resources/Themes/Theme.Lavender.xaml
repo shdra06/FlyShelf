@@ -49,6 +49,29 @@
     <SolidColorBrush x:Key="ThemeTextSecondary"   Color="#94A3B8" options:Freeze="True"/>
     <SolidColorBrush x:Key="ThemeTextMuted"       Color="#64748B" options:Freeze="True"/>
     <SolidColorBrush x:Key="ThemeTextOnAccent"    Color="#FFFFFF" options:Freeze="True"/>
+    <Color x:Key="ThemeTextPrimaryColor" options:Freeze="True">#F1F5F9</Color>
+    <Color x:Key="ThemeTextSecondaryColor" options:Freeze="True">#94A3B8</Color>
+    <Color x:Key="ThemeTextMutedColor" options:Freeze="True">#64748B</Color>
+    <Color x:Key="ThemeOverlayBgColor" options:Freeze="True">#12FFFFFF</Color>
+    <Color x:Key="ThemeOverlayBorderColor" options:Freeze="True">#18FFFFFF</Color>
+    <Color x:Key="ThemeOverlayHoverColor" options:Freeze="True">#22FFFFFF</Color>
+
+    <!-- ── Clipboard Popup ── -->
+    <Color x:Key="AltCardBgColor" options:Freeze="True">#18FFFFFF</Color>
+    <Color x:Key="AltCardBgHoverColor" options:Freeze="True">#28FFFFFF</Color>
+    <Color x:Key="AltCardBorderColor" options:Freeze="True">#22FFFFFF</Color>
+    <Color x:Key="AltCardBorderHoverColor" options:Freeze="True">#35FFFFFF</Color>
+    <Color x:Key="AltHeaderBgColor" options:Freeze="True">#16FFFFFF</Color>
+    <Color x:Key="AltSearchBgColor" options:Freeze="True">#12FFFFFF</Color>
+    <Color x:Key="AltSearchBorderColor" options:Freeze="True">#20FFFFFF</Color>
+    <Color x:Key="AltSearchFgColor" options:Freeze="True">#64748B</Color>
+    <Color x:Key="AltTextPrimaryColor" options:Freeze="True">#F1F5F9</Color>
+    <Color x:Key="AltTextSecondaryColor" options:Freeze="True">#94A3B8</Color>
+    <Color x:Key="AltTextMutedColor" options:Freeze="True">#64748B</Color>
+    <Color x:Key="AltSidebarHoverColor" options:Freeze="True">#15FFFFFF</Color>
+    <Color x:Key="AltBottomBarBgColor" options:Freeze="True">#16FFFFFF</Color>
+    <Color x:Key="AltBottomBarBorderColor" options:Freeze="True">#20FFFFFF</Color>
+    <Color x:Key="AltIconFallbackBgColor" options:Freeze="True">#0AFFFFFF</Color>
 
     <!-- Separator / Shadow / Window -->
     <SolidColorBrush x:Key="ThemeSeparator"       Color="#20FFFFFF" options:Freeze="True"/>

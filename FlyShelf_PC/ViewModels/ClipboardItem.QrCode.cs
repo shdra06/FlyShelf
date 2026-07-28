@@ -189,7 +189,7 @@ namespace FlyShelf.ViewModels
 
                     string outputPath = Path.Combine(
                         Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(),
-                        Path.GetFileNameWithoutExtension(FilePath) + "_Converted.docx");
+                        Path.GetFileNameWithoutExtension(FilePath) + $"_Converted_{DateTime.Now:yyyyMMdd_HHmmss}.docx");
 
                     bool converted = false;
 
@@ -323,11 +323,10 @@ try {{
                     // ═══════════════════════════════════════════════════════
                     if (!converted)
                     {
-                        string loPath = @"C:\Program Files\LibreOffice\program\soffice.exe";
-                        if (!File.Exists(loPath))
-                            loPath = @"C:\Program Files (x86)\LibreOffice\program\soffice.exe";
+                        // [FIX C4]: Use shared LibreOffice path resolver instead of hardcoded paths
+                        string loPath = GetLibreOfficePath();
 
-                        if (File.Exists(loPath))
+                        if (loPath != null)
                         {
                             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                                 FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting via LibreOffice...")

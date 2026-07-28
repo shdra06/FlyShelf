@@ -24,6 +24,8 @@ namespace FlyShelf
         private bool _isClosingSearch = false;   // re-entrancy guard for CloseSearch
         private bool _isApplyingFilter = false;  // PERF: guard to prevent triple filter reapplication during category switch
         private DateTime _overflowPopupLastClosed = DateTime.MinValue;
+        private System.Windows.Threading.DispatcherTimer _reapplyFilterDebounce; // PERF: coalesce rapid ReapplyActiveFilters calls
+        private DateTime _lastFilterApplyTime = DateTime.MinValue; // PERF: throttle filter re-evaluation
 
         private void SearchToggle_Click(object sender, RoutedEventArgs e)
         {
@@ -372,52 +374,89 @@ namespace FlyShelf
 
                 _viewModel.IsSearchActive = true;
                 
-                // Filter logic: Fuzzy match name, content, extension, or type name
-                view.Filter = obj =>
+                // PERF: Apply filter synchronously (fast boolean check) but defer sorting.
+                // The filter predicate is cheap — just string matching.
+                _isApplyingFilter = true;
+                try
                 {
-                    if (obj is FlyShelf.ViewModels.ClipboardItem item)
+                    view.Filter = obj =>
                     {
-                        // 1. Fuzzy match in text content or name (handles typos + word-order)
-                        if (Classes.FuzzyMatcher.IsMatchAny(q, item.LowerFileName, item.LowerContent, item.FileName, item.RawContent))
-                            return true;
-
-                        // 2. Check exact extension match (direct property or via FilePath)
-                        if (!string.IsNullOrEmpty(item.Extension) && item.Extension.Replace(".", "").Trim().Equals(q, StringComparison.OrdinalIgnoreCase))
-                            return true;
-                        if (!string.IsNullOrEmpty(item.FilePath))
+                        if (obj is FlyShelf.ViewModels.ClipboardItem item)
                         {
-                            try
+                            // 1. Fuzzy match in text content or name (handles typos + word-order)
+                            if (Classes.FuzzyMatcher.IsMatchAny(q, item.LowerFileName, item.LowerContent, item.FileName, item.RawContent))
+                                return true;
+
+                            // 2. Check exact extension match (direct property or via FilePath)
+                            if (!string.IsNullOrEmpty(item.Extension) && item.Extension.Replace(".", "").Trim().Equals(q, StringComparison.OrdinalIgnoreCase))
+                                return true;
+                            if (!string.IsNullOrEmpty(item.FilePath))
                             {
-                                string ext = System.IO.Path.GetExtension(item.FilePath).Replace(".", "").Trim();
-                                if (ext.Equals(q, StringComparison.OrdinalIgnoreCase)) return true;
+                                try
+                                {
+                                    string ext = System.IO.Path.GetExtension(item.FilePath).Replace(".", "").Trim();
+                                    if (ext.Equals(q, StringComparison.OrdinalIgnoreCase)) return true;
+                                }
+                                catch { } // Best-effort: failure is acceptable
                             }
-                            catch { } // Best-effort: failure is acceptable
+
+                            // 3. Check exact match with the item type string
+                            if (item.ItemType.ToString().Equals(q, StringComparison.OrdinalIgnoreCase))
+                                return true;
                         }
+                        return false;
+                    };
+                }
+                finally
+                {
+                    _isApplyingFilter = false;
+                }
 
-                        // 3. Check exact match with the item type string
-                        if (item.ItemType.ToString().Equals(q, StringComparison.OrdinalIgnoreCase))
-                            return true;
-                    }
-                    return false;
-                };
-
-                // Pre-compute scores once instead of scoring per comparison (O(N) vs O(N×log(N)×2))
-                var scoreCache = new Dictionary<ViewModels.ClipboardItem, double>();
+                // PERF: Score and sort on background thread to avoid UI freeze with 100+ items.
+                // Collect filtered items snapshot, score off-thread, then apply sort on UI thread.
+                var filteredItems = new System.Collections.Generic.List<ViewModels.ClipboardItem>();
                 foreach (var obj in view)
                 {
                     if (obj is ViewModels.ClipboardItem ci)
-                        scoreCache[ci] = Classes.FuzzyMatcher.ScoreBest(q, ci.LowerFileName, ci.LowerContent, ci.FileName, ci.RawContent);
+                        filteredItems.Add(ci);
                 }
-                view.CustomSort = Comparer<object>.Create((a, b) =>
+
+                // Only sort if there are enough items to warrant the cost
+                if (filteredItems.Count > 1)
                 {
-                    var sa = a is ViewModels.ClipboardItem ca && scoreCache.TryGetValue(ca, out var va) ? va : 0.0;
-                    var sb = b is ViewModels.ClipboardItem cb && scoreCache.TryGetValue(cb, out var vb) ? vb : 0.0;
-                    return sb.CompareTo(sa);
-                });
+                    _ = System.Threading.Tasks.Task.Run(() =>
+                    {
+                        var scoreCache = new Dictionary<ViewModels.ClipboardItem, double>(filteredItems.Count);
+                        foreach (var ci in filteredItems)
+                        {
+                            scoreCache[ci] = Classes.FuzzyMatcher.ScoreBest(q, ci.LowerFileName, ci.LowerContent, ci.FileName, ci.RawContent);
+                        }
+
+                        Dispatcher.InvokeAsync(() =>
+                        {
+                            try
+                            {
+                                if (!_isSearchActive) return; // Search was closed while scoring
+
+                                var currentView = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems) as ListCollectionView;
+                                if (currentView == null) return;
+
+                                currentView.CustomSort = Comparer<object>.Create((a, b) =>
+                                {
+                                    var sa = a is ViewModels.ClipboardItem ca && scoreCache.TryGetValue(ca, out var va) ? va : 0.0;
+                                    var sb = b is ViewModels.ClipboardItem cb && scoreCache.TryGetValue(cb, out var vb) ? vb : 0.0;
+                                    return sb.CompareTo(sa);
+                                });
+                            }
+                            catch { } // Best-effort: failure is acceptable
+                        }, System.Windows.Threading.DispatcherPriority.Background);
+                    });
+                }
             }
 
-            // Render newly visible thumbnails immediately
-            RenderVisibleThumbnails();
+            // PERF: Render thumbnails at ContextIdle — let layout complete first
+            Dispatcher.InvokeAsync(() => RenderVisibleThumbnails(),
+                System.Windows.Threading.DispatcherPriority.ContextIdle);
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -569,6 +608,10 @@ namespace FlyShelf
                     return;
                 }
 
+                // PERF: Throttle rapid category switches — ignore clicks within 100ms of last apply
+                if ((DateTime.UtcNow - _lastFilterApplyTime).TotalMilliseconds < 100)
+                    return;
+
                 _activeCategoryFilter = category;
 
                 // Close any active text search first
@@ -583,28 +626,26 @@ namespace FlyShelf
                 _isApplyingFilter = true;
                 try
                 {
+                    // PERF: Pre-build the category predicate ONCE, then assign.
+                    // This avoids the switch expression running per-item inside DeferRefresh.
+                    Predicate<object> categoryPredicate = category switch
+                    {
+                        "Images" => obj => obj is FlyShelf.ViewModels.ClipboardItem item && item.IsImagePreview,
+                        "Pinned" => obj => obj is FlyShelf.ViewModels.ClipboardItem item && item.IsPinned,
+                        "PDF" => obj => obj is FlyShelf.ViewModels.ClipboardItem item && item.IsPdfPreview,
+                        "Docs" => obj => obj is FlyShelf.ViewModels.ClipboardItem item && item.IsDocPreview,
+                        "Password" => obj => obj is FlyShelf.ViewModels.ClipboardItem item && item.IsPassword,
+                        _ => obj => obj is FlyShelf.ViewModels.ClipboardItem
+                    };
+
                     // PERF: DeferRefresh batches the filter assignment into a single
                     // view refresh, preventing WPF from re-evaluating the filter and
                     // re-materializing containers multiple times.
                     using (view.DeferRefresh())
                     {
-                        view.Filter = obj =>
-                        {
-                            if (obj is FlyShelf.ViewModels.ClipboardItem item)
-                            {
-                                return category switch
-                                {
-                                    "Images" => item.IsImagePreview,
-                                    "Pinned" => item.IsPinned,
-                                    "PDF" => item.IsPdfPreview,
-                                    "Docs" => item.IsDocPreview,
-                                    "Password" => item.IsPassword,
-                                    _ => true
-                                };
-                            }
-                            return false;
-                        };
+                        view.Filter = categoryPredicate;
                     }
+                    _lastFilterApplyTime = DateTime.UtcNow;
                 }
                 finally
                 {
@@ -628,12 +669,11 @@ namespace FlyShelf
                 UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs");
                 UpdateFilterButtonHighlight(FilterBtn_Password, "Password");
 
-                // PERF: Render thumbnails at Background priority so layout pass
-                // from the filter change completes first. At Normal priority, this
-                // ran before WPF finished re-virtualizing containers, wasting time
-                // iterating containers that don't exist yet.
+                // PERF: Delay thumbnail rendering 300ms to let WPF finish container
+                // virtualization. Immediate calls were iterating containers that
+                // haven't been materialized yet, causing wasted layout passes.
                 Dispatcher.InvokeAsync(() => RenderVisibleThumbnails(),
-                    System.Windows.Threading.DispatcherPriority.Background);
+                    System.Windows.Threading.DispatcherPriority.ContextIdle);
             }
         }
 
@@ -714,6 +754,12 @@ namespace FlyShelf
         {
             try
             {
+                // PERF: Throttle — skip if we applied a filter very recently (< 50ms ago)
+                // This prevents cascading re-evaluations when CollectionChanged fires
+                // multiple times in rapid succession (e.g., drag-drop + clipboard copy).
+                if ((DateTime.UtcNow - _lastFilterApplyTime).TotalMilliseconds < 50)
+                    return;
+
                 var listView = ShelfListView?.Items;
                 var altListView = AltShelfListView?.Items;
 
@@ -721,21 +767,17 @@ namespace FlyShelf
 
                 if (_activeCategoryFilter != null)
                 {
+                    // PERF: Pre-build predicate with captured category string
+                    // instead of evaluating switch per-item.
                     string category = _activeCategoryFilter;
-                    filterPredicate = obj =>
+                    filterPredicate = category switch
                     {
-                        if (obj is FlyShelf.ViewModels.ClipboardItem item)
-                        {
-                            return category switch
-                            {
-                                "Images" => item.IsImagePreview,
-                                "Pinned" => item.IsPinned,
-                                "PDF" => item.IsPdfPreview,
-                                "Docs" => item.IsDocPreview,
-                                _ => true
-                            };
-                        }
-                        return false;
+                        "Images" => obj => obj is FlyShelf.ViewModels.ClipboardItem item && item.IsImagePreview,
+                        "Pinned" => obj => obj is FlyShelf.ViewModels.ClipboardItem item && item.IsPinned,
+                        "PDF" => obj => obj is FlyShelf.ViewModels.ClipboardItem item && item.IsPdfPreview,
+                        "Docs" => obj => obj is FlyShelf.ViewModels.ClipboardItem item && item.IsDocPreview,
+                        "Password" => obj => obj is FlyShelf.ViewModels.ClipboardItem item && item.IsPassword,
+                        _ => obj => obj is FlyShelf.ViewModels.ClipboardItem
                     };
                 }
                 else if (_isSearchActive)
@@ -765,6 +807,7 @@ namespace FlyShelf
                         activeListView.Filter = filterPredicate;
                     }
                 }
+                _lastFilterApplyTime = DateTime.UtcNow;
             }
             catch { } // Best-effort: failure is acceptable
         }

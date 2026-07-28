@@ -61,6 +61,29 @@
     <SolidColorBrush x:Key="ThemeTextSecondary"   Color="#94A3B8"/>
     <SolidColorBrush x:Key="ThemeTextMuted"       Color="#64748B"/>
     <SolidColorBrush x:Key="ThemeTextOnAccent"    Color="#FFFFFF"/>
+    <Color x:Key="ThemeTextPrimaryColor">#F1F5F9</Color>
+    <Color x:Key="ThemeTextSecondaryColor">#94A3B8</Color>
+    <Color x:Key="ThemeTextMutedColor">#64748B</Color>
+    <Color x:Key="ThemeOverlayBgColor">#0AFFFFFF</Color>
+    <Color x:Key="ThemeOverlayBorderColor">#18FFFFFF</Color>
+    <Color x:Key="ThemeOverlayHoverColor">#15FFFFFF</Color>
+
+    <!-- ═══ CLIPBOARD POPUP — Dedicated tokens (need real contrast, not subtle overlay) ═══ -->
+    <Color x:Key="AltCardBgColor">#18FFFFFF</Color>
+    <Color x:Key="AltCardBgHoverColor">#28FFFFFF</Color>
+    <Color x:Key="AltCardBorderColor">#22FFFFFF</Color>
+    <Color x:Key="AltCardBorderHoverColor">#35FFFFFF</Color>
+    <Color x:Key="AltHeaderBgColor">#16FFFFFF</Color>
+    <Color x:Key="AltSearchBgColor">#12FFFFFF</Color>
+    <Color x:Key="AltSearchBorderColor">#20FFFFFF</Color>
+    <Color x:Key="AltSearchFgColor">#64748B</Color>
+    <Color x:Key="AltTextPrimaryColor">#F1F5F9</Color>
+    <Color x:Key="AltTextSecondaryColor">#94A3B8</Color>
+    <Color x:Key="AltTextMutedColor">#64748B</Color>
+    <Color x:Key="AltSidebarHoverColor">#15FFFFFF</Color>
+    <Color x:Key="AltBottomBarBgColor">#16FFFFFF</Color>
+    <Color x:Key="AltBottomBarBorderColor">#20FFFFFF</Color>
+    <Color x:Key="AltIconFallbackBgColor">#0AFFFFFF</Color>
 
     <SolidColorBrush x:Key="ThemeSeparator"       Color="#20FFFFFF"/>
     <SolidColorBrush x:Key="ThemeShadow"          Color="#000000"/>

@@ -22,32 +22,32 @@
     <SolidColorBrush x:Key="AltAccent_File"         Color="#6B7280"/>
     <SolidColorBrush x:Key="AltAccent_Default"      Color="#6B7280"/>
 
-    <!-- Aero Card Background (light theme — semi-opaque white) -->
-    <SolidColorBrush x:Key="AltCardBg"              Color="#B8FFFFFF"/>
-    <SolidColorBrush x:Key="AltCardBgHover"         Color="#E0FFFFFF"/>
-    <SolidColorBrush x:Key="AltCardBorder"          Color="#18000000"/>
-    <SolidColorBrush x:Key="AltCardBorderHover"     Color="#28000000"/>
+    <!-- Aero Card Background — dedicated clipboard tokens for real contrast -->
+    <SolidColorBrush x:Key="AltCardBg"              Color="{DynamicResource AltCardBgColor}"/>
+    <SolidColorBrush x:Key="AltCardBgHover"         Color="{DynamicResource AltCardBgHoverColor}"/>
+    <SolidColorBrush x:Key="AltCardBorder"          Color="{DynamicResource AltCardBorderColor}"/>
+    <SolidColorBrush x:Key="AltCardBorderHover"     Color="{DynamicResource AltCardBorderHoverColor}"/>
 
-    <!-- Aero Header (light theme) -->
-    <SolidColorBrush x:Key="AltHeaderBg"            Color="#80FFFFFF"/>
-    <SolidColorBrush x:Key="AltSearchBg"            Color="#90FFFFFF"/>
-    <SolidColorBrush x:Key="AltSearchBorder"        Color="#20000000"/>
-    <SolidColorBrush x:Key="AltSearchFg"            Color="#64748B"/>
+    <!-- Aero Header -->
+    <SolidColorBrush x:Key="AltHeaderBg"            Color="{DynamicResource AltHeaderBgColor}"/>
+    <SolidColorBrush x:Key="AltSearchBg"            Color="{DynamicResource AltSearchBgColor}"/>
+    <SolidColorBrush x:Key="AltSearchBorder"        Color="{DynamicResource AltSearchBorderColor}"/>
+    <SolidColorBrush x:Key="AltSearchFg"            Color="{DynamicResource AltSearchFgColor}"/>
 
-    <!-- Aero Text Colors (dark text on light background) -->
-    <SolidColorBrush x:Key="AltTextPrimary"         Color="#1E293B"/>
-    <SolidColorBrush x:Key="AltTextSecondary"       Color="#475569"/>
-    <SolidColorBrush x:Key="AltTextTertiary"        Color="#94A3B8"/>
+    <!-- Aero Text Colors -->
+    <SolidColorBrush x:Key="AltTextPrimary"         Color="{DynamicResource AltTextPrimaryColor}"/>
+    <SolidColorBrush x:Key="AltTextSecondary"       Color="{DynamicResource AltTextSecondaryColor}"/>
+    <SolidColorBrush x:Key="AltTextTertiary"        Color="{DynamicResource AltTextMutedColor}"/>
 
     <!-- Aero Misc -->
     <SolidColorBrush x:Key="AltPinDot"              Color="#F59E0B"/>
-    <SolidColorBrush x:Key="AltTimestampFg"         Color="#64748B"/>
-    <SolidColorBrush x:Key="AltSubtitleFg"          Color="#64748B"/>
+    <SolidColorBrush x:Key="AltTimestampFg"         Color="{DynamicResource AltTextMutedColor}"/>
+    <SolidColorBrush x:Key="AltSubtitleFg"          Color="{DynamicResource AltTextMutedColor}"/>
     <SolidColorBrush x:Key="AltCloseHoverBg"        Color="#20EF4444"/>
-    <SolidColorBrush x:Key="AltSidebarHover"        Color="#18000000"/>
-    <SolidColorBrush x:Key="AltBottomBarBg"         Color="#D8F0F4F8"/>
-    <SolidColorBrush x:Key="AltBottomBarBorder"     Color="#20000000"/>
-    <SolidColorBrush x:Key="AltIconFallbackBg"      Color="#0A000000"/>
+    <SolidColorBrush x:Key="AltSidebarHover"        Color="{DynamicResource AltSidebarHoverColor}"/>
+    <SolidColorBrush x:Key="AltBottomBarBg"         Color="{DynamicResource AltBottomBarBgColor}"/>
+    <SolidColorBrush x:Key="AltBottomBarBorder"     Color="{DynamicResource AltBottomBarBorderColor}"/>
+    <SolidColorBrush x:Key="AltIconFallbackBg"      Color="{DynamicResource AltIconFallbackBgColor}"/>
 
     <!-- Close Button Style -->
     <Style x:Key="AltCloseButtonStyle" TargetType="Border">

@@ -101,7 +101,7 @@
                                 <!-- FREE badge -->
                                 <Border x:Name="FreeBadgeTitleBar" CornerRadius="{StaticResource RadiusSM}" Padding="8,2,8,2" 
                                         Margin="8,0,0,0" VerticalAlignment="Center"
-                                        Background="#12FFFFFF" BorderBrush="#18FFFFFF" BorderThickness="1">
+                                        Background="{DynamicResource ThemeOverlayBg}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1">
                                     <TextBlock Text="FREE" FontSize="{StaticResource TypeMicro}" FontWeight="SemiBold" 
                                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
                                                VerticalAlignment="Center" Opacity="0.65"/>
@@ -257,7 +257,7 @@
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="DismissBg" Property="Background" Value="#18FFFFFF"/>
+                                                <Setter TargetName="DismissBg" Property="Background" Value="{DynamicResource ThemeOverlayHover}"/>
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
@@ -592,7 +592,7 @@
                                                 </Setter>
                                                 <Style.Triggers>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Background" Value="#1AFFFFFF"/>
+                                                        <Setter Property="Background" Value="{DynamicResource ThemeOverlayHover}"/>
                                                     </Trigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -696,7 +696,7 @@
                                                         <Condition Property="IsMouseOver" Value="True"/>
                                                         <Condition Property="IsChecked" Value="False"/>
                                                     </MultiTrigger.Conditions>
-                                                    <Setter TargetName="ChipBorder" Property="Background" Value="#0AFFFFFF"/>
+                                                    <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource ThemeOverlayHover}"/>
                                                 </MultiTrigger>
                                                 
                                                 <!-- Checked — elevated pill with subtle accent tint -->
@@ -1043,7 +1043,7 @@
                                                             </Button>
                                                         </StackPanel>
                                                         <TextBlock Text="{Binding DisplayTitle}" FontSize="{StaticResource TypeCaption}" 
-                                                                   Foreground="#CCFFFFFF" VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center"
                                                                    TextTrimming="CharacterEllipsis" Margin="0,0,8,0"/>
                                                     </DockPanel>
                                                 </Grid>
@@ -1143,10 +1143,7 @@
                     <Border x:Name="MergePdfFloatingBar" Grid.Row="2" Visibility="Collapsed"
                             VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,16"
                             CornerRadius="{StaticResource RadiusMD}" Padding="16,10,16,10"
-                            IsHitTestVisible="True">
-                        <Border.Background>
-                            <SolidColorBrush Color="#1E1E2E" Opacity="0.95"/>
-                        </Border.Background>
+                            IsHitTestVisible="True" Background="{DynamicResource ThemeFloatingBarBg}">
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="20" ShadowDepth="4" Opacity="0.5" Color="Black"/>
                         </Border.Effect>
@@ -1776,7 +1773,7 @@
                                         <Border Width="10" Height="10" CornerRadius="4" Background="#F59E0B" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="Device Groups" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" />
                                         <Button x:Name="CreateGroupBtn" Content="+ New Group" Margin="12,0,0,0" Padding="10,4" FontSize="{StaticResource TypeCaption}" FontWeight="Bold" Click="CreateGroupBtn_Click"
-                                                Background="#F59E0B" Foreground="#000" BorderThickness="0" Cursor="Hand">
+                                                Background="#F59E0B" Foreground="{DynamicResource ThemeTextOnAccent}" BorderThickness="0" Cursor="Hand">
                                             <Button.Template>
                                                 <ControlTemplate TargetType="Button">
                                                     <Border Background="{TemplateBinding Background}" CornerRadius="{StaticResource RadiusSM}" Padding="{TemplateBinding Padding}">
@@ -2406,7 +2403,7 @@
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="16,10">
                                                 <TextBlock Text="🚀" FontSize="{StaticResource TypeTitle}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                 <TextBlock Text="Buy FlyShelf Pro — ₹299" FontSize="{StaticResource TypeSubtitle}" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
-                                                <TextBlock Text="  (Lifetime)" FontSize="{StaticResource TypeSmall}" Foreground="#D1D5DB" VerticalAlignment="Center"/>
+                                                <TextBlock Text="  (Lifetime)" FontSize="{StaticResource TypeSmall}" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Border>
                                     </StackPanel>
@@ -2414,7 +2411,7 @@
                             </Grid>
 
                             <!-- ═══ Summon Hotkey Customization ═══ -->
-                            <Border CornerRadius="{StaticResource RadiusLG}" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="24" Margin="0,0,0,12">
+                            <Border CornerRadius="{StaticResource RadiusLG}" Background="{DynamicResource ThemeOverlayBg}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" Padding="24" Margin="0,0,0,12">
                                 <StackPanel>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -2431,7 +2428,7 @@
 
                                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
                                             <Border x:Name="HotkeyRecorderBorder" Visibility="Collapsed"
-                                                    Background="#20FFFFFF" CornerRadius="{StaticResource RadiusSM}" Padding="12,8" Margin="0,0,8,0"
+                                                    Background="{DynamicResource ThemeOverlayBg}" CornerRadius="{StaticResource RadiusSM}" Padding="12,8" Margin="0,0,8,0"
                                                     MinWidth="120">
                                                 <TextBlock x:Name="HotkeyRecorderText" Text="Press keys..."
                                                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
@@ -4212,7 +4209,7 @@
                             <UniformGrid Columns="2" Margin="0,0,0,20">
 
                                 <!-- Card 1: Summon & Dismiss -->
-                                <Border CornerRadius="{StaticResource RadiusLG}" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="0,0,8,16" Cursor="Hand">
+                                <Border CornerRadius="{StaticResource RadiusLG}" Background="{DynamicResource ThemeOverlayBg}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" Padding="20" Margin="0,0,8,16" Cursor="Hand">
                                     <StackPanel>
                                         <Border Width="48" Height="48" CornerRadius="{StaticResource RadiusMD}" Margin="0,0,0,14" HorizontalAlignment="Left">
                                             <Border.Background>
@@ -4229,7 +4226,7 @@
                                 </Border>
 
                                 <!-- Card 2: Drag & Drop -->
-                                <Border CornerRadius="{StaticResource RadiusLG}" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="8,0,0,16" Cursor="Hand">
+                                <Border CornerRadius="{StaticResource RadiusLG}" Background="{DynamicResource ThemeOverlayBg}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" Padding="20" Margin="8,0,0,16" Cursor="Hand">
                                     <StackPanel>
                                         <Border Width="48" Height="48" CornerRadius="{StaticResource RadiusMD}" Margin="0,0,0,14" HorizontalAlignment="Left">
                                             <Border.Background>
@@ -4246,7 +4243,7 @@
                                 </Border>
 
                                 <!-- Card 3: Cross-Device Sync -->
-                                <Border CornerRadius="{StaticResource RadiusLG}" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="0,0,8,16" Cursor="Hand">
+                                <Border CornerRadius="{StaticResource RadiusLG}" Background="{DynamicResource ThemeOverlayBg}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" Padding="20" Margin="0,0,8,16" Cursor="Hand">
                                     <StackPanel>
                                         <Border Width="48" Height="48" CornerRadius="{StaticResource RadiusMD}" Margin="0,0,0,14" HorizontalAlignment="Left">
                                             <Border.Background>
@@ -4263,7 +4260,7 @@
                                 </Border>
 
                                 <!-- Card 4: Quick Notes & To-Do -->
-                                <Border CornerRadius="{StaticResource RadiusLG}" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="8,0,0,16" Cursor="Hand">
+                                <Border CornerRadius="{StaticResource RadiusLG}" Background="{DynamicResource ThemeOverlayBg}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" Padding="20" Margin="8,0,0,16" Cursor="Hand">
                                     <StackPanel>
                                         <Border Width="48" Height="48" CornerRadius="{StaticResource RadiusMD}" Margin="0,0,0,14" HorizontalAlignment="Left">
                                             <Border.Background>
@@ -4280,7 +4277,7 @@
                                 </Border>
 
                                 <!-- Card 5: Themes & Wallpapers -->
-                                <Border CornerRadius="{StaticResource RadiusLG}" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="0,0,8,16" Cursor="Hand">
+                                <Border CornerRadius="{StaticResource RadiusLG}" Background="{DynamicResource ThemeOverlayBg}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" Padding="20" Margin="0,0,8,16" Cursor="Hand">
                                     <StackPanel>
                                         <Border Width="48" Height="48" CornerRadius="{StaticResource RadiusMD}" Margin="0,0,0,14" HorizontalAlignment="Left">
                                             <Border.Background>
@@ -4297,7 +4294,7 @@
                                 </Border>
 
                                 <!-- Card 6: Quick Paste -->
-                                <Border CornerRadius="{StaticResource RadiusLG}" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="8,0,0,16" Cursor="Hand">
+                                <Border CornerRadius="{StaticResource RadiusLG}" Background="{DynamicResource ThemeOverlayBg}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" Padding="20" Margin="8,0,0,16" Cursor="Hand">
                                     <StackPanel>
                                         <Border Width="48" Height="48" CornerRadius="{StaticResource RadiusMD}" Margin="0,0,0,14" HorizontalAlignment="Left">
                                             <Border.Background>
@@ -4318,7 +4315,7 @@
                                 </Border>
 
                                 <!-- Card 7: Timer Shortcut -->
-                                <Border CornerRadius="{StaticResource RadiusLG}" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="0,0,8,16" Cursor="Hand">
+                                <Border CornerRadius="{StaticResource RadiusLG}" Background="{DynamicResource ThemeOverlayBg}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" Padding="20" Margin="0,0,8,16" Cursor="Hand">
                                     <StackPanel>
                                         <Border Width="48" Height="48" CornerRadius="{StaticResource RadiusMD}" Margin="0,0,0,14" HorizontalAlignment="Left">
                                             <Border.Background>
@@ -4338,7 +4335,7 @@
                                 </Border>
 
                                 <!-- Card 8: Text Shortcuts -->
-                                <Border CornerRadius="{StaticResource RadiusLG}" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="8,0,0,16" Cursor="Hand">
+                                <Border CornerRadius="{StaticResource RadiusLG}" Background="{DynamicResource ThemeOverlayBg}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" Padding="20" Margin="8,0,0,16" Cursor="Hand">
                                     <StackPanel>
                                         <Border Width="48" Height="48" CornerRadius="{StaticResource RadiusMD}" Margin="0,0,0,14" HorizontalAlignment="Left">
                                             <Border.Background>
@@ -4361,7 +4358,7 @@
                             </UniformGrid>
 
                             <!-- Keyboard Shortcuts Card -->
-                            <Border CornerRadius="{StaticResource RadiusLG}" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="24" Margin="0,0,0,20">
+                            <Border CornerRadius="{StaticResource RadiusLG}" Background="{DynamicResource ThemeOverlayBg}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" Padding="24" Margin="0,0,0,20">
                                 <StackPanel>
                                     <TextBlock Text="⌨️ Keyboard Shortcuts" FontSize="{StaticResource TypeTitle}" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Margin="0,0,0,16"/>
 

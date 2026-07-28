@@ -41,7 +41,9 @@ export const syncLog = (tag: string, message?: string) => {
   }
 
   // Also console.log for adb logcat
-  console.log(`[FlyShelf] ${entry}`);
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.log(`[FlyShelf] ${entry}`);
+  }
 };
 
 export const getDebugLogs = (): string => {

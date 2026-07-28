@@ -11,6 +11,7 @@ const FlashListCast = FlashList as React.ComponentType<any>;
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import EncryptedStorage from '../../utils/EncryptedStorage';
 
 import { useSettings } from '../../context/SettingsContext';
 import { fetchWithTimeout, resolveBestPcUrl } from '../../utils/networkHelpers';
@@ -158,7 +159,7 @@ function NotesScreenInner() {
       // Persist outside setState would be ideal, but we need the computed value.
       // Using a microtask to avoid calling async side-effects inside the updater.
       queueMicrotask(() => {
-        AsyncStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
+        EncryptedStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
       });
       return updated;
     });

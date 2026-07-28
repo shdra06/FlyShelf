@@ -44,6 +44,7 @@ public static partial class NativeMethods
     internal const int DWMWA_COLOR_DARK_GRAY = 0x002D2D2D;
     internal const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
     internal const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    internal const int DWMWA_SYSTEMBACKDROP_TYPE = 38; // Win11 22H2+ (Build 22621): 0=Auto, 1=None, 2=Mica, 3=Acrylic, 4=MicaAlt
     internal const int DWMWCP_ROUND = 2; // Force rounded corners on all devices/VMs
 
     // Keyboard Hook
@@ -815,55 +816,102 @@ public static partial class NativeMethods
 
     public static void EnableCustomAcrylic(IntPtr hwnd, uint tintColor)
     {
-        var accent = new AccentPolicy
-        {
-            AccentState = AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND,
-            GradientColor = tintColor // Format: AABBGGRR
-        };
+        // ═══ Strategy: Try modern DWM API first (Win11 22H2+), then legacy SetWindowCompositionAttribute ═══
+        // The legacy ACCENT_ENABLE_ACRYLICBLURBEHIND API is broken/deprecated on newer Win11 builds.
+        // DWM attribute 38 (DWMWA_SYSTEMBACKDROP_TYPE) with value 3 (Acrylic) is the modern replacement.
 
-        int size = Marshal.SizeOf(accent);
-        IntPtr buffer = Marshal.AllocHGlobal(size);
-        try
+        bool modernApplied = false;
+
+        // Modern path: DWMWA_SYSTEMBACKDROP_TYPE = 3 (Acrylic) — requires Build 22621+
+        if (Environment.OSVersion.Version.Build >= 22621)
         {
-            Marshal.StructureToPtr(accent, buffer, false);
-            var data = new WindowCompositionAttributeData
+            try
             {
-                Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
-                Data = buffer,
-                SizeOfData = size
-            };
-            SetWindowCompositionAttribute(hwnd, ref data);
+                // DWM Acrylic requires the frame to be extended into client area
+                var margins = new MARGINS { cxLeftWidth = -1, cxRightWidth = -1, cyTopHeight = -1, cyBottomHeight = -1 };
+                DwmExtendFrameIntoClientArea(hwnd, ref margins);
+
+                int backdropType = 3; // DWM_SYSTEMBACKDROP_TYPE_ACRYLIC
+                int hr = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, ref backdropType, sizeof(int));
+                modernApplied = (hr == 0); // S_OK
+            }
+            catch { } // Best-effort: fall through to legacy
         }
-        finally
+
+        // Legacy fallback: SetWindowCompositionAttribute with ACCENT_ENABLE_ACRYLICBLURBEHIND
+        // Still needed for Win11 21H2 (Build 22000-22620) and some edge cases
+        if (!modernApplied)
         {
-            Marshal.FreeHGlobal(buffer);
+            try
+            {
+                var accent = new AccentPolicy
+                {
+                    AccentState = AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND,
+                    GradientColor = tintColor // Format: AABBGGRR
+                };
+
+                int size = Marshal.SizeOf(accent);
+                IntPtr buffer = Marshal.AllocHGlobal(size);
+                try
+                {
+                    Marshal.StructureToPtr(accent, buffer, false);
+                    var data = new WindowCompositionAttributeData
+                    {
+                        Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
+                        Data = buffer,
+                        SizeOfData = size
+                    };
+                    SetWindowCompositionAttribute(hwnd, ref data);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(buffer);
+                }
+            }
+            catch { } // Best-effort: failure is acceptable
         }
     }
 
     public static void DisableCustomAcrylic(IntPtr hwnd)
     {
-        var accent = new AccentPolicy
+        // Modern path: Reset DWMWA_SYSTEMBACKDROP_TYPE to None (1)
+        if (Environment.OSVersion.Version.Build >= 22621)
         {
-            AccentState = AccentState.ACCENT_DISABLED
-        };
+            try
+            {
+                int backdropType = 1; // DWM_SYSTEMBACKDROP_TYPE_NONE
+                DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, ref backdropType, sizeof(int));
+            }
+            catch { } // Best-effort
+        }
 
-        int size = Marshal.SizeOf(accent);
-        IntPtr buffer = Marshal.AllocHGlobal(size);
+        // Legacy path: Always also clear the accent policy
         try
         {
-            Marshal.StructureToPtr(accent, buffer, false);
-            var data = new WindowCompositionAttributeData
+            var accent = new AccentPolicy
             {
-                Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
-                Data = buffer,
-                SizeOfData = size
+                AccentState = AccentState.ACCENT_DISABLED
             };
-            SetWindowCompositionAttribute(hwnd, ref data);
+
+            int size = Marshal.SizeOf(accent);
+            IntPtr buffer = Marshal.AllocHGlobal(size);
+            try
+            {
+                Marshal.StructureToPtr(accent, buffer, false);
+                var data = new WindowCompositionAttributeData
+                {
+                    Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
+                    Data = buffer,
+                    SizeOfData = size
+                };
+                SetWindowCompositionAttribute(hwnd, ref data);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
         }
-        finally
-        {
-            Marshal.FreeHGlobal(buffer);
-        }
+        catch { } // Best-effort
     }
 
     public static void ApplyWindowBackdropAndBackground(System.Windows.Window window, System.Windows.Controls.Grid? rootGrid = null)
@@ -936,50 +984,50 @@ public static partial class NativeMethods
 
             if (blurEnabled && window is not MainWindow)
             {
-                // Utility windows (HubWindow, EmojiPickerWindow, etc.) always get Mica/Acrylic blur when blur is enabled
-                micaWin.SystemBackdropType = (mode == "glass") ? MicaWPF.Core.Enums.BackdropType.Acrylic : MicaWPF.Core.Enums.BackdropType.Mica;
-                // Use a semi-transparent tinted background as fallback when Mica doesn't render
-                var tintColor = isLight
-                    ? System.Windows.Media.Color.FromArgb(200, 243, 243, 243)   // Light: bright grey tint
-                    : System.Windows.Media.Color.FromArgb(200, 32, 32, 32);     // Dark: Windows 11 dark grey tint
-                var tintBrush = new System.Windows.Media.SolidColorBrush(tintColor);
-                tintBrush.Freeze();
-                micaWin.Background = tintBrush;
-                if (rootGrid != null) rootGrid.Background = null;
-            }
-            else if (blurEnabled && mode == "mica")
-            {
+                // Utility windows (HubWindow, EmojiPickerWindow, etc.) ALWAYS get Mica blur.
+                // MicaWPF works fine for these since they're initialized once.
                 micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
-                // Semi-transparent fallback — blends with Mica when it works,
-                // provides a visible bright grey background when Mica fails to render
                 var tintColor = isLight
-                    ? System.Windows.Media.Color.FromArgb(200, 243, 243, 243)   // #F3F3F3 at ~78% opacity
-                    : System.Windows.Media.Color.FromArgb(200, 32, 32, 32);     // #202020 at ~78% opacity
+                    ? System.Windows.Media.Color.FromArgb(200, 243, 243, 243)
+                    : System.Windows.Media.Color.FromArgb(200, 32, 32, 32);
                 var tintBrush = new System.Windows.Media.SolidColorBrush(tintColor);
                 tintBrush.Freeze();
                 micaWin.Background = tintBrush;
                 if (rootGrid != null) rootGrid.Background = null;
             }
-            else if (blurEnabled && mode == "glass")
+            else if (blurEnabled && window is MainWindow)
             {
-                // Main window glass mode
-                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+                // MainWindow (clipboard popup) — use direct DWM API calls
+                // MicaWPF's SystemBackdropType doesn't work at runtime on already-visible windows
                 micaWin.Background = System.Windows.Media.Brushes.Transparent;
-                if (rootGrid != null) rootGrid.Background = null;
+                if (rootGrid != null) rootGrid.Background = System.Windows.Media.Brushes.Transparent;
 
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-                if (hwnd != IntPtr.Zero)
+                try
                 {
-                    EnableCustomAcrylic(hwnd, 0x22242424);
+                    var hwndVal = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                    if (hwndVal != IntPtr.Zero)
+                    {
+                        // Extend frame into client area (required for DWM backdrop)
+                        var margins = new MARGINS { cxLeftWidth = -1, cxRightWidth = -1, cyTopHeight = -1, cyBottomHeight = -1 };
+                        DwmExtendFrameIntoClientArea(hwndVal, ref margins);
+
+                        int darkMode = 1;
+                        DwmSetWindowAttribute(hwndVal, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkMode, sizeof(int));
+
+                        // 2=Mica, 3=Acrylic based on display mode
+                        int backdropType = (mode == "glass") ? 3 : 2;
+                        DwmSetWindowAttribute(hwndVal, DWMWA_SYSTEMBACKDROP_TYPE, ref backdropType, sizeof(int));
+                    }
                 }
+                catch { } // Best-effort
             }
             else
             {
                 // Solid background fallback — use Windows 11 standard grey tones
                 micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
                 var bgColor = isLight
-                    ? System.Windows.Media.Color.FromRgb(243, 243, 243)   // Windows 11 light bg
-                    : System.Windows.Media.Color.FromRgb(32, 32, 32);     // Windows 11 dark bg
+                    ? System.Windows.Media.Color.FromRgb(243, 243, 243)
+                    : System.Windows.Media.Color.FromRgb(32, 32, 32);
                 var darkBg = new System.Windows.Media.SolidColorBrush(bgColor);
                 darkBg.Freeze();
                 micaWin.Background = darkBg;

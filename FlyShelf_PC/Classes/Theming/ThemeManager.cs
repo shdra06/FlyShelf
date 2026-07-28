@@ -609,16 +609,18 @@ namespace FlyShelf.Classes
                 // Persist the choice
                 SettingsManager.Current.ColorThemeName = themeName;
 
-                // ═══ v3.7.0: Switch WPF-UI and MicaWPF base theme (Light/Dark) ═══
-                // ArcticSnow is a light theme — needs Light mode Mica backdrop + system controls
-                bool isLightTheme = themeName.Equals("ArcticSnow", StringComparison.OrdinalIgnoreCase);
-                SwitchSystemThemeMode(app, isLightTheme);
+                // ═══ v3.7.0: System theme mode ═══
+                // Hub is ALWAYS dark — color themes only affect the clipboard popup
+                // via AltClipboard token overrides and the Arctic frost overlay.
+                // Do NOT switch the global MicaWPF/WPF-UI base theme to Light.
+                // ArcticSnow's light look is self-contained in its theme dictionary
+                // and the ApplyAeroThemeOverrides() brush injection.
 
                 // Auto-apply matching wallpaper for dark themes
                 // ArcticSnow and Default use desktop wallpaper (handled by clearing path)
                 ApplyColorThemeWallpaper(themeName);
 
-                Logger.LogAction("COLOR_THEME", $"Applied color theme: '{themeName}' (mode: {(isLightTheme ? "Light" : "Dark")})");
+                Logger.LogAction("COLOR_THEME", $"Applied color theme: '{themeName}'");
 
                 // Update Aero UI resources to match the active color theme
                 ApplyAeroThemeOverrides(themeName);

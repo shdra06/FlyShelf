@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const { firebaseFetch } = require('./_firebaseAdmin');
+const { firebaseFetch, setSecurityHeaders } = require('./_firebaseAdmin');
 
 // ═══════════════════════════════════════════════════════════════════
 // Server-side license key activation (security audit v2.1.0)
@@ -72,6 +72,7 @@ function validateKeyChecksum(key) {
 
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
+  setSecurityHeaders(res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();

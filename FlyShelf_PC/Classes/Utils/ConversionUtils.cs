@@ -44,7 +44,8 @@ namespace FlyShelf.Classes
             return results.Length > 0 ? results[0] : null;
         }
 
-        /// <summary>Batch converts multiple DOC/DOCX files to PDF. Reuses a single Word instance for maximum speed and zero lag.</summary>
+        /// <summary>Batch converts multiple DOC/DOCX files to PDF. Reuses a single Word instance for maximum speed and zero lag.
+        /// [FIX C1/C2/C3/R2]: Runs on explicit STA thread, has 60s timeout, full dialog suppression, ExportAsFixedFormat.</summary>
         public static async Task<string[]> ConvertDocsToPdfsAsync(string[] docPaths)
         {
 #if MSIX_STORE
@@ -53,43 +54,87 @@ namespace FlyShelf.Classes
 #else
             if (docPaths == null || docPaths.Length == 0) return Array.Empty<string>();
 
-            return await Task.Run(() =>
+            string outputDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Downloads", "FlyShelf", "Converted");
+            Directory.CreateDirectory(outputDir);
+
+            var tcs = new TaskCompletionSource<string[]>();
+            var staThread = new System.Threading.Thread(() =>
             {
                 object word = null;
                 var convertedPaths = new System.Collections.Generic.List<string>();
-                
                 try
                 {
                     Type wordType = Type.GetTypeFromProgID("Word.Application");
-                    if (wordType == null) throw new Exception("Microsoft Word not found. Please install Word to enable DOCX to PDF conversion.");
-                    
+                    if (wordType == null)
+                    {
+                        tcs.TrySetResult(Array.Empty<string>());
+                        return;
+                    }
+
                     word = Activator.CreateInstance(wordType);
                     dynamic dynamicWord = word;
-                    dynamicWord.Visible = false;
-                    dynamicWord.DisplayAlerts = 0; // wdAlertsNone
 
-                    string outputDir = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                        "Downloads", "FlyShelf", "Converted");
-                    Directory.CreateDirectory(outputDir);
+                    // ── FULL DIALOG SUPPRESSION (matches TryWordComConvertCore) ──
+                    dynamicWord.Visible = false;
+                    dynamicWord.DisplayAlerts = 0;              // wdAlertsNone
+                    dynamicWord.AutomationSecurity = 3;          // msoAutomationSecurityForceDisable
+                    dynamicWord.Options.DoNotPromptForConvert = true;
+                    try { dynamicWord.Options.WarnBeforeSavingPrintOrMailMerge = false; } catch { }
 
                     foreach (string docPath in docPaths)
                     {
                         if (!File.Exists(docPath)) continue;
 
-                        // [FIX H-15]: Ensure doc is closed even on exception to prevent Word zombie
                         dynamic doc = null;
                         try
                         {
-                            string pdfPath = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(docPath) + "_" + Guid.NewGuid().ToString()[..4] + ".pdf");
-                            
-                            // wdOpenFormatAuto = 0, wdFormatPDF = 17
-                            doc = dynamicWord.Documents.Open(docPath, false, true); // FileName, ConfirmConversions, ReadOnly
-                            doc.SaveAs2(pdfPath, 17); // FileFormat: wdFormatPDF
-                            doc.Close(false); // wdDoNotSaveChanges = 0
+                            string pdfPath = Path.Combine(outputDir,
+                                Path.GetFileNameWithoutExtension(docPath) + "_" + Guid.NewGuid().ToString()[..4] + ".pdf");
+
+                            // Full 16-param Open with all dialog-triggering options disabled
+                            doc = dynamicWord.Documents.Open(
+                                docPath,                // FileName
+                                false,                  // ConfirmConversions
+                                true,                   // ReadOnly
+                                false,                  // AddToRecentFiles
+                                "",                     // PasswordDocument
+                                "",                     // PasswordTemplate
+                                true,                   // Revert
+                                "",                     // WritePasswordDocument
+                                "",                     // WritePasswordTemplate
+                                Type.Missing,           // Format
+                                Type.Missing,           // Encoding
+                                false,                  // Visible
+                                false,                  // OpenAndRepair
+                                Type.Missing,           // DocumentDirection
+                                true,                   // NoEncodingDialog
+                                Type.Missing            // XMLTransform
+                            );
+
+                            // ExportAsFixedFormat — reliable silent PDF export
+                            doc.ExportAsFixedFormat(
+                                pdfPath,                // OutputFileName
+                                17,                     // wdExportFormatPDF
+                                false,                  // OpenAfterExport
+                                0,                      // OptimizeFor: wdExportOptimizeForPrint
+                                0,                      // Range: wdExportAllDocument
+                                1, 1,                   // From, To
+                                0,                      // Item: wdExportDocumentContent
+                                true,                   // IncludeDocProps
+                                true,                   // KeepIRM
+                                0,                      // CreateBookmarks: wdExportCreateNoBookmarks
+                                true,                   // DocStructureTags
+                                true,                   // BitmapMissingFonts
+                                false                   // UseISO19005_1
+                            );
+
+                            doc.Close(0 /* wdDoNotSaveChanges */);
                             doc = null;
-                            
-                            if (File.Exists(pdfPath)) convertedPaths.Add(pdfPath);
+
+                            if (File.Exists(pdfPath) && new FileInfo(pdfPath).Length > 0)
+                                convertedPaths.Add(pdfPath);
                         }
                         catch (Exception ex)
                         {
@@ -99,14 +144,13 @@ namespace FlyShelf.Classes
                         {
                             if (doc != null)
                             {
-                                try { doc.Close(false); } catch { }
+                                try { doc.Close(0); } catch { }
                                 try { System.Runtime.InteropServices.Marshal.ReleaseComObject(doc); } catch { }
                             }
                         }
                     }
 
-                    // [FIX M-31]: Guard against Quit() failure leaving zombie Word process
-                    try { dynamicWord.Quit(); } catch { }
+                    try { dynamicWord.Quit(0); } catch { }
                 }
                 catch (Exception ex)
                 {
@@ -118,12 +162,37 @@ namespace FlyShelf.Classes
                     {
                         try { System.Runtime.InteropServices.Marshal.ReleaseComObject(word); } catch { }
                     }
+                    tcs.TrySetResult(convertedPaths.ToArray());
                 }
-
-                return convertedPaths.ToArray();
             });
+
+            staThread.SetApartmentState(System.Threading.ApartmentState.STA);
+            staThread.IsBackground = true;
+            staThread.Start();
+
+            // 60-second global timeout — kill Word if it hangs
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(60000);
+                if (!tcs.Task.IsCompleted)
+                {
+                    Logger.LogAction("DOC2PDF_BATCH", "Batch Word COM timed out after 60s — killing orphaned WINWORD");
+                    try
+                    {
+                        foreach (var p in Process.GetProcessesByName("WINWORD"))
+                        {
+                            try { if (p.MainWindowTitle == "") p.Kill(); } catch { }
+                        }
+                    }
+                    catch { }
+                    tcs.TrySetResult(Array.Empty<string>());
+                }
+            });
+
+            return await tcs.Task;
 #endif
         }
+
 
         /// <summary>
         /// Converts a Markdown (.md) file to a styled, highlighted PDF.

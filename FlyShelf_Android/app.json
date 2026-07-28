@@ -72,11 +72,10 @@
       [
         "expo-build-properties",
         {
-          "android": {
-            "usesCleartextTraffic": true
-          }
+          "android": {}
         }
       ],
+      "./plugins/withNetworkSecurityConfig",
       "expo-web-browser",
       "expo-secure-store"
     ],

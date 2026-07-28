@@ -695,8 +695,8 @@
                                                                             <Setter TargetName="ChevronIcon" Property="Foreground" Value="{DynamicResource TypePdfColor}"/>
                                                                         </DataTrigger>
                                                                         <Trigger Property="IsMouseOver" Value="True">
-                                                                            <Setter TargetName="CircleBorder" Property="Background" Value="#E62C2C32"/>
-                                                                            <Setter TargetName="CircleBorder" Property="BorderBrush" Value="#66FFFFFF"/>
+                                                                            <Setter TargetName="CircleBorder" Property="Background" Value="{DynamicResource ThemeChevronBg}"/>
+                                                                            <Setter TargetName="CircleBorder" Property="BorderBrush" Value="{DynamicResource ThemeOverlayBorder}"/>
                                                                         </Trigger>
                                                                     </ControlTemplate.Triggers>
                                                                 </ControlTemplate>
@@ -713,7 +713,7 @@
                                             
                                             <!-- File Transfer / Download Progress Panel -->
                                             <StackPanel Margin="0,4,0,0" Visibility="{Binding IsTransferring, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                                <ProgressBar Value="{Binding TransferProgress}" Minimum="0" Maximum="100" Height="4" Foreground="{DynamicResource SyncIncomingColor}" Background="#15FFFFFF" BorderThickness="0">
+                                                <ProgressBar Value="{Binding TransferProgress}" Minimum="0" Maximum="100" Height="4" Foreground="{DynamicResource SyncIncomingColor}" Background="{DynamicResource ThemeOverlayBg}" BorderThickness="0">
                                                     <ProgressBar.Style>
                                                         <Style TargetType="ProgressBar">
                                                             <Setter Property="Template">

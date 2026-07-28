@@ -21,10 +21,10 @@ const _deriveLegacyPassword = (): string => {
   // Obfuscated components — concatenated they form the original legacy password.
   // Split to prevent simple string searches from finding the full password.
   const parts = [
-    String.fromCharCode(70,108,121,83,104,101,108,102),           // 'FlyShelf'
-    String.fromCharCode(95,67,111,109,112,97,110,105,111,110),    // '_Companion'
-    String.fromCharCode(95,82,111,111,109,95,83,116,111,114,97,103,101), // '_Room_Storage'
-    String.fromCharCode(95,83,104,105,101,108,100,95,50,48,50,54) // '_Shield_2026'
+    String.fromCharCode(70,108,121,83,104,101,108,102),
+    String.fromCharCode(95,67,111,109,112,97,110,105,111,110),
+    String.fromCharCode(95,82,111,111,109,95,83,116,111,114,97,103,101),
+    String.fromCharCode(95,83,104,105,101,108,100,95,50,48,50,54)
   ];
   return parts.join('');
 };

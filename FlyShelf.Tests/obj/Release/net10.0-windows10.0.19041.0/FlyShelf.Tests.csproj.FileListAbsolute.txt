@@ -1,0 +1,7 @@
+E:\exeapps\FlyShelf\FlyShelf.Tests\bin\Release\net10.0-windows10.0.19041.0\.msCoverageSourceRootsMapping_FlyShelf.Tests
+E:\exeapps\FlyShelf\FlyShelf.Tests\obj\Release\net10.0-windows10.0.19041.0\FlyShelf.Tests.csproj.AssemblyReference.cache
+E:\exeapps\FlyShelf\FlyShelf.Tests\obj\Release\net10.0-windows10.0.19041.0\FlyShelf.Tests.GeneratedMSBuildEditorConfig.editorconfig
+E:\exeapps\FlyShelf\FlyShelf.Tests\obj\Release\net10.0-windows10.0.19041.0\FlyShelf.Tests.AssemblyInfoInputs.cache
+E:\exeapps\FlyShelf\FlyShelf.Tests\obj\Release\net10.0-windows10.0.19041.0\FlyShelf.Tests.AssemblyInfo.cs
+E:\exeapps\FlyShelf\FlyShelf.Tests\obj\Release\net10.0-windows10.0.19041.0\FlyShelf.Tests.csproj.CoreCompileInputs.cache
+E:\exeapps\FlyShelf\FlyShelf.Tests\obj\Release\net10.0-windows10.0.19041.0\FlyShelf.Tests.sourcelink.json

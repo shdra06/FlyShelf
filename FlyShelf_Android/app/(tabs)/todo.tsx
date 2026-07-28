@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import EncryptedStorage from '../../utils/EncryptedStorage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { useSettings } from '../../context/SettingsContext';
@@ -180,7 +181,7 @@ function TodoScreenInner() {
   // ─── Load from AsyncStorage + migrate incomplete tasks ─
   const loadLocal = useCallback(async () => {
     try {
-      const raw = await AsyncStorage.getItem(TODOS_STORAGE_KEY);
+      const raw = await EncryptedStorage.getItem(TODOS_STORAGE_KEY);
       if (raw) {
         let parsed: TodoDay[] = JSON.parse(raw);
 
@@ -247,7 +248,7 @@ function TodoScreenInner() {
         // ── End migration ────────────────────────────────
 
         setDays(parsed);
-        await AsyncStorage.setItem(TODOS_STORAGE_KEY, JSON.stringify(parsed));
+        await EncryptedStorage.setItem(TODOS_STORAGE_KEY, JSON.stringify(parsed));
       }
     } catch {}
   }, []);
@@ -257,9 +258,9 @@ function TodoScreenInner() {
     try {
       // Atomic write: write to temp key first, then swap
       const tempKey = `${TODOS_STORAGE_KEY}_pending`;
-      await AsyncStorage.setItem(tempKey, JSON.stringify(allDays));
-      await AsyncStorage.setItem(TODOS_STORAGE_KEY, JSON.stringify(allDays));
-      await AsyncStorage.removeItem(tempKey);
+      await EncryptedStorage.setItem(tempKey, JSON.stringify(allDays));
+      await EncryptedStorage.setItem(TODOS_STORAGE_KEY, JSON.stringify(allDays));
+      await EncryptedStorage.removeItem(tempKey);
     } catch (e) {
       console.warn('Todo saveLocal: error', (e as any)?.message || e);
     }

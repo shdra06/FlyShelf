@@ -154,51 +154,77 @@ namespace FlyShelf.Windows
         {
             if (!_isDirty) return;
 
-            // Remove image elements from the document before XAML serialization
-            // (TextRange.Save does not serialize UIElements properly)
-            var imageParagraphs = NoteRichTextBox.Document.Blocks
-                .OfType<Paragraph>()
-                .Where(p => p.Inlines.OfType<InlineUIContainer>().Any(
-                    iuc => iuc.Child is System.Windows.Controls.Image))
-                .ToList();
+            // ═══ FIX: Do NOT remove image blocks from the live FlowDocument ═══
+            // Removing InlineUIContainer elements invalidates the TextContainer's character
+            // offset map. When the TSF/IME subsystem requests layout (GetTextExt), it accesses
+            // stale offsets causing Invariant.FailFast → app crash.
+            // Instead, build a clean text-only FlowDocument for serialization.
 
-            // Track paragraph positions relative to other blocks
-            var blockOrder = NoteRichTextBox.Document.Blocks.ToList();
-            foreach (var ip in imageParagraphs)
-                NoteRichTextBox.Document.Blocks.Remove(ip);
-
-            // Save formatted text as XAML (images excluded)
+            // Save formatted text as XAML (images excluded) using a temporary FlowDocument
             try
             {
+                // Create a new FlowDocument with only text blocks (no images)
+                var tempDoc = new FlowDocument();
+                tempDoc.PagePadding = new Thickness(0);
+
+                foreach (var block in NoteRichTextBox.Document.Blocks.ToList())
+                {
+                    if (block is Paragraph para)
+                    {
+                        // Skip paragraphs that contain ONLY an image (no text)
+                        bool hasOnlyImage = para.Inlines.Count == 1
+                            && para.Inlines.FirstInline is InlineUIContainer iuc
+                            && iuc.Child is System.Windows.Controls.Image;
+                        if (hasOnlyImage) continue;
+
+                        // Clone text-only content from this paragraph
+                        var clonedPara = new Paragraph { Margin = para.Margin };
+                        foreach (var inline in para.Inlines)
+                        {
+                            if (inline is InlineUIContainer) continue; // skip images
+                            // Clone text runs by copying their text range
+                            var inlineRange = new TextRange(inline.ContentStart, inline.ContentEnd);
+                            string text = inlineRange.Text;
+                            if (!string.IsNullOrEmpty(text))
+                            {
+                                var run = new Run(text);
+                                // Copy formatting
+                                if (inline is Run srcRun)
+                                {
+                                    run.FontWeight = srcRun.FontWeight;
+                                    run.FontStyle = srcRun.FontStyle;
+                                    run.TextDecorations = srcRun.TextDecorations;
+                                    run.FontFamily = srcRun.FontFamily;
+                                    run.FontSize = srcRun.FontSize;
+                                    run.Foreground = srcRun.Foreground;
+                                }
+                                clonedPara.Inlines.Add(run);
+                            }
+                        }
+                        if (clonedPara.Inlines.Count > 0 || !string.IsNullOrEmpty(new TextRange(para.ContentStart, para.ContentEnd).Text.Trim()))
+                            tempDoc.Blocks.Add(clonedPara);
+                    }
+                    else if (block is Section || block is List || block is Table || block is BlockUIContainer)
+                    {
+                        // For non-paragraph blocks, serialize via text range
+                        var blockRange = new TextRange(block.ContentStart, block.ContentEnd);
+                        string blockText = blockRange.Text;
+                        if (!string.IsNullOrEmpty(blockText?.Trim()))
+                        {
+                            tempDoc.Blocks.Add(new Paragraph(new Run(blockText)));
+                        }
+                    }
+                }
+
+                // Serialize the temp document (no InlineUIContainers → safe to serialize)
                 using var ms = new MemoryStream();
-                var range = new TextRange(
-                    NoteRichTextBox.Document.ContentStart,
-                    NoteRichTextBox.Document.ContentEnd);
+                var range = new TextRange(tempDoc.ContentStart, tempDoc.ContentEnd);
                 range.Save(ms, DataFormats.Xaml);
                 _section.RichContent = Encoding.UTF8.GetString(ms.ToArray());
             }
-            catch { }
-
-            // Re-insert image paragraphs at their original positions
-            foreach (var ip in imageParagraphs)
+            catch (Exception ex)
             {
-                int origIdx = blockOrder.IndexOf(ip);
-                // Find the block that was just before this in the original order
-                Block insertAfter = null;
-                for (int i = origIdx - 1; i >= 0; i--)
-                {
-                    if (NoteRichTextBox.Document.Blocks.Contains(blockOrder[i]))
-                    {
-                        insertAfter = blockOrder[i];
-                        break;
-                    }
-                }
-                if (insertAfter != null)
-                    NoteRichTextBox.Document.Blocks.InsertAfter(insertAfter, ip);
-                else if (NoteRichTextBox.Document.Blocks.FirstBlock != null)
-                    NoteRichTextBox.Document.Blocks.InsertBefore(NoteRichTextBox.Document.Blocks.FirstBlock, ip);
-                else
-                    NoteRichTextBox.Document.Blocks.Add(ip);
+                Logger.LogAction("NOTES_EXPAND", $"SaveContent XAML serialization failed: {ex.Message}");
             }
 
             // Sync plain text for backward compat (main window card)
@@ -1069,9 +1095,198 @@ namespace FlyShelf.Windows
         // (Ctrl+B and Ctrl+I are handled natively by RichTextBox)
         // ═══════════════════════════════════════════════════════════
 
+        // ═══════════════════════════════════════════════════════════
+        // SAFE IMAGE DELETION (prevents WPF TextContainer crash)
+        // ═══════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Intercepts Delete/Backspace when the caret or selection is adjacent to or
+        /// contains an InlineUIContainer (image). Removes the image paragraph safely
+        /// to avoid WPF's TextContainer.CreatePointerAtCharOffset crash.
+        /// Returns true if an image was handled (caller should set e.Handled = true).
+        /// </summary>
+        private bool TryHandleImageDeletion(bool isBackspace)
+        {
+            var caret = NoteRichTextBox.CaretPosition;
+            if (caret == null) return false;
+
+            // Case 1: Selection spans an image → remove it
+            if (!NoteRichTextBox.Selection.IsEmpty)
+            {
+                var selectedBlocks = NoteRichTextBox.Document.Blocks
+                    .OfType<Paragraph>()
+                    .Where(p => p.Inlines.Count == 1
+                        && p.Inlines.FirstInline is InlineUIContainer iuc
+                        && iuc.Child is System.Windows.Controls.Image)
+                    .Where(p =>
+                    {
+                        // Check if block overlaps with selection
+                        var blockStart = p.ContentStart.GetOffsetToPosition(NoteRichTextBox.Selection.Start);
+                        var blockEnd = p.ContentEnd.GetOffsetToPosition(NoteRichTextBox.Selection.End);
+                        return blockStart <= 0 && blockEnd >= 0; // selection contains block
+                    })
+                    .ToList();
+
+                if (selectedBlocks.Count > 0)
+                {
+                    _isLoading = true; // suppress TextChanged/SaveContent during manipulation
+                    try
+                    {
+                        foreach (var imgBlock in selectedBlocks)
+                        {
+                            RemoveImageBlock(imgBlock);
+                        }
+                        // Delete remaining selected text normally
+                        NoteRichTextBox.Selection.Text = "";
+                    }
+                    finally
+                    {
+                        _isLoading = false;
+                    }
+                    _isDirty = true;
+                    // Defer UI updates to let TextContainer stabilize
+                    Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
+                    {
+                        UpdateWordCount();
+                        _saveTimer?.Stop();
+                        _saveTimer?.Start();
+                    }));
+                    return true;
+                }
+            }
+
+            // Case 2: Caret is adjacent to an image paragraph (Backspace before or Delete after)
+            Paragraph adjacentImagePara = null;
+
+            if (isBackspace)
+            {
+                // Backspace: check the paragraph ending right before the caret
+                var prevBlock = caret.Paragraph;
+                if (prevBlock == null)
+                {
+                    // Caret might be between blocks; check the block before
+                    var pointer = caret.GetNextInsertionPosition(LogicalDirection.Backward);
+                    if (pointer?.Paragraph is Paragraph p && IsImageOnlyParagraph(p))
+                        adjacentImagePara = p;
+                }
+                else if (IsImageOnlyParagraph(prevBlock))
+                {
+                    adjacentImagePara = prevBlock;
+                }
+                else
+                {
+                    // Check if caret is at the very start of the current paragraph,
+                    // meaning Backspace would merge with previous block
+                    var paraStart = prevBlock.ContentStart;
+                    if (caret.GetOffsetToPosition(paraStart) >= 0)
+                    {
+                        // At the start → previous block might be an image
+                        var prev = prevBlock.PreviousBlock as Paragraph;
+                        if (prev != null && IsImageOnlyParagraph(prev))
+                            adjacentImagePara = prev;
+                    }
+                }
+            }
+            else
+            {
+                // Delete: check if next block is an image paragraph
+                var currentPara = caret.Paragraph;
+                if (currentPara != null)
+                {
+                    // Check if caret is at the end of the current paragraph
+                    var paraEnd = currentPara.ContentEnd;
+                    if (paraEnd.GetOffsetToPosition(caret) >= 0 || 
+                        new TextRange(caret, paraEnd).Text.Length == 0)
+                    {
+                        var nextBlock = currentPara.NextBlock as Paragraph;
+                        if (nextBlock != null && IsImageOnlyParagraph(nextBlock))
+                            adjacentImagePara = nextBlock;
+                    }
+                }
+                else if (IsImageOnlyParagraph(caret.Paragraph))
+                {
+                    adjacentImagePara = caret.Paragraph;
+                }
+            }
+
+            if (adjacentImagePara != null)
+            {
+                _isLoading = true;
+                try
+                {
+                    RemoveImageBlock(adjacentImagePara);
+                }
+                finally
+                {
+                    _isLoading = false;
+                }
+                _isDirty = true;
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
+                {
+                    UpdateWordCount();
+                    _saveTimer?.Stop();
+                    _saveTimer?.Start();
+                }));
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>Returns true if the paragraph contains only an image (InlineUIContainer).</summary>
+        private static bool IsImageOnlyParagraph(Paragraph p)
+        {
+            return p != null
+                && p.Inlines.Count == 1
+                && p.Inlines.FirstInline is InlineUIContainer iuc
+                && iuc.Child is System.Windows.Controls.Image;
+        }
+
+        /// <summary>
+        /// Safely removes an image-only paragraph from the document and cleans up
+        /// the section's image list.
+        /// </summary>
+        private void RemoveImageBlock(Paragraph imgParagraph)
+        {
+            // Find and remove the image path from _section.Images
+            var iuc = imgParagraph.Inlines.FirstInline as InlineUIContainer;
+            if (iuc?.Child is System.Windows.Controls.Image img && img.Tag is string imagePath)
+            {
+                var freeformImg = _section.Images.FirstOrDefault(i => i.ImagePath == imagePath);
+                if (freeformImg != null)
+                    _section.Images.Remove(freeformImg);
+            }
+
+            // Remove the paragraph from the live document
+            NoteRichTextBox.Document.Blocks.Remove(imgParagraph);
+            NoteManager.MarkDirty();
+
+            if (FooterStatus != null) FooterStatus.Text = "Image removed";
+        }
+
         protected override void OnPreviewKeyDown(KeyEventArgs e)
         {
             base.OnPreviewKeyDown(e);
+
+            // ═══ FIX: Intercept Delete/Backspace near InlineUIContainer (image) ═══
+            // WPF's default handler corrupts TextContainer offsets when deleting
+            // InlineUIContainer elements, causing Invariant.FailFast in OnTextViewUpdatedWorker.
+            // We manually remove the image paragraph to avoid the crash.
+            if ((e.Key == Key.Delete || e.Key == Key.Back) && Keyboard.Modifiers == ModifierKeys.None)
+            {
+                try
+                {
+                    if (TryHandleImageDeletion(e.Key == Key.Back))
+                    {
+                        e.Handled = true;
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("NOTES_EXPAND", $"Image deletion handler error: {ex.Message}");
+                }
+            }
 
             if (e.Key == Key.Escape)
             {

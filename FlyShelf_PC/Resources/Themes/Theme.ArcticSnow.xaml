@@ -59,6 +59,48 @@
     <SolidColorBrush x:Key="ThemeTextSecondary"  Color="#5C4A3A" options:Freeze="True"/>
     <SolidColorBrush x:Key="ThemeTextMuted"      Color="#9C8A7A" options:Freeze="True"/>
     <SolidColorBrush x:Key="ThemeTextOnAccent"   Color="#FFFFFF" options:Freeze="True"/>
+    <Color x:Key="ThemeTextPrimaryColor" options:Freeze="True">#2C1810</Color>
+    <Color x:Key="ThemeTextSecondaryColor" options:Freeze="True">#5C4A3A</Color>
+    <Color x:Key="ThemeTextMutedColor" options:Freeze="True">#9C8A7A</Color>
+    <Color x:Key="ThemeOverlayBgColor" options:Freeze="True">#0C6B5B3A</Color>
+    <Color x:Key="ThemeOverlayBorderColor" options:Freeze="True">#126B5B3A</Color>
+    <Color x:Key="ThemeOverlayHoverColor" options:Freeze="True">#186B5B3A</Color>
+
+    <!-- ── Clipboard Popup — opaque cards for real contrast on light glassmorphism ── -->
+    <Color x:Key="AltCardBgColor" options:Freeze="True">#C0FFFFFF</Color>
+    <Color x:Key="AltCardBgHoverColor" options:Freeze="True">#DDFFFFFF</Color>
+    <Color x:Key="AltCardBorderColor" options:Freeze="True">#18000000</Color>
+    <Color x:Key="AltCardBorderHoverColor" options:Freeze="True">#28000000</Color>
+    <Color x:Key="AltHeaderBgColor" options:Freeze="True">#80FFFFFF</Color>
+    <Color x:Key="AltSearchBgColor" options:Freeze="True">#90FFFFFF</Color>
+    <Color x:Key="AltSearchBorderColor" options:Freeze="True">#20000000</Color>
+    <Color x:Key="AltSearchFgColor" options:Freeze="True">#64748B</Color>
+    <Color x:Key="AltTextPrimaryColor" options:Freeze="True">#1E293B</Color>
+    <Color x:Key="AltTextSecondaryColor" options:Freeze="True">#475569</Color>
+    <Color x:Key="AltTextMutedColor" options:Freeze="True">#64748B</Color>
+    <Color x:Key="AltSidebarHoverColor" options:Freeze="True">#18000000</Color>
+    <Color x:Key="AltBottomBarBgColor" options:Freeze="True">#D8F0F4F8</Color>
+    <Color x:Key="AltBottomBarBorderColor" options:Freeze="True">#20000000</Color>
+    <Color x:Key="AltIconFallbackBgColor" options:Freeze="True">#0A000000</Color>
+
+    <!-- ── Clipboard Popup — SolidColorBrush overrides (MUST be here for DynamicResource to work) ── -->
+    <SolidColorBrush x:Key="AltCardBg"              Color="#C0FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltCardBgHover"         Color="#DDFFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltCardBorder"          Color="#18000000" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltCardBorderHover"     Color="#28000000" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltHeaderBg"            Color="#80FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltSearchBg"            Color="#90FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltSearchBorder"        Color="#20000000" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltSearchFg"            Color="#64748B" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltTextPrimary"         Color="#1E293B" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltTextSecondary"       Color="#475569" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltTextTertiary"        Color="#64748B" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltTimestampFg"         Color="#64748B" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltSubtitleFg"          Color="#64748B" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltSidebarHover"        Color="#18000000" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltBottomBarBg"         Color="#D8F0F4F8" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltBottomBarBorder"     Color="#20000000" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltIconFallbackBg"      Color="#0A000000" options:Freeze="True"/>
 
     <!-- ── Chrome / Surface ──────────────────────────────────────────── -->
     <SolidColorBrush x:Key="ThemeSeparator"      Color="#186B5B3A" options:Freeze="True"/>

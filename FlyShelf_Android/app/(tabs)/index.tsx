@@ -25,6 +25,7 @@ import * as Linking from 'expo-linking';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import EncryptedStorage from '../../utils/EncryptedStorage';
 import * as Notifications from 'expo-notifications';
 import NetInfo from '@react-native-community/netinfo';
 
@@ -175,7 +176,7 @@ function SyncScreenInner() {
           PreviewUrl: (c as any).PreviewUrl || undefined,
           IsPinned: c.IsPinned || undefined,
         }));
-        AsyncStorage.setItem(CLIPS_STORAGE_KEY, JSON.stringify(toSave)).catch(() => {});
+        EncryptedStorage.setItem(CLIPS_STORAGE_KEY, JSON.stringify(toSave)).catch(() => {});
       } catch (e) { syncLog('PERSIST', `Clip persist failed: ${(e as any)?.message || e}`); }
     }, 800);
   }, []);
@@ -205,7 +206,7 @@ function SyncScreenInner() {
     let mounted = true; // A-13: Guard against state updates after unmount
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem(CLIPS_STORAGE_KEY);
+        const stored = await EncryptedStorage.getItem(CLIPS_STORAGE_KEY);
         if (stored && mounted) {
           const parsed: ClipItem[] = JSON.parse(stored);
           // Validate CachedUri: check if the local file still exists
@@ -429,7 +430,7 @@ function SyncScreenInner() {
       if (val) { setLocalWipeTimestamp(parseInt(val, 10) || 0); }
       else { setLocalWipeTimestamp(0); AsyncStorage.setItem('localWipeTimestamp', '0'); }
     });
-    AsyncStorage.getItem('localDeletedIds').then(val => {
+    EncryptedStorage.getItem('localDeletedIds').then(val => {
       if (val) { try { const arr = JSON.parse(val); setLocalDeletedIds(new Set(arr.slice(-500))); } catch(e) { console.warn('Load localDeletedIds: error', (e as any)?.message || e); } }
     });
     (async () => {

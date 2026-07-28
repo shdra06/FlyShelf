@@ -107,7 +107,7 @@
         <Setter Property="Height" Value="6" />
         <Setter Property="Minimum" Value="0" />
         <Setter Property="Maximum" Value="100" />
-        <Setter Property="Background" Value="#15FFFFFF" />
+        <Setter Property="Background" Value="{DynamicResource ThemeOverlayHover}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Template">
             <Setter.Value>
@@ -178,7 +178,7 @@
     <!-- ═══ Speed Badge Style ═══ -->
 
     <Style x:Key="SpeedBadgeStyle" TargetType="Border">
-        <Setter Property="Background" Value="#18FFFFFF" />
+        <Setter Property="Background" Value="{DynamicResource ThemeOverlayBg}" />
         <Setter Property="CornerRadius" Value="{StaticResource RadiusMD}" />
         <Setter Property="Padding" Value="8,3" />
         <Setter Property="Margin" Value="4,0" />
@@ -321,7 +321,7 @@
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
                                        VerticalAlignment="Center" />
                             <Border x:Name="CountBadge"
-                                    Background="#20FFFFFF"
+                                    Background="{DynamicResource ThemeOverlayBg}"
                                     CornerRadius="8"
                                     Padding="6,1"
                                     Margin="6,0,0,0"
@@ -339,11 +339,11 @@
                             <Setter TargetName="TabBd" Property="Background" Value="{DynamicResource ThemeAccentBg}" />
                             <Setter TargetName="TabText" Property="Foreground" Value="{DynamicResource ThemeAccentLight}" />
                             <Setter TargetName="TabText" Property="FontWeight" Value="SemiBold" />
-                            <Setter TargetName="CountBadge" Property="Background" Value="#30FFFFFF" />
+                            <Setter TargetName="CountBadge" Property="Background" Value="{DynamicResource ThemeOverlayBg}" />
                             <Setter TargetName="CountText" Property="Foreground" Value="{DynamicResource ThemeAccentLight}" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="TabBd" Property="Background" Value="#10FFFFFF" />
+                            <Setter TargetName="TabBd" Property="Background" Value="{DynamicResource ThemeOverlayBg}" />
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
                                     <Storyboard>
@@ -386,11 +386,11 @@
     <!-- ═══ Dashboard Stat Card ═══ -->
 
     <Style x:Key="DashboardStatCard" TargetType="Border">
-        <Setter Property="Background" Value="#10FFFFFF" />
+        <Setter Property="Background" Value="{DynamicResource ThemeOverlayBg}" />
         <Setter Property="CornerRadius" Value="10" />
         <Setter Property="Padding" Value="14,8" />
         <Setter Property="Margin" Value="4,0" />
-        <Setter Property="BorderBrush" Value="#15FFFFFF" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ThemeOverlayBorder}" />
         <Setter Property="BorderThickness" Value="1" />
     </Style>
 

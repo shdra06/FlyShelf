@@ -102,11 +102,11 @@ namespace FlyShelf.Windows
 
                 if (blurEnabled)
                 {
-                    // HubWindow always gets Mica blur (or Acrylic blur if in glass mode) when blur is enabled
-                    this.SystemBackdropType = (mode == "glass") ? MicaWPF.Core.Enums.BackdropType.Acrylic : MicaWPF.Core.Enums.BackdropType.Mica;
+                    // HubWindow ALWAYS gets Mica blur — the glass/acrylic display mode only affects the clipboard
+                    this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
                     this.Background = System.Windows.Media.Brushes.Transparent;
                     if (RootGrid != null) RootGrid.Background = null;
-                    // Force dark caption color to prevent system red accent bleeding
+                    // Force dark caption color — Hub is always dark regardless of color theme
                     try
                     {
                         var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
@@ -120,25 +120,24 @@ namespace FlyShelf.Windows
                 else
                 {
                     this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-                    bool isLight = SettingsManager.Current.ColorScheme == 1;
-                    var bgColor = isLight ? System.Windows.Media.Color.FromRgb(245, 246, 248) : System.Windows.Media.Color.FromRgb(18, 18, 26);
+                    var bgColor = System.Windows.Media.Color.FromRgb(18, 18, 26);
                     var bgBrush = new System.Windows.Media.SolidColorBrush(bgColor);
                     this.Background = bgBrush;
                     if (RootGrid != null) RootGrid.Background = bgBrush;
-                    // Force title bar to match the fallback color via DWM (DWMWA_CAPTION_COLOR = 35)
+                    // Force title bar to match the dark fallback
                     try
                     {
                         var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                         if (hwnd != IntPtr.Zero)
                         {
-                            int dwmColor = isLight ? ((248 << 16) | (246 << 8) | 245) : ((26 << 16) | (18 << 8) | 18);
+                            int dwmColor = (26 << 16) | (18 << 8) | 18;
                             NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref dwmColor, sizeof(int));
                         }
                     } catch { } // Best-effort: failure is acceptable
                 }
 
-                // Color scheme — always dark mode (Light mode removed)
-                // Force ColorScheme to 0 (dark) in case old settings had 1 (light)
+                // Color scheme — Hub is ALWAYS dark mode
+                // Color themes only affect the clipboard popup via AltClipboard tokens
                 if (SettingsManager.Current.ColorScheme != 0)
                     SettingsManager.Current.ColorScheme = 0;
 
@@ -154,7 +153,7 @@ namespace FlyShelf.Windows
                             mergedDicts.RemoveAt(i);
                     }
 
-                    // Ensure MicaWPF is set to Dark
+                    // Hub always uses Dark MicaWPF theme
                     foreach (var dict in mergedDicts)
                     {
                         if (dict is MicaWPF.Styles.ThemeDictionary md)
@@ -172,7 +171,7 @@ namespace FlyShelf.Windows
                 }
                 catch { /* Theme switching may not be supported on all versions */ }
 
-                // Re-apply window backdrop and background (Mica dark or solid dark fallback)
+                // Re-apply window backdrop and background
                 NativeMethods.ApplyWindowBackdropAndBackground(this, RootGrid);
             }
             catch (Exception ex)

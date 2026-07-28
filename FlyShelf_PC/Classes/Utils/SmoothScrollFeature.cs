@@ -1,15 +1,18 @@
 // ---------------------------------------------------------------
-// SmoothScrollFeature — Premium velocity-based smooth scrolling
-// for all secondary windows (popup dialogs, editors, settings).
+// SmoothScrollFeature — Lightweight smooth scroll engine for feature windows
+// Provides buttery-smooth pixel-based scrolling for all secondary/feature
+// windows (ShortcutsWindow, TransferManager, ReminderHistory, etc.)
 //
-// Drop-in replacement: call Attach(window) in constructor,
-// Detach(window) on close. Shared CompositionTarget.Rendering
-// render loop across all windows for minimal overhead.
+// This is a SEPARATE engine from SmoothScroll (main clipboard) and
+// SmoothScrollPCApp (HubWindow/dashboard). Do NOT merge these.
+//
+// Usage:
+//   SmoothScrollFeature.Attach(this);   // in Window constructor
+//   SmoothScrollFeature.Detach(this);   // in OnClosed
 // ---------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -18,85 +21,72 @@ using System.Windows.Media;
 namespace FlyShelf.Classes
 {
     /// <summary>
-    /// Lightweight velocity-based smooth scrolling for secondary windows.
-    /// Uses CompositionTarget.Rendering (vsync-synced), impulse coalescing,
-    /// adaptive friction, pixel-snapping, and analytical coasting.
+    /// Lightweight smooth scroll engine for feature/secondary windows.
+    /// Uses cubic easing with velocity accumulation for a natural feel.
+    /// Automatically finds ScrollViewers in the visual tree.
     /// </summary>
     public static class SmoothScrollFeature
     {
         // ═══ Physics Constants ═══
-        private const double TouchpadMul        = 0.09;     // Touchpad micro-step scale multiplier
-        private const double MouseMul           = 0.06;     // Mouse wheel step scale multiplier
-        private const double MaxVelocity        = 40.0;     // Maximum speed cap (px/frame)
-        private const double MinVelocity        = 0.40;     // Below this → stop
-        private const double DeltaCapTouchpad   = 120.0;    // Clamp raw trackpad delta
-        private const double DeltaCapMouse      = 280.0;    // Clamp raw mouse delta
-        private const double TargetFrameMs      = 16.667;   // 60 FPS baseline
-        private const double BlendFactorTouchpad = 0.35;    // Soft blend for touchpad
-        private const double BlendFactorMouse    = 0.55;    // Snappy blend for mouse wheel
-        private const double FrictionSlow       = 0.95;     // Friction for slow scrolling
-        private const double FrictionFast       = 0.91;     // Friction for fast scrolling
+        private const double Friction            = 0.88;    // Per-frame velocity decay (lower = more friction)
+        private const double MouseScrollPx       = 64.0;    // Pixels per mouse wheel notch
+        private const double TouchpadScale       = 0.55;    // Sensitivity for trackpad deltas
+        private const double MaxVelocity         = 50.0;    // Cap to prevent runaway scrolling
+        private const double MinVelocity         = 0.3;     // Below this → stop animating
+        private const double DirectionBrake      = 0.3;     // Retained velocity on direction reversal
+        private const double VelocityBlend       = 0.65;    // Blend factor between old and new velocity
+        private const double TargetFrameMs       = 16.667;  // 60 FPS baseline
 
-        private static readonly Dictionary<Window, MouseWheelEventHandler> _handlers = new();
-        private static readonly Dictionary<ScrollViewer, ScrollState> _states = new();
-        private static readonly Dictionary<DependencyObject, ScrollViewer> _ancestorCache = new();
-        private static bool _renderingAttached;
-
+        // ═══ Per-ScrollViewer State ═══
         private class ScrollState
         {
             public double Velocity;
+            public double TargetOffset;
             public bool IsAnimating;
-            public bool IsTouchpad;
             public long LastFrameTick;
-            public long LastInputTime;
-            public double PendingImpulse;
-            public double TrueOffset;
-            public double LastSetOffset;
         }
 
+        private static readonly Dictionary<ScrollViewer, ScrollState> _states = new();
+        private static readonly Dictionary<DependencyObject, ScrollViewer> _svCache = new();
+        private static readonly HashSet<Window> _attachedWindows = new();
+        private static bool _renderingAttached;
+
+        // ═══ Public API ═══
+
         /// <summary>
-        /// Attaches smooth scroll handling to all ScrollViewers in the window.
+        /// Attach smooth scrolling to all ScrollViewers within a window.
+        /// Call once in the window constructor or Loaded event.
         /// </summary>
         public static void Attach(Window window)
         {
-            if (window == null || _handlers.ContainsKey(window)) return;
-
-            MouseWheelEventHandler handler = (sender, e) =>
-            {
-                if (e.Handled) return;
-
-                DependencyObject? source = e.OriginalSource as DependencyObject;
-                ScrollViewer? sv = FindScrollViewer(source);
-                if (sv == null) return;
-
-                // Boundary check: let events bubble at top/bottom limits
-                bool atTop = sv.VerticalOffset <= 0 && e.Delta > 0;
-                bool atBottom = sv.VerticalOffset >= sv.ScrollableHeight && e.Delta < 0;
-                if (atTop || atBottom) return;
-
-                e.Handled = true;
-                ApplyImpulse(sv, e.Delta);
-            };
-
-            window.PreviewMouseWheel += handler;
-            _handlers[window] = handler;
+            if (window == null || _attachedWindows.Contains(window)) return;
+            _attachedWindows.Add(window);
+            window.PreviewMouseWheel -= OnPreviewMouseWheel;
+            window.PreviewMouseWheel += OnPreviewMouseWheel;
         }
 
         /// <summary>
-        /// Detaches smooth scroll handling from the window.
+        /// Detach and clean up all state for the window.
+        /// Call in OnClosed or Closed event.
         /// </summary>
         public static void Detach(Window window)
         {
-            if (window == null || !_handlers.TryGetValue(window, out var handler)) return;
-            window.PreviewMouseWheel -= handler;
-            _handlers.Remove(window);
+            if (window == null) return;
+            _attachedWindows.Remove(window);
+            window.PreviewMouseWheel -= OnPreviewMouseWheel;
 
-            // Clean up scroll states for ScrollViewers in this window
-            var toRemove = _states.Keys.Where(sv => IsDescendantOf(sv, window)).ToList();
+            // Clean up states for ScrollViewers in this window
+            var toRemove = new List<ScrollViewer>();
+            foreach (var sv in _states.Keys)
+            {
+                if (IsDescendantOf(sv, window))
+                    toRemove.Add(sv);
+            }
             foreach (var sv in toRemove)
                 _states.Remove(sv);
 
-            _ancestorCache.Clear();
+            // Clear ancestor cache
+            _svCache.Clear();
 
             if (_states.Count == 0 && _renderingAttached)
             {
@@ -105,45 +95,86 @@ namespace FlyShelf.Classes
             }
         }
 
-        private static void ApplyImpulse(ScrollViewer sv, int delta)
+        /// <summary>
+        /// Reset any in-flight scroll animation for a specific ScrollViewer.
+        /// </summary>
+        public static void Reset(ScrollViewer? sv)
         {
-            bool isTouchpad = (delta % 120 != 0) || (Math.Abs(delta) < 120);
-
-            if (!_states.TryGetValue(sv, out var state))
+            if (sv == null) return;
+            if (_states.Remove(sv) && _states.Count == 0 && _renderingAttached)
             {
-                state = new ScrollState();
-                _states[sv] = state;
+                CompositionTarget.Rendering -= OnRendering;
+                _renderingAttached = false;
             }
+        }
 
-            long now = (long)(Stopwatch.GetTimestamp() * 1000.0 / Stopwatch.Frequency);
-            state.IsTouchpad = isTouchpad;
-            state.LastInputTime = now;
+        // ═══ Input Handling ═══
 
-            double rawDelta = delta;
+        private static void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (e.Handled) return;
+
+            // Prevent cache from growing unbounded
+            if (_svCache.Count > 80) _svCache.Clear();
+
+            var source = e.OriginalSource as DependencyObject;
+            var sv = FindScrollableAncestor(source);
+            if (sv == null) return;
+
+            // Let events bubble at boundaries
+            bool atTop = sv.VerticalOffset <= 0 && e.Delta > 0;
+            bool atBottom = sv.VerticalOffset >= sv.ScrollableHeight && e.Delta < 0;
+            if (atTop || atBottom) return;
+
+            e.Handled = true;
+            ApplyImpulse(sv, e.Delta);
+        }
+
+        private static void ApplyImpulse(ScrollViewer sv, int rawDelta)
+        {
+            bool isTouchpad = (rawDelta % 120 != 0) || (Math.Abs(rawDelta) < 120);
+
             double impulse;
-
             if (isTouchpad)
             {
-                double capped = Math.Sign(rawDelta) * Math.Min(Math.Abs(rawDelta), DeltaCapTouchpad);
-                impulse = capped * TouchpadMul;
+                // Trackpad: scale the raw delta directly
+                impulse = rawDelta * TouchpadScale * -1.0;
             }
             else
             {
-                double capped = Math.Sign(rawDelta) * Math.Min(Math.Abs(rawDelta), DeltaCapMouse);
-                impulse = capped * MouseMul;
+                // Mouse wheel: fixed pixel step per notch
+                int notches = rawDelta / 120;
+                impulse = notches * MouseScrollPx * -1.0;
             }
 
-            // Coalesce impulses — drained once per render frame
-            state.PendingImpulse += impulse;
+            // Clamp impulse
+            impulse = Math.Clamp(impulse, -MaxVelocity * 8, MaxVelocity * 8);
 
-            if (!state.IsAnimating)
+            if (!_states.TryGetValue(sv, out var state))
             {
-                state.IsAnimating = true;
-                state.LastFrameTick = Stopwatch.GetTimestamp();
-                state.TrueOffset = sv.VerticalOffset;
-                state.LastSetOffset = sv.VerticalOffset;
+                state = new ScrollState
+                {
+                    Velocity = 0,
+                    TargetOffset = sv.VerticalOffset,
+                    LastFrameTick = Stopwatch.GetTimestamp(),
+                    IsAnimating = false
+                };
+                _states[sv] = state;
             }
 
+            // Direction reversal braking
+            if (Math.Sign(impulse) != Math.Sign(state.Velocity) && Math.Abs(state.Velocity) > MinVelocity)
+            {
+                state.Velocity *= DirectionBrake;
+            }
+
+            // Blend new impulse with existing velocity
+            double newVelocity = state.Velocity + impulse * (1.0 - VelocityBlend);
+            state.Velocity = Math.Clamp(newVelocity, -MaxVelocity, MaxVelocity);
+            state.IsAnimating = true;
+            state.LastFrameTick = Stopwatch.GetTimestamp();
+
+            // Start rendering loop if not already
             if (!_renderingAttached)
             {
                 CompositionTarget.Rendering += OnRendering;
@@ -151,161 +182,102 @@ namespace FlyShelf.Classes
             }
         }
 
+        // ═══ Animation Loop ═══
+
         private static void OnRendering(object? sender, EventArgs e)
         {
-            bool anyAnimating = false;
-            long nowMs = (long)(Stopwatch.GetTimestamp() * 1000.0 / Stopwatch.Frequency);
+            if (_states.Count == 0)
+            {
+                CompositionTarget.Rendering -= OnRendering;
+                _renderingAttached = false;
+                return;
+            }
 
-            var scrollKeys = _states.Keys.ToList();
             var completed = new List<ScrollViewer>();
 
-            foreach (var sv in scrollKeys)
+            foreach (var kvp in _states)
             {
-                if (!_states.TryGetValue(sv, out var state)) continue;
-                if (!state.IsAnimating) { completed.Add(sv); continue; }
+                var sv = kvp.Key;
+                var state = kvp.Value;
 
-                // Synchronize with WPF layout shifts
-                double actualOffset = sv.VerticalOffset;
-                double wpfDelta = actualOffset - state.LastSetOffset;
-                if (Math.Abs(wpfDelta) > 5.0)
-                {
-                    state.TrueOffset += wpfDelta;
-                    state.LastSetOffset = actualOffset;
-                }
-                else if (Math.Abs(wpfDelta) > 0.001)
-                {
-                    state.LastSetOffset = actualOffset;
-                }
+                if (!state.IsAnimating) continue;
 
-                // Drain coalesced impulse into velocity
-                if (state.PendingImpulse != 0)
-                {
-                    double pending = state.PendingImpulse;
-                    state.PendingImpulse = 0;
+                // Frame-time compensation using high-precision Stopwatch
+                long currentTick = Stopwatch.GetTimestamp();
+                double frameMs = (double)(currentTick - state.LastFrameTick) * 1000.0 / Stopwatch.Frequency;
+                state.LastFrameTick = currentTick;
 
-                    double targetVelocity = state.Velocity - pending;
-                    targetVelocity = Math.Clamp(targetVelocity, -MaxVelocity, MaxVelocity);
+                // Clamp frame time to prevent huge jumps after tab-away
+                frameMs = Math.Clamp(frameMs, 1.0, 50.0);
+                double frameScale = frameMs / TargetFrameMs;
 
-                    double reversalThreshold = state.IsTouchpad ? 4.0 : 2.5;
-                    bool isReversal = Math.Abs(state.Velocity) > reversalThreshold &&
-                                     Math.Sign(targetVelocity) != Math.Sign(state.Velocity);
+                // Apply friction with frame compensation
+                double frictionPerFrame = Math.Pow(Friction, frameScale);
+                state.Velocity *= frictionPerFrame;
 
-                    if (isReversal)
-                    {
-                        state.Velocity *= 0.40;
-                        if (Math.Abs(state.Velocity) < 0.3) state.Velocity = 0;
-                    }
-                    else
-                    {
-                        double blend = state.IsTouchpad ? BlendFactorTouchpad : BlendFactorMouse;
-                        state.Velocity += (targetVelocity - state.Velocity) * blend;
-                    }
+                // Apply velocity to offset
+                double delta = state.Velocity * frameScale;
+                double newOffset = sv.VerticalOffset + delta;
 
-                    state.Velocity = Math.Clamp(state.Velocity, -MaxVelocity, MaxVelocity);
-                }
+                // Clamp to bounds
+                newOffset = Math.Clamp(newOffset, 0, sv.ScrollableHeight);
 
-                // Frame-time compensation
-                long currentTimestamp = Stopwatch.GetTimestamp();
-                double elapsedMs = (double)(currentTimestamp - state.LastFrameTick) * 1000.0 / Stopwatch.Frequency;
-                if (elapsedMs <= 0) elapsedMs = 1.0;
-                double timeScale = Math.Min(elapsedMs / TargetFrameMs, 3.0);
-                state.LastFrameTick = currentTimestamp;
-
-                // Boundary check
-                bool atBound = (state.TrueOffset <= 0 && state.Velocity < 0) ||
-                               (state.TrueOffset >= sv.ScrollableHeight && state.Velocity > 0);
-
-                if (atBound)
-                {
-                    state.Velocity = 0;
-                    state.TrueOffset = Math.Clamp(Math.Round(state.TrueOffset), 0, sv.ScrollableHeight);
-                    sv.ScrollToVerticalOffset(state.TrueOffset);
-                    state.LastSetOffset = state.TrueOffset;
-                    state.IsAnimating = false;
-                    completed.Add(sv);
-                    continue;
-                }
-
-                // Apply velocity with frame-time compensation
-                double displacement = state.Velocity * timeScale;
-                state.TrueOffset += displacement;
-                state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
-
-                // Pixel-snap + delta guard
-                double snappedOffset = Math.Round(state.TrueOffset);
+                // Pixel-snap + delta guard to avoid redundant layout passes
+                double snappedOffset = Math.Round(newOffset);
                 if (Math.Abs(snappedOffset - sv.VerticalOffset) >= 0.5)
                     sv.ScrollToVerticalOffset(snappedOffset);
-                state.LastSetOffset = snappedOffset;
 
-                // Velocity-adaptive friction
-                double absV = Math.Abs(state.Velocity);
-                double t = Math.Clamp((absV - 2.0) / 18.0, 0.0, 1.0);
-                t = t * t * (3.0 - 2.0 * t); // Smoothstep
-                double friction = FrictionSlow + (FrictionFast - FrictionSlow) * t;
-                state.Velocity *= Math.Pow(friction, timeScale);
-
-                // Stop when velocity is imperceptible
-                if (Math.Abs(state.Velocity) < MinVelocity)
+                // Check if animation should stop
+                if (Math.Abs(state.Velocity) < MinVelocity || newOffset <= 0 || newOffset >= sv.ScrollableHeight)
                 {
                     state.Velocity = 0;
-                    state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
-                    sv.ScrollToVerticalOffset(state.TrueOffset);
-                    state.LastSetOffset = state.TrueOffset;
                     state.IsAnimating = false;
                     completed.Add(sv);
-                }
-                else
-                {
-                    anyAnimating = true;
                 }
             }
 
+            // Clean up completed animations
             foreach (var sv in completed)
                 _states.Remove(sv);
 
-            if (!anyAnimating)
+            if (_states.Count == 0 && _renderingAttached)
             {
                 CompositionTarget.Rendering -= OnRendering;
                 _renderingAttached = false;
             }
         }
 
-        private static ScrollViewer? FindScrollViewer(DependencyObject? source)
+        // ═══ Visual Tree Helpers ═══
+
+        private static ScrollViewer? FindScrollableAncestor(DependencyObject? element)
         {
-            if (source == null) return null;
+            if (element == null) return null;
 
-            if (_ancestorCache.Count > 120)
-                _ancestorCache.Clear();
-
-            if (_ancestorCache.TryGetValue(source, out var cached))
+            // Cache lookup
+            if (_svCache.TryGetValue(element, out var cached))
                 return cached;
 
-            var current = source;
+            DependencyObject? current = element;
             while (current != null)
             {
                 if (current is ScrollViewer sv && sv.ScrollableHeight > 0)
                 {
-                    _ancestorCache[source] = sv;
+                    _svCache[element] = sv;
                     return sv;
                 }
-                if (current is Visual or System.Windows.Media.Media3D.Visual3D)
-                    current = VisualTreeHelper.GetParent(current);
-                else
-                    current = LogicalTreeHelper.GetParent(current);
+                current = VisualTreeHelper.GetParent(current);
             }
+
             return null;
         }
 
-        private static bool IsDescendantOf(DependencyObject child, DependencyObject parent)
+        private static bool IsDescendantOf(DependencyObject element, DependencyObject ancestor)
         {
-            var current = child;
+            DependencyObject? current = element;
             while (current != null)
             {
-                if (current == parent) return true;
-                if (current is Visual or System.Windows.Media.Media3D.Visual3D)
-                    current = VisualTreeHelper.GetParent(current);
-                else
-                    current = LogicalTreeHelper.GetParent(current);
+                if (current == ancestor) return true;
+                current = VisualTreeHelper.GetParent(current);
             }
             return false;
         }

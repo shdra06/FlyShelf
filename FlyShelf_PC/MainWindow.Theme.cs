@@ -91,8 +91,57 @@ namespace FlyShelf
         #region ═══ Backdrop Modes (Mica / Acrylic / Non-Mica) ═══
 
         /// <summary>
-        /// Activates Mica blur mode — sets SystemBackdropType to Mica if blur is enabled,
-        /// otherwise falls back to a solid background.
+        /// Applies a DWM system backdrop type directly via native DWM API.
+        /// MicaWPF's SystemBackdropType property only works at window creation —
+        /// changing it at runtime on an already-visible window does nothing.
+        /// This method calls the DWM APIs directly for immediate effect.
+        /// backdropType: 1=None, 2=Mica, 3=Acrylic, 4=MicaAlt
+        /// </summary>
+        private void ApplyDwmBackdrop(int backdropType)
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero)
+            {
+                Classes.Logger.LogAction("DWM_BACKDROP", "FAILED: hwnd is IntPtr.Zero");
+                return;
+            }
+
+            try
+            {
+                // Extend DWM frame into entire client area (required for backdrop to render)
+                var margins = new Classes.NativeMethods.MARGINS
+                {
+                    cxLeftWidth = -1,
+                    cxRightWidth = -1,
+                    cyTopHeight = -1,
+                    cyBottomHeight = -1
+                };
+                int hrMargins = Classes.NativeMethods.DwmExtendFrameIntoClientArea(hwnd, ref margins);
+
+                // Set immersive dark mode for dark backdrop tint
+                int darkMode = 1;
+                int hrDark = Classes.NativeMethods.DwmSetWindowAttribute(hwnd,
+                    Classes.NativeMethods.DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkMode, sizeof(int));
+
+                // Set the actual backdrop type
+                int hrBackdrop = Classes.NativeMethods.DwmSetWindowAttribute(hwnd,
+                    Classes.NativeMethods.DWMWA_SYSTEMBACKDROP_TYPE, ref backdropType, sizeof(int));
+
+                Classes.Logger.LogAction("DWM_BACKDROP",
+                    $"Applied backdropType={backdropType} hwnd=0x{hwnd:X} " +
+                    $"hrMargins=0x{hrMargins:X8} hrDark=0x{hrDark:X8} hrBackdrop=0x{hrBackdrop:X8} " +
+                    $"WindowBg={this.Background} RootContentBg={RootContent?.Background}");
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("DWM_BACKDROP", $"EXCEPTION: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Activates Mica blur mode — uses the system Mica backdrop which creates a
+        /// subtle tinted surface that imitates the desktop wallpaper colors.
+        /// Falls back to solid dark background when blur is not enabled/supported.
         /// </summary>
         private void RestoreMicaBlur()
         {
@@ -104,51 +153,66 @@ namespace FlyShelf
                 Classes.NativeMethods.DisableCustomAcrylic(hwnd);
             }
 
-            // ═══ SOLID GREY BACKGROUND ═══
-            // Mica blur doesn't render well on the clipboard popup, so we use a clean
-            // Windows-native dark grey (#2B2B2B) instead of the DWM Mica backdrop.
-            // The main PC app (HubWindow) keeps its own Mica blur — only the clipboard is changed.
-            this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-            var greyBg = new SolidColorBrush(Color.FromRgb(0x2B, 0x2B, 0x2B));
-            greyBg.Freeze();
-            this.Background = greyBg;
-            if (RootContent != null)
-                RootContent.Background = greyBg;
+            bool blurEnabled = Classes.SettingsManager.Current.EnableBlurBehind 
+                               && Classes.NativeMethods.ShouldUseBlur();
+
+            if (blurEnabled)
+            {
+                // Apply Mica backdrop via direct DWM API (backdropType 2 = Mica)
+                // Background MUST be fully Transparent (not null) for DWM backdrop to show
+                this.Background = Brushes.Transparent;
+                if (RootContent != null)
+                    RootContent.Background = Brushes.Transparent;
+                ApplyDwmBackdrop(2); // DWMSBT_MAINWINDOW = Mica
+            }
+            else
+            {
+                // Solid dark fallback when blur is disabled
+                ApplyDwmBackdrop(1); // DWMSBT_NONE
+                var greyBg = new SolidColorBrush(Color.FromRgb(0x2B, 0x2B, 0x2B));
+                greyBg.Freeze();
+                this.Background = greyBg;
+                if (RootContent != null)
+                    RootContent.Background = greyBg;
+            }
 
             ResetSelectionAccent();
         }
 
         /// <summary>
-        /// Activates Acrylic blur mode — sets SystemBackdropType to Acrylic if blur is enabled,
-        /// otherwise falls back to a solid background.
+        /// Activates Acrylic blur mode — uses the system Acrylic backdrop which creates
+        /// a real see-through frosted glass effect showing blurred content behind the window.
+        /// Falls back to solid background when blur is not supported/disabled.
         /// </summary>
         private void RestoreAcrylicBlur()
         {
             ClearWallpaperLayers();
+
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
             bool blurEnabled = Classes.SettingsManager.Current.EnableBlurBehind 
                                && Classes.NativeMethods.ShouldUseBlur();
+
             if (blurEnabled)
             {
-                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+                // Disable any previous custom acrylic before re-applying
+                if (hwnd != IntPtr.Zero)
+                    Classes.NativeMethods.DisableCustomAcrylic(hwnd);
+
+                // Apply Acrylic backdrop via direct DWM API (backdropType 3 = Acrylic)
+                // Background MUST be fully Transparent (not null) for DWM backdrop to show
                 this.Background = Brushes.Transparent;
                 if (RootContent != null)
-                    RootContent.Background = new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0)); // Near-transparent for hit-testing
-
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
-                {
-                    Classes.NativeMethods.EnableCustomAcrylic(hwnd, 0x22242424);
-                }
+                    RootContent.Background = Brushes.Transparent;
+                ApplyDwmBackdrop(3); // DWMSBT_TRANSIENTWINDOW = Acrylic
             }
             else
             {
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
                     Classes.NativeMethods.DisableCustomAcrylic(hwnd);
                 }
 
-                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+                ApplyDwmBackdrop(1); // DWMSBT_NONE
                 ApplyPopupBackground(); // solid dark + software blur fallback
             }
             ResetSelectionAccent();

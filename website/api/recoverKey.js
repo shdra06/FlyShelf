@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { firebaseFetch } = require('./_firebaseAdmin');
+const { firebaseFetch, setSecurityHeaders } = require('./_firebaseAdmin');
 const { sendRecoveryEmail } = require('./_email');
 
 // ═══════════════════════════════════════════════════════════════════
@@ -33,6 +33,7 @@ function setCorsHeaders(req, res) {
 
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
+  setSecurityHeaders(res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();

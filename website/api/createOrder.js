@@ -1,6 +1,6 @@
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
-const { firebaseFetch } = require('./_firebaseAdmin');
+const { firebaseFetch, setSecurityHeaders } = require('./_firebaseAdmin');
 
 // Rate limit constants
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -30,6 +30,7 @@ function setCorsHeaders(req, res) {
 
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
+  setSecurityHeaders(res);
 
   // [SECURITY FIX v2.2.0]: Handle CORS preflight (was missing)
   if (req.method === 'OPTIONS') {

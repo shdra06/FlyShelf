@@ -166,8 +166,8 @@ namespace FlyShelf.ViewModels
                 double usableW = pageW - 2 * margin;
                 double fontSize = 10;
                 double lineHeight = fontSize * 1.4;
-                double charsPerLine = (int)(usableW / (fontSize * 0.52)); // approximate monospace width
-                double linesPerPage = (int)((pageH - 2 * margin) / lineHeight);
+                int charsPerLine = (int)(usableW / (fontSize * 0.52)); // approximate monospace width
+                int linesPerPage = (int)((pageH - 2 * margin) / lineHeight);
 
                 // Word-wrap and paginate
                 var allLines = new List<string>();
@@ -180,9 +180,9 @@ namespace FlyShelf.ViewModels
                     else
                     {
                         // Wrap long lines
-                        for (int i = 0; i < rawLine.Length; i += (int)charsPerLine)
+                        for (int i = 0; i < rawLine.Length; i += charsPerLine)
                         {
-                            int len = Math.Min((int)charsPerLine, rawLine.Length - i);
+                            int len = Math.Min(charsPerLine, rawLine.Length - i);
                             allLines.Add(rawLine.Substring(i, len));
                         }
                     }
@@ -190,9 +190,9 @@ namespace FlyShelf.ViewModels
 
                 // Split into pages
                 var pages = new List<List<string>>();
-                for (int i = 0; i < allLines.Count; i += (int)linesPerPage)
+                for (int i = 0; i < allLines.Count; i += linesPerPage)
                 {
-                    int count = Math.Min((int)linesPerPage, allLines.Count - i);
+                    int count = Math.Min(linesPerPage, allLines.Count - i);
                     pages.Add(allLines.GetRange(i, count));
                 }
                 if (pages.Count == 0) pages.Add(new List<string> { "(empty)" });
@@ -572,10 +572,26 @@ namespace FlyShelf.ViewModels
                     imgHeight = frame.PixelHeight;
 
                     // Convert to JPEG bytes for PDF embedding
+                    // [FIX R5]: Strip alpha channel from RGBA PNGs — JPEG/DCTDecode requires DeviceRGB
+                    System.Windows.Media.Imaging.BitmapSource sourceFrame = frame;
+                    if (frame.Format == System.Windows.Media.PixelFormats.Bgra32 ||
+                        frame.Format == System.Windows.Media.PixelFormats.Pbgra32 ||
+                        frame.Format == System.Windows.Media.PixelFormats.Rgba64 ||
+                        frame.Format == System.Windows.Media.PixelFormats.Prgba64)
+                    {
+                        var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap();
+                        converted.BeginInit();
+                        converted.Source = frame;
+                        converted.DestinationFormat = System.Windows.Media.PixelFormats.Bgr24;
+                        converted.EndInit();
+                        converted.Freeze();
+                        sourceFrame = converted;
+                    }
+
                     using (var ms = new MemoryStream())
                     {
                         var enc = new System.Windows.Media.Imaging.JpegBitmapEncoder { QualityLevel = 90 };
-                        enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(frame));
+                        enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(sourceFrame));
                         enc.Save(ms);
                         jpegBytes = ms.ToArray();
                     }
@@ -591,7 +607,8 @@ namespace FlyShelf.ViewModels
                     double drawW = imgWidth * scale;
                     double drawH = imgHeight * scale;
                     double drawX = margin + (usableW - drawW) / 2;
-                    double drawY = margin + (usableH - drawH) / 2;
+                    // [FIX C6]: PDF uses bottom-left origin — position image correctly
+                    double drawY = pageH - margin - drawH - (usableH - drawH) / 2;
 
                     // Write a minimal valid PDF
                     using (var fs = new FileStream(outputPdf, FileMode.Create))

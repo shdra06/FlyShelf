@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { firebaseFetch } = require('./_firebaseAdmin');
+const { firebaseFetch, setSecurityHeaders } = require('./_firebaseAdmin');
 
 // Safe import — if nodemailer isn't available, email is skipped (not fatal)
 let sendPurchaseEmail;
@@ -44,6 +44,7 @@ function generateProKey() {
 
 module.exports = async (req, res) => {
   // Webhooks are server-to-server — no CORS needed
+  setSecurityHeaders(res);
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }

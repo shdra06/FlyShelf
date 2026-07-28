@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useContext, useCallback, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import EncryptedStorage from '../utils/EncryptedStorage';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { clearKeyCache } from '../utils/syncCrypto';
 import * as Crypto from 'expo-crypto';
@@ -129,7 +130,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           '@isFloatingBallEnabled', '@defaultTargetDeviceName', '@floatingBallSize',
           '@floatingBallAutoHide', '@deviceId', '@pairedDevices'
         ];
-        const results = await AsyncStorage.multiGet(keys);
+        const results = await EncryptedStorage.multiGet(keys);
         const values = Object.fromEntries(results);
 
         if (values['@pcLocalIp']) setPcLocalIpState(values['@pcLocalIp']!);
@@ -173,7 +174,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         // Note: pairingKey may remain '' until user pairs via QR/code — that's intentional
 
         // ── Sync Preferences ──
-        const storedSyncPrefs = await AsyncStorage.getItem('@syncPreferences');
+        const storedSyncPrefs = await EncryptedStorage.getItem('@syncPreferences');
         if (storedSyncPrefs) {
           try { setSyncPreferencesState(JSON.parse(storedSyncPrefs)); } catch {}
         }
@@ -202,7 +203,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const json = JSON.stringify(stableDevices);
     if (json === persistableDevicesRef.current) return; // no stable change
     persistableDevicesRef.current = json;
-    AsyncStorage.setItem('@pairedDevices', json).catch(() => {});
+    EncryptedStorage.setItem('@pairedDevices', json).catch(() => {});
     // If no devices remain, clear legacy pairing state
     if (pairedDevices.length === 0) {
       AsyncStorage.multiRemove([
@@ -213,12 +214,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const setPcLocalIp = useCallback(async (ip: string) => {
     setPcLocalIpState(ip);
-    await AsyncStorage.setItem('@pcLocalIp', ip);
+    await EncryptedStorage.setItem('@pcLocalIp', ip);
   }, []);
 
   const setDeviceName = useCallback(async (name: string) => {
     setDeviceNameState(name);
-    await AsyncStorage.setItem('@deviceName', name);
+    await EncryptedStorage.setItem('@deviceName', name);
   }, []);
 
   const setGlobalSyncEnabled = useCallback(async (val: boolean) => {
@@ -233,7 +234,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const setDefaultTargetDeviceName = useCallback(async (name: string) => {
     setDefaultTargetDeviceNameState(name);
-    await AsyncStorage.setItem('@defaultTargetDeviceName', name);
+    await EncryptedStorage.setItem('@defaultTargetDeviceName', name);
   }, []);
 
   const setFloatingBallSize = useCallback(async (val: number) => {
@@ -315,7 +316,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setSyncPreferencesState(prev => {
       const devicePrefs = prev[deviceId] || { ...DEFAULT_SYNC_PREFS };
       const updated = { ...prev, [deviceId]: { ...devicePrefs, [category]: enabled } };
-      AsyncStorage.setItem('@syncPreferences', JSON.stringify(updated)).catch(() => {});
+      EncryptedStorage.setItem('@syncPreferences', JSON.stringify(updated)).catch(() => {});
       return updated;
     });
   }, []);
@@ -327,7 +328,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const setAllSyncPrefsForDevice = useCallback(async (deviceId: string, prefs: DeviceSyncPrefs) => {
     setSyncPreferencesState(prev => {
       const updated = { ...prev, [deviceId]: prefs };
-      AsyncStorage.setItem('@syncPreferences', JSON.stringify(updated)).catch(() => {});
+      EncryptedStorage.setItem('@syncPreferences', JSON.stringify(updated)).catch(() => {});
       return updated;
     });
   }, []);
