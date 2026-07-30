@@ -4,14 +4,101 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              mc:Ignorable="d" 
-             d:DesignHeight="40" d:DesignWidth="120"
+             d:DesignHeight="40" d:DesignWidth="200"
              Background="Transparent">
     
     <Grid Name="WidgetGrid" Background="Transparent" MouseLeftButtonDown="WidgetGrid_MouseLeftButtonDown" Cursor="Hand">
-        <Border Name="WidgetBorder" Background="#11FFFFFF" CornerRadius="8" Padding="6,4">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-                <Image Source="{DynamicResource ThemeLogoIcon}" Width="20" Height="20" RenderOptions.BitmapScalingMode="HighQuality"/>
-                <TextBlock Foreground="White" FontSize="14" FontWeight="SemiBold" Text="Fly" Margin="6,0,0,0" VerticalAlignment="Center"/>
+        <Border Name="WidgetBorder" Background="#11FFFFFF" CornerRadius="8" Padding="5,4"
+                HorizontalAlignment="Left" RenderTransformOrigin="0,0.5">
+            <Border.RenderTransform>
+                <ScaleTransform x:Name="WidgetBounceScale" ScaleX="1" ScaleY="1"/>
+            </Border.RenderTransform>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Permanent: Logo + "Fly" -->
+                <Image Source="{DynamicResource ThemeLogoIcon}" Width="20" Height="20" 
+                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                <TextBlock Foreground="White" FontSize="14" FontWeight="SemiBold" 
+                           Text="Fly" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                
+                <!-- ═══ Dynamic Status Panel (icon-based, expands horizontally) ═══ -->
+                <Border x:Name="StatusPanel" ClipToBounds="True" Width="0" Margin="0">
+                    <StackPanel x:Name="StatusContent" Orientation="Horizontal" 
+                                VerticalAlignment="Center" Opacity="0"
+                                RenderTransformOrigin="0,0.5">
+                        <StackPanel.RenderTransform>
+                            <ScaleTransform x:Name="ContentBounceScale" ScaleX="1" ScaleY="1"/>
+                        </StackPanel.RenderTransform>
+                        
+                        <!-- Thin separator -->
+                        <Border Width="1" Height="14" Background="#30FFFFFF" 
+                                Margin="6,0,4,0" VerticalAlignment="Center"/>
+                        
+                        <!-- Source format pill -->
+                        <Border x:Name="SourcePill" CornerRadius="3" Padding="3,1"
+                                Background="#CC2563EB" VerticalAlignment="Center">
+                            <TextBlock x:Name="SourceLabel" Text="DOC" FontSize="7.5" 
+                                       FontWeight="Bold" Foreground="White"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        
+                        <!-- Arrow → (vector) -->
+                        <Path Data="M 0,5 L 6,5 M 4,2.5 L 7,5 L 4,7.5" 
+                              Stroke="#70FFFFFF" StrokeThickness="1.2"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                              StrokeLineJoin="Round"
+                              Width="8" Height="10" Margin="3,0"
+                              VerticalAlignment="Center" Stretch="Uniform"/>
+                        
+                        <!-- Target format pill -->
+                        <Border x:Name="TargetPill" CornerRadius="3" Padding="3,1"
+                                Background="#CCDC2626" VerticalAlignment="Center">
+                            <TextBlock x:Name="TargetLabel" Text="PDF" FontSize="7.5"
+                                       FontWeight="Bold" Foreground="White"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        
+                        <!-- Spinner / Checkmark / Error indicator -->
+                        <Grid Width="14" Height="14" VerticalAlignment="Center" Margin="4,0,1,0">
+                            <!-- Track ring -->
+                            <Ellipse x:Name="SpinnerTrack" Width="12" Height="12" 
+                                     Stroke="#25FFFFFF" StrokeThickness="1.5" Fill="Transparent"/>
+                            <!-- Spinning arc -->
+                            <Path x:Name="SpinnerArc" Stroke="#818CF8"
+                                  StrokeThickness="1.5" 
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  RenderTransformOrigin="0.5,0.5"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Width="14" Height="14">
+                                <Path.RenderTransform>
+                                    <RotateTransform x:Name="SpinnerRotation" Angle="0"/>
+                                </Path.RenderTransform>
+                                <Path.Data>
+                                    <PathGeometry>
+                                        <PathFigure StartPoint="7,1">
+                                            <ArcSegment Point="1,7" Size="6,6" 
+                                                        SweepDirection="Clockwise" IsLargeArc="True"/>
+                                        </PathFigure>
+                                    </PathGeometry>
+                                </Path.Data>
+                            </Path>
+                            <!-- Checkmark -->
+                            <Path x:Name="CheckmarkPath" 
+                                  Data="M 3,7 L 5.5,10 L 11,4" 
+                                  Stroke="#34D399" StrokeThickness="1.8"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" 
+                                  StrokeLineJoin="Round"
+                                  Visibility="Collapsed"
+                                  Width="14" Height="14"/>
+                            <!-- Error X -->
+                            <Path x:Name="ErrorPath" 
+                                  Data="M 3.5,3.5 L 10.5,10.5 M 10.5,3.5 L 3.5,10.5" 
+                                  Stroke="#F87171" StrokeThickness="1.8"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Visibility="Collapsed"
+                                  Width="14" Height="14"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </Border>
     </Grid>

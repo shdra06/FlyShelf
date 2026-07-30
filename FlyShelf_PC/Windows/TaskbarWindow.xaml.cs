@@ -181,6 +181,12 @@ namespace FlyShelf.Windows
             {
                 Widget.SetMainWindow(_mainWindow);
             }
+            // Wire up the mini-notification resize callback
+            Widget.OnSizeChangeRequested = () =>
+            {
+                if (_isClosed) return;
+                ForceReposition();
+            };
         }
 
         private IntPtr GetSelectedTaskbarHandle(out bool isMainTaskbarSelected)

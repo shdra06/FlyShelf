@@ -28,7 +28,7 @@ namespace FlyShelf.Windows
             {
                 _hubScrollHighQualityTimer = new System.Windows.Threading.DispatcherTimer
                 {
-                    Interval = TimeSpan.FromMilliseconds(30)
+                    Interval = TimeSpan.FromMilliseconds(150)
                 };
                 _hubScrollHighQualityTimer.Tick += (s, ev) =>
                 {
@@ -93,8 +93,9 @@ namespace FlyShelf.Windows
                     if (!this.IsVisible) { ThumbDiag("SKIP: window not visible"); return; }
                     if (HistoryGrid == null || HistoryGrid.Visibility != Visibility.Visible) { ThumbDiag("SKIP: HistoryGrid not visible"); return; }
 
-                    // Force layout pass to ensure containers are generated
-                    HubListView.UpdateLayout();
+                    // Skip UpdateLayout() here — it forces a synchronous layout pass
+                    // that fights CompositionTarget.Rendering for UI thread time.
+                    // The VirtualizingStackPanel has already generated containers by this point.
 
                     if (HubListView.ItemContainerGenerator.Status != System.Windows.Controls.Primitives.GeneratorStatus.ContainersGenerated)
                     {
@@ -206,7 +207,7 @@ namespace FlyShelf.Windows
                 {
                     Logger.LogAction("HUB_THUMB_ERR", $"Error in RenderHubVisibleThumbnails: {ex.Message}");
                 }
-            }, System.Windows.Threading.DispatcherPriority.Normal);
+            }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
         /// <summary>
@@ -231,7 +232,7 @@ namespace FlyShelf.Windows
                             item.Icon = bmp;
                             item.IsLoadedHighQuality = true;
                             item.IsLoadingHighQuality = false;
-                        }, System.Windows.Threading.DispatcherPriority.Normal);
+                        }, System.Windows.Threading.DispatcherPriority.Background);
                     }
                     else
                     {

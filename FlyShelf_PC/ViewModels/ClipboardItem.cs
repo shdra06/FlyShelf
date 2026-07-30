@@ -43,6 +43,8 @@ namespace FlyShelf.ViewModels
         private const int MaxCollapsedLines = 4;
         private const double CollapsedMaxHeightLong = 100.0;
         private const double CollapsedMaxHeightShort = 57.0;
+        private const int ExpandedDisplayTextLimit = 5000;
+        private const double ExpandedMaxHeightLimit = 800.0;
 
         public DateTime DateCopied { get; set; } = DateTime.Now;
         public string FilePath { get; set; } = string.Empty;
@@ -103,7 +105,14 @@ namespace FlyShelf.ViewModels
         {
             get
             {
-                if (IsExpanded) return _fileName;
+                if (IsExpanded)
+                {
+                    // Cap expanded text to prevent WPF TextBlock.MeasureOverride from
+                    // processing massive strings for wrap computation (scroll jitter killer)
+                    if (_fileName.Length <= ExpandedDisplayTextLimit)
+                        return _fileName;
+                    return string.Concat(_fileName.AsSpan(0, ExpandedDisplayTextLimit), "\n\n[… Text truncated — open item to view full content]");
+                }
                 if (_displayText != null) return _displayText;
                 if (_fileName.Length <= DisplayTextTruncationLimit)
                 {
@@ -532,7 +541,7 @@ namespace FlyShelf.ViewModels
         }
 
         [JsonIgnore]
-        public double CollapsedMaxHeight => IsLongText ? (IsExpanded ? double.PositiveInfinity : CollapsedMaxHeightLong) : CollapsedMaxHeightShort;
+        public double CollapsedMaxHeight => IsLongText ? (IsExpanded ? ExpandedMaxHeightLimit : CollapsedMaxHeightLong) : CollapsedMaxHeightShort;
 
         [JsonIgnore]
         public string ExpandToggleText => IsExpanded ? "▴" : "▾";

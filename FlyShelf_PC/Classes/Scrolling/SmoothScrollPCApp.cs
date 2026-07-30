@@ -312,10 +312,7 @@ namespace FlyShelf.Classes
                         mouseTargetV = Math.Clamp(mouseTargetV, -MouseMaxVelocity, MouseMaxVelocity);
 
                         // Smooth direction reversal: 2-phase brake-and-reverse
-                        // Touchpad uses higher threshold (4.0) — residual momentum
-                        // shouldn't trigger braking or upward scrolling feels sluggish.
-                        double mouseReversalThreshold = state.IsTouchpad ? 4.0 : 2.0;
-                        bool mouseReversal = Math.Abs(state.MouseVelocity) > mouseReversalThreshold &&
+                        bool mouseReversal = Math.Abs(state.MouseVelocity) > 2.0 &&
                                              Math.Sign(mouseTargetV) != Math.Sign(state.MouseVelocity);
 
                         if (mouseReversal)
@@ -327,11 +324,8 @@ namespace FlyShelf.Classes
                         }
                         else
                         {
-                            // Input-appropriate blend factor:
-                            // Touchpad uses softer 0.35 for buttery continuity (Chrome/macOS-like).
-                            // Mouse uses snappier 0.55 for responsive notch-to-motion feel.
-                            double blendFactor = state.IsTouchpad ? 0.35 : MouseBlendFactor;
-                            state.MouseVelocity += (mouseTargetV - state.MouseVelocity) * blendFactor;
+                            // Responsive acceleration blend
+                            state.MouseVelocity += (mouseTargetV - state.MouseVelocity) * MouseBlendFactor;
                         }
 
                         state.MouseVelocity = Math.Clamp(state.MouseVelocity, -MouseMaxVelocity, MouseMaxVelocity);
@@ -368,15 +362,8 @@ namespace FlyShelf.Classes
                     // Store rounded offset so WPF sync check doesn't produce false deltas
                     state.LastSetOffset = mouseNextOffset;
 
-                    // Velocity-adaptive friction: wider transition band (2-20 px/frame)
-                    // eliminates mid-speed resonance — matched to clipboard engine.
-                    double mouseAbsV = Math.Abs(state.MouseVelocity);
-                    double mouseSlowFriction = 0.96;
-                    double mouseFastFriction = 0.93;
-                    double mouseFrictionT = Math.Clamp((mouseAbsV - 2.0) / 18.0, 0.0, 1.0);
-                    mouseFrictionT = mouseFrictionT * mouseFrictionT * (3.0 - 2.0 * mouseFrictionT);
-                    double mouseAdaptiveFriction = mouseSlowFriction + (mouseFastFriction - mouseSlowFriction) * mouseFrictionT;
-                    state.MouseVelocity *= Math.Pow(mouseAdaptiveFriction, mouseTimeScale);
+                    // Apply exponential friction
+                    state.MouseVelocity *= Math.Pow(MouseVelocityFriction, mouseTimeScale);
 
                     // Stop when velocity is imperceptible
                     if (Math.Abs(state.MouseVelocity) < MouseMinVelocity)

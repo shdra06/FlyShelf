@@ -75,8 +75,11 @@ namespace FlyShelf.ViewModels
                     string ext = Path.GetExtension(workFilePath).ToUpperInvariant();
 
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowProgress("Converting to PDF", 10)
-                    );
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowProgress("Converting to PDF", 10);
+                        FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ShowConversionNotification(
+                            ext.TrimStart('.'), "PDF");
+                    });
 
                     string targetPdf = Path.Combine(
                          Path.GetDirectoryName(workFilePath) ?? Path.GetTempPath(),
@@ -135,6 +138,7 @@ namespace FlyShelf.ViewModels
                             var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
                             (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
                             FlyShelf.Windows.ToastWindow.ShowProgress("PDF converted", 100);
+                            FlyShelf.Controls.FlyShelfWidgetControl.Instance?.CompleteMiniNotification();
                             FlyShelf.Classes.LicenseManager.RecordDocConversion();
 
                             // Scroll to top after a short delay so the new PDF item is visible
@@ -144,15 +148,19 @@ namespace FlyShelf.ViewModels
                     else
                     {
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            FlyShelf.Windows.ToastWindow.ShowToast("Conversion failed — Install LibreOffice or Microsoft Word")
-                        );
+                        {
+                            FlyShelf.Windows.ToastWindow.ShowToast("Conversion failed — Install LibreOffice or Microsoft Word");
+                            FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ErrorMiniNotification("Failed");
+                        });
                     }
                 }
                 catch (Exception ex)
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Conversion Error: {ex.Message} ❌")
-                    );
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Conversion Error: {ex.Message}");
+                        FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ErrorMiniNotification("Error");
+                    });
                 }
             });
 #endif
@@ -557,8 +565,11 @@ namespace FlyShelf.ViewModels
                 try
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowProgress("Converting image to PDF", 10)
-                    );
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowProgress("Converting image to PDF", 10);
+                        FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ShowConversionNotification(
+                            Path.GetExtension(FilePath).TrimStart('.'), "PDF");
+                    });
 
                     string outputPdf = Path.Combine(
                         Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(),
@@ -670,6 +681,7 @@ namespace FlyShelf.ViewModels
                         var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
                         (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
                         FlyShelf.Windows.ToastWindow.ShowProgress("Image converted to PDF", 100);
+                        FlyShelf.Controls.FlyShelfWidgetControl.Instance?.CompleteMiniNotification();
                         FlyShelf.Classes.LicenseManager.RecordImageToPdf();
 
                         // Scroll to top after a short delay so the new PDF item is visible
@@ -679,8 +691,10 @@ namespace FlyShelf.ViewModels
                 catch (Exception ex)
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Image to PDF failed: {ex.Message}")
-                    );
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Image to PDF failed: {ex.Message}");
+                        FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ErrorMiniNotification("Failed");
+                    });
                 }
             });
         }
@@ -827,8 +841,10 @@ namespace FlyShelf.ViewModels
                 try
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowToast("Converting CSV to XLSX... 📊")
-                    );
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast("Converting CSV to XLSX...");
+                        FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ShowConversionNotification("CSV", "XLSX");
+                    });
 
                     string xlsxPath = Path.Combine(
                         Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(),
@@ -862,7 +878,8 @@ namespace FlyShelf.ViewModels
                         dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { xlsxPath });
                         var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
                         (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
-                        FlyShelf.Windows.ToastWindow.ShowToast($"CSV → XLSX converted! ✅ {Path.GetFileName(xlsxPath)}");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"CSV to XLSX converted — {Path.GetFileName(xlsxPath)}");
+                        FlyShelf.Controls.FlyShelfWidgetControl.Instance?.CompleteMiniNotification();
                         FlyShelf.Classes.LicenseManager.RecordDocConversion();
 
                         // Scroll to top after a short delay so the new item is visible
