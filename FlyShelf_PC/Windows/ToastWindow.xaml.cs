@@ -54,6 +54,10 @@ namespace FlyShelf.Windows
         // Dismiss timer
         private System.Windows.Threading.DispatcherTimer? _dismissTimer;
         private int _customDurationMs;
+        
+        // Progress mode tracking
+        private bool _isProgressMode;
+        private double _progressTrackWidth = 200; // Default track width for progress bar
 
         public ToastWindow()
         {
@@ -61,70 +65,128 @@ namespace FlyShelf.Windows
         }
 
         /// <summary>
-        /// Configures the toast content and icon based on message semantics.
-        /// Called each time a message is shown (no Window re-creation needed).
+        /// Configures the toast content based on message semantics.
+        /// Uses a subtle accent-dot color instead of large icons.
         /// </summary>
         private void ConfigureForMessage(string message)
         {
             MessageText.Text = message;
+            _isProgressMode = false;
+            
+            // Show standard layout, hide progress layout
+            StandardLayout.Visibility = Visibility.Visible;
+            ProgressLayout.Visibility = Visibility.Collapsed;
 
             string msgLower = message.ToLowerInvariant();
-            Wpf.Ui.Controls.SymbolRegular symbol;
-            string accentKey; // Theme token key for accent color lookup
-
+            
+            // Determine accent color based on message type
+            string accentKey;
             if (msgLower.Contains("failed", StringComparison.Ordinal) || msgLower.Contains("error", StringComparison.Ordinal) || msgLower.Contains("❌", StringComparison.Ordinal) || msgLower.Contains("busy", StringComparison.Ordinal) || msgLower.Contains("timeout", StringComparison.Ordinal) || msgLower.Contains("offline", StringComparison.Ordinal) || msgLower.Contains("unreachable", StringComparison.Ordinal))
             {
-                symbol = Wpf.Ui.Controls.SymbolRegular.ErrorCircle24;
-                accentKey = "DangerColor"; // Rose/Red from palette
+                accentKey = "DangerColor";
             }
             else if (msgLower.Contains("warning", StringComparison.Ordinal) || msgLower.Contains("⚠️", StringComparison.Ordinal) || msgLower.Contains("⚠", StringComparison.Ordinal) || msgLower.Contains("limit", StringComparison.Ordinal) || msgLower.Contains("retry", StringComparison.Ordinal))
             {
-                symbol = Wpf.Ui.Controls.SymbolRegular.Warning24;
-                accentKey = "WarningColor"; // Amber from palette
+                accentKey = "WarningColor";
+            }
+            else if (msgLower.Contains("convert", StringComparison.Ordinal) || msgLower.Contains("merge", StringComparison.Ordinal) || msgLower.Contains("pdf", StringComparison.Ordinal))
+            {
+                accentKey = "InfoColor";
             }
             else if (msgLower.Contains("copy", StringComparison.Ordinal) || msgLower.Contains("copied", StringComparison.Ordinal) || msgLower.Contains("clipboard", StringComparison.Ordinal) || msgLower.Contains("📋", StringComparison.Ordinal))
             {
-                symbol = Wpf.Ui.Controls.SymbolRegular.Clipboard24;
-                accentKey = "ThemeAccentLight"; // Theme accent light
+                accentKey = "ThemeAccentLight";
             }
             else if (msgLower.Contains("sync", StringComparison.Ordinal) || msgLower.Contains("pairing", StringComparison.Ordinal) || msgLower.Contains("paired", StringComparison.Ordinal) || msgLower.Contains("device", StringComparison.Ordinal) || msgLower.Contains("lan", StringComparison.Ordinal) || msgLower.Contains("cloudflare", StringComparison.Ordinal))
             {
-                symbol = Wpf.Ui.Controls.SymbolRegular.Router24;
-                accentKey = "InfoColor"; // Sky/info from palette
+                accentKey = "InfoColor";
             }
             else
             {
-                symbol = Wpf.Ui.Controls.SymbolRegular.CheckmarkCircle24;
-                accentKey = "ThemeAccentLight"; // Default theme accent
+                accentKey = "ThemeAccentLight";
             }
 
-            // Apply icon
-            ToastIcon.Symbol = symbol;
-
-            // Resolve accent color from theme-aware resources
+            // Resolve accent color
             Color accentColor;
             try
             {
                 var brush = Application.Current?.Resources[accentKey] as SolidColorBrush;
-                accentColor = brush?.Color ?? Color.FromRgb(129, 140, 248); // Fallback indigo
+                accentColor = brush?.Color ?? Color.FromRgb(129, 140, 248);
             }
             catch
             {
-                accentColor = Color.FromRgb(129, 140, 248); // Fallback indigo
+                accentColor = Color.FromRgb(129, 140, 248);
             }
 
-            ToastIcon.Foreground = new SolidColorBrush(accentColor);
+            // Apply accent to the dot indicator
+            AccentDot.Background = new SolidColorBrush(accentColor);
 
-            // Subtle accent-colored outer glow
+            // Subtle accent-colored shadow
             ToastShadow.Color = accentColor;
-            ToastShadow.Opacity = 0.18;
-            ToastShadow.BlurRadius = 14;
+            ToastShadow.Opacity = 0.12;
+            ToastShadow.BlurRadius = 20;
 
             // Reset transform for fresh animation
             ToastTranslate.Y = 12;
             ToastScale.ScaleX = 0.97;
             ToastScale.ScaleY = 0.97;
             this.Opacity = 0;
+        }
+
+        /// <summary>
+        /// Configures the toast for progress display (e.g., PDF conversion).
+        /// </summary>
+        private void ConfigureForProgress(string title, int percent, string accentKey = "InfoColor")
+        {
+            _isProgressMode = true;
+            
+            // Show progress layout, hide standard layout
+            StandardLayout.Visibility = Visibility.Collapsed;
+            ProgressLayout.Visibility = Visibility.Visible;
+            
+            ProgressTitle.Text = title;
+            ProgressPercent.Text = $"{Math.Clamp(percent, 0, 100)}%";
+            
+            // Resolve accent color
+            Color accentColor;
+            try
+            {
+                var brush = Application.Current?.Resources[accentKey] as SolidColorBrush;
+                accentColor = brush?.Color ?? Color.FromRgb(56, 189, 248);
+            }
+            catch
+            {
+                accentColor = Color.FromRgb(56, 189, 248);
+            }
+
+            ProgressAccentDot.Background = new SolidColorBrush(accentColor);
+            ProgressFill.Background = new SolidColorBrush(accentColor);
+            
+            // Calculate fill width based on percentage
+            UpdateProgressBarWidth(percent);
+
+            // Subtle accent shadow
+            ToastShadow.Color = accentColor;
+            ToastShadow.Opacity = 0.12;
+            ToastShadow.BlurRadius = 20;
+
+            // Reset transform for fresh animation (only on first show)
+            if (!_isShowing || this.Opacity < 0.5)
+            {
+                ToastTranslate.Y = 12;
+                ToastScale.ScaleX = 0.97;
+                ToastScale.ScaleY = 0.97;
+                this.Opacity = 0;
+            }
+        }
+        
+        private void UpdateProgressBarWidth(int percent)
+        {
+            // The progress track is inside a Grid that auto-sizes.
+            // We set ProgressFill width as a proportion of the track.
+            // Use a reasonable default; will be recalculated on layout.
+            double trackWidth = _progressTrackWidth;
+            ProgressFill.Width = Math.Max(0, trackWidth * Math.Clamp(percent, 0, 100) / 100.0);
         }
 
         private void PositionAndShow()
@@ -218,7 +280,12 @@ namespace FlyShelf.Windows
                 };
             }
             _dismissTimer.Stop();
-            _dismissTimer.Interval = TimeSpan.FromMilliseconds(_customDurationMs > 0 ? _customDurationMs : 2400);
+            
+            // Progress toasts stay longer; normal toasts dismiss quickly
+            int duration = _customDurationMs > 0 ? _customDurationMs 
+                         : _isProgressMode ? 8000 
+                         : 2400;
+            _dismissTimer.Interval = TimeSpan.FromMilliseconds(duration);
             _dismissTimer.Start();
         }
 
@@ -375,6 +442,63 @@ namespace FlyShelf.Windows
         }
 
         /// <summary>
+        /// Shows a progress toast with a percentage bar.
+        /// Call repeatedly to update progress. Auto-dismisses after completion.
+        /// Thread-safe: can be called from background threads.
+        /// </summary>
+        public static void ShowProgress(string title, int percent, string accentKey = "InfoColor")
+        {
+            try { if (!FlyShelf.Classes.SettingsManager.Current.EnableNotifications) return; } catch { }
+
+            Application.Current?.Dispatcher?.InvokeAsync(() =>
+            {
+                lock (_poolLock)
+                {
+                    try
+                    {
+                        if (_pooledInstance == null)
+                            _pooledInstance = new ToastWindow();
+
+                        bool wasAlreadyShowing = _isShowing && _pooledInstance._isProgressMode;
+
+                        // If a progress toast is already visible, just update in-place
+                        if (wasAlreadyShowing && _pooledInstance.IsVisible)
+                        {
+                            _pooledInstance.ProgressTitle.Text = title;
+                            _pooledInstance.ProgressPercent.Text = $"{Math.Clamp(percent, 0, 100)}%";
+                            _pooledInstance.UpdateProgressBarWidth(percent);
+                            
+                            // Reset the dismiss timer on each update
+                            _pooledInstance.RestartDismissTimer();
+                            return;
+                        }
+
+                        _isShowing = true;
+                        _pooledInstance._customDurationMs = percent >= 100 ? 2000 : 0; // Quick dismiss when done
+                        _pooledInstance.ConfigureForProgress(title, percent, accentKey);
+
+                        if (!_pooledInstance.IsLoaded)
+                        {
+                            _pooledInstance.Show();
+                        }
+                        else
+                        {
+                            _pooledInstance.Show();
+                            _pooledInstance.ShowAndAnimate();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _isShowing = false;
+                        Classes.Logger.LogAction("TOAST", $"Progress show failed: {ex.Message}");
+                        try { _pooledInstance?.Close(); } catch { }
+                        _pooledInstance = null;
+                    }
+                }
+            });
+        }
+
+        /// <summary>
         /// Internal: configures and shows the pooled window with a new message.
         /// Must be called on the UI thread while holding _poolLock.
         /// </summary>
@@ -422,7 +546,10 @@ namespace FlyShelf.Windows
         {
             if (string.IsNullOrEmpty(message)) return message;
 
-            // 1. Detect any full filenames and swap them with friendly type names
+            // 1. Strip emoji clutter — professional notifications don't need emoji
+            message = StripEmoji(message);
+
+            // 2. Detect any full filenames and swap them with friendly type names
             string[] extensions = { ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".pdf", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt", ".zip", ".rar", ".7z", ".mp3", ".wav", ".m4a", ".mp4", ".mkv", ".apk" };
             foreach (var ext in extensions)
             {
@@ -446,29 +573,31 @@ namespace FlyShelf.Windows
                 }
             }
 
-            // 2. Condense common verbose phrases to make notifications extremely clean & compact
-            // - Redundant copy-to-clipboard mentions
+            // 3. Condense common verbose phrases
             message = message.Replace("copied to clipboard", "Copied");
             message = message.Replace("copied to Clipboard", "Copied");
             message = message.Replace("copied to your clipboard", "Copied");
             
-            // - Store version terminal / compilation notices
             message = message.Replace("Terminal execution is not available in the Store version.", "Terminal unavailable in Store version");
             message = message.Replace("Elevated terminal is not available in the Store version.", "Elevated terminal unavailable");
             message = message.Replace("Code compilation is not available in the Store version.", "Compilation unavailable");
             
-            // - File transfers
-            message = message.Replace("paired successfully!", "paired!");
+            message = message.Replace("paired successfully!", "paired");
             message = message.Replace("paired successfully", "paired");
-            message = message.Replace("joined your sync group!", "joined group!");
+            message = message.Replace("joined your sync group!", "joined group");
             
             message = message.Replace("Assembling ", "Receiving ");
-            message = message.Replace(" (via WS)... 📥", "... 📥");
+            message = message.Replace(" (via WS)... 📥", "");
             
             message = message.Replace("Text from ", "Text received: ");
-            message = message.Replace(" via WebSocket!", "!");
-            message = message.Replace(" via LAN!", "!");
-            message = message.Replace(" via Cloudflare!", "!");
+            message = message.Replace(" via WebSocket!", "");
+            message = message.Replace(" via LAN!", "");
+            message = message.Replace(" via Cloudflare!", "");
+            
+            // Capitalize first letter for consistency
+            message = message.Trim();
+            if (message.Length > 0 && char.IsLower(message[0]))
+                message = char.ToUpper(message[0]) + message[1..];
 
             // Clean up double-spaces
             while (message.Contains("  ", StringComparison.Ordinal))
@@ -476,11 +605,39 @@ namespace FlyShelf.Windows
                 message = message.Replace("  ", " ");
             }
 
-            // Remove trailing spaces / colons/ periods where unnecessary
+            // Remove trailing exclamation pairs and clean endings
             message = message.Trim();
             if (message.EndsWith("! !", StringComparison.Ordinal)) message = message[..^2] + "!";
+            // Remove trailing "!" spam (max 1 exclamation)
+            while (message.EndsWith("!!", StringComparison.Ordinal)) message = message[..^1];
 
             return message;
+        }
+
+        /// <summary>
+        /// Strips common emoji from notification messages for a cleaner, professional look.
+        /// Keeps the text content intact.
+        /// </summary>
+        private static string StripEmoji(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            
+            // Common emoji used in toast messages
+            string[] emojiToStrip = { "✅", "❌", "⚠️", "⚠", "📋", "📄", "🖼️", "📊", "📥", "♻️", "🔗", "✨", "🎉", "💾", "🗑️", "📁", "🔄", "⏳", "🚀", "💡", "🔔", "🔒", "🔓", "🌐", "📡", "🛡️", "⬆️", "⬇️" };
+            foreach (var emoji in emojiToStrip)
+            {
+                text = text.Replace(emoji, "");
+            }
+            
+            // Clean up any resulting whitespace issues
+            text = text.Trim();
+            while (text.Contains("  ", StringComparison.Ordinal))
+                text = text.Replace("  ", " ");
+            
+            // Remove trailing/leading punctuation artifacts
+            text = text.Trim(' ', ':', '-', '—');
+            
+            return text;
         }
     }
 }

@@ -287,18 +287,28 @@ namespace FlyShelf
                     // freezes the entire UI and blocks ALL other apps from pasting.
                     // By using a dedicated STA thread, we release the clipboard lock faster
                     // and keep the main UI thread completely free.
-                    // Gate: only one STA thread at a time — prevents unbounded thread creation
-                    if (!await _clipboardStaSemaphore.WaitAsync(500)) return;
+                    // Gate: only one STA thread at a time — prevents unbounded thread creation.
+                    // Uses indefinite wait (safe due to 5s STA thread timeout) so rapid copies
+                    // are never silently dropped. After acquiring, re-reads the latest token
+                    // to skip stale intermediate copies — only the most recent state is processed.
+                    await _clipboardStaSemaphore.WaitAsync();
                     try
                     {
+                    // Re-read the latest token after acquiring the semaphore — if a newer
+                    // clipboard update arrived while we were waiting, skip this stale one
+                    // and let the newer task handle it (it's either queued or will arrive soon).
+                    int latestToken = System.Threading.Volatile.Read(ref _clipboardUpdateToken);
+                    if (currentToken != latestToken) return;
+
                     var staThread = new System.Threading.Thread(() =>
                     {
-                        // STABILITY: Re-check drag state — a drag may have started during the 50ms debounce
+                        // STABILITY: Re-check drag state — a drag may have started during the wait
                         if (_isDragging)
                         {
                             Classes.Logger.LogAction("CLIPBOARD", "Skipped clipboard update: Drag in progress (post-debounce).");
                             return;
                         }
+                        // Final token check inside STA thread — another copy may have arrived
                         if (currentToken == System.Threading.Volatile.Read(ref _clipboardUpdateToken))
                         {
                             HandleClipboardUpdateOnStaThread(currentToken);

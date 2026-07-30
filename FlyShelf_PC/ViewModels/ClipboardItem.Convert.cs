@@ -75,7 +75,7 @@ namespace FlyShelf.ViewModels
                     string ext = Path.GetExtension(workFilePath).ToUpperInvariant();
 
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowToast("Converting to PDF... ♻️")
+                        FlyShelf.Windows.ToastWindow.ShowProgress("Converting to PDF", 10)
                     );
 
                     string targetPdf = Path.Combine(
@@ -99,6 +99,9 @@ namespace FlyShelf.ViewModels
 
                     if (!converted)
                     {
+                        // Update progress — trying Word COM
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                            FlyShelf.Windows.ToastWindow.ShowProgress("Converting to PDF", 40));
                         // ═══════════════════════════════════════════════════════
                         // STRATEGY 2: Word COM — tried first (Windows app, everyone has Word)
                         // ═══════════════════════════════════════════════════════
@@ -112,7 +115,12 @@ namespace FlyShelf.ViewModels
                         // STRATEGY 3: LibreOffice — fallback if Word not installed or failed
                         // ═══════════════════════════════════════════════════════
                         if (!converted)
+                        {
+                            // Update progress — trying LibreOffice
+                            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                FlyShelf.Windows.ToastWindow.ShowProgress("Converting to PDF", 60));
                             converted = TryLibreOfficeConvert(workFilePath, targetPdf);
+                        }
                     }
 
                     // ═══════════════════════════════════════════════════════
@@ -126,7 +134,7 @@ namespace FlyShelf.ViewModels
                             dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { targetPdf });
                             var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
                             (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
-                            FlyShelf.Windows.ToastWindow.ShowToast("PDF Converted Successfully ✅");
+                            FlyShelf.Windows.ToastWindow.ShowProgress("PDF converted", 100);
                             FlyShelf.Classes.LicenseManager.RecordDocConversion();
 
                             // Scroll to top after a short delay so the new PDF item is visible
@@ -136,7 +144,7 @@ namespace FlyShelf.ViewModels
                     else
                     {
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            FlyShelf.Windows.ToastWindow.ShowToast("Conversion Failed: Install LibreOffice or Microsoft Word ❌")
+                            FlyShelf.Windows.ToastWindow.ShowToast("Conversion failed — Install LibreOffice or Microsoft Word")
                         );
                     }
                 }
@@ -549,7 +557,7 @@ namespace FlyShelf.ViewModels
                 try
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowToast("Converting Image to PDF... 📄")
+                        FlyShelf.Windows.ToastWindow.ShowProgress("Converting image to PDF", 10)
                     );
 
                     string outputPdf = Path.Combine(
@@ -587,6 +595,10 @@ namespace FlyShelf.ViewModels
                         converted.Freeze();
                         sourceFrame = converted;
                     }
+
+                    // Update progress — encoding image
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        FlyShelf.Windows.ToastWindow.ShowProgress("Converting image to PDF", 50));
 
                     using (var ms = new MemoryStream())
                     {
@@ -657,7 +669,7 @@ namespace FlyShelf.ViewModels
                         dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { outputPdf });
                         var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
                         (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Image → PDF converted! ✅ {Path.GetFileName(outputPdf)}");
+                        FlyShelf.Windows.ToastWindow.ShowProgress("Image converted to PDF", 100);
                         FlyShelf.Classes.LicenseManager.RecordImageToPdf();
 
                         // Scroll to top after a short delay so the new PDF item is visible
@@ -667,7 +679,7 @@ namespace FlyShelf.ViewModels
                 catch (Exception ex)
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Image→PDF failed: {ex.Message} ❌")
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Image to PDF failed: {ex.Message}")
                     );
                 }
             });
