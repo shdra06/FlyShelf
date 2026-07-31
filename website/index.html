@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlyShelf — Best Clipboard Manager for Windows PC & Android</title>
+  
+  <!-- Advanced SEO Engine Meta Tags -->
+  <meta name="description" content="FlyShelf is the best free clipboard manager for Windows PC & Android. Save clipboard history, sync copy-paste across devices via P2P, merge PDFs, extract text with OCR, and boost productivity instantly.">
+  <meta name="keywords" content="clipboard manager, clipboard history, best clipboard manager for windows, clipboard sync across devices, copy paste app, clipboard manager free, save clipboard history, cross-device clipboard sync, windows clipboard history, android clipboard sync, P2P file transfer, OCR text extraction, PDF merger, text snippets, flyshelf, shdra06">
+  <meta name="author" content="Shivendra (shdra06)">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+  <meta name="theme-color" content="#0a0b14">
+  <link rel="canonical" href="https://fly-shelf.vercel.app/" />
+  
+  <!-- Open Graph / Facebook Social Metadata -->
+  <meta property="og:title" content="FlyShelf — Best Free Clipboard Manager for Windows PC & Android">
+  <meta property="og:description" content="Save clipboard history, sync text & files across devices instantly. Free PDF merge, OCR, and 30+ productivity tools. Download now.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://fly-shelf.vercel.app/" />
+  <meta property="og:site_name" content="FlyShelf" />
+  <meta property="og:image" content="https://fly-shelf.vercel.app/og-banner.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="en_US">
+  
+  <!-- Twitter Cards metadata -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="FlyShelf — Best Clipboard Manager for Windows & Android">
+  <meta name="twitter:description" content="Free clipboard manager with history, cross-device sync, PDF merge, OCR & 30+ tools. Download now.">
+  <meta name="twitter:image" content="https://fly-shelf.vercel.app/og-banner.png">
+  
+  <!-- Structured Data: @graph with SoftwareApplication, WebSite, FAQPage, BreadcrumbList -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://fly-shelf.vercel.app/#software",
+        "name": "FlyShelf — Clipboard Manager",
+        "operatingSystem": "Windows 10, Windows 11, Android",
+        "applicationCategory": "UtilitiesApplication",
+        "applicationSubCategory": "Productivity, Developer Tools",
+        "downloadUrl": "https://github.com/shdra06/FlyShelf/releases/download/v4.0.0/FlyShelf.exe",
+        "softwareVersion": "4.0.0",
+        "inLanguage": "en",
+        "screenshot": "https://fly-shelf.vercel.app/img_clipboard.png",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "description": "Free clipboard manager for Windows PC & Android. Save clipboard history (2,500 items), sync across devices via P2P LAN and Cloudflare tunnels, merge PDFs, extract text with OCR, and manage passwords.",
+        "featureList": "Clipboard History, Cross-Device Sync, PDF Merger, OCR Text Extraction, Table Extraction, Quick Notes, To-Do Lists, Text Shortcuts, Speed Timer, Emoji Picker, Color Themes, Password Vault, Smart Reminders, QuickLook Preview, Audio Playback",
+        "license": "https://github.com/shdra06/FlyShelf/blob/main/LICENSE",
+        "author": {
+          "@type": "Person",
+          "name": "Shivendra",
+          "alternateName": "shdra06",
+          "url": "https://github.com/shdra06"
+        }
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://fly-shelf.vercel.app/#website",
+        "url": "https://fly-shelf.vercel.app/",
+        "name": "FlyShelf",
+        "description": "Official website for FlyShelf — the best free clipboard manager for Windows PC and Android with cross-device sync.",
+        "inLanguage": "en",
+        "publisher": {
+          "@type": "Person",
+          "name": "Shivendra",
+          "alternateName": "shdra06",
+          "sameAs": [
+            "https://github.com/shdra06",
+            "https://github.com/shdra06/FlyShelf"
+          ]
+        }
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://fly-shelf.vercel.app/"},
+          {"@type": "ListItem", "position": 2, "name": "Buy Pro", "item": "https://fly-shelf.vercel.app/pricing.html"}
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is FlyShelf?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "FlyShelf is a free, premium clipboard manager for Windows PC and Android. It saves your entire copy-paste history (up to 2,500 items), syncs across devices via secure P2P connections, and includes 30+ built-in productivity tools like PDF merge, OCR, text shortcuts, and more."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is FlyShelf free to use?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes! FlyShelf has a generous free tier with clipboard history, LAN sync, OCR, and core features. FlyShelf Pro ($9.99 lifetime) unlocks unlimited history, Cloudflare tunnels, advanced PDF tools, and custom themes."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How does cross-device clipboard sync work?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "FlyShelf syncs your clipboard between Windows PC and Android using three transport methods: Direct P2P over LAN (fastest, 100+ Mbps), Cloudflare secure tunnels (worldwide), and cloud relay (lightweight text fallback). All transfers are end-to-end encrypted."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is my clipboard data private and secure?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "100% private. FlyShelf uses peer-to-peer connections — your data never passes through our servers. All transfers are protected with military-grade AES-256 encryption, end-to-end. No analytics, no telemetry, no cloud storage of your content."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What platforms does FlyShelf support?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "FlyShelf is available for Windows 10/11 (x64 desktop app) and Android (APK). Both platforms sync seamlessly via the same P2P protocol."
+            }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+  
+  <!-- Favicon / Styling CSS -->
+  <link rel="shortcut icon" href="favicon.png" type="image/x-icon">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="style.css?v=8.5.2">
+  
+  <!-- Ionicons for Modern Clean Icons -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/ionicons@7.1.0/dist/ionicons/ionicons.esm.js" integrity="sha384-xyQ/Vpt1cq1pdPYlRaT/QkcSj2vrYyWI3WOhxGBzqnP1vgvsS2yrhWXe3/wIoCr5" crossorigin="anonymous"></script>
+  <script nomodule defer src="https://cdn.jsdelivr.net/npm/ionicons@7.1.0/dist/ionicons/ionicons.js" integrity="sha384-KAUcUASKfGZ0sxENVFRiH12jtpvd9SsVpgzvYdvv8ZMLqB99G3gX3DAts418wzIC" crossorigin="anonymous"></script>
+
+  <style>
+  .hero-screenshot { max-width: 800px; width: 100%; border-radius: 16px; box-shadow: 0 25px 80px rgba(0,0,0,0.5), 0 0 40px rgba(0,210,255,0.1); border: 1px solid rgba(255,255,255,0.08); margin-top: 40px; }
+  .feature-strip { overflow-x: auto; }
+  .strip-items { display: flex; justify-content: center; gap: 30px; padding: 40px 20px; flex-wrap: wrap; }
+  .strip-item { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap; }
+  .strip-item ion-icon { font-size: 1.2rem; color: var(--color-cyan); }
+  @media (max-width: 768px) {
+    .showcase-section > div { grid-template-columns: 1fr !important; }
+    .strip-items { gap: 16px; }
+    [style*='grid-template-columns: repeat(4'] { grid-template-columns: repeat(2, 1fr) !important; }
+  }
+  </style>
+</head>
+<body>
+
+  <!-- Background Fluid Mesh Gradients -->
+  <div class="bg-mesh"></div>
+  <div class="grid-bg"></div>
+
+  <!-- Premium Glass Navigation Bar -->
+  <nav class="navbar glass" id="main-nav" aria-label="Main navigation">
+    <div class="nav-brand">
+      <img src="favicon.png" alt="FlyShelf Logo" style="width: 24px; height: 24px; margin-right: 8px; border-radius: 6px; vertical-align: middle; box-shadow: 0 0 10px rgba(0, 210, 255, 0.4);"/>
+      <span>FlyShelf</span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#simulator">Sync Space</a></li>
+      <li><a href="#smart-actions">Smart Tools</a></li>
+      <li><a href="#summon">Shake Summon</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="pricing.html" style="color: var(--color-cyan); font-weight: 700;">Buy Pro</a></li>
+    </ul>
+    <div style="display: flex; align-items: center; gap: 15px;">
+      <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Mode">
+        <ion-icon name="moon-outline" id="theme-toggle-icon"></ion-icon>
+      </button>
+      <a href="#download" class="btn-premium btn-cyan nav-download-btn" style="padding: 10px 20px; font-size: 0.85rem;">Download</a>
+      <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Toggle Navigation Menu">
+        <ion-icon name="menu-outline"></ion-icon>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile Navigation Drawer -->
+  <div class="mobile-menu-drawer glass" id="mobile-menu-drawer">
+    <button class="mobile-menu-close" id="mobile-menu-close" aria-label="Close Navigation Menu">
+      <ion-icon name="close-outline"></ion-icon>
+    </button>
+    <ul class="mobile-nav-links">
+      <li><a href="#simulator">Sync Space</a></li>
+      <li><a href="#smart-actions">Smart Tools</a></li>
+      <li><a href="#summon">Shake Summon</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="pricing.html" style="color: var(--color-cyan); font-weight: 700;">Buy Pro</a></li>
+    </ul>
+    <div class="mobile-menu-cta">
+      <a href="#download" class="btn-premium btn-cyan" style="width: 100%; justify-content: center;">Download App</a>
+    </div>
+  </div>
+  <main>
+
+  <!-- Hero Section (COMPACT) -->
+  <header class="hero" id="hero-header">
+
+    <h1 class="scroll-reveal">
+      Your Clipboard.<br>
+      <span class="gradient-text-cyan-purple">Everywhere. Instantly.</span>
+    </h1>
+    <p class="lead scroll-reveal">
+      Copy once on any device. Paste everywhere instantly. Secure P2P sync for Windows &amp; Android.
+    </p>
+
+    <!-- Swatch Theme Switcher (From Next.js) -->
+    <div class="theme-switcher-wrapper scroll-reveal">
+      <div class="theme-switcher-box">
+        <span class="theme-switcher-label">Select Workspace Theme:</span>
+        <div class="theme-swatches">
+          <button class="theme-swatch active" data-theme="midnight" id="swatch-midnight"><span class="swatch-circle swatch-midnight"></span> Midnight</button>
+          <button class="theme-swatch" data-theme="ocean" id="swatch-ocean"><span class="swatch-circle swatch-ocean"></span> Ocean</button>
+          <button class="theme-swatch" data-theme="sunset" id="swatch-sunset"><span class="swatch-circle swatch-sunset"></span> Sunset</button>
+          <button class="theme-swatch" data-theme="emerald" id="swatch-emerald"><span class="swatch-circle swatch-emerald"></span> Emerald</button>
+          <button class="theme-swatch" data-theme="lavender" id="swatch-lavender"><span class="swatch-circle swatch-lavender"></span> Lavender</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-ctas scroll-reveal">
+      <a href="https://github.com/shdra06/FlyShelf/releases/download/v4.0.0/FlyShelf.exe" class="btn-premium btn-cyan" id="btn-hero-download-exe">
+        <ion-icon name="logo-windows"></ion-icon>
+        Download for Windows
+      </a>
+      <a href="https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk" class="btn-premium btn-outline" id="btn-hero-download-apk">
+        <ion-icon name="logo-android"></ion-icon>
+        Get Android APK
+      </a>
+    </div>
+    <div class="hero-stats scroll-reveal" style="margin-top: 15px; font-size: 0.9rem; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; gap: 8px;">
+      <ion-icon name="download-outline" style="color: var(--color-cyan); font-size: 1.1rem;"></ion-icon>
+      <span id="hero-download-count" style="font-weight: 700; color: var(--text-primary);">...</span>
+      <span>trusted downloads worldwide</span>
+    </div>
+
+  </header>
+
+  <!-- FEATURE ICON STRIP -->
+  <section class="feature-strip">
+    <div class="strip-items">
+      <div class="strip-item"><ion-icon name="clipboard-outline"></ion-icon><span>Smart Clipboard</span></div>
+      <div class="strip-item"><ion-icon name="sync-outline"></ion-icon><span>Cross-Device Sync</span></div>
+      <div class="strip-item"><ion-icon name="color-palette-outline"></ion-icon><span>7 Color Themes</span></div>
+      <div class="strip-item"><ion-icon name="document-text-outline"></ion-icon><span>PDF Tools</span></div>
+      <div class="strip-item"><ion-icon name="scan-outline"></ion-icon><span>OCR & Tables</span></div>
+      <div class="strip-item"><ion-icon name="shield-checkmark-outline"></ion-icon><span>100% Private</span></div>
+    </div>
+  </section>
+
+  <!-- SHOWCASE SECTION C: Themes (image LEFT) — moved to top -->
+  <section class="showcase-section scroll-reveal" style="padding: 60px 20px; max-width: 1100px; margin: 0 auto;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;">
+      <!-- IMAGE side -->
+      <div style="background: var(--bg-darker); display: flex; align-items: center; justify-content: center; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.12), 0 0 0 1px var(--border-light);">
+        <!-- <img src="img_themes.png" alt="FlyShelf 7 premium color themes" style="width: 100%; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);"> -->
+        <video src="flyshelftheming_new.mp4" autoplay loop muted playsinline style="width: 100%; display: block; border-radius: 0;"></video>
+      </div>
+      <!-- TEXT side -->
+      <div>
+        <span class="badge badge-cyan" style="margin-bottom: 12px; display: inline-block;">Personalization</span>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 16px;">7 Premium Workspace Themes for Your Clipboard</h2>
+        <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 14px;">
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge purple"><ion-icon name="color-palette-outline"></ion-icon></span>
+            <span><strong>Midnight, Ocean, Sunset, Emerald, Lavender, Light + Default</strong></span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge cyan"><ion-icon name="image-outline"></ion-icon></span>
+            <span><strong>Custom wallpaper backdrop</strong> — with frosted glass header</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge amber"><ion-icon name="happy-outline"></ion-icon></span>
+            <span><strong>Mascot theme packs</strong> — with animated sprite companions</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge emerald"><ion-icon name="sync-outline"></ion-icon></span>
+            <span><strong>Hot-reload</strong> — themes apply instantly without restart</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SHOWCASE SECTION A: Cross-Device Sync (image LEFT) -->
+  <section class="showcase-section scroll-reveal" style="padding: 60px 20px; max-width: 1100px; margin: 0 auto;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;">
+      <!-- IMAGE side -->
+      <div>
+        <img src="img_sync.png" alt="Cross-device sync between Windows PC and Android" style="width: 100%; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);">
+      </div>
+      <!-- TEXT side -->
+      <div>
+        <span class="badge badge-cyan" style="margin-bottom: 12px; display: inline-block;">P2P Encrypted</span>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 16px;">Sync Your Clipboard Across Windows & Android</h2>
+        <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 14px;">
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge cyan"><ion-icon name="flash"></ion-icon></span>
+            <span><strong>Direct P2P LAN sync</strong> — files transfer at 100+ Mbps over WiFi</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge purple"><ion-icon name="globe-outline"></ion-icon></span>
+            <span><strong>Cloudflare Tunnel fallback</strong> — worldwide sync through secure proxies</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge amber"><ion-icon name="flame"></ion-icon></span>
+            <span><strong>Cloud relay</strong> — lightweight text sync when direct connection is unavailable</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge emerald"><ion-icon name="shield-checkmark-outline"></ion-icon></span>
+            <span><strong>End-to-end encrypted</strong> — Military-grade AES-256 encryption protects every transfer, end-to-end</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SHOWCASE SECTION B: Smart Tools (image RIGHT) -->
+  <section class="showcase-section scroll-reveal" style="padding: 60px 20px; max-width: 1100px; margin: 0 auto;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;">
+      <!-- TEXT side -->
+      <div>
+        <span class="badge badge-cyan" style="margin-bottom: 12px; display: inline-block;">Built-in Power Tools</span>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 16px;">Smart OCR, PDF Merge & Table Extraction Tools</h2>
+        <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 14px;">
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge emerald"><ion-icon name="bar-chart-outline"></ion-icon></span>
+            <span><strong>Extract tables from screenshots</strong> — AI-powered detection with automatic row and column recognition</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge cyan"><ion-icon name="search-outline"></ion-icon></span>
+            <span><strong>Text recognition (OCR)</strong> — instantly reads text from any image, screenshot, or document</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge purple"><ion-icon name="cube-outline"></ion-icon></span>
+            <span><strong>PDF Merger</strong> — drag-to-reorder, page selection, multi-file merge</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge amber"><ion-icon name="qr-code-outline"></ion-icon></span>
+            <span><strong>QR Code scanner</strong> — decode QR codes from clipboard images</span>
+          </li>
+        </ul>
+      </div>
+      <!-- IMAGE side -->
+      <div>
+        <img src="img_tools.png" alt="FlyShelf intelligent productivity tools" style="width: 100%; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);">
+      </div>
+    </div>
+  </section>
+
+
+  <!-- SHOWCASE SECTION D: Everything Else (image RIGHT) -->
+  <section class="showcase-section scroll-reveal" style="padding: 60px 20px; max-width: 1100px; margin: 0 auto;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;">
+      <!-- TEXT side -->
+      <div>
+        <span class="badge badge-cyan" style="margin-bottom: 12px; display: inline-block;">All-in-One Workspace</span>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 16px;">Notes, Timers, Emoji & Password Manager Built-in</h2>
+        <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 14px;">
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge cyan"><ion-icon name="create-outline"></ion-icon></span>
+            <span><strong>Quick Notes</strong> — per-day bullets with image embeds & freeform mode</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge emerald"><ion-icon name="checkmark-circle-outline"></ion-icon></span>
+            <span><strong>To-Do Lists</strong> — daily task lists with done/undone toggle</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge purple"><ion-icon name="text-outline"></ion-icon></span>
+            <span><strong>Text Shortcuts</strong> — /trigger text expansion with auto-paste</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge amber"><ion-icon name="stopwatch-outline"></ion-icon></span>
+            <span><strong>Speed Timer</strong> — type /5 or timer 30 min to launch countdown</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge purple"><ion-icon name="happy-outline"></ion-icon></span>
+            <span><strong>Emoji Picker</strong> — 800+ searchable color emojis</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge red"><ion-icon name="key-outline"></ion-icon></span>
+            <span><strong>Password Manager</strong> — mask, view, edit clipboard passwords</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge cyan"><ion-icon name="notifications-outline"></ion-icon></span>
+            <span><strong>Smart Reminders</strong> — set reminders with natural language like 'meeting at 9 am tomorrow'</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge emerald"><ion-icon name="eye-outline"></ion-icon></span>
+            <span><strong>QuickLook</strong> — instant full preview of images, PDFs, and documents in a floating window</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge purple"><ion-icon name="musical-notes-outline"></ion-icon></span>
+            <span><strong>Audio Playback</strong> — preview MP3, WAV, FLAC, and OGG files directly from clipboard</span>
+          </li>
+        </ul>
+      </div>
+      <!-- IMAGE side -->
+      <div>
+        <img src="img_clipboard.png" alt="FlyShelf all-in-one workspace features" style="width: 100%; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);">
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 1: THE SYNC SPACE (UNIVERSAL PIPELINE SIMULATOR) -->
+  <section class="sync-space-section scroll-reveal" id="simulator">
+    <div class="section-header">
+      <span class="badge badge-cyan">Real-time Sandbox</span>
+      <h2>Cross-Device Clipboard Sync — Live Demo</h2>
+      <p>Click any clipboard item on the Windows PC on the left to see it instantly sync along the selected pipeline to your Android phone.</p>
+    </div>
+    
+    <div class="sync-container glass">
+      <!-- Windows PC Mockup -->
+      <div class="device-wrapper">
+        <div class="badge badge-cyan" style="margin-bottom: 8px;">PC clipboard</div>
+        <div class="mockup-pc">
+          <div class="mockup-titlebar">
+            <div class="titlebar-dots">
+              <span class="titlebar-dot"></span>
+              <span class="titlebar-dot"></span>
+              <span class="titlebar-dot"></span>
+            </div>
+            <div style="font-size: 0.65rem; color: var(--text-muted); font-family: monospace;">FlyShelf Dashboard</div>
+            <div></div>
+          </div>
+          <div class="mockup-body" id="pc-clipboard-items">
+            <!-- Simulated Clipboard Items -->
+            <div class="sync-card" role="button" tabindex="0" data-content="npm i -g @flyshelf/cli" data-type="Code (Terminal)" data-badge="TERM">
+              <div class="sync-card-left">
+                <div class="sync-card-icon"><ion-icon name="terminal-outline"></ion-icon></div>
+                <div class="sync-card-text">
+                  <div class="sync-card-title">npm install CLI command</div>
+                  <div class="sync-card-subtitle">Terminal command copied</div>
+                </div>
+              </div>
+              <span class="badge badge-cyan">TERM</span>
+            </div>
+            
+            <div class="sync-card" role="button" tabindex="0" data-content="https://fly-shelf.vercel.app/docs/pairing-guide" data-type="URL" data-badge="LINK">
+              <div class="sync-card-left">
+                <div class="sync-card-icon"><ion-icon name="link-outline"></ion-icon></div>
+                <div class="sync-card-text">
+                  <div class="sync-card-title">FlyShelf Pairing Docs</div>
+                  <div class="sync-card-subtitle">https://fly-shelf.vercel.app/docs/pairing-guide</div>
+                </div>
+              </div>
+              <span class="badge badge-purple">LINK</span>
+            </div>
+            
+            <div class="sync-card" role="button" tabindex="0" data-content="invoice_report_q1.pdf" data-type="File (PDF)" data-badge="PDF">
+              <div class="sync-card-left">
+                <div class="sync-card-icon"><ion-icon name="document-text-outline"></ion-icon></div>
+                <div class="sync-card-text">
+                  <div class="sync-card-title">invoice_report_q1.pdf</div>
+                  <div class="sync-card-subtitle">Local PDF File (1.2 MB)</div>
+                </div>
+              </div>
+              <span class="badge badge-amber">PDF</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Middle Pipeline SVG & Pathway Selectors -->
+      <div class="sync-pathway">
+        <svg class="pipeline-svg" viewBox="0 0 200 100" aria-hidden="true">
+          <!-- Flow Line Paths -->
+          <path id="flow-path" class="flow-line active-lane lane-lan" d="M 0 50 Q 100 0 200 50" />
+          <circle id="flow-particle" class="flow-packet" r="6" cx="0" cy="50" />
+        </svg>
+        
+        <div class="pathway-selectors">
+          <div class="selector-pill lan-pill active" role="button" tabindex="0" data-path="lan" id="path-lan">
+            <span>Direct P2P LAN</span>
+            <div class="pill-dot"></div>
+          </div>
+          <div class="selector-pill cloud-pill" role="button" tabindex="0" data-path="cloud" id="path-cloud">
+            <span>Cloudflare Tunnel</span>
+            <div class="pill-dot"></div>
+          </div>
+          <div class="selector-pill fb-pill" role="button" tabindex="0" data-path="firebase" id="path-firebase">
+            <span>Cloud Relay</span>
+            <div class="pill-dot"></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Android Mobile Mockup -->
+      <div class="device-wrapper">
+        <div class="badge badge-emerald" style="margin-bottom: 8px;">Android Feed</div>
+        <div class="mockup-phone">
+          <div class="phone-speaker"></div>
+          <div class="phone-screen" id="mobile-feed">
+            <div class="floating-ball"></div>
+            <div class="phone-card empty-feed" id="empty-state-notice">
+              <ion-icon name="clipboard-outline" style="font-size: 2rem; margin-bottom: 10px; opacity: 0.5;"></ion-icon>
+              <div>Waiting for clipboard sync...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: ADVANCED SMART ACTIONS MODULES -->
+  <section class="smart-actions-section scroll-reveal" id="smart-actions">
+    <div class="section-header">
+      <span class="badge badge-emerald">Productivity Powerhouses</span>
+      <h2>Built-in Productivity Tools — PDF, OCR & More</h2>
+      <p>Try out FlyShelf's intelligent context-aware processors directly in your browser. Fully interactive modules engineered for speed.</p>
+    </div>
+    
+    <div class="smart-widgets-grid">
+      <!-- WIDGET A: DRAG-AND-REORDER PDF MERGER -->
+      <div class="widget-card glass pdf-merger-card">
+        <div class="widget-card-header">
+          <div>
+            <h3 class="widget-title"><span class="title-icon-wrap" style="color:var(--color-purple);"><ion-icon name="cube"></ion-icon></span> Premium PDF Merger</h3>
+            <p class="widget-desc">Arrange PDF sequences and merge them in a click.</p>
+          </div>
+          <span class="badge badge-purple">Interactive</span>
+        </div>
+        <div class="widget-body">
+          <div class="desktop-merger-widget" id="merger-widget">
+            
+            <!-- Hidden DOM element to satisfy existing JS logging logic -->
+            <div id="pdf-status-console" style="display:none;"></div>
+            
+            <!-- Header bar with buttons -->
+            <div class="widget-top-bar">
+              <div class="top-bar-left">
+                <button class="top-bar-btn" aria-label="Search"><ion-icon name="search-outline"></ion-icon></button>
+                <button class="top-bar-btn" aria-label="Documents"><ion-icon name="document-text-outline"></ion-icon></button>
+                <button class="top-bar-btn" aria-label="Select"><ion-icon name="checkbox-outline"></ion-icon></button>
+                <button class="top-bar-btn" aria-label="Filter"><ion-icon name="funnel-outline"></ion-icon></button>
+              </div>
+              <div class="top-bar-right">
+                <button class="top-bar-btn" aria-label="More options"><ion-icon name="ellipsis-horizontal-outline"></ion-icon></button>
+                <button class="top-bar-btn close-btn" aria-label="Close"><ion-icon name="close-outline"></ion-icon></button>
+              </div>
+            </div>
+
+            <!-- Categories / Filter Row -->
+            <div class="widget-filter-row">
+              <button class="filter-pill" aria-label="Filter images"><ion-icon name="image-outline"></ion-icon> Img</button>
+              <button class="filter-pill" aria-label="Filter pinned"><ion-icon name="pin-outline"></ion-icon> Pin</button>
+              <button class="filter-pill active" aria-label="Filter PDFs"><ion-icon name="document-text"></ion-icon> PDF</button>
+              <button class="filter-pill" aria-label="Filter documents"><ion-icon name="document-outline"></ion-icon> Doc</button>
+              <button class="filter-pill-clear" aria-label="Clear filter"><ion-icon name="close-outline"></ion-icon></button>
+            </div>
+
+            <!-- PDF Queue List (Inner glassmorphic scroll box) -->
+            <div class="desktop-pdf-list" id="pdf-file-queue">
+              <div class="desktop-pdf-item pdf-item" data-index="0">
+                <div class="item-checkbox-badge"><ion-icon name="checkmark-outline"></ion-icon></div>
+                <div class="pdf-item-content">
+                  <ion-icon name="document-text" class="pdf-icon-red"></ion-icon>
+                  <span class="pdf-file-name">dummy 1.pdf</span>
+                </div>
+                <div class="pdf-item-controls">
+                  <button class="pdf-ctrl-btn move-up" title="Move Up" aria-label="Move up"><ion-icon name="arrow-up-outline"></ion-icon></button>
+                  <button class="pdf-ctrl-btn move-down" title="Move Down" aria-label="Move down"><ion-icon name="arrow-down-outline"></ion-icon></button>
+                </div>
+              </div>
+
+              <div class="desktop-pdf-item pdf-item" data-index="1">
+                <div class="item-checkbox-badge"><ion-icon name="checkmark-outline"></ion-icon></div>
+                <div class="pdf-item-content">
+                  <ion-icon name="document-text" class="pdf-icon-red"></ion-icon>
+                  <span class="pdf-file-name">dummy 2.pdf</span>
+                </div>
+                <div class="pdf-item-controls">
+                  <button class="pdf-ctrl-btn move-up" title="Move Up"><ion-icon name="arrow-up-outline"></ion-icon></button>
+                  <button class="pdf-ctrl-btn move-down" title="Move Down"><ion-icon name="arrow-down-outline"></ion-icon></button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bottom Merge Button -->
+            <div class="widget-bottom-bar" id="pdf-action-block">
+              <button class="btn-merge-desktop" id="btn-trigger-merge">
+                <ion-icon name="document-text-outline"></ion-icon> Merge 2 Files
+              </button>
+            </div>
+
+            <!-- Dynamic Spinner Overlay (Mocking processing) -->
+            <div class="pdf-merger-loader-desktop" id="pdf-merge-loading-overlay">
+              <div class="loader-spinner-desktop"></div>
+              <div class="pdf-status-log-desktop" id="pdf-live-progress-msg">Stitching document buffers...</div>
+            </div>
+            
+            <!-- Output success card -->
+            <div class="pdf-output-card-desktop" id="pdf-output-success-card">
+              <ion-icon name="file-tray-full-outline" class="output-success-icon"></ion-icon>
+              <div class="output-meta-desktop">
+                <div class="output-title">flyshelf_merged_pkg.pdf</div>
+                <div class="output-size">2 PDF Files Combined • 1.9 MB</div>
+              </div>
+              <button class="btn-reset-desktop" id="btn-reset-pdf-merger">Stitch Again</button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+      
+      <!-- COLUMN 2: COMPACT UTILITIES GRID (2x2 Layout) -->
+      <div class="compact-utilities-grid">
+        
+        <!-- WIDGET B: COUNTDOWN SPEED TIMER -->
+        <div class="widget-card glass">
+          <div class="widget-card-header">
+            <div>
+              <h3 class="widget-title"><span class="title-icon-wrap" style="color:var(--color-cyan);"><ion-icon name="stopwatch"></ion-icon></span> Speed Countdown</h3>
+              <p class="widget-desc">Type '/10s' to trigger visualizer.</p>
+            </div>
+            <span class="badge badge-cyan">Interactive</span>
+          </div>
+          <div class="widget-body">
+            <div class="timer-widget-box">
+              <div class="timer-input-group">
+                <input type="text" class="timer-field" id="timer-cmd-input" placeholder="/10s" value="/10s" aria-label="Timer command">
+                <button class="btn-timer-trigger" id="btn-timer-run" aria-label="Start timer"><ion-icon name="play-outline"></ion-icon></button>
+              </div>
+              <div class="timer-display">
+                <svg class="timer-circle-svg" viewBox="0 0 120 120" aria-hidden="true">
+                  <circle class="timer-circle-bg" cx="60" cy="60" r="54"></circle>
+                  <circle class="timer-circle-progress" id="timer-progress-ring" cx="60" cy="60" r="54"></circle>
+                </svg>
+                <div class="timer-text" id="timer-count-label">--</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- WIDGET C: COLOR PREVIEW & SWATCH -->
+        <div class="widget-card glass">
+          <div class="widget-card-header">
+            <div>
+              <h3 class="widget-title"><span class="title-icon-wrap" style="color:var(--color-emerald);"><ion-icon name="color-palette"></ion-icon></span> Color Picker</h3>
+              <p class="widget-desc">HEX, RGB, or HSL code previewer.</p>
+            </div>
+            <span class="badge badge-emerald">Interactive</span>
+          </div>
+          <div class="widget-body">
+            <div class="color-widget-box">
+              <div class="color-swatch-box" id="live-color-swatch"></div>
+              <input type="text" class="color-input-field" id="color-code-field" value="#00d2ff" aria-label="Color code">
+              <div class="color-pills-row">
+                <button class="color-pill-btn" id="btn-copy-hex">HEX</button>
+                <button class="color-pill-btn" id="btn-copy-rgb">RGB</button>
+                <button class="color-pill-btn" id="btn-copy-hsl">HSL</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- WIDGET D: UTM LINK TRACKER SCRUBBER -->
+        <div class="widget-card glass">
+          <div class="widget-card-header">
+            <div>
+              <h3 class="widget-title"><span class="title-icon-wrap" style="color:var(--color-amber);"><ion-icon name="link"></ion-icon></span> URL Tracking Sanitizer</h3>
+              <p class="widget-desc">Strip UTM marketing query markers instantly.</p>
+            </div>
+            <span class="badge badge-amber">Interactive</span>
+          </div>
+          <div class="widget-body">
+            <div class="utm-widget-box">
+              <div class="utm-input-container">
+                <textarea class="utm-input-area" id="utm-url-input" aria-label="URL to sanitize">https://fly-shelf.vercel.app/docs?utm_source=newsletter&utm_medium=email&utm_campaign=launch_v6&fbclid=ab12cd34ef56</textarea>
+              </div>
+              <div class="utm-action-row">
+                <button class="btn-utm-scrub" id="btn-utm-scrub-trigger">Sanitize Link</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- WIDGET E: CUSTOM TEXT SNIPPET SHORTCUTS -->
+        <div class="widget-card glass">
+          <div class="widget-card-header">
+            <div>
+              <h3 class="widget-title"><span class="title-icon-wrap" style="color:var(--color-purple);"><ion-icon name="flash"></ion-icon></span> Text Snippet Shortcuts</h3>
+              <p class="widget-desc">Slash shortcut tag text block expander.</p>
+            </div>
+            <span class="badge badge-purple">Interactive</span>
+          </div>
+          <div class="widget-body">
+            <div class="snippet-widget-box" style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
+              <div class="snippet-input-group" style="display: flex; gap: 10px; width: 100%;">
+                <input type="text" class="timer-field" id="snippet-shortcut-input" placeholder="Type /address..." value="/address" style="flex: 1;" aria-label="Snippet shortcut">
+                <button class="btn-timer-trigger" id="btn-expand-snippet" style="background: var(--color-purple); color: var(--text-primary); box-shadow: 0 4px 15px rgba(158,0,255,0.25);" aria-label="Expand snippet"><ion-icon name="flash-outline"></ion-icon></button>
+              </div>
+              
+              <!-- Quick Tags -->
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 2px;">
+                <button class="color-pill-btn" data-shortcut="/address">/address</button>
+                <button class="color-pill-btn" data-shortcut="/email">/email</button>
+                <button class="color-pill-btn" data-shortcut="/sig">/sig</button>
+              </div>
+              
+              <!-- Expanded output area -->
+              <div class="utm-input-container" style="margin-top: 5px;">
+                <textarea class="utm-input-area" id="snippet-expanded-output" readonly style="min-height: 80px; width: 100%; color: var(--color-cyan); border-color: rgba(0, 210, 255, 0.15);" placeholder="Expanded text snippet will appear here..." aria-label="Expanded snippet output"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: "MOUSE SHAKE" GESTURE SUMMON DEMO -->
+  <section class="summon-section scroll-reveal" id="summon">
+    <div class="section-header">
+      <span class="badge badge-purple">Summon gesture</span>
+      <h2>Summon Your Clipboard with a Mouse Shake</h2>
+      <p>FlyShelf registers a low-level physical summon. Hold down your left-click in the sandbox below and shake your mouse rapidly left-and-right to open the Glassmorphic Dashboard!</p>
+    </div>
+    
+    <div class="summon-box glass" id="gesture-sandbox">
+      <div id="gesture-instruction-box">
+        <div class="shake-icon"><ion-icon name="hand-left-outline"></ion-icon></div>
+        <div class="shake-hint">Click & Shake Here</div>
+        <div class="shake-gauge-bg">
+          <div class="shake-gauge-fill" id="shake-gauge"></div>
+        </div>
+      </div>
+      
+      <!-- Hidden glass dashboard elements -->
+      <div class="sumo-overlay" id="win-sumo-overlay">
+        <!-- 5% Discount Placeholder Coupon -->
+        <div class="coupon-badge">
+          <div style="font-size: 0.55rem; opacity: 0.9; font-weight: 700; letter-spacing: 1px;">EXCLUSIVE</div>
+          <div style="font-size: 0.75rem; font-weight: 800;">5% Discount</div>
+        </div>
+        
+        <!-- Header bar with buttons -->
+        <div class="widget-top-bar" style="margin-bottom: 8px;">
+          <div class="top-bar-left">
+            <button class="top-bar-btn" aria-label="Search"><ion-icon name="search-outline"></ion-icon></button>
+            <button class="top-bar-btn" aria-label="Documents"><ion-icon name="document-text-outline"></ion-icon></button>
+            <button class="top-bar-btn" aria-label="Select"><ion-icon name="checkbox-outline"></ion-icon></button>
+            <button class="top-bar-btn" aria-label="Filter"><ion-icon name="funnel-outline"></ion-icon></button>
+          </div>
+          <div class="sumo-title" style="font-size:0.8rem; font-weight:700; color:#fff; display:flex; align-items:center; gap:4px; margin-left: 10px; margin-right: 10px;"><span style="color:var(--color-cyan); display: flex;"><ion-icon name="flash"></ion-icon></span> FlyShelf</div>
+          <div class="top-bar-right">
+            <button class="top-bar-btn" aria-label="More options"><ion-icon name="ellipsis-horizontal-outline"></ion-icon></button>
+            <button class="top-bar-btn close-btn" id="btn-close-sumo" aria-label="Close dashboard"><ion-icon name="close-outline"></ion-icon></button>
+          </div>
+        </div>
+
+        <!-- Categories / Filter Row -->
+        <div class="widget-filter-row" style="margin-bottom: 8px;">
+          <button class="filter-pill active" aria-label="Filter images"><ion-icon name="image-outline"></ion-icon> Img</button>
+          <button class="filter-pill" aria-label="Filter pinned"><ion-icon name="pin-outline"></ion-icon> Pin</button>
+          <button class="filter-pill" aria-label="Filter PDFs"><ion-icon name="document-text-outline"></ion-icon> PDF</button>
+          <button class="filter-pill" aria-label="Filter documents"><ion-icon name="document-outline"></ion-icon> Doc</button>
+          <button class="filter-pill-clear" aria-label="Clear filter"><ion-icon name="close-outline"></ion-icon></button>
+        </div>
+
+        <!-- Inner Glass List Container -->
+        <div class="desktop-pdf-list" style="max-height: 150px; min-height: 110px;">
+          
+          <!-- Card 1: Text -->
+          <div class="desktop-pdf-item" style="margin-left: 10px;">
+            <div class="item-checkbox-badge" style="background:var(--color-cyan); box-shadow: 0 0 8px var(--color-cyan);"><ion-icon name="checkmark-outline"></ion-icon></div>
+            <div class="pdf-item-content">
+              <ion-icon name="document-text" style="color:var(--color-cyan); font-size:1.25rem;"></ion-icon>
+              <div>
+                <div style="font-weight:700; color:#fff;">Setup design brief</div>
+                <div style="font-size:0.6rem; color:var(--text-muted);">Copied from Teams</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Image -->
+          <div class="desktop-pdf-item" style="margin-left: 10px;">
+            <div class="item-checkbox-badge" style="background:var(--color-emerald); box-shadow: 0 0 8px var(--color-emerald);"><ion-icon name="checkmark-outline"></ion-icon></div>
+            <div class="pdf-item-content">
+              <ion-icon name="image" style="color:var(--color-emerald); font-size:1.25rem;"></ion-icon>
+              <div>
+                <div style="font-weight:700; color:#fff;">DesignMockup.png</div>
+                <div style="font-size:0.6rem; color:var(--text-muted);">OCR text extracted</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURE ICON GRID (4x3) -->
+  <section class="scroll-reveal" id="features" style="padding: 60px 20px; max-width: 1100px; margin: 0 auto;">
+    <div class="section-header">
+      <span class="badge badge-emerald">Complete Toolkit</span>
+      <h2>35+ Clipboard Manager Features in One App</h2>
+      <p>35+ productivity tools built right into your clipboard manager.</p>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 30px;">
+      <!-- 1 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box cyan" style="margin: 0 auto 12px auto;"><ion-icon name="clipboard-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Clipboard History</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Up to 2,500 items</div>
+      </div>
+      <!-- 2 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box emerald" style="margin: 0 auto 12px auto;"><ion-icon name="sync-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Cross-Device Sync</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">PC ↔ Android P2P</div>
+      </div>
+      <!-- 3 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box purple" style="margin: 0 auto 12px auto;"><ion-icon name="cube-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">PDF Merger</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Drag, reorder, merge</div>
+      </div>
+      <!-- 4 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box cyan" style="margin: 0 auto 12px auto;"><ion-icon name="search-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">OCR Extraction</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Text from images</div>
+      </div>
+      <!-- 5 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box emerald" style="margin: 0 auto 12px auto;"><ion-icon name="bar-chart-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Table Extraction</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">AI-powered detection</div>
+      </div>
+      <!-- 6 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box purple" style="margin: 0 auto 12px auto;"><ion-icon name="create-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Quick Notes</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Per-day bullet notes</div>
+      </div>
+      <!-- 7 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box amber" style="margin: 0 auto 12px auto;"><ion-icon name="checkbox-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">To-Do Lists</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Daily task tracking</div>
+      </div>
+      <!-- 8 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box cyan" style="margin: 0 auto 12px auto;"><ion-icon name="text-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Text Shortcuts</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">/trigger expansion</div>
+      </div>
+      <!-- 9 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box amber" style="margin: 0 auto 12px auto;"><ion-icon name="stopwatch-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Speed Timer</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Search bar countdown</div>
+      </div>
+      <!-- 10 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box purple" style="margin: 0 auto 12px auto;"><ion-icon name="happy-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Emoji Picker</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">800+ searchable</div>
+      </div>
+      <!-- 11 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box emerald" style="margin: 0 auto 12px auto;"><ion-icon name="color-palette-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">7 Color Themes</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Dynamic theming</div>
+      </div>
+      <!-- 12 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box red" style="margin: 0 auto 12px auto;"><ion-icon name="key-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Password Vault</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Masked clipboard text</div>
+      </div>
+      <!-- 13 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box amber" style="margin: 0 auto 12px auto;"><ion-icon name="notifications-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Smart Reminders</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Natural language scheduling</div>
+      </div>
+      <!-- 14 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box cyan" style="margin: 0 auto 12px auto;"><ion-icon name="eye-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">QuickLook Preview</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Instant file preview</div>
+      </div>
+      <!-- 15 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box purple" style="margin: 0 auto 12px auto;"><ion-icon name="musical-notes-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Audio Playback</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Play clips inline</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: COMPARISON MATRIX (From Next.js) -->
+  <section class="comparison-section scroll-reveal" id="compare">
+    <div class="section-header">
+      <span class="badge badge-cyan">Feature Comparison</span>
+      <h2>FlyShelf vs Other Clipboard Managers</h2>
+      <p>A features comparison matching FlyShelf with standard and classic clipboard tools:</p>
+    </div>
+    
+    <div class="comparison-table-wrapper">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th scope="col">Feature</th>
+            <th scope="col" class="highlight-col"><ion-icon name="flash" style="color:var(--color-cyan); margin-right: 4px; vertical-align: middle;"></ion-icon> FlyShelf</th>
+            <th scope="col">Win + V</th>
+            <th scope="col">Ditto</th>
+            <th scope="col">PastePaw</th>
+            <th scope="col">ClipClip</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Interface Design</strong></td>
+            <td class="highlight-col"><ion-icon name="sparkles" style="color:var(--color-cyan); margin-right: 4px; vertical-align: middle;"></ion-icon> Mica Glassmorphism</td>
+            <td>Standard Gray</td>
+            <td><ion-icon name="calendar-outline" style="color:var(--text-secondary); margin-right: 4px; vertical-align: middle;"></ion-icon> 2005 Windows Forms</td>
+            <td><ion-icon name="sparkles-outline" style="color:var(--text-secondary); margin-right: 4px; vertical-align: middle;"></ion-icon> Mica (Rust)</td>
+            <td>Standard Folders</td>
+          </tr>
+          <tr>
+            <td><strong>History Capacity</strong></td>
+            <td class="highlight-col">Unlimited</td>
+            <td>25 Items</td>
+            <td>Unlimited</td>
+            <td>Unlimited</td>
+            <td>Unlimited</td>
+          </tr>
+          <tr>
+            <td><strong>Cross-device Sync</strong></td>
+            <td class="highlight-col"><ion-icon name="checkmark-circle" class="matrix-icon check"></ion-icon> PC ↔ PC ↔ Android (P2P)</td>
+            <td><ion-icon name="close-circle-outline" class="matrix-icon cross"></ion-icon> PC Only</td>
+            <td><ion-icon name="close-circle-outline" class="matrix-icon cross"></ion-icon> PC Only</td>
+            <td><ion-icon name="close-circle-outline" class="matrix-icon cross"></ion-icon> PC Only</td>
+            <td><ion-icon name="close-circle-outline" class="matrix-icon cross"></ion-icon> Cloud Folders only</td>
+          </tr>
+          <tr>
+            <td><strong>Raw File Transfers</strong></td>
+            <td class="highlight-col"><ion-icon name="checkmark-circle" class="matrix-icon check"></ion-icon> P2P LAN + Cloud</td>
+            <td><ion-icon name="close-circle-outline" class="matrix-icon cross"></ion-icon> None</td>
+            <td><ion-icon name="close-circle-outline" class="matrix-icon cross"></ion-icon> Local LAN only</td>
+            <td><ion-icon name="close-circle-outline" class="matrix-icon cross"></ion-icon> None</td>
+            <td><ion-icon name="close-circle-outline" class="matrix-icon cross"></ion-icon> Cloud Sync only</td>
+          </tr>
+          <tr>
+            <td><strong>Built-in Utilities</strong></td>
+            <td class="highlight-col"><ion-icon name="checkmark-circle" class="matrix-icon check"></ion-icon> AI OCR + PDF Merge + Notes & To-Do List</td>
+            <td><ion-icon name="close-circle-outline" class="matrix-icon cross"></ion-icon> None</td>
+            <td><ion-icon name="close-circle-outline" class="matrix-icon cross"></ion-icon> None</td>
+            <td><ion-icon name="close-circle-outline" class="matrix-icon cross"></ion-icon> AI ready only</td>
+            <td><ion-icon name="close-circle-outline" class="matrix-icon cross"></ion-icon> Basic text editors</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SECTION: FREEMIUM TIERS DETAIL (FREE VS PRO) -->
+  <section class="pricing-section scroll-reveal" id="licensing" style="padding: 40px 20px 80px 20px; max-width: 1000px; margin: 0 auto; text-align: center;">
+    <div class="section-header" style="margin-bottom: 40px;">
+      <span class="badge badge-purple">Ecosystem Licensing</span>
+      <h2>Freemium Tier Breakdown</h2>
+      <p>Generous offline-first limits for everyday users, and unlimited power-user configurations for professionals.</p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px; margin-top: 30px;">
+      
+      <!-- FREE TIER CARD -->
+      <div class="widget-card glass" style="border: 1px solid rgba(255, 157, 0, 0.2); padding: 30px; text-align: left; transition: transform 0.4s ease, box-shadow 0.4s ease; position: relative;">
+        <span class="badge badge-amber" style="position: absolute; top: 20px; right: 20px;">Default Tier</span>
+        <h3 style="font-size: 1.5rem; font-weight: 800; color: var(--color-amber); margin-bottom: 5px;">FlyShelf Free</h3>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 20px;">Generous, 100% offline-first productivity tool with solid daily buffers.</p>
+        
+        <ul style="list-style: none; padding-left: 0; display: flex; flex-direction: column; gap: 12px; font-size: 0.85rem; color: var(--text-secondary);">
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Clipboard History Capacity</span>
+            <strong style="color: var(--text-primary);">500 Items</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Daily PDF Merges</span>
+            <strong style="color: var(--text-primary);">20 Files/day</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Daily PDF Saves / Image-to-PDF</span>
+            <strong style="color: var(--text-primary);">10 Files/day</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Daily Document Conversions</span>
+            <strong style="color: var(--text-primary);">10 Docs/day</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Daily OCR & Table Extractions</span>
+            <strong style="color: var(--text-primary);">30 OCR • 15 Table</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Daily QR Scans & To-Do entries</span>
+            <strong style="color: var(--text-primary);">20 QR • 25 Tasks</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Max Active Pinned Clips</span>
+            <strong style="color: var(--text-primary);">20 Pins</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Built-in Workspace Notes Retention</span>
+            <strong style="color: var(--text-primary);">30 Days</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between;">
+            <span>Personalization & Themes</span>
+            <strong style="color: var(--text-primary);">Default Theme only</strong>
+          </li>
+        </ul>
+      </div>
+
+      <!-- PRO TIER CARD -->
+      <div class="widget-card glass" style="border: 1px solid rgba(0, 210, 255, 0.4); padding: 30px; text-align: left; transition: transform 0.4s ease, box-shadow 0.4s ease; position: relative; box-shadow: 0 12px 40px -10px rgba(0, 210, 255, 0.15), 0 0 25px rgba(0, 210, 255, 0.1);">
+        <span class="badge badge-cyan" style="position: absolute; top: 20px; right: 20px; box-shadow: 0 0 10px rgba(0,210,255,0.3);">Power User</span>
+        <h3 style="font-size: 1.5rem; font-weight: 800; color: var(--color-cyan); margin-bottom: 5px; text-shadow: 0 0 15px rgba(0,210,255,0.3);">FlyShelf Pro</h3>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 20px;">Unrestricted, high-performance toolkit for maximum developer productivity.</p>
+        
+        <ul style="list-style: none; padding-left: 0; display: flex; flex-direction: column; gap: 12px; font-size: 0.85rem; color: var(--text-secondary);">
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Clipboard History Capacity</span>
+            <strong style="color: var(--color-cyan); text-shadow: 0 0 8px rgba(0,210,255,0.3);">2,500 Items</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Daily PDF Merges</span>
+            <strong style="color: var(--color-cyan);">Unlimited (∞)</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Daily PDF Saves / Image-to-PDF</span>
+            <strong style="color: var(--color-cyan);">Unlimited (∞)</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Daily Document Conversions</span>
+            <strong style="color: var(--color-cyan);">Unlimited (∞)</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Daily OCR & Table Extractions</span>
+            <strong style="color: var(--color-cyan);">Unlimited (∞)</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Daily QR Scans & To-Do entries</span>
+            <strong style="color: var(--color-cyan);">Unlimited (∞)</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Max Active Pinned Clips</span>
+            <strong style="color: var(--color-cyan);">Unlimited (∞)</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
+            <span>Built-in Workspace Notes Retention</span>
+            <strong style="color: var(--color-cyan);">Permanent (∞)</strong>
+          </li>
+          <li style="display: flex; justify-content: space-between;">
+            <span>Personalization, Themes & Cloud</span>
+            <strong style="color: var(--color-cyan);">Custom Wallpaper + Glass UI + Cloudflare Tunnels</strong>
+          </li>
+        </ul>
+        <div style="margin-top: 20px; display: flex; justify-content: center;">
+          <a href="pricing.html" class="btn-premium btn-cyan" style="padding: 10px 24px; font-size: 0.85rem; width: 100%; justify-content: center; box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);">Upgrade to Pro Tier</a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- SECTION: STATS & CONNECTIONS (From Next.js) -->
+  <section class="stats-section scroll-reveal">
+    <div class="stats-grid">
+      <div class="stat-card glass">
+        <span class="stat-value">3</span>
+        <span class="stat-label">Sync Lanes (LAN / Cloud / Signal)</span>
+        <span class="stat-desc">Sub-millisecond dynamic routing</span>
+      </div>
+      <div class="stat-card glass">
+        <span class="stat-value">0</span>
+        <span class="stat-label">Ads, Telemetry or Tracking</span>
+        <span class="stat-desc">100% offline-first & secure P2P</span>
+      </div>
+      <div class="stat-card glass">
+        <span class="stat-value">Licensed</span>
+        <span class="stat-label">Premium & Freemium</span>
+        <span class="stat-desc">Flexible plans and advanced sync features</span>
+      </div>
+      <div class="stat-card glass">
+        <span class="stat-value">2</span>
+        <span class="stat-label">Supported Platforms</span>
+        <span class="stat-desc">Windows PC & Android Phone</span>
+      </div>
+      <div class="stat-card glass">
+        <span class="stat-value" id="stats-download-count">...</span>
+        <span class="stat-label">Total App Downloads</span>
+        <span class="stat-desc">Global installs across platforms</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 6: PRIVACY SHIELD BANNER -->
+  <section class="privacy-section scroll-reveal">
+    <div class="privacy-banner glass">
+      <div class="privacy-shield-icon">
+        <ion-icon name="shield-checkmark-outline"></ion-icon>
+      </div>
+      <div class="privacy-content">
+        <h3>Privacy First. No Clouds Retained.</h3>
+        <p>
+          Unlike modern SaaS tools, FlyShelf keeps your data yours. Large files and credentials transfer entirely peer-to-peer over your local networks. Cloud storage channels are reserved solely for signaling relays and are set with 5-minute auto-purge timeouts. No telemetry tracking, no ads, no databases.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD FOOTER SECTION -->
+  <section id="download" style="padding: 100px 20px; text-align: center; max-width: 800px; margin: 0 auto;" class="scroll-reveal">
+    <h2 style="font-size: 2.5rem; font-weight: 800; margin-bottom: 15px;">Ready to Elevate Your Flow?</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 40px; font-size: 1.1rem;">
+      Download the latest stable client binaries below. Fully self-contained, portable, zero installation needed.
+    </p>
+    <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+      <a href="https://github.com/shdra06/FlyShelf/releases/download/v4.0.0/FlyShelf.exe" class="btn-premium btn-cyan" style="padding: 16px 32px; font-size: 1.05rem;" id="btn-footer-download-exe">
+        <ion-icon name="logo-windows"></ion-icon>
+        Windows Executable (v4.0.0)
+      </a>
+      <a href="https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk" class="btn-premium btn-outline" style="padding: 16px 32px; font-size: 1.05rem;" id="btn-footer-download-apk">
+        <ion-icon name="logo-android"></ion-icon>
+        Android APK Build (v7.1.0)
+      </a>
+    </div>
+    <div style="margin-top: 28px; display: flex; justify-content: center; align-items: center; gap: 8px;">
+      <a href="https://github.com/shdra06/FlyShelf" target="_blank" rel="noopener"
+         style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; border-radius: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary); font-size: 0.92rem; text-decoration: none; transition: all 0.25s ease;"
+         onmouseover="this.style.background='rgba(255,255,255,0.1)';this.style.borderColor='rgba(0,210,255,0.3)';this.style.color='#e2e8f0'"
+         onmouseout="this.style.background='rgba(255,255,255,0.06)';this.style.borderColor='rgba(255,255,255,0.1)';this.style.color='var(--text-secondary)'"
+         id="btn-footer-github">
+        <ion-icon name="logo-github" style="font-size: 1.15rem;"></ion-icon>
+        View on GitHub — Star ⭐ &amp; Contribute
+      </a>
+    </div>
+  </section>
+
+  </main>
+  <!-- Premium Footer -->
+  <footer>
+    <div class="footer-container">
+      <div class="footer-brand-col">
+        <div class="nav-brand">
+          <img src="favicon.png" alt="FlyShelf Logo" style="width: 28px; height: 28px; border-radius: 6px; filter: drop-shadow(0 0 8px rgba(0, 210, 255, 0.5));"/>
+          <span>FlyShelf</span>
+        </div>
+        <p class="footer-desc">
+          FlyShelf is a premium, licensed cross-device clipboard sync and productivity platform designed for power developers and creators.
+        </p>
+      </div>
+      
+      <div class="footer-nav-col">
+        <h4>Product</h4>
+        <ul class="footer-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#simulator">Sync Demo</a></li>
+          <li><a href="#smart-actions">Smart Tools</a></li>
+          <li><a href="pricing.html">Buy Pro License</a></li>
+        </ul>
+      </div>
+      
+      <div class="footer-nav-col">
+        <h4>Resources</h4>
+        <ul class="footer-links">
+          <li><a href="https://github.com/shdra06/FlyShelf/releases">Download & Releases</a></li>
+          <li><a href="https://github.com/shdra06/FlyShelf/issues">Report Issues</a></li>
+          <li><a href="https://github.com/shdra06/FlyShelf/blob/main/LICENSE">License</a></li>
+          <li><a href="https://github.com/shdra06/FlyShelf/blob/main/PRIVACY.md">Privacy Policy</a></li>
+        </ul>
+      </div>
+    </div>
+    
+    <div class="footer-bottom">
+      <div>© 2026 FlyShelf Ecosystem. Built by Shivendra. All Rights Reserved.</div>
+      <div style="display: flex; gap: 15px;">
+        <span>v4.0.0 &amp; v7.1.0 Release Build</span>
+        <span>•</span>
+        <span>Secure P2P Protocol</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Script logic hook -->
+  <script src="app.js?v=4.0.0"></script>
+</body>
+</html>
