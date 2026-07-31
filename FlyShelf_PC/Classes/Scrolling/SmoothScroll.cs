@@ -325,15 +325,21 @@ namespace FlyShelf.Classes
                 // ═══ SYNCHRONIZE WITH WPF LAYOUT SHIFTS ═══
                 // WPF's VirtualizingPanel causes micro layout shifts when realizing items,
                 // especially when scrolling UP (items above viewport need realization).
-                // ALL shifts must be absorbed into TrueOffset to prevent mismatch
-                // accumulation that causes upward scroll jitter. The old approach of
-                // only resyncing LastSetOffset (without adjusting TrueOffset) left a
-                // growing delta that caused correction jumps on subsequent frames.
+                // Small shifts (< 5px): Don't absorb into TrueOffset — just resync tracking.
+                //   Absorbing them fights the scroll and causes upward choppiness.
+                // Large shifts (> 5px): Absorb into TrueOffset to prevent position jumps
+                //   from async image loads or major layout changes.
                 double actualOffset = sv.VerticalOffset;
                 double wpfDelta = actualOffset - state.LastSetOffset;
-                if (Math.Abs(wpfDelta) > 0.001)
+                if (Math.Abs(wpfDelta) > 5.0)
                 {
+                    // Large shift — absorb to prevent visible jump
                     state.TrueOffset += wpfDelta;
+                    state.LastSetOffset = actualOffset;
+                }
+                else if (Math.Abs(wpfDelta) > 0.001)
+                {
+                    // Small virtualization shift — just resync, don't fight the scroll
                     state.LastSetOffset = actualOffset;
                 }
 
@@ -436,12 +442,11 @@ namespace FlyShelf.Classes
                         double directDisplacement = -state.PendingImpulse * (TargetFrameMs / 1.0);
                         state.TrueOffset += directDisplacement;
                         state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
-                        // Sub-pixel precision — no rounding. WPF ScrollViewer accepts
-                        // doubles and VirtualizingStackPanel renders via TranslateTransform.
-                        // Delta guard: skip writes smaller than 0.25px to avoid redundant layout.
-                        if (Math.Abs(state.TrueOffset - sv.VerticalOffset) >= 0.25)
-                            sv.ScrollToVerticalOffset(state.TrueOffset);
-                        state.LastSetOffset = state.TrueOffset;
+                        // Pixel-snap + delta guard: avoid redundant layout passes from sub-pixel writes
+                        double snappedOffset = Math.Round(state.TrueOffset);
+                        if (Math.Abs(snappedOffset - sv.VerticalOffset) >= 0.5)
+                            sv.ScrollToVerticalOffset(snappedOffset);
+                        state.LastSetOffset = snappedOffset;
                         // Let velocity build naturally from micro-scrolls
                         state.Velocity = 0;
                         anyAnimating = true;
@@ -453,12 +458,12 @@ namespace FlyShelf.Classes
                         state.TrueOffset += displacement;
                         state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
 
-                        // Sub-pixel precision — no rounding. Removes integer-stepping
-                        // that causes visible step-wise motion at slow scroll speeds.
-                        // Delta guard at 0.25px prevents redundant layout passes.
-                        if (Math.Abs(state.TrueOffset - sv.VerticalOffset) >= 0.25)
-                            sv.ScrollToVerticalOffset(state.TrueOffset);
-                        state.LastSetOffset = state.TrueOffset;
+                        // Pixel-snap + delta guard: VirtualizingStackPanel snaps internally,
+                        // so sub-pixel writes cause redundant layout passes without visible change.
+                        double snappedOffset = Math.Round(state.TrueOffset);
+                        if (Math.Abs(snappedOffset - sv.VerticalOffset) >= 0.5)
+                            sv.ScrollToVerticalOffset(snappedOffset);
+                        state.LastSetOffset = snappedOffset;
 
                         // Velocity-adaptive friction during active input.
                         // Wider transition band (2-20 px/frame) eliminates mid-speed resonance
@@ -508,26 +513,23 @@ namespace FlyShelf.Classes
                         state.CoastStartVelocity = state.Velocity;
                         state.CoastStartOffset = state.TrueOffset;
 
-                        // ═══ SEAMLESS TRANSITION ═══
-                        // Compute the coast decay rate from the SAME velocity-adaptive friction
-                        // that was running during active input. This ensures zero deceleration
-                        // jump at the transition — the coast curve is a mathematically exact
-                        // continuation of the active friction curve.
+                        // ═══ COAST-SPECIFIC FRICTION (snappier than active phase) ═══
+                        // Active phase uses gentle friction (0.96/0.93) for smooth finger-tracking.
+                        // Coast phase uses tighter friction (0.90/0.87) so deceleration is ~40% shorter
+                        // and feels responsive rather than floaty.
                         if (state.IsTouchpad)
                         {
                             double absV = Math.Abs(state.Velocity);
-                            double slowFriction = 0.96;
-                            double fastFriction = 0.93;
-                            // Wider transition band (2-20 px/frame) — must match active phase
+                            double slowCoastFriction = 0.90;  // Active: 0.96 → Coast: 0.90
+                            double fastCoastFriction = 0.87;  // Active: 0.93 → Coast: 0.87
                             double t = Math.Clamp((absV - 2.0) / 18.0, 0.0, 1.0);
                             t = t * t * (3.0 - 2.0 * t);
-                            double frictionPerFrame = slowFriction + (fastFriction - slowFriction) * t;
-                            // Convert per-frame friction to per-ms: f_ms = f_frame^(1/16.667)
-                            state.CoastDecayPerMs = Math.Pow(frictionPerFrame, 1.0 / TargetFrameMs);
+                            double coastFrictionPerFrame = slowCoastFriction + (fastCoastFriction - slowCoastFriction) * t;
+                            state.CoastDecayPerMs = Math.Pow(coastFrictionPerFrame, 1.0 / TargetFrameMs);
                         }
                         else
                         {
-                            state.CoastDecayPerMs = 0.9962;
+                            state.CoastDecayPerMs = 0.9935;  // Was 0.9962 — ~40% shorter mouse coast
                         }
                     }
 
@@ -554,13 +556,10 @@ namespace FlyShelf.Classes
                     sv.ScrollToVerticalOffset(state.TrueOffset);
                     state.LastSetOffset = state.TrueOffset;
 
-                    // Stop condition: velocity is imperceptible (< 0.5 px/frame = 30px/sec)
-                    // No Math.Round — rounding snaps position by up to 0.5px which causes
-                    // a visible jitter on the final frame. Just stop at the exact sub-pixel
-                    // position. ClearType is restored HERE (not mid-coast) to avoid a
-                    // mid-deceleration text re-render shift.
-                    // 0.15 px/frame ≈ 9 px/sec — below visual perception threshold.
-                    // Analytical coast formula means this longer tail costs zero extra CPU.
+                    // Stop condition: velocity below visual perception (< 0.15 px/frame ≈ 9px/sec).
+                    // Low threshold ensures the scroll fades to rest imperceptibly instead of
+                    // stopping abruptly with visible micro-steps. The analytical coast formula
+                    // means this longer tail costs zero extra CPU.
                     if (Math.Abs(state.Velocity) < 0.15)
                     {
                         state.Velocity = 0.0;
