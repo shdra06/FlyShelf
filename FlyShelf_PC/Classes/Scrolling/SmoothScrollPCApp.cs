@@ -34,10 +34,10 @@ namespace FlyShelf.Classes
         private const double TouchpadImpulseMul   = 0.09;     // Touchpad impulse multiplier — matched to main clipboard's TouchpadMul
 
         // ═══ Velocity Physics (unified for mouse + touchpad) ═══
-        private const double MouseVelocityFriction   = 0.95;     // Per-frame decay (0.94→0.95 for slightly longer glide, better for content browsing)
+        private const double MouseVelocityFriction   = 0.94;     // Per-frame decay — crisp, responsive deceleration
         private const double MouseMaxVelocity        = 45.0;     // Maximum velocity cap (px/frame)
         private const double MouseImpulseScale       = 7.2;      // Mouse impulse per notch — matched to clipboard's MouseMul*120 (0.06*120)
-        private const double MouseMinVelocity        = 0.15;     // Below this → stop (lowered from 0.20 for Apple-style longer tail)
+        private const double MouseMinVelocity        = 0.20;     // Below this → stop
         private const double MouseDirectionBrakeMul  = 0.35;     // Retained velocity on direction reversal
         private const double MouseTargetFrameMs      = 16.667;   // 60 FPS baseline for frame-time compensation
         private const double MouseBlendFactor        = 0.55;     // Velocity blending factor — matched to main clipboard

@@ -624,6 +624,24 @@ namespace FlyShelf
                 }
                 _activeCardContextMenu.IsOpen = false;
             }
+
+            // Close OverflowPopup when clicking outside it.
+            // StaysOpen="False" can fail when the popup HWND is forced topmost.
+            if (OverflowPopup != null && OverflowPopup.IsOpen)
+            {
+                // Don't close if clicking the MoreBtn itself (the click handler will toggle it)
+                if (e.OriginalSource is DependencyObject src)
+                {
+                    DependencyObject parent = src;
+                    while (parent != null)
+                    {
+                        if (parent == MoreBtn) return;
+                        if (parent == OverflowPopup.Child) return; // Click inside the popup
+                        parent = VisualTreeHelper.GetParent(parent);
+                    }
+                }
+                OverflowPopup.IsOpen = false;
+            }
         }
 
         private void CopyFilePath_Click(object sender, RoutedEventArgs e)

@@ -1104,7 +1104,7 @@ namespace FlyShelf
                     // that interrupt the CompositionTarget.Rendering cadence.
                     var scrollSv = GetShelfScrollViewer();
                     double scrollVelocity = scrollSv != null ? Classes.SmoothScroll.GetCurrentVelocity(scrollSv) : 0;
-                    bool isFastScrolling = scrollVelocity > 12.0; // > 12 px/frame = moderate-to-fast scroll
+                    bool isFastScrolling = scrollVelocity > 30.0; // > 30 px/frame = truly fast scroll (flicks)
 
                     // Prefetch overdraw: expand viewport by 1200px above and below.
                     // Larger zone ensures images preload well before entering viewport.
