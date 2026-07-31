@@ -167,12 +167,12 @@ namespace FlyShelf.ViewModels
                             string importedName = Classes.ThemeManager.Instance.ImportTheme(files[0]);
                             if (importedName != null)
                             {
-                                FlyShelf.Windows.ToastWindow.ShowToast($"🎨 Theme '{importedName}' imported!");
+                                FlyShelf.Windows.ToastWindow.ShowToast($"Theme '{importedName}' imported!");
                                 Classes.ThemeManager.Instance.SetActiveTheme(importedName);
                             }
                             else
                             {
-                                FlyShelf.Windows.ToastWindow.ShowToast("❌ Invalid theme file");
+                                FlyShelf.Windows.ToastWindow.ShowToast("Invalid theme file");
                             }
                         });
                         return;

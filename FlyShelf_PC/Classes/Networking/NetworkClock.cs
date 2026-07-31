@@ -129,11 +129,11 @@ namespace FlyShelf.Classes
                 if (Math.Abs(_offset.TotalSeconds) > 5)
                 {
                     _driftDetected = true;
-                    Logger.LogAction("CLOCK", $"⚠️ OS clock is off by {_offset.TotalSeconds:F1}s — using NTP-corrected time");
+                    Logger.LogAction("CLOCK", $"OS clock is off by {_offset.TotalSeconds:F1}s — using NTP-corrected time");
                 }
                 else
                 {
-                    Logger.LogAction("CLOCK", $"✅ OS clock is accurate (drift: {_offset.TotalMilliseconds:F0}ms)");
+                    Logger.LogAction("CLOCK", $"OS clock is accurate (drift: {_offset.TotalMilliseconds:F0}ms)");
                 }
 
                 // Persist the anchor for future sessions
@@ -177,11 +177,11 @@ namespace FlyShelf.Classes
                         if (driftSinceLast > 5)
                         {
                             _driftDetected = true;
-                            Logger.LogAction("CLOCK", $"⚠️ Periodic re-sync: drift of {driftSinceLast:F1}s detected since last sync");
+                            Logger.LogAction("CLOCK", $"Periodic re-sync: drift of {driftSinceLast:F1}s detected since last sync");
                         }
                         else
                         {
-                            Logger.LogAction("CLOCK", $"✅ Periodic re-sync OK (drift: {_offset.TotalMilliseconds:F0}ms)");
+                            Logger.LogAction("CLOCK", $"Periodic re-sync OK (drift: {_offset.TotalMilliseconds:F0}ms)");
                         }
                         PersistAnchor(ntpTime.Value);
                     }

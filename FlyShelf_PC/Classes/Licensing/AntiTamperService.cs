@@ -74,7 +74,7 @@ namespace FlyShelf.Classes
                 if (DetectDebugger())
                 {
                     _debuggerDetected = true;
-                    Logger.LogAction("SECURITY", "⚠️ Debugger detected — Pro features disabled");
+                    Logger.LogAction("SECURITY", "Debugger detected — Pro features disabled");
                     return true;
                 }
             }
@@ -213,7 +213,7 @@ namespace FlyShelf.Classes
                     // from pre-computing and writing a new hash for their patched binary
                     if (!VerifySignedHash(storedRaw, keySecret, out string storedHash))
                     {
-                        Logger.LogAction("INTEGRITY", "⚠️ .assembly_hash signature invalid — file was tampered");
+                        Logger.LogAction("INTEGRITY", ".assembly_hash signature invalid — file was tampered");
                         storedHash = "tampered";
                     }
 
@@ -238,7 +238,7 @@ namespace FlyShelf.Classes
                 // Store/update the signed hash on clean runs
                 Directory.CreateDirectory(appDataDir);
                 File.WriteAllText(hashFile, SignAssemblyHash(currentHash, keySecret));
-                Logger.LogAction("INTEGRITY", $"✅ Assembly integrity verified: {currentHash.Substring(0, 12)}...");
+                Logger.LogAction("INTEGRITY", $"Assembly integrity verified: {currentHash.Substring(0, 12)}...");
             }
             catch (Exception ex)
             {

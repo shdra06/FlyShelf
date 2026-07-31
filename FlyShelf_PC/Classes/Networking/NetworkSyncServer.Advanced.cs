@@ -225,14 +225,14 @@ namespace FlyShelf.Classes
                         try { res.Close(); } catch { }
 
                         _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                            FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ File rejected before assembly: exceeds 50 GB Free tier limit.");
+                            FlyShelf.Windows.ToastWindow.ShowToast($"File rejected before assembly: exceeds 50 GB Free tier limit.");
                         });
                         return;
                     }
                 }
 
                 _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                    FlyShelf.Windows.ToastWindow.ShowToast($"Assembling {rawName} ({chunkFiles.Length} chunks)... 📦");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Assembling {rawName} ({chunkFiles.Length} chunks)...");
                 });
 
                 using (var outputFs = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920))
@@ -259,7 +259,7 @@ namespace FlyShelf.Classes
                     await res.OutputStream.WriteAsync(errBytes, 0, errBytes.Length);
 
                     _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ File assembly rejected: exceeds 50 GB Free tier limit.");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"File assembly rejected: exceeds 50 GB Free tier limit.");
                     });
                     return;
                 }
@@ -282,7 +282,7 @@ namespace FlyShelf.Classes
                 string sizeStr = fileInfo.Length > 1_073_741_824 ? $"{fileInfo.Length / 1_073_741_824.0:F1} GB" : $"{fileInfo.Length / 1_048_576.0:F1} MB";
 
                 _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                    FlyShelf.Windows.ToastWindow.ShowToast($"✅ {rawName} ({sizeStr}) received!");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"{rawName} ({sizeStr}) received!");
                     // Auto-copy to clipboard + insert into FlyShelf
                     try
                     {
@@ -452,7 +452,7 @@ namespace FlyShelf.Classes
                         var dropList = new System.Collections.Specialized.StringCollection { pdfPath };
                         dataObj.SetFileDropList(dropList);
                         _viewModel.HandleDrop(dataObj, true);
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Converted: {pdfName} ✅");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Converted: {pdfName}");
                     });
 
                     // Record successful doc conversion
@@ -832,7 +832,7 @@ namespace FlyShelf.Classes
                         var dropList = new System.Collections.Specialized.StringCollection { outputPath };
                         dataObj.SetFileDropList(dropList);
                         _viewModel.HandleDrop(dataObj, true);
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Merged PDF: {baseName} ✅");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Merged PDF: {baseName}");
                     });
 
                     string pairingKey = DevicePairingManager.EnsurePairingKey();

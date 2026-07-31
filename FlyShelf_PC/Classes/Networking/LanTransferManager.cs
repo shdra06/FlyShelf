@@ -552,7 +552,7 @@ namespace FlyShelf.Classes
                     }
                     _viewModel.SchedulePersistHistoryPublic(); // PERF: throttled — network transfer is non-critical
 
-                    Windows.ToastWindow.ShowToast($"✅ {session.FileName} ({LanTransferSession.FormatBytes(session.FileSize)}) received from {session.PeerDeviceName}");
+                    Windows.ToastWindow.ShowToast($"{session.FileName} ({LanTransferSession.FormatBytes(session.FileSize)}) received from {session.PeerDeviceName}");
                 }
                 catch (Exception ex)
                 {
@@ -999,7 +999,7 @@ namespace FlyShelf.Classes
                 .FirstOrDefault(p => p.DeviceId == session.PeerDeviceId);
             if (peer == null || !peer.IsAlive)
             {
-                Windows.ToastWindow.ShowToast($"⚠️ Cannot retry — {session.PeerDeviceName} is not connected");
+                Windows.ToastWindow.ShowToast($"Cannot retry — {session.PeerDeviceName} is not connected");
                 Logger.LogAction("TRANSFER", $"Retry: peer {session.PeerDeviceName} not connected");
                 return;
             }

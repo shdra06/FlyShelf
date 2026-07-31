@@ -204,7 +204,7 @@ namespace FlyShelf.Classes
                         const int MAX_DISCOVERY_BYTES = 4096;
                         if (result.Buffer.Length > MAX_DISCOVERY_BYTES)
                         {
-                            Logger.LogAction("PEER_UDP", $"⛔ Oversized UDP packet dropped: {result.Buffer.Length} bytes from {result.RemoteEndPoint}");
+                            Logger.LogAction("PEER_UDP", $"Oversized UDP packet dropped: {result.Buffer.Length} bytes from {result.RemoteEndPoint}");
                             continue;
                         }
 
@@ -242,12 +242,12 @@ namespace FlyShelf.Classes
                                     // Fix #1B: Don't auto-re-register devices that were recently unpaired
                                     if (DevicePairingManager.IsRecentlyUnpaired(packet.DeviceId))
                                     {
-                                        Logger.LogAction("PEER_UDP", $"⛔ Blocked auto-re-registration of recently unpaired device: {packet.DeviceName} ({packet.DeviceId})");
+                                        Logger.LogAction("PEER_UDP", $"Blocked auto-re-registration of recently unpaired device: {packet.DeviceName} ({packet.DeviceId})");
                                     }
                                     else
                                     {
                                         DevicePairingManager.TryPairDevice(pairingKey, packet.DeviceId, packet.DeviceName, "PC", senderIp);
-                                        Logger.LogAction("PEER_UDP", $"✅ Auto-registered device offline from validated broadcast: {packet.DeviceName}");
+                                        Logger.LogAction("PEER_UDP", $"Auto-registered device offline from validated broadcast: {packet.DeviceName}");
                                     }
                                 }
                             }
@@ -257,20 +257,20 @@ namespace FlyShelf.Classes
                             {
                                 if (!string.IsNullOrEmpty(packet.LocalUrl) && existing.LanUrl != packet.LocalUrl)
                                 {
-                                    Logger.LogAction("PEER_UDP", $"🔎 LAN URL for {packet.DeviceName} changed: {packet.LocalUrl}");
+                                    Logger.LogAction("PEER_UDP", $"LAN URL for {packet.DeviceName} changed: {packet.LocalUrl}");
                                     existing.LanUrl = packet.LocalUrl;
                                     SaveUrlCache();
                                 }
 
                                 if (!existing.IsAlive)
                                 {
-                                    Logger.LogAction("PEER_UDP", $"⚡ Reconnecting to {packet.DeviceName} offline...");
+                                    Logger.LogAction("PEER_UDP", $"Reconnecting to {packet.DeviceName} offline...");
                                     _ = Task.Run(() => Handshake(existing));
                                 }
                             }
                             else
                             {
-                                Logger.LogAction("PEER_UDP", $"⚡ Discovered NEW offline peer: {packet.DeviceName} at {packet.LocalUrl}");
+                                Logger.LogAction("PEER_UDP", $"Discovered NEW offline peer: {packet.DeviceName} at {packet.LocalUrl}");
                                 var newPeer = new PeerConnection
                                 {
                                     DeviceId = packet.DeviceId,
@@ -339,7 +339,7 @@ namespace FlyShelf.Classes
             }
             if (skewMs > 30000)
             {
-                Logger.LogAction("PEER_UDP_WARN", $"⚠️ High clock skew detected with {deviceId}: {skewMs / 1000.0}s — consider syncing system clocks");
+                Logger.LogAction("PEER_UDP_WARN", $"High clock skew detected with {deviceId}: {skewMs / 1000.0}s — consider syncing system clocks");
             }
 
             string expected = GenerateDiscoverySignature(deviceId, timestamp, localUrl, pairingKey);

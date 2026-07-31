@@ -127,7 +127,7 @@ namespace FlyShelf.Classes
                             try
                             {
                                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                                    Windows.ToastWindow.ShowToast("☁️ Cloud sync temporarily limited — retrying in 5 minutes"));
+                                    Windows.ToastWindow.ShowToast("Cloud sync temporarily limited — retrying in 5 minutes"));
                             }
                             catch { } // Best-effort: failure is acceptable
                         }

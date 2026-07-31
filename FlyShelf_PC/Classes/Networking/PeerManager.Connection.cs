@@ -26,13 +26,13 @@ namespace FlyShelf.Classes
             // Prevent concurrent handshakes on the same peer (HeartbeatLoop, DiscoveryLoop, UDP, PeerAnnounce, UrlUpdate)
             if (!await peer.HandshakeLock.WaitAsync(0))
             {
-                Logger.LogAction("PEER", $"🔌 Handshake {peer.DeviceName} already in progress — skipping");
+                Logger.LogAction("PEER", $"Handshake {peer.DeviceName} already in progress — skipping");
                 return;
             }
             try
             {
                 bool lanEnabled = SettingsManager.Current.EnableLocalLAN;
-                Logger.LogAction("PEER", $"🔌 Handshake {peer.DeviceName}: LAN={peer.LanUrl ?? "(empty)"} CF={peer.CloudflareUrl ?? "(empty)"} lanEnabled={lanEnabled}");
+                Logger.LogAction("PEER", $"Handshake {peer.DeviceName}: LAN={peer.LanUrl ?? "(empty)"} CF={peer.CloudflareUrl ?? "(empty)"} lanEnabled={lanEnabled}");
 
                 using var cts = new CancellationTokenSource();
                 var tasks = new List<Task<(bool success, string transport, string url)>>();
@@ -84,7 +84,7 @@ namespace FlyShelf.Classes
                 if (!handshakeSucceeded)
                 {
                     lock (peer.StateLock) { peer.IsAlive = false; peer.Transport = "offline"; }
-                    Logger.LogAction("PEER", $"⚠️  {peer.DeviceName} unreachable (LAN:{(lanEnabled ? "on" : "off")}) tried LAN={peer.LanUrl ?? "null"} CF={peer.CloudflareUrl ?? "null"}");
+                    Logger.LogAction("PEER", $" {peer.DeviceName} unreachable (LAN:{(lanEnabled ? "on" : "off")}) tried LAN={peer.LanUrl ?? "null"} CF={peer.CloudflareUrl ?? "null"}");
                 }
             }
             finally { peer.HandshakeLock.Release(); }
@@ -173,7 +173,7 @@ namespace FlyShelf.Classes
                                 string returnedId = idProp.GetString() ?? "";
                                 if (returnedId == _myDeviceId)
                                 {
-                                    Logger.LogAction("PEER", $"🔌 Loopback connection detected (health returned our own DeviceId '{_myDeviceId}') — rejecting handshake.");
+                                    Logger.LogAction("PEER", $"Loopback connection detected (health returned our own DeviceId '{_myDeviceId}') — rejecting handshake.");
                                     return false;
                                 }
                             }
@@ -192,7 +192,7 @@ namespace FlyShelf.Classes
                                     if (!string.IsNullOrEmpty(peerLan) && peerLan.StartsWith("http", StringComparison.Ordinal) && peerLan != peer.LanUrl)
                                     {
                                         peer.LanUrl = peerLan;
-                                        Logger.LogAction("PEER", $"🔎 Discovered {peer.DeviceName} LAN URL from health: {peerLan}");
+                                        Logger.LogAction("PEER", $"Discovered {peer.DeviceName} LAN URL from health: {peerLan}");
                                     }
                                 }
                                 if (tr.TryGetProperty("cloudflare", out var cfProp))
@@ -201,7 +201,7 @@ namespace FlyShelf.Classes
                                     if (!string.IsNullOrEmpty(peerCf) && peerCf.Contains("trycloudflare", StringComparison.Ordinal) && peerCf != peer.CloudflareUrl)
                                     {
                                         peer.CloudflareUrl = peerCf;
-                                        Logger.LogAction("PEER", $"🔎 Discovered {peer.DeviceName} CF URL from health: {peerCf}");
+                                        Logger.LogAction("PEER", $"Discovered {peer.DeviceName} CF URL from health: {peerCf}");
                                     }
                                 }
                             }
@@ -210,13 +210,13 @@ namespace FlyShelf.Classes
                             string myVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "";
                             if (!string.IsNullOrEmpty(peer.Version) && peer.Version != myVersion)
                             {
-                                Logger.LogAction("PEER", $"⚠️  Version mismatch: {peer.DeviceName} is on v{peer.Version}, we are on v{myVersion}");
+                                Logger.LogAction("PEER", $" Version mismatch: {peer.DeviceName} is on v{peer.Version}, we are on v{myVersion}");
                             }
                         }
                     }
                     catch { /* Health parsing is optional — connection is already confirmed */ }
 
-                    Logger.LogAction("PEER", $"✅ {peer.DeviceName} connected via {transport}: {testUrl}" +
+                    Logger.LogAction("PEER", $"{peer.DeviceName} connected via {transport}: {testUrl}" +
                         (!string.IsNullOrEmpty(peer.Version) ? $" (v{peer.Version})" : ""));
                     PeerConnected?.Invoke(peer.DeviceId, transport);
 
@@ -251,7 +251,7 @@ namespace FlyShelf.Classes
                     peer.IncrementFailures();
                     if (peer.ConsecutiveFailures >= 5 || isHostError)
                     {
-                        Logger.LogAction("PEER", $"⚠️ Invalidating stale Cloudflare URL for {peer.DeviceName} (failures: {peer.ConsecutiveFailures}, reason: {ex.Message})");
+                        Logger.LogAction("PEER", $"Invalidating stale Cloudflare URL for {peer.DeviceName} (failures: {peer.ConsecutiveFailures}, reason: {ex.Message})");
                         peer.CloudflareUrl = "";
                         SaveUrlCache();
                     }
@@ -292,7 +292,7 @@ namespace FlyShelf.Classes
                 await ws.ConnectAsync(new Uri(wsUrl), peer.WsCts.Token);
                 peer.LiveSocket = ws;
                 peer.ResetWsReconnectAttempts(); // Reset backoff on successful connection
-                Logger.LogAction("WS", $"🔗 WebSocket connected to {peer.DeviceName} via {peer.Transport}");
+                Logger.LogAction("WS", $"WebSocket connected to {peer.DeviceName} via {peer.Transport}");
 
                 // Monitor the WebSocket — when it drops, peer is dead
                 await MonitorWebSocket(peer);
@@ -457,7 +457,7 @@ namespace FlyShelf.Classes
                     catch (OperationCanceledException) when (!cts.Token.IsCancellationRequested)
                     {
                         // Pong timeout — peer may be dead
-                        Logger.LogAction("WS", $"⚠️  {peer.DeviceName} WebSocket pong timeout");
+                        Logger.LogAction("WS", $" {peer.DeviceName} WebSocket pong timeout");
                         break;
                     }
 
@@ -475,7 +475,7 @@ namespace FlyShelf.Classes
             // WebSocket died → if peer was still marked alive, verify via HTTP health check
             if (peer.IsAlive)
             {
-                Logger.LogAction("WS", $"⚠️  {peer.DeviceName} WebSocket dropped — verifying health via HTTP...");
+                Logger.LogAction("WS", $" {peer.DeviceName} WebSocket dropped — verifying health via HTTP...");
                 
                 bool stillAlive = false;
                 try
@@ -500,7 +500,7 @@ namespace FlyShelf.Classes
 
                 if (stillAlive)
                 {
-                    Logger.LogAction("WS", $"ℹ️  {peer.DeviceName} still reachable — reconnecting WebSocket...");
+                    Logger.LogAction("WS", $"ℹ {peer.DeviceName} still reachable — reconnecting WebSocket...");
                     try { peer.WsCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
                     try { peer.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
                     peer.LiveSocket = null;
@@ -508,17 +508,17 @@ namespace FlyShelf.Classes
                     peer.IncrementWsReconnectAttempts();
                     if (peer.WsReconnectAttempts > 20)
                     {
-                        Logger.LogAction("WS", $"⛔ Max reconnect attempts reached for {peer.DeviceName} — giving up");
+                        Logger.LogAction("WS", $"Max reconnect attempts reached for {peer.DeviceName} — giving up");
                         return;
                     }
                     int delay = Math.Min(1000 * (1 << Math.Min(peer.WsReconnectAttempts, 5)), 30000);
-                    Logger.LogAction("WS", $"⏳ Reconnecting WebSocket to {peer.DeviceName} in {delay}ms (attempt #{peer.WsReconnectAttempts})");
+                    Logger.LogAction("WS", $"Reconnecting WebSocket to {peer.DeviceName} in {delay}ms (attempt #{peer.WsReconnectAttempts})");
                     await Task.Delay(delay);
                     _ = Task.Run(() => ConnectWebSocket(peer));
                 }
                 else
                 {
-                    Logger.LogAction("WS", $"💀 {peer.DeviceName} WebSocket dropped and HTTP health check failed — instant death detection");
+                    Logger.LogAction("WS", $"{peer.DeviceName} WebSocket dropped and HTTP health check failed — instant death detection");
                     await HandlePeerDeath(peer);
                 }
             }
@@ -589,13 +589,13 @@ namespace FlyShelf.Classes
                     }
                     catch { /* Response parsing is best-effort */ }
 
-                    Logger.LogAction("PEER", $"📢 Announced ourselves to {peer.DeviceName} via {peer.Transport}");
+                    Logger.LogAction("PEER", $"Announced ourselves to {peer.DeviceName} via {peer.Transport}");
                 }
             }
             catch (Exception ex)
             {
                 // Non-fatal — the handshake already succeeded, announce is for reverse discovery
-                Logger.LogAction("PEER", $"📢 Announce to {peer.DeviceName} failed (non-fatal): {ex.Message}");
+                Logger.LogAction("PEER", $"Announce to {peer.DeviceName} failed (non-fatal): {ex.Message}");
             }
         }
 
@@ -623,7 +623,7 @@ namespace FlyShelf.Classes
                     peers = peerIds
                 });
                 await _sharedClient.PutAsync(tickUrl, new StringContent(tickJson, Encoding.UTF8, "application/json"), cleanupCts.Token);
-                Logger.LogAction("PEER", $"✅ Confirmation tick written — {peerIds.Count} peer(s) confirmed");
+                Logger.LogAction("PEER", $"Confirmation tick written — {peerIds.Count} peer(s) confirmed");
 
                 // ═ ═ ═ FIX 6: DON'T delete URLs from Firebase ═ ═ ═ 
                 // The old code deleted GlobalUrl/LocalIp/Url from Firebase for "security".
@@ -640,7 +640,7 @@ namespace FlyShelf.Classes
 
                 _urlCleanedFromFirebase = true;
                 _urlRequestSent = false;
-                Logger.LogAction("PEER", "✅ Peer confirmation written (URLs preserved in Firebase for reconnection)");
+                Logger.LogAction("PEER", "Peer confirmation written (URLs preserved in Firebase for reconnection)");
             }
             catch (Exception ex)
             {
@@ -705,7 +705,7 @@ namespace FlyShelf.Classes
             }
 
             if (sent > 0)
-                Logger.LogAction("WS", $"📡 Broadcasted URL update to {sent} peer(s) via WebSocket (LAN={lanUrl} CF={cfUrl})");
+                Logger.LogAction("WS", $"Broadcasted URL update to {sent} peer(s) via WebSocket (LAN={lanUrl} CF={cfUrl})");
         }
 
         /// <summary>
@@ -716,7 +716,7 @@ namespace FlyShelf.Classes
         {
             if (sourceDeviceId == _myDeviceId) return;
 
-            Logger.LogAction("WS", $"📡 Received URL update from {sourceDeviceName} via WebSocket: LAN={newLanUrl} CF={newCfUrl}");
+            Logger.LogAction("WS", $"Received URL update from {sourceDeviceName} via WebSocket: LAN={newLanUrl} CF={newCfUrl}");
 
             if (_peers.TryGetValue(sourceDeviceId, out var peer))
             {
@@ -741,7 +741,7 @@ namespace FlyShelf.Classes
                     // we need to reconnect with the new URL
                     if (peer.Transport == "Cloudflare" && !string.IsNullOrEmpty(newCfUrl) && newCfUrl != peer.ActiveUrl)
                     {
-                        Logger.LogAction("WS", $"📡 {sourceDeviceName} CF URL changed — scheduling reconnect...");
+                        Logger.LogAction("WS", $"{sourceDeviceName} CF URL changed — scheduling reconnect...");
                         // Fire-and-forget reconnect to avoid blocking the WebSocket monitor
                         // that dispatched this handler — prevents deadlock with HandlePeerDeath
                         _ = Task.Run(async () =>
@@ -756,13 +756,13 @@ namespace FlyShelf.Classes
                     }
                     else
                     {
-                        Logger.LogAction("WS", $"📡 {sourceDeviceName} URLs updated (no reconnect needed — transport={peer.Transport})");
+                        Logger.LogAction("WS", $"{sourceDeviceName} URLs updated (no reconnect needed — transport={peer.Transport})");
                     }
                 }
             }
             else
             {
-                Logger.LogAction("WS", $"📡 URL update from unknown peer {sourceDeviceName} ({sourceDeviceId}) — ignoring");
+                Logger.LogAction("WS", $"URL update from unknown peer {sourceDeviceName} ({sourceDeviceId}) — ignoring");
             }
         }
     }

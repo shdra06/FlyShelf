@@ -209,7 +209,7 @@ namespace FlyShelf.Windows
                     _pdfModifiedPages[0] = tempPath;
                     _isPdfModified = true;
                     
-                    FlyShelf.Windows.ToastWindow.ShowToast("🎨 Annotation applied to page");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Annotation applied to page");
                     ExitDoodleMode();
                 }
                 catch (Exception ex)
@@ -349,7 +349,7 @@ namespace FlyShelf.Windows
                 _hasUnsavedDoodle = false;
                 UpdateDoodleButtonStates();
 
-                FlyShelf.Windows.ToastWindow.ShowToast("🎨 Annotated image saved!");
+                FlyShelf.Windows.ToastWindow.ShowToast("Annotated image saved!");
                 FlyShelf.Classes.Logger.LogAction("DOODLE", $"Saved annotated image: {Path.GetFileName(filePath)}");
             }
             catch (Exception ex)

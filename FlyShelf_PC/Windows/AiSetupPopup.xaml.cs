@@ -154,7 +154,7 @@ namespace FlyShelf.Windows
                 apiKeyMaskedBox.Visibility = Visibility.Collapsed;
                 apiKeyBox.Visibility = Visibility.Visible;
                 apiKeyBox.Focus();
-                toggleVisibilityBtn.Content = "🙈";
+                toggleVisibilityBtn.Content = "Hide";
             }
             else
             {
@@ -163,7 +163,7 @@ namespace FlyShelf.Windows
                 apiKeyBox.Visibility = Visibility.Collapsed;
                 apiKeyMaskedBox.Visibility = Visibility.Visible;
                 apiKeyMaskedBox.Focus();
-                toggleVisibilityBtn.Content = "👁";
+                toggleVisibilityBtn.Content = "Show";
             }
         }
 

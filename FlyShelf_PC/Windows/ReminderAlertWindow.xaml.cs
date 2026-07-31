@@ -239,7 +239,7 @@ namespace FlyShelf.Windows
                 Logger.LogAction("REMINDER", $"Snooze error: {ex.Message}");
             }
 
-            RunDismissAnimation(() => ToastWindow.ShowToast("Snoozed to tomorrow 9 AM 🌅"));
+            RunDismissAnimation(() => ToastWindow.ShowToast("Snoozed to tomorrow 9 AM"));
         }
 
         // ═══ DONE ═══

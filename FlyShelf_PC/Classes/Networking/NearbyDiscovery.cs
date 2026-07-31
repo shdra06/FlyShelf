@@ -391,9 +391,9 @@ namespace FlyShelf.Classes
 
                 device.IsConnected = success;
                 if (success)
-                    Logger.LogAction("NEARBY", $"✅ Connected to nearby device: {device.DeviceName} @ {device.IpAddress}");
+                    Logger.LogAction("NEARBY", $"Connected to nearby device: {device.DeviceName} @ {device.IpAddress}");
                 else
-                    Logger.LogAction("NEARBY", $"❌ Could not reach {device.DeviceName} @ {device.IpAddress}");
+                    Logger.LogAction("NEARBY", $"Could not reach {device.DeviceName} @ {device.IpAddress}");
             }
             catch (Exception ex)
             {
@@ -414,7 +414,7 @@ namespace FlyShelf.Classes
             if (deviceId == myId) return;
 
             RecordDiscovery(deviceId, deviceName, ipAddress, httpPort, 0, deviceType);
-            Logger.LogAction("NEARBY", $"📱 HTTP discovery: {deviceName} ({deviceType}) @ {ipAddress}:{httpPort}");
+            Logger.LogAction("NEARBY", $"HTTP discovery: {deviceName} ({deviceType}) @ {ipAddress}:{httpPort}");
         }
 
         /// <summary>

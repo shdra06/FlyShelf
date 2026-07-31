@@ -127,7 +127,7 @@ namespace FlyShelf.Classes
                     if (!string.IsNullOrEmpty(globalUrl) || !string.IsNullOrEmpty(localUrl))
                     {
                         await CloudDiscoveryManager.PushTunnelUrl(globalUrl ?? "", true, localUrl, forceWrite: true);
-                        Logger.LogAction("PEER", $"📡 Startup: re-published URLs to Firebase (LAN={localUrl} CF={globalUrl})");
+                        Logger.LogAction("PEER", $"Startup: re-published URLs to Firebase (LAN={localUrl} CF={globalUrl})");
                     }
                 }
                 catch (Exception ex) { Logger.LogAction("PEER", $"Startup URL publish error: {ex.Message}"); }
@@ -164,7 +164,7 @@ namespace FlyShelf.Classes
                 var cache = JsonSerializer.Deserialize<Dictionary<string, CachedPeerUrls>>(json);
                 if (cache == null || cache.Count == 0) return;
 
-                Logger.LogAction("PEER", $"📋 Loaded {cache.Count} cached peer URL(s) from last session");
+                Logger.LogAction("PEER", $"Loaded {cache.Count} cached peer URL(s) from last session");
 
                 foreach (var (devId, urls) in cache)
                 {
@@ -181,7 +181,7 @@ namespace FlyShelf.Classes
 
                     if (!peer.IsAlive)
                     {
-                        Logger.LogAction("PEER", $"📋 Trying cached URLs for {peer.DeviceName}: LAN={peer.LanUrl} CF={peer.CloudflareUrl}");
+                        Logger.LogAction("PEER", $"Trying cached URLs for {peer.DeviceName}: LAN={peer.LanUrl} CF={peer.CloudflareUrl}");
                         await Handshake(peer);
                     }
                 }
@@ -222,7 +222,7 @@ namespace FlyShelf.Classes
             }
             catch (Exception ex)
             {
-                Logger.LogAction("PEER", $"⚠️ URL cache save failed: {ex.Message}");
+                Logger.LogAction("PEER", $"URL cache save failed: {ex.Message}");
             }
         }
 
@@ -268,7 +268,7 @@ namespace FlyShelf.Classes
                 peer.DeviceName = deviceName;
                 peer.TransferPort = transferPort;
 
-                Logger.LogAction("PEER", $"📡 Manual peer added: {deviceName} @ {lanUrl}");
+                Logger.LogAction("PEER", $"Manual peer added: {deviceName} @ {lanUrl}");
 
                 // Attempt handshake
                 await Handshake(peer);
@@ -341,7 +341,7 @@ namespace FlyShelf.Classes
                     // collisions when multiple devices share the same DeviceName.
                     if (!pairedDeviceIds.Contains(devId))
                     {
-                        Logger.LogAction("PEER", $"⚠️ Unknown device in Firebase room (not paired): {name} ({devId}) — skipping. Use QR or code pairing to add.");
+                        Logger.LogAction("PEER", $"Unknown device in Firebase room (not paired): {name} ({devId}) — skipping. Use QR or code pairing to add.");
                         continue;
                     }
 
@@ -461,7 +461,7 @@ namespace FlyShelf.Classes
 
                 _urlRequestSent = true;
                 _lastUrlRequestTime = DateTime.UtcNow;
-                Logger.LogAction("PEER", "📡 URL request signal sent + our URLs re-published");
+                Logger.LogAction("PEER", "URL request signal sent + our URLs re-published");
             }
             catch (Exception ex)
             {
@@ -477,7 +477,7 @@ namespace FlyShelf.Classes
         {
             if (requestingDeviceId == _myDeviceId) return;
 
-            Logger.LogAction("PEER", $"📡 {requestingDeviceId} is requesting URLs — re-publishing ours...");
+            Logger.LogAction("PEER", $"{requestingDeviceId} is requesting URLs — re-publishing ours...");
 
             string globalUrl = CloudDiscoveryManager.CachedGlobalUrl;
             string localUrl = CloudDiscoveryManager.CachedLocalUrl;
@@ -485,7 +485,7 @@ namespace FlyShelf.Classes
             {
                 _urlCleanedFromFirebase = false;
                 await CloudDiscoveryManager.PushTunnelUrl(globalUrl ?? "", true, localUrl, forceWrite: true);
-                Logger.LogAction("PEER", $"📡 Re-published encrypted URLs for {requestingDeviceId}");
+                Logger.LogAction("PEER", $"Re-published encrypted URLs for {requestingDeviceId}");
             }
         }
 
@@ -520,11 +520,11 @@ namespace FlyShelf.Classes
             // Fix #4: Only match by DeviceId — name matching is not secure
             if (!pairedDeviceIds.Contains(deviceId))
             {
-                Logger.LogAction("PEER", $"⚠️ Unknown device in real-time update (not paired): {deviceName} ({deviceId}) — ignoring.");
+                Logger.LogAction("PEER", $"Unknown device in real-time update (not paired): {deviceName} ({deviceId}) — ignoring.");
                 return;
             }
 
-            Logger.LogAction("PEER", $"📡 Target URL update for {deviceName}: LAN={lan} CF={cf}");
+            Logger.LogAction("PEER", $"Target URL update for {deviceName}: LAN={lan} CF={cf}");
 
             PeerConnection peer;
             if (_peers.TryGetValue(deviceId, out var existing))
@@ -554,7 +554,7 @@ namespace FlyShelf.Classes
             // Guard: don't tear down connection if a file transfer is in progress — update URLs and let transfer finish
             if (peer.ActiveTransfers > 0)
             {
-                Logger.LogAction("PEER", $"📡 {deviceName} URL update deferred — {peer.ActiveTransfers} active transfer(s) in progress");
+                Logger.LogAction("PEER", $"{deviceName} URL update deferred — {peer.ActiveTransfers} active transfer(s) in progress");
                 if (!string.IsNullOrEmpty(lan)) peer.LanUrl = lan;
                 if (!string.IsNullOrEmpty(cf)) peer.CloudflareUrl = cf;
                 // FIX: Remember to reconnect with the new URLs after transfers complete.
@@ -582,7 +582,7 @@ namespace FlyShelf.Classes
         {
             if (peer == null || peer.DeviceId == _myDeviceId) return;
 
-            Logger.LogAction("PEER", $"🔄 ReconnectPeerAsync: resetting and re-handshaking {peer.DeviceName}");
+            Logger.LogAction("PEER", $"ReconnectPeerAsync: resetting and re-handshaking {peer.DeviceName}");
             lock (peer.StateLock) { peer.IsAlive = false; peer.Transport = "offline"; }
             peer.ConsecutiveFailures = 0;
             try { peer.WsCts?.Cancel(); } catch { }
@@ -601,7 +601,7 @@ namespace FlyShelf.Classes
         {
             if (deviceId == _myDeviceId) return;
 
-            Logger.LogAction("PEER", $"📢 Peer announce from {deviceName}: LAN={lanUrl} CF={cloudflareUrl}");
+            Logger.LogAction("PEER", $"Peer announce from {deviceName}: LAN={lanUrl} CF={cloudflareUrl}");
 
             if (_peers.TryGetValue(deviceId, out var existing))
             {
@@ -613,7 +613,7 @@ namespace FlyShelf.Classes
                 // If already alive with active WebSocket, just update URLs — no re-handshake needed
                 if (existing.IsAlive && existing.LiveSocket?.State == System.Net.WebSockets.WebSocketState.Open)
                 {
-                    Logger.LogAction("PEER", $"📢 {deviceName} already connected — URLs updated");
+                    Logger.LogAction("PEER", $"{deviceName} already connected — URLs updated");
                     SaveUrlCache();
                     return;
                 }
@@ -646,7 +646,7 @@ namespace FlyShelf.Classes
 
             if (existing.IsAlive)
             {
-                Logger.LogAction("PEER", $"📢 ✅ Reverse connection to {deviceName} established via {existing.Transport}");
+                Logger.LogAction("PEER", $"Reverse connection to {deviceName} established via {existing.Transport}");
             }
         }
 

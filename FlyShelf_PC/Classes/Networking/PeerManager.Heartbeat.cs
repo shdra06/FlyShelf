@@ -24,7 +24,7 @@ namespace FlyShelf.Classes
         /// </summary>
         private async Task HeartbeatLoop(CancellationToken ct)
         {
-            Logger.LogAction("PEER", "💓 Heartbeat loop started (5s interval)");
+            Logger.LogAction("PEER", "Heartbeat loop started (5s interval)");
             while (!ct.IsCancellationRequested)
             {
                 try
@@ -57,7 +57,7 @@ namespace FlyShelf.Classes
                     int totalTransfers = legacyTransfers + tcpTransfers;
                     if (totalTransfers > 0)
                     {
-                        Logger.LogAction("PEER", $"💓 Skipping heartbeat for {peer.DeviceName} — {totalTransfers} active transfer(s)");
+                        Logger.LogAction("PEER", $"Skipping heartbeat for {peer.DeviceName} — {totalTransfers} active transfer(s)");
                         return;
                     }
 
@@ -78,12 +78,12 @@ namespace FlyShelf.Classes
 
                         if (peer.ConsecutiveFailures >= effectiveMaxFailures)
                         {
-                            Logger.LogAction("PEER", $"💀 {peer.DeviceName} failed {effectiveMaxFailures} heartbeats — marking dead (type={peer.DeviceType})");
+                            Logger.LogAction("PEER", $"{peer.DeviceName} failed {effectiveMaxFailures} heartbeats — marking dead (type={peer.DeviceType})");
                             await HandlePeerDeath(peer);
                         }
                         else
                         {
-                            Logger.LogAction("PEER", $"⚠️ {peer.DeviceName} heartbeat miss ({peer.ConsecutiveFailures}/{effectiveMaxFailures})");
+                            Logger.LogAction("PEER", $"{peer.DeviceName} heartbeat miss ({peer.ConsecutiveFailures}/{effectiveMaxFailures})");
 
                             // On first failure, proactively probe alternate transport
                             if (peer.ConsecutiveFailures == 1)
@@ -103,7 +103,7 @@ namespace FlyShelf.Classes
                                             using var resp = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, altCts.Token);
                                             if (resp.IsSuccessStatusCode)
                                             {
-                                                Logger.LogAction("PEER", $"⚡ {peer.DeviceName} alternate transport reachable at {altUrl} — proactive failover ready");
+                                                Logger.LogAction("PEER", $"{peer.DeviceName} alternate transport reachable at {altUrl} — proactive failover ready");
                                             }
                                         }
                                     }
@@ -150,7 +150,7 @@ namespace FlyShelf.Classes
         /// </summary>
         private async Task DiscoveryLoop(CancellationToken ct)
         {
-            Logger.LogAction("PEER", "🔍 Discovery loop started (exponential backoff: 30s→5min)");
+            Logger.LogAction("PEER", "Discovery loop started (exponential backoff: 30s→5min)");
             while (!ct.IsCancellationRequested)
             {
                 try
@@ -176,13 +176,13 @@ namespace FlyShelf.Classes
                             int prev = _discoveryBackoffMs;
                             _discoveryBackoffMs = Math.Min(_discoveryBackoffMs * 2, DISCOVERY_MAX_MS);
                             if (_discoveryBackoffMs != prev)
-                                Logger.LogAction("PEER", $"🔍 Discovery backoff: {prev / 1000}s → {_discoveryBackoffMs / 1000}s (peers still dead)");
+                                Logger.LogAction("PEER", $"Discovery backoff: {prev / 1000}s → {_discoveryBackoffMs / 1000}s (peers still dead)");
                         }
                         else if (AliveCount > prevAlive)
                         {
                             // Peer recovered — reset backoff to base
                             _discoveryBackoffMs = DISCOVERY_MS;
-                            Logger.LogAction("PEER", $"🔍 Discovery backoff reset to {DISCOVERY_MS / 1000}s (peer recovered)");
+                            Logger.LogAction("PEER", $"Discovery backoff reset to {DISCOVERY_MS / 1000}s (peer recovered)");
                         }
                     }
                     catch (Exception ex)
@@ -223,14 +223,14 @@ namespace FlyShelf.Classes
 
             // Fire event so UI updates immediately
             PeerDisconnected?.Invoke(peer.DeviceId);
-            Logger.LogAction("PEER", $"❌ {peer.DeviceName} disconnected (was {oldTransport})");
+            Logger.LogAction("PEER", $"{peer.DeviceName} disconnected (was {oldTransport})");
 
             // Delegate connection probing concurrently to Handshake
             await Handshake(peer);
 
             if (peer.IsAlive)
             {
-                Logger.LogAction("PEER", $"✅ {peer.DeviceName} recovered via {peer.Transport}");
+                Logger.LogAction("PEER", $"{peer.DeviceName} recovered via {peer.Transport}");
                 if (peer.Transport != oldTransport)
                 {
                     TransportSwitched?.Invoke(peer.DeviceId, peer.Transport);
@@ -252,7 +252,7 @@ namespace FlyShelf.Classes
             peer.IncrementFailures();
             if (peer.ConsecutiveFailures >= MAX_FAILURES)
             {
-                Logger.LogAction("PEER", $"💀 {peer.DeviceName} transfer failures hit {MAX_FAILURES} — marking dead ({reason})");
+                Logger.LogAction("PEER", $"{peer.DeviceName} transfer failures hit {MAX_FAILURES} — marking dead ({reason})");
                 _ = HandlePeerDeath(peer).ContinueWith(t =>
                 {
                     if (t.IsFaulted) Logger.LogAction("PEER_ERR", $"HandlePeerDeath failed for {peer.DeviceName}: {t.Exception?.InnerException?.Message}");
@@ -260,7 +260,7 @@ namespace FlyShelf.Classes
             }
             else
             {
-                Logger.LogAction("PEER", $"⚠️ {peer.DeviceName} transfer failure ({peer.ConsecutiveFailures}/{MAX_FAILURES}): {reason}");
+                Logger.LogAction("PEER", $"{peer.DeviceName} transfer failure ({peer.ConsecutiveFailures}/{MAX_FAILURES}): {reason}");
             }
         }
 
@@ -270,7 +270,7 @@ namespace FlyShelf.Classes
         /// </summary>
         public async Task ForceResync()
         {
-            Logger.LogAction("PEER", "🔄 Force resync requested");
+            Logger.LogAction("PEER", "Force resync requested");
 
             // Reset all peers
             foreach (var peer in _peers.Values)
@@ -310,7 +310,7 @@ namespace FlyShelf.Classes
                 await SendUrlRequest();
             }
 
-            Logger.LogAction("PEER", $"🔄 Force resync complete — {AliveCount}/{_peers.Count} peer(s) alive");
+            Logger.LogAction("PEER", $"Force resync complete — {AliveCount}/{_peers.Count} peer(s) alive");
         }
 
         /// <summary>

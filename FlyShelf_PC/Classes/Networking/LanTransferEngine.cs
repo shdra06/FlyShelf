@@ -71,14 +71,14 @@ namespace FlyShelf.Classes
                 _listener = new TcpListener(IPAddress.Any, _port);
                 _listener.Start(ACCEPT_BACKLOG);
                 _isRunning = true;
-                Logger.LogAction("TCP_ENGINE", $"✅ Transfer engine started on port {_port}");
+                Logger.LogAction("TCP_ENGINE", $"Transfer engine started on port {_port}");
 
                 // Start accept loop
                 _ = Task.Run(() => AcceptLoop(_cts.Token));
             }
             catch (Exception ex)
             {
-                Logger.LogAction("TCP_ENGINE", $"❌ Failed to start transfer engine: {ex.Message}");
+                Logger.LogAction("TCP_ENGINE", $"Failed to start transfer engine: {ex.Message}");
                 _isRunning = false;
             }
         }
@@ -198,12 +198,12 @@ namespace FlyShelf.Classes
                 byte[] expectedHmac = ComputeHmac(guidBytes, pairingKey);
                 if (!CryptographicOperations.FixedTimeEquals(receivedHmac, expectedHmac))
                 {
-                    Logger.LogAction("TCP_ENGINE", $"⛔ HMAC validation failed for transfer {transferId}");
+                    Logger.LogAction("TCP_ENGINE", $"HMAC validation failed for transfer {transferId}");
                     try { await socket.SendAsync(new byte[] { 0xFF }, SocketFlags.None); } catch { } // Best-effort: failure is acceptable
                     return;
                 }
 
-                Logger.LogAction("TCP_ENGINE", $"✅ Authenticated TCP connection for transfer {transferId}");
+                Logger.LogAction("TCP_ENGINE", $"Authenticated TCP connection for transfer {transferId}");
 
                 // Look up the pending receive session in the transfer manager
                 var session = LanTransferManager.Instance?.GetPendingReceiveSession(transferId);
@@ -233,7 +233,7 @@ namespace FlyShelf.Classes
                     long chunkStart = BitConverter.ToInt64(chunkHeader, 4);
                     long chunkEnd = BitConverter.ToInt64(chunkHeader, 12);
 
-                    Logger.LogAction("TCP_ENGINE", $"📥⚡ Chunk {chunkIndex} connection for transfer {transferId}");
+                    Logger.LogAction("TCP_ENGINE", $"Chunk {chunkIndex} connection for transfer {transferId}");
                     await ReceiveChunkAsync(socket, session, chunkIndex, chunkStart, chunkEnd, ct);
 
                     // Check if ALL chunks are complete — use Interlocked to ensure only ONE thread does hash verification
@@ -246,7 +246,7 @@ namespace FlyShelf.Classes
                             return; // Another chunk thread is handling finalization
                         }
 
-                        Logger.LogAction("TCP_ENGINE", $"✅ All {session.NumChunks} chunks received for {session.FileName} — verifying hash");
+                        Logger.LogAction("TCP_ENGINE", $"All {session.NumChunks} chunks received for {session.FileName} — verifying hash");
 
                         // Hash verification
                         if (!string.IsNullOrEmpty(session.XxHash64))
@@ -263,24 +263,24 @@ namespace FlyShelf.Classes
                                 if (!string.Equals(computed, session.XxHash64, StringComparison.OrdinalIgnoreCase))
                                 {
                                     session.MarkFailed($"Integrity check failed: expected {session.XxHash64}, got {computed}");
-                                    Logger.LogAction("TCP_ENGINE", $"❌ Hash mismatch for chunked {session.FileName} — deleting");
+                                    Logger.LogAction("TCP_ENGINE", $"Hash mismatch for chunked {session.FileName} — deleting");
                                     try { File.Delete(session.FilePath); } catch { }
                                     LanTransferManager.Instance?.PersistCheckpointsIncludingFailed(session);
                                     return;
                                 }
-                                Logger.LogAction("TCP_ENGINE", $"✅ Hash verified for chunked {session.FileName}");
+                                Logger.LogAction("TCP_ENGINE", $"Hash verified for chunked {session.FileName}");
                             }
                             catch (OperationCanceledException) { return; }
                             catch (Exception ex)
                             {
-                                Logger.LogAction("TCP_ENGINE", $"⚠️ Hash verification skipped: {ex.Message}");
+                                Logger.LogAction("TCP_ENGINE", $"Hash verification skipped: {ex.Message}");
                             }
                         }
 
                         if (session.State == TransferState.Transferring)
                         {
                             session.MarkCompleted();
-                            Logger.LogAction("TCP_ENGINE", $"✅ Parallel receive completed: {session.FileName} ({LanTransferSession.FormatBytes(session.FileSize)}) peak {session.PeakSpeedText}");
+                            Logger.LogAction("TCP_ENGINE", $"Parallel receive completed: {session.FileName} ({LanTransferSession.FormatBytes(session.FileSize)}) peak {session.PeakSpeedText}");
                             LanTransferManager.Instance?.OnReceiveCompleted(session);
                         }
                     }
@@ -340,7 +340,7 @@ namespace FlyShelf.Classes
                 connectCts.CancelAfter(CONNECT_TIMEOUT_MS);
                 await socket.ConnectAsync(peerIp, peerPort, connectCts.Token);
 
-                Logger.LogAction("TCP_ENGINE", $"📤 Connected to {peerIp}:{peerPort} for transfer {session.TransferId}");
+                Logger.LogAction("TCP_ENGINE", $"Connected to {peerIp}:{peerPort} for transfer {session.TransferId}");
 
                 // Send connection header
                 byte[] header = BuildConnectionHeader(session.TransferId);
@@ -354,7 +354,7 @@ namespace FlyShelf.Classes
 
                 if (resumeFrom > 0)
                 {
-                    Logger.LogAction("TCP_ENGINE", $"📤 Resuming send from offset {LanTransferSession.FormatBytes(resumeFrom)}");
+                    Logger.LogAction("TCP_ENGINE", $"Resuming send from offset {LanTransferSession.FormatBytes(resumeFrom)}");
                 }
 
                 // Always use chunked send — supports pause/resume/cancel and provides real-time progress.
@@ -364,7 +364,7 @@ namespace FlyShelf.Classes
                 if (session.State == TransferState.Transferring)
                 {
                     session.MarkCompleted();
-                    Logger.LogAction("TCP_ENGINE", $"✅ Send completed: {session.FileName} ({LanTransferSession.FormatBytes(fileSize)}) peak {session.PeakSpeedText}");
+                    Logger.LogAction("TCP_ENGINE", $"Send completed: {session.FileName} ({LanTransferSession.FormatBytes(fileSize)}) peak {session.PeakSpeedText}");
                 }
             }
             catch (OperationCanceledException)
@@ -379,13 +379,13 @@ namespace FlyShelf.Classes
             {
                 session.MarkFailed($"Network error: {ex.Message}");
                 LanTransferManager.Instance?.PersistCheckpointsIncludingFailed(session);
-                Logger.LogAction("TCP_ENGINE", $"❌ Send socket error at {LanTransferSession.FormatBytes(session.BytesTransferred)}: {ex.Message}");
+                Logger.LogAction("TCP_ENGINE", $"Send socket error at {LanTransferSession.FormatBytes(session.BytesTransferred)}: {ex.Message}");
             }
             catch (Exception ex)
             {
                 session.MarkFailed($"Transfer error: {ex.Message}");
                 LanTransferManager.Instance?.PersistCheckpointsIncludingFailed(session);
-                Logger.LogAction("TCP_ENGINE", $"❌ Send error: {ex.Message}");
+                Logger.LogAction("TCP_ENGINE", $"Send error: {ex.Message}");
             }
             finally
             {
@@ -406,7 +406,7 @@ namespace FlyShelf.Classes
             long fileSize = session.FileSize;
             long chunkSize = session.ChunkSize;
 
-            Logger.LogAction("TCP_ENGINE", $"📤⚡ Parallel send: {session.FileName} ({LanTransferSession.FormatBytes(fileSize)}) → {numChunks} chunks of {LanTransferSession.FormatBytes(chunkSize)}");
+            Logger.LogAction("TCP_ENGINE", $"Parallel send: {session.FileName} ({LanTransferSession.FormatBytes(fileSize)}) → {numChunks} chunks of {LanTransferSession.FormatBytes(chunkSize)}");
 
             var tasks = new Task[numChunks];
             var sockets = new Socket?[numChunks];
@@ -455,7 +455,7 @@ namespace FlyShelf.Classes
                         }
                         catch (Exception ex) when (ex is not OperationCanceledException)
                         {
-                            Logger.LogAction("TCP_ENGINE", $"❌ Chunk {chunkIndex} send failed: {ex.Message}");
+                            Logger.LogAction("TCP_ENGINE", $"Chunk {chunkIndex} send failed: {ex.Message}");
                             throw;
                         }
                         finally
@@ -472,7 +472,7 @@ namespace FlyShelf.Classes
                 if (session.State == TransferState.Transferring)
                 {
                     session.MarkCompleted();
-                    Logger.LogAction("TCP_ENGINE", $"✅ Parallel send completed: {session.FileName} peak {session.PeakSpeedText}");
+                    Logger.LogAction("TCP_ENGINE", $"Parallel send completed: {session.FileName} peak {session.PeakSpeedText}");
                 }
             }
             catch (OperationCanceledException)
@@ -487,7 +487,7 @@ namespace FlyShelf.Classes
             {
                 session.MarkFailed($"Network error: {ex.InnerException?.Message ?? ex.Message}");
                 LanTransferManager.Instance?.PersistCheckpointsIncludingFailed(session);
-                Logger.LogAction("TCP_ENGINE", $"❌ Parallel send error: {ex.Message}");
+                Logger.LogAction("TCP_ENGINE", $"Parallel send error: {ex.Message}");
             }
         }
 
@@ -540,7 +540,7 @@ namespace FlyShelf.Classes
                 }
 
                 session.MarkChunkCompleted(chunkIndex);
-                Logger.LogAction("TCP_ENGINE", $"✅ Chunk {chunkIndex}/{session.NumChunks} sent: {LanTransferSession.FormatBytes(chunkLength)}");
+                Logger.LogAction("TCP_ENGINE", $"Chunk {chunkIndex}/{session.NumChunks} sent: {LanTransferSession.FormatBytes(chunkLength)}");
             }
             finally
             {
@@ -639,7 +639,7 @@ namespace FlyShelf.Classes
                 {
                     fs.Seek(resumeFrom, SeekOrigin.Begin);
                     fs.SetLength(resumeFrom); // Remove stale tail from previous partial write
-                    Logger.LogAction("TCP_ENGINE", $"📥 Resuming receive from offset {LanTransferSession.FormatBytes(resumeFrom)}");
+                    Logger.LogAction("TCP_ENGINE", $"Resuming receive from offset {LanTransferSession.FormatBytes(resumeFrom)}");
                 }
 
                 long totalReceived = resumeFrom;
@@ -671,7 +671,7 @@ namespace FlyShelf.Classes
                             await fs.FlushAsync();
                             session.MarkFailed($"Connection lost at {LanTransferSession.FormatBytes(totalReceived)} of {LanTransferSession.FormatBytes(fileSize)}");
                             LanTransferManager.Instance?.PersistCheckpointsIncludingFailed(session);
-                            Logger.LogAction("TCP_ENGINE", $"❌ Connection lost during receive: {session.FileName} — checkpoint saved at {LanTransferSession.FormatBytes(totalReceived)}");
+                            Logger.LogAction("TCP_ENGINE", $"Connection lost during receive: {session.FileName} — checkpoint saved at {LanTransferSession.FormatBytes(totalReceived)}");
                         }
                         return;
                     }
@@ -726,26 +726,26 @@ namespace FlyShelf.Classes
                         if (!string.Equals(computed, session.XxHash64, StringComparison.OrdinalIgnoreCase))
                         {
                             session.MarkFailed($"Integrity check failed: expected {session.XxHash64}, got {computed}");
-                            Logger.LogAction("TCP_ENGINE", $"❌ Hash mismatch for {session.FileName} — deleting corrupted file");
+                            Logger.LogAction("TCP_ENGINE", $"Hash mismatch for {session.FileName} — deleting corrupted file");
                             // Delete the corrupted file to prevent it from being injected into clipboard
                             try { File.Delete(session.FilePath); } catch (Exception delEx) { Logger.LogAction("TCP_ENGINE", $"Failed to delete corrupted file: {delEx.Message}"); }
                             // Persist the failure so checkpoint doesn't try to resume from corrupt data
                             LanTransferManager.Instance?.PersistCheckpointsIncludingFailed(session);
                             return;
                         }
-                        Logger.LogAction("TCP_ENGINE", $"✅ Hash verified for {session.FileName}");
+                        Logger.LogAction("TCP_ENGINE", $"Hash verified for {session.FileName}");
                     }
                     catch (OperationCanceledException) { return; }
                     catch (Exception ex)
                     {
-                        Logger.LogAction("TCP_ENGINE", $"⚠️ Hash verification skipped: {ex.Message}");
+                        Logger.LogAction("TCP_ENGINE", $"Hash verification skipped: {ex.Message}");
                     }
                 }
 
                 if (session.State == TransferState.Transferring)
                 {
                     session.MarkCompleted();
-                    Logger.LogAction("TCP_ENGINE", $"✅ Receive completed: {session.FileName} ({LanTransferSession.FormatBytes(fileSize)}) peak {session.PeakSpeedText}");
+                    Logger.LogAction("TCP_ENGINE", $"Receive completed: {session.FileName} ({LanTransferSession.FormatBytes(fileSize)}) peak {session.PeakSpeedText}");
 
                     // Inject received file into clipboard
                     LanTransferManager.Instance?.OnReceiveCompleted(session);
@@ -763,13 +763,13 @@ namespace FlyShelf.Classes
             {
                 session.MarkFailed($"Network error: {ex.Message}");
                 LanTransferManager.Instance?.PersistCheckpointsIncludingFailed(session);
-                Logger.LogAction("TCP_ENGINE", $"❌ Receive socket error at {LanTransferSession.FormatBytes(session.BytesTransferred)}: {ex.Message}");
+                Logger.LogAction("TCP_ENGINE", $"Receive socket error at {LanTransferSession.FormatBytes(session.BytesTransferred)}: {ex.Message}");
             }
             catch (Exception ex)
             {
                 session.MarkFailed($"Receive error: {ex.Message}");
                 LanTransferManager.Instance?.PersistCheckpointsIncludingFailed(session);
-                Logger.LogAction("TCP_ENGINE", $"❌ Receive error: {ex.Message}");
+                Logger.LogAction("TCP_ENGINE", $"Receive error: {ex.Message}");
             }
             finally
             {
@@ -802,7 +802,7 @@ namespace FlyShelf.Classes
                 long lastSpeedSample = Environment.TickCount64;
                 long lastCheckpoint = resumeFrom;
 
-                Logger.LogAction("TCP_ENGINE", $"📥 Chunk {chunkIndex}/{session.NumChunks}: receiving {LanTransferSession.FormatBytes(chunkLength)} (offset {LanTransferSession.FormatBytes(chunkStart)})");
+                Logger.LogAction("TCP_ENGINE", $"Chunk {chunkIndex}/{session.NumChunks}: receiving {LanTransferSession.FormatBytes(chunkLength)} (offset {LanTransferSession.FormatBytes(chunkStart)})");
 
                 while (totalReceived < chunkLength)
                 {
@@ -822,7 +822,7 @@ namespace FlyShelf.Classes
                         if (totalReceived < chunkLength)
                         {
                             await fs.FlushAsync();
-                            Logger.LogAction("TCP_ENGINE", $"❌ Chunk {chunkIndex} connection lost at {LanTransferSession.FormatBytes(totalReceived)} of {LanTransferSession.FormatBytes(chunkLength)}");
+                            Logger.LogAction("TCP_ENGINE", $"Chunk {chunkIndex} connection lost at {LanTransferSession.FormatBytes(totalReceived)} of {LanTransferSession.FormatBytes(chunkLength)}");
                             throw new SocketException((int)System.Net.Sockets.SocketError.ConnectionReset);
                         }
                         return;
@@ -843,7 +843,7 @@ namespace FlyShelf.Classes
                         {
                             double progress = (double)session.BytesTransferred / session.FileSize * 100.0;
                             session.Placeholder.TransferProgress = Math.Min(progress, 99.0);
-                            session.Placeholder.TransferStatusText = $"Receiving... {progress:F0}% ({session.SpeedText}) ⚡{session.NumChunks} streams";
+                            session.Placeholder.TransferStatusText = $"Receiving... {progress:F0}% ({session.SpeedText}) {session.NumChunks} streams";
                         }
                     }
 
@@ -857,7 +857,7 @@ namespace FlyShelf.Classes
 
                 await fs.FlushAsync(linkedCts.Token);
                 session.MarkChunkCompleted(chunkIndex);
-                Logger.LogAction("TCP_ENGINE", $"✅ Chunk {chunkIndex}/{session.NumChunks} received: {LanTransferSession.FormatBytes(chunkLength)}");
+                Logger.LogAction("TCP_ENGINE", $"Chunk {chunkIndex}/{session.NumChunks} received: {LanTransferSession.FormatBytes(chunkLength)}");
             }
             finally
             {

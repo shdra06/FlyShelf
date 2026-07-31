@@ -69,7 +69,7 @@ namespace FlyShelf.Classes
                     _listener = new HttpListener();
                     _listener.Prefixes.Add($"http://+:{publicPort}/");
                     _listener.Start();
-                    Logger.LogAction("BIND", $"✅ Bound to http://+:{publicPort}/ (all interfaces — no proxy needed)");
+                    Logger.LogAction("BIND", $"Bound to http://+:{publicPort}/ (all interfaces — no proxy needed)");
                     allInterfacesBound = true;
                 } catch (Exception ex) { 
                     Logger.LogAction("BIND", $"http://+:{publicPort}/ failed: {ex.Message}");
@@ -81,7 +81,7 @@ namespace FlyShelf.Classes
                     _listener = new HttpListener();
                     _listener.Prefixes.Add($"http://*:{publicPort}/");
                     _listener.Start();
-                    Logger.LogAction("BIND", $"✅ Bound to http://*:{publicPort}/ (all interfaces — no proxy needed)");
+                    Logger.LogAction("BIND", $"Bound to http://*:{publicPort}/ (all interfaces — no proxy needed)");
                     allInterfacesBound = true;
                 } catch (Exception ex) { 
                     Logger.LogAction("BIND", $"http://*:{publicPort}/ failed: {ex.Message}");
@@ -94,7 +94,7 @@ namespace FlyShelf.Classes
                     _listener.Prefixes.Add($"http://{localIp}:{publicPort}/");
                     _listener.Prefixes.Add($"http://localhost:{publicPort}/");
                     _listener.Start();
-                    Logger.LogAction("BIND", $"✅ Bound to http://{localIp}:{publicPort}/ + http://localhost:{publicPort}/");
+                    Logger.LogAction("BIND", $"Bound to http://{localIp}:{publicPort}/ + http://localhost:{publicPort}/");
                     allInterfacesBound = true;
                 } catch (Exception ex) { 
                     Logger.LogAction("BIND", $"Dual-bind failed: {ex.Message}");
@@ -113,7 +113,7 @@ namespace FlyShelf.Classes
                         _listener.Prefixes.Add($"http://localhost:{internalPort}/");
                         _listener.Start();
                         localhostBound = true;
-                        Logger.LogAction("BIND", $"✅ HttpListener bound to http://localhost:{internalPort}/ (internal)");
+                        Logger.LogAction("BIND", $"HttpListener bound to http://localhost:{internalPort}/ (internal)");
                     } catch (Exception ex) {
                         Logger.LogAction("BIND", $"localhost:{internalPort} failed: {ex.Message}");
                         if (_listener != null) { try { _listener.Close(); } catch { } /* Best-effort: failure is acceptable */ }
@@ -125,7 +125,7 @@ namespace FlyShelf.Classes
                         _listener.Prefixes.Add($"http://127.0.0.1:{internalPort}/");
                         _listener.Start();
                         localhostBound = true;
-                        Logger.LogAction("BIND", $"✅ HttpListener bound to http://127.0.0.1:{internalPort}/ (internal)");
+                        Logger.LogAction("BIND", $"HttpListener bound to http://127.0.0.1:{internalPort}/ (internal)");
                     } catch (Exception ex) {
                         Logger.LogAction("BIND", $"127.0.0.1:{internalPort} failed: {ex.Message}");
                         if (_listener != null) { try { _listener.Close(); } catch { } /* Best-effort: failure is acceptable */ }
@@ -149,11 +149,11 @@ namespace FlyShelf.Classes
                         // Accept connections in background
                         _ = Task.Run(async () => await TcpProxyLoop(internalPort));
                         
-                        Logger.LogAction("BIND", $"✅ TCP Proxy started: 0.0.0.0:{publicPort} → localhost:{internalPort} (LAN + Cloudflare enabled)");
+                        Logger.LogAction("BIND", $"TCP Proxy started: 0.0.0.0:{publicPort} → localhost:{internalPort} (LAN + Cloudflare enabled)");
                     }
                     catch (Exception proxyEx)
                     {
-                        Logger.LogAction("BIND", $"❌ TCP Proxy on port {publicPort} failed: {proxyEx.Message} — LAN access will NOT work");
+                        Logger.LogAction("BIND", $"TCP Proxy on port {publicPort} failed: {proxyEx.Message} — LAN access will NOT work");
                         // Even without the proxy, the HttpListener on localhost still works for Cloudflare
                         // (cloudflared connects to localhost). So we don't throw here.
                     }
@@ -174,7 +174,7 @@ namespace FlyShelf.Classes
                 UpdateServerUrl();
                 CloudDiscoveryManager.CachedLocalUrl = DisplayUrl; // Cache first LAN URL for file download fallback
                 string bindMode = needsProxy ? "TCP Proxy" : "Direct";
-                Logger.LogAction("NETWORK", $"✅ Web server launched on {ServerUrl} (port {CurrentPort}, mode: {bindMode})");
+                Logger.LogAction("NETWORK", $"Web server launched on {ServerUrl} (port {CurrentPort}, mode: {bindMode})");
                 NetworkActivityLog.Instance.ServerStatus = "Online";
 
                 // Fix #9: Detect network changes (WiFi reconnect, VPN toggle, IP change)
@@ -263,11 +263,11 @@ namespace FlyShelf.Classes
                     // Determine LAN IP for TLS URL
                     string tlsIp = localIp;
                     TlsUrl = $"https://{tlsIp}:{TLS_PORT}";
-                    Logger.LogAction("TLS", $"✅ HTTPS server started on {TlsUrl} (thumbprint: {TlsThumbprint})");
+                    Logger.LogAction("TLS", $"HTTPS server started on {TlsUrl} (thumbprint: {TlsThumbprint})");
                 }
                 catch (Exception tlsEx)
                 {
-                    Logger.LogAction("TLS", $"⚠️ HTTPS server failed to start: {tlsEx.Message} — LAN sync will use HTTP only");
+                    Logger.LogAction("TLS", $"HTTPS server failed to start: {tlsEx.Message} — LAN sync will use HTTP only");
                 }
 
                 // ═══════════════════════════════════════════════════════════════════
@@ -337,7 +337,7 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 ServerUrl = "Fatal Error Bind Failed";
-                Logger.LogAction("NETWORK ERROR", $"❌ Server failed to start: {ex.Message}");
+                Logger.LogAction("NETWORK ERROR", $"Server failed to start: {ex.Message}");
             }
             
             // [FIX M-35]: Null-conditional to prevent NRE during app shutdown

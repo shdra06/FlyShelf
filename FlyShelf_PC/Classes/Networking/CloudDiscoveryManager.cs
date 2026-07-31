@@ -101,13 +101,13 @@ namespace FlyShelf.Classes
             // SECURITY: Password items must NEVER be synced to any device
             if (item.IsPassword)
             {
-                Logger.LogAction("FIREBASE SYNC", "🔒 Blocked password item from cloud sync — password items are never synced");
+                Logger.LogAction("FIREBASE SYNC", "Blocked password item from cloud sync — password items are never synced");
                 return;
             }
 
             if (!SettingsManager.Current.EnableCloudDiscovery)
             {
-                Logger.LogAction("PEER SYNC", "⚠️ PushToCloudHub skipped — EnableCloudDiscovery is OFF");
+                Logger.LogAction("PEER SYNC", "PushToCloudHub skipped — EnableCloudDiscovery is OFF");
                 return;
             }
 
@@ -183,14 +183,14 @@ namespace FlyShelf.Classes
                     else
                     {
                         lock (_recentPushTimes) { _recentPushSuccess[fingerprint] = false; }
-                        Logger.LogAction("PEER SYNC", $"⚠️ Direct P2P delivery failed — no peers accepted the {(isTextType ? "text" : "file")}");
+                        Logger.LogAction("PEER SYNC", $"Direct P2P delivery failed — no peers accepted the {(isTextType ? "text" : "file")}");
                         throw new InvalidOperationException($"Direct P2P delivery failed: 0 peers accepted the {(isTextType ? "text" : "file")}.");
                     }
                 }
                 else
                 {
                     lock (_recentPushTimes) { _recentPushSuccess[fingerprint] = false; }
-                    Logger.LogAction("PEER SYNC", $"⚠️ No online peers available for direct P2P transport.");
+                    Logger.LogAction("PEER SYNC", $"No online peers available for direct P2P transport.");
                     throw new InvalidOperationException("No online peers available for direct P2P transport.");
                 }
             }
@@ -254,7 +254,7 @@ namespace FlyShelf.Classes
                 }
 
                 if (purged > 0)
-                    Logger.LogAction("PURGE", $"ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Purged {purged} of MY stale file entries with dead Cloudflare URL");
+                    Logger.LogAction("PURGE", $"ÃƒÂ¢Ã…â€œÃ¢â‚¬ÂPurged {purged} of MY stale file entries with dead Cloudflare URL");
             }
             catch (Exception ex)
             {

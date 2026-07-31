@@ -477,7 +477,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("LICENSE", $"Server activation failed: {ex.Message}");
                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    Windows.ToastWindow.ShowToast("⚠️ Could not reach activation server. Please check your internet connection and try again."));
+                    Windows.ToastWindow.ShowToast("Could not reach activation server. Please check your internet connection and try again."));
                 return false; // v2.3.0: FAIL — do NOT activate offline
             }
 
@@ -487,11 +487,11 @@ namespace FlyShelf.Classes
                 Logger.LogAction("LICENSE", $"Server rejected activation: {serverError}");
                 string userMsg = serverError switch
                 {
-                    "key_not_found" => "⚠️ This license key was not found. Please check your key and try again.",
-                    "revoked" => "⚠️ This license key has been revoked. Contact support.",
-                    "device_limit" => "⚠️ This key has reached the maximum device limit (3 devices).",
-                    "invalid_key" => "⚠️ Invalid license key format.",
-                    _ => $"⚠️ Activation failed: {serverError}"
+                    "key_not_found" => "This license key was not found. Please check your key and try again.",
+                    "revoked" => "This license key has been revoked. Contact support.",
+                    "device_limit" => "This key has reached the maximum device limit (3 devices).",
+                    "invalid_key" => "Invalid license key format.",
+                    _ => $"Activation failed: {serverError}"
                 };
                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     Windows.ToastWindow.ShowToast(userMsg));
@@ -503,7 +503,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("LICENSE", "Server returned no token and no error — activation failed");
                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    Windows.ToastWindow.ShowToast("⚠️ Activation server returned an unexpected response. Please try again."));
+                    Windows.ToastWindow.ShowToast("Activation server returned an unexpected response. Please try again."));
                 return false;
             }
 
@@ -846,7 +846,7 @@ namespace FlyShelf.Classes
                         Logger.LogAction("LICENSE_SERVER", $"⚠️ Key {(key.Length > 8 ? key[..8] : key)}... has been REVOKED on the server!");
                         DeactivateLicense();
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            Windows.ToastWindow.ShowToast("⚠️ Your license key has been revoked. Contact support."));
+                            Windows.ToastWindow.ShowToast("Your license key has been revoked. Contact support."));
                         return;
                     }
                 }
@@ -905,7 +905,7 @@ namespace FlyShelf.Classes
                         Logger.LogAction("LICENSE_SERVER", $"⚠️ Key used on {deviceCount} devices (max 3) — DEACTIVATING");
                         DeactivateLicense();
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            Windows.ToastWindow.ShowToast("⚠️ License limit exceeded (max 3 devices). Please contact support."));
+                            Windows.ToastWindow.ShowToast("License limit exceeded (max 3 devices). Please contact support."));
                         return;
                     }
                 }
@@ -1008,8 +1008,8 @@ namespace FlyShelf.Classes
                             DeactivateLicense();
                             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                                 Windows.ToastWindow.ShowToast(error == "revoked"
-                                    ? "⚠️ Your license has been revoked. Contact support."
-                                    : "⚠️ License limit exceeded (max 3 devices). Contact support."));
+                                    ? "Your license has been revoked. Contact support."
+                                    : "License limit exceeded (max 3 devices). Contact support."));
                             return;
                         }
                         if (error == "invalid_token")
@@ -1048,7 +1048,7 @@ namespace FlyShelf.Classes
                             // Don't deactivate — valid license persists offline indefinitely
                             // Just show a non-destructive warning
                             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                                Windows.ToastWindow.ShowToast("⚠️ License revalidation pending — please connect to internet when possible."));
+                                Windows.ToastWindow.ShowToast("License revalidation pending — please connect to internet when possible."));
                         }
                         else
                         {

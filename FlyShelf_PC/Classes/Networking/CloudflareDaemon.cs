@@ -178,7 +178,7 @@ namespace FlyShelf.Classes
                             if (_quicErrorCount >= 5 && !_stopped)
                             {
                                 int quicCount = Interlocked.Exchange(ref _quicErrorCount, 0);
-                                Logger.LogAction("CLOUDFLARE", $"⚡ {quicCount} QUIC failures detected — auto-restarting tunnel with protocol switch...");
+                                Logger.LogAction("CLOUDFLARE", $"{quicCount} QUIC failures detected — auto-restarting tunnel with protocol switch...");
                                 _consecutiveFailures++; // This triggers protocol toggle in StartTunnelCore
                                 StopHealthMonitor();
                                 GlobalUrl = "QUIC failing — restarting...";
@@ -278,7 +278,7 @@ namespace FlyShelf.Classes
                                 {
                                     verified = true;
                                     IsTunnelVerified = true;
-                                    Logger.LogAction("CLOUDFLARE", $"✅ Local server verified on port {_localPort} — tunnel is live: {GlobalUrl}");
+                                    Logger.LogAction("CLOUDFLARE", $"Local server verified on port {_localPort} — tunnel is live: {GlobalUrl}");
                                     break;
                                 }
                                 Logger.LogAction("CLOUDFLARE", $"Local verify attempt {v + 1}/3: HTTP {(int)localResp.StatusCode}");
@@ -306,7 +306,7 @@ namespace FlyShelf.Classes
                                     if (addresses.Length > 0)
                                     {
                                         dnsReady = true;
-                                        Logger.LogAction("CLOUDFLARE", $"✅ DNS resolved: {uri.Host} → {addresses[0]} ({d * 3}s wait)");
+                                        Logger.LogAction("CLOUDFLARE", $"DNS resolved: {uri.Host} → {addresses[0]} ({d * 3}s wait)");
                                         break;
                                     }
                                 }
@@ -319,7 +319,7 @@ namespace FlyShelf.Classes
                             
                             if (!dnsReady)
                             {
-                                Logger.LogAction("CLOUDFLARE", "⚠️ DNS propagation timeout — publishing URL anyway (receivers will use fallback)");
+                                Logger.LogAction("CLOUDFLARE", "DNS propagation timeout — publishing URL anyway (receivers will use fallback)");
                             }
                         }
                         
@@ -337,7 +337,7 @@ namespace FlyShelf.Classes
                                     {
                                         verified = true;
                                         IsTunnelVerified = true;
-                                        Logger.LogAction("CLOUDFLARE", $"✅ Tunnel verified via public URL: {GlobalUrl}");
+                                        Logger.LogAction("CLOUDFLARE", $"Tunnel verified via public URL: {GlobalUrl}");
                                         break;
                                     }
                                     Logger.LogAction("CLOUDFLARE", $"Public URL verify {v + 1}/2: HTTP {(int)pubResp.StatusCode}");
@@ -352,8 +352,8 @@ namespace FlyShelf.Classes
                         if (!verified)
                         {
                             IsTunnelVerified = false;
-                            Logger.LogAction("CLOUDFLARE", $"⚠️ Tunnel verification FAILED — URL exists but local server not responding: {GlobalUrl}");
-                            Logger.LogAction("CLOUDFLARE", $"⚠️ File sync will use Firebase Storage fallback instead of Cloudflare tunnel.");
+                            Logger.LogAction("CLOUDFLARE", $"Tunnel verification FAILED — URL exists but local server not responding: {GlobalUrl}");
+                            Logger.LogAction("CLOUDFLARE", $"File sync will use Firebase Storage fallback instead of Cloudflare tunnel.");
                         }
                         
                         // NOW publish the URL to Firebase — DNS has had time to propagate
@@ -431,7 +431,7 @@ namespace FlyShelf.Classes
                         if (!IsTunnelVerified)
                         {
                             IsTunnelVerified = true;
-                            Logger.LogAction("CLOUDFLARE HEALTH", $"✅ Tunnel now verified via health check — file downloads enabled: {GlobalUrl}");
+                            Logger.LogAction("CLOUDFLARE HEALTH", $"Tunnel now verified via health check — file downloads enabled: {GlobalUrl}");
                         }
                     }
                     else
@@ -440,7 +440,7 @@ namespace FlyShelf.Classes
                         if (IsTunnelVerified && _healthFailCount >= 2)
                         {
                             IsTunnelVerified = false;
-                            Logger.LogAction("CLOUDFLARE HEALTH", $"⚠️ Tunnel verification lost — file downloads will use Firebase Storage fallback");
+                            Logger.LogAction("CLOUDFLARE HEALTH", $"Tunnel verification lost — file downloads will use Firebase Storage fallback");
                         }
                         Logger.LogAction("CLOUDFLARE HEALTH", $"Ping failed ({_healthFailCount}/3): HTTP {(int)resp.StatusCode}");
                     }
@@ -474,7 +474,7 @@ namespace FlyShelf.Classes
 
                 if (_healthFailCount >= 3)
                 {
-                    Logger.LogAction("CLOUDFLARE HEALTH", "🔄 Tunnel appears dead — auto-restarting...");
+                    Logger.LogAction("CLOUDFLARE HEALTH", "Tunnel appears dead — auto-restarting...");
                     StopHealthMonitor();
                     _consecutiveFailures++;
                     GlobalUrl = "Restarting tunnel...";
@@ -517,14 +517,14 @@ namespace FlyShelf.Classes
                 Logger.LogAction("CLOUDFLARE HEALTH", "Force check skipped — tunnel not active");
                 return;
             }
-            Logger.LogAction("CLOUDFLARE HEALTH", "⚡ Force health check triggered (post-sleep)");
+            Logger.LogAction("CLOUDFLARE HEALTH", "Force health check triggered (post-sleep)");
             try
             {
                 var client = _healthClient;
                 using var resp = await client.GetAsync($"http://localhost:{_localPort}/api/health");
                 if (resp.IsSuccessStatusCode)
                 {
-                    Logger.LogAction("CLOUDFLARE HEALTH", "✅ Force check passed — tunnel is alive");
+                    Logger.LogAction("CLOUDFLARE HEALTH", "Force check passed — tunnel is alive");
                     Interlocked.Exchange(ref _healthFailCount, 0);
                     return;
                 }
@@ -537,7 +537,7 @@ namespace FlyShelf.Classes
             // Tunnel is dead — restart immediately
             try
             {
-                Logger.LogAction("CLOUDFLARE HEALTH", "🔄 Post-sleep tunnel dead — force-restarting...");
+                Logger.LogAction("CLOUDFLARE HEALTH", "Post-sleep tunnel dead — force-restarting...");
                 StopHealthMonitor();
                 _consecutiveFailures++;
                 GlobalUrl = "Restarting tunnel...";
@@ -635,7 +635,7 @@ namespace FlyShelf.Classes
                         string downloadedHash = BitConverter.ToString(sha.ComputeHash(fs)).Replace("-", "").ToLowerInvariant();
                         if (downloadedHash != TRUSTED_CF_HASH)
                         {
-                            Logger.LogAction("CLOUDFLARE_ERROR", $"❌ SHA-256 mismatch! Downloaded: {downloadedHash}, Expected: {TRUSTED_CF_HASH}. Rejecting insecure binary.");
+                            Logger.LogAction("CLOUDFLARE_ERROR", $"SHA-256 mismatch! Downloaded: {downloadedHash}, Expected: {TRUSTED_CF_HASH}. Rejecting insecure binary.");
                             try { File.Delete(tempPath); } catch { } // Best-effort: failure is acceptable
                             continue;
                         }
@@ -644,7 +644,7 @@ namespace FlyShelf.Classes
                     // Atomic rename: only replace after complete download and successful signature verification
                     try { if (File.Exists(exePath)) File.Delete(exePath); } catch { } // Best-effort: failure is acceptable
                     File.Move(tempPath, exePath);
-                    Logger.LogAction("CLOUDFLARE", $"✅ Download complete and verified: cloudflared.exe ({new FileInfo(exePath).Length / 1048576.0:F1} MB)");
+                    Logger.LogAction("CLOUDFLARE", $"Download complete and verified: cloudflared.exe ({new FileInfo(exePath).Length / 1048576.0:F1} MB)");
                     return true;
                 }
                 catch (Exception ex)

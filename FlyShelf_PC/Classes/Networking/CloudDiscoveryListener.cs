@@ -134,7 +134,7 @@ namespace FlyShelf.Classes
                 // but wrapped in a single snapshot parse
                 await ProcessPeerSnapshot(json, myDeviceId);
 
-                Logger.LogAction("PEER QUERY", "✅ Peer discovery query completed (single REST call)");
+                Logger.LogAction("PEER QUERY", "Peer discovery query completed (single REST call)");
             }
             catch (TaskCanceledException)
             {

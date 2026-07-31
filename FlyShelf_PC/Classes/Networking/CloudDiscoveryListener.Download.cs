@@ -341,7 +341,7 @@ namespace FlyShelf.Classes
                     {
                         if (progressClip != null)
                             _viewModel.DroppedItems.Remove(progressClip);
-                        FlyShelf.Windows.ToastWindow.ShowToast($"❌ {cloudItem.Title} — file corrupted during transfer");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"{cloudItem.Title} — file corrupted during transfer");
                     });
                     return;
                 }
@@ -357,7 +357,7 @@ namespace FlyShelf.Classes
                         : string.Create(CultureInfo.InvariantCulture, $"{fileInfo.Length / 1_048_576.0:F1} MB");
 
                     ClipboardHelper.SafeSetFileDropList(new System.Collections.Specialized.StringCollection { filePath }, suppressEcho: true, echoDelayMs: 100);
-                    FlyShelf.Windows.ToastWindow.ShowToast($"✅ {cloudItem.Title} ({sizeStr}) from {cloudItem.SourceDeviceName}");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"{cloudItem.Title} ({sizeStr}) from {cloudItem.SourceDeviceName}");
 
                     var clip = new ClipboardItem(filePath);
                     clip.SourceDeviceName = cloudItem.SourceDeviceName ?? "Remote";
@@ -414,7 +414,7 @@ namespace FlyShelf.Classes
                 {
                     if (progressClip != null)
                         _viewModel.DroppedItems.Remove(progressClip);
-                    FlyShelf.Windows.ToastWindow.ShowToast($"❌ Dropped: {cloudItem.Title} — source unreachable");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Dropped: {cloudItem.Title} — source unreachable");
                 });
                 
                 try { if (File.Exists(filePath)) File.Delete(filePath); } catch { } // Best-effort: failure is acceptable

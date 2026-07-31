@@ -202,7 +202,7 @@ namespace FlyShelf.Classes
                 if (fSize > LicenseManager.FREE_SYNC_SIZE_LIMIT && !LicenseManager.IsPro)
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        Windows.ToastWindow.ShowToast($"⚠️ File transfer limited to 50 GB on Free tier."));
+                        Windows.ToastWindow.ShowToast($"File transfer limited to 50 GB on Free tier."));
                     return 0;
                 }
             }
@@ -245,7 +245,7 @@ namespace FlyShelf.Classes
                 if (fSize > LicenseManager.FREE_SYNC_SIZE_LIMIT && !LicenseManager.IsPro)
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        Windows.ToastWindow.ShowToast($"⚠️ File transfer limited to 50 GB on Free tier."));
+                        Windows.ToastWindow.ShowToast($"File transfer limited to 50 GB on Free tier."));
                     return false;
                 }
             }
