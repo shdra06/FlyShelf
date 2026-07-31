@@ -72,7 +72,7 @@ namespace FlyShelf.Windows
                                 DeviceType = "PC",
                                 IsOnline = true,
                                 ConnectionType = "Local",
-                                LastSeen = $"LAN active — {peer.ActiveUrl}",
+                                LastSeen = $"LAN active  {peer.ActiveUrl}",
                                 LocalIp = peer.LanUrl,
                                 GlobalUrl = peer.CloudflareUrl
                             });
@@ -119,7 +119,7 @@ namespace FlyShelf.Windows
                             {
                                 // Build a proper URL for the health check
                                 string checkUrl = d.LocalIp;
-                                if (!checkUrl.StartsWith("http", StringComparison.Ordinal)) checkUrl = "http://" + checkUrl;
+                                if (!checkUrl.StartsWith("http", StringComparison.Ordinal)) checkUrl ="http://" + checkUrl;
                                 if (!checkUrl.Contains(':')) checkUrl += ":8999";
                                 
                                 try
@@ -211,7 +211,7 @@ namespace FlyShelf.Windows
                 {
                     if (Classes.ClipboardHelper.SafeSetText(copyUrl))
                     {
-                        info += "\n\n✅ URL copied to clipboard!";
+                        info +="\n\n URL copied to clipboard!";
                     }
                 }
 
@@ -252,7 +252,7 @@ namespace FlyShelf.Windows
         {
             try
             {
-                var name = ShowInputDialog("Enter group name:", "Create Device Group", "");
+                var name = ShowInputDialog("Enter group name:","Create Device Group","");
                 if (string.IsNullOrWhiteSpace(name)) return;
 
                 var devices = await CloudDiscoveryManager.GetActiveDevices();
@@ -293,7 +293,7 @@ namespace FlyShelf.Windows
                     var group = groups.FirstOrDefault(g => g.Id == groupId);
                     if (group == null) return;
 
-                    var name = ShowInputDialog("Edit group name:", "Edit Group", group.Name);
+                    var name = ShowInputDialog("Edit group name:","Edit Group", group.Name);
                     if (string.IsNullOrWhiteSpace(name)) return;
 
                     var devices = await CloudDiscoveryManager.GetActiveDevices();
@@ -308,7 +308,7 @@ namespace FlyShelf.Windows
                     for (int i = 0; i < deviceNames.Count; i++)
                     {
                         bool inGroup = (group.DeviceNames ?? new List<string>()).Contains(deviceNames[i]);
-                        prompt += $"  {i + 1}. {deviceNames[i]}{(inGroup ? " ★" : "")}\n";
+                        prompt += $"{i + 1}. {deviceNames[i]}{(inGroup ? "" : "")}\n";
                         if (inGroup) preSelected.Add(i + 1);
                     }
 
@@ -335,7 +335,7 @@ namespace FlyShelf.Windows
             {
                 if (sender is System.Windows.Controls.Button btn && btn.Tag is string groupId)
                 {
-                    var result = MessageBox.Show("Delete this group?", "Confirm", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    var result = MessageBox.Show("Delete this group?","Confirm", MessageBoxButton.YesNo, MessageBoxImage.Question);
                     if (result != MessageBoxResult.Yes) return;
 
                     await CloudDiscoveryManager.DeleteDeviceGroup(groupId);
@@ -427,7 +427,7 @@ namespace FlyShelf.Windows
                     if (success)
                     {
                         UpdateBtn.Content = "Restarting...";
-                        UpdateStatusText.Text = "✅ Update downloaded! Restarting now...";
+                        UpdateStatusText.Text ="Update downloaded! Restarting now...";
                         await Task.Delay(1500);
                         _updateManager.ApplyUpdateAndRestart();
                     }
@@ -465,7 +465,7 @@ namespace FlyShelf.Windows
                 {
                     RedownloadBtn.IsEnabled = false;
                     UpdateBtn.Content = "Restarting...";
-                    UpdateStatusText.Text = $"✅ v{UpdateManager.CurrentVersion} re-downloaded! Restarting now...";
+                    UpdateStatusText.Text = $"v{UpdateManager.CurrentVersion} re-downloaded! Restarting now...";
                     UpdatePctText.Text = "100%";
 
                     await Task.Delay(1500);
@@ -475,7 +475,7 @@ namespace FlyShelf.Windows
                 {
                     RedownloadBtn.IsEnabled = true;
                     UpdateBtn.IsEnabled = true;
-                    UpdateStatusText.Text = "❌ Redownload failed — check your internet connection.";
+                    UpdateStatusText.Text ="Redownload failed  check your internet connection.";
                 }
             });
         }
@@ -497,13 +497,13 @@ namespace FlyShelf.Windows
             {
                 if (DeviceName.Contains("(You)", StringComparison.Ordinal))
                 {
-                    return "💻 Local Host";
+                    return"Local Host";
                 }
                 if (!IsOnline)
                 {
-                    return "❌ Offline";
+                    return"Offline";
                 }
-                return ConnectionType == "Cloud" ? "🌐 Cloudflare Active" : "📡 LAN Active";
+                return ConnectionType == "Cloud" ? "Cloudflare Active" : "LAN Active";
             }
         }
     }

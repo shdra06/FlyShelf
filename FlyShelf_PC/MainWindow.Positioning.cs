@@ -1000,7 +1000,7 @@ namespace FlyShelf
             {
                 _scrollLiveLoadTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
                 {
-                    Interval = TimeSpan.FromMilliseconds(200)
+                    Interval = TimeSpan.FromMilliseconds(350) // 350ms throttle — high enough to prevent layout storm during fast scroll
                 };
                 _scrollLiveLoadTimer.Tick += (s, ev) =>
                 {
@@ -1109,7 +1109,7 @@ namespace FlyShelf
                     // Prefetch overdraw: expand viewport by 1200px above and below.
                     // Larger zone ensures images preload well before entering viewport.
                     // During fast scroll, shrink to 400px (just enough for immediate needs).
-                    double prefetchOverdraw = isFastScrolling ? 400 : 1200;
+                    double prefetchOverdraw = isFastScrolling ? 200 : 1200;
                     Rect viewportRect = new Rect(0, -prefetchOverdraw, viewportWidth, viewportHeight + prefetchOverdraw * 2);
                     int count = ShelfListView.Items.Count;
 

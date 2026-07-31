@@ -646,7 +646,7 @@ namespace FlyShelf.Controls
                 connectBtn.MouseLeftButtonDown += async (s, e) =>
                 {
                     e.Handled = true;
-                    connectBtn.Text = "⏳";
+                    connectBtn.Text = "";
                     try
                     {
                         await (NearbyDiscovery.Instance?.ConnectToDevice(device) ?? Task.CompletedTask);
@@ -655,14 +655,14 @@ namespace FlyShelf.Controls
                             connectBtn.Text = "✓";
                             connectBtn.Foreground = new SolidColorBrush(ThemeColors.SuccessGreen);
                             statusDot.Background = new SolidColorBrush(ThemeColors.SuccessGreen);
-                            ToastWindow.ShowToast($"✅ Connected to {device.DeviceName}");
+                            ToastWindow.ShowToast($"Connected to {device.DeviceName}");
                             RefreshDevices();
                         }
                         else
                         {
                             connectBtn.Text = "✕";
                             connectBtn.Foreground = new SolidColorBrush(ThemeColors.ErrorRed);
-                            ToastWindow.ShowToast($"❌ Could not reach {device.DeviceName}");
+                            ToastWindow.ShowToast($"Could not reach {device.DeviceName}");
                         }
                     }
                     catch (Exception ex)
@@ -773,7 +773,7 @@ namespace FlyShelf.Controls
                 {
                     NetworkFileQueue.Instance?.StageFiles(dialog.FileNames);
                     RefreshQueue();
-                    ToastWindow.ShowToast($"📂 {dialog.FileNames.Length} file(s) added to queue");
+                    ToastWindow.ShowToast($"{dialog.FileNames.Length} file(s) added to queue");
                 }
             }
             catch (Exception ex)
@@ -789,26 +789,26 @@ namespace FlyShelf.Controls
             {
                 if (NetworkFileQueue.Instance == null || NetworkFileQueue.Instance.StagedFiles.Count == 0)
                 {
-                    ToastWindow.ShowToast("⚠️ No files in queue to send");
+                    ToastWindow.ShowToast("No files in queue to send");
                     return;
                 }
 
                 int peerCount = PeerManager.Instance?.AliveCount ?? 0;
                 if (peerCount == 0)
                 {
-                    ToastWindow.ShowToast("⚠️ No connected devices to send to");
+                    ToastWindow.ShowToast("No connected devices to send to");
                     return;
                 }
 
-                ToastWindow.ShowToast($"📤 Sending {NetworkFileQueue.Instance.StagedFiles.Count} file(s) to {peerCount} device(s)...");
+                ToastWindow.ShowToast($"Sending {NetworkFileQueue.Instance.StagedFiles.Count} file(s) to {peerCount} device(s)...");
                 await NetworkFileQueue.Instance.SendAllToAll();
                 RefreshQueue();
-                ToastWindow.ShowToast("✅ All files sent!");
+                ToastWindow.ShowToast("All files sent!");
             }
             catch (Exception ex)
             {
                 Logger.LogAction("NETWORK", $"Send all error: {ex.Message}");
-                ToastWindow.ShowToast($"❌ Send failed: {ex.Message}");
+                ToastWindow.ShowToast($"Send failed: {ex.Message}");
             }
         }
 
@@ -839,7 +839,7 @@ namespace FlyShelf.Controls
                     {
                         NetworkFileQueue.Instance?.StageFiles(files);
                         RefreshQueue();
-                        ToastWindow.ShowToast($"📂 {files.Length} file(s) added to queue");
+                        ToastWindow.ShowToast($"{files.Length} file(s) added to queue");
                     }
                 }
             }
@@ -871,7 +871,7 @@ namespace FlyShelf.Controls
         private void NetPanel_RefreshDevices_MenuClick(object sender, RoutedEventArgs e)
         {
             RefreshDevices();
-            ToastWindow.ShowToast("📡 Devices refreshed");
+            ToastWindow.ShowToast("Devices refreshed");
         }
 
         private void NetPanel_OpenTransferMgr_MenuClick(object sender, RoutedEventArgs e)
@@ -883,7 +883,7 @@ namespace FlyShelf.Controls
         {
             NetworkFileQueue.Instance?.ClearAll();
             RefreshQueue();
-            ToastWindow.ShowToast("🗑️ Queue cleared");
+            ToastWindow.ShowToast("Queue cleared");
         }
 
         // ═══════════════════════════════════════════════════════════
@@ -893,7 +893,7 @@ namespace FlyShelf.Controls
         private async void NetPanel_Scan_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
-            ToastWindow.ShowToast("📡 Scanning for nearby devices...");
+            ToastWindow.ShowToast("Scanning for nearby devices...");
             try
             {
                 NearbyDiscovery.Instance?.PruneStale();
@@ -922,12 +922,12 @@ namespace FlyShelf.Controls
                 await Task.Delay(1500);
                 RefreshNearbyDevices();
                 var count = NearbyDiscovery.Instance?.DiscoveredDevices?.Count ?? 0;
-                ToastWindow.ShowToast($"📡 Found {count} nearby device(s)");
+                ToastWindow.ShowToast($"Found {count} nearby device(s)");
             }
             catch (Exception ex)
             {
                 Logger.LogAction("NETWORK", $"Scan error: {ex.Message}");
-                ToastWindow.ShowToast($"❌ Scan failed: {ex.Message}");
+                ToastWindow.ShowToast($"Scan failed: {ex.Message}");
             }
         }
 
@@ -944,14 +944,14 @@ namespace FlyShelf.Controls
                 string code = DevicePairingManager.CurrentPairingCode;
                 if (string.IsNullOrEmpty(code))
                 {
-                    ToastWindow.ShowToast("🔄 Generating pairing code...");
+                    ToastWindow.ShowToast("Generating pairing code...");
                     await DevicePairingManager.PublishPairingCode();
                     code = DevicePairingManager.CurrentPairingCode;
                 }
 
                 if (string.IsNullOrEmpty(code))
                 {
-                    ToastWindow.ShowToast("❌ Could not generate pairing code");
+                    ToastWindow.ShowToast("Could not generate pairing code");
                     return;
                 }
 
@@ -968,11 +968,11 @@ namespace FlyShelf.Controls
 
                 if (!string.IsNullOrEmpty(enteredCode) && enteredCode != code)
                 {
-                    ToastWindow.ShowToast($"🔗 Connecting with code {enteredCode}...");
+                    ToastWindow.ShowToast($"Connecting with code {enteredCode}...");
                     var (success, deviceName) = await DevicePairingManager.ConnectByCode(enteredCode);
                     if (success)
                     {
-                        ToastWindow.ShowToast($"✅ Paired with {deviceName}!");
+                        ToastWindow.ShowToast($"Paired with {deviceName}!");
                         await Task.Delay(2000);
                         RefreshDevices();
                         // Hide pairing info after successful pair
@@ -980,14 +980,14 @@ namespace FlyShelf.Controls
                     }
                     else
                     {
-                        ToastWindow.ShowToast("❌ Invalid code or device unreachable");
+                        ToastWindow.ShowToast("Invalid code or device unreachable");
                     }
                 }
             }
             catch (Exception ex)
             {
                 Logger.LogAction("NETWORK", $"Pair error: {ex.Message}");
-                ToastWindow.ShowToast($"❌ Pairing failed: {ex.Message}");
+                ToastWindow.ShowToast($"Pairing failed: {ex.Message}");
             }
         }
 

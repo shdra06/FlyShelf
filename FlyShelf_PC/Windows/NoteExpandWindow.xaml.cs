@@ -743,7 +743,7 @@ namespace FlyShelf.Windows
             }
             catch { } // Best-effort: failure is acceptable
 
-            InsertText("☐ ");
+            InsertText("☐");
         }
 
         private void CycleFontSize()
@@ -1055,7 +1055,7 @@ namespace FlyShelf.Windows
             PinIcon.Symbol = _isPinned
                 ? Wpf.Ui.Controls.SymbolRegular.Pin24
                 : Wpf.Ui.Controls.SymbolRegular.PinOff24;
-            FooterStatus.Text = _isPinned ? "📌 Pinned" : "Unpinned";
+            FooterStatus.Text = _isPinned ? "Pinned" : "Unpinned";
             e.Handled = true;
         }
 

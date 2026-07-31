@@ -382,7 +382,7 @@
                     </Grid.ColumnDefinitions>
                     <ui:SymbolIcon Grid.Column="0" Symbol="ArrowCircleUp24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource ThemeAccentLight}" 
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBlock Grid.Column="1" x:Name="UpdateBannerText" Text="🚀 New version available — tap to update" 
+                    <TextBlock Grid.Column="1" x:Name="UpdateBannerText" Text="New version available — tap to update" 
                                FontSize="{StaticResource TypeSmall}" FontWeight="SemiBold" 
                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
@@ -848,7 +848,7 @@
                     <StackPanel Orientation="Horizontal">
                         <!-- Emoji Picker -->
                         <ui:Button x:Name="EmojiBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,4,0" Padding="0" AutomationProperties.Name="Emoji picker">
-                            <emoji:TextBlock Text="😊" FontSize="{StaticResource TypeTitle}" 
+                            <emoji:TextBlock Text="" FontSize="{StaticResource TypeTitle}" 
                                              VerticalAlignment="Center" HorizontalAlignment="Center"
                                              Margin="0,-1,0,0"/>
                         </ui:Button>
@@ -1028,7 +1028,7 @@
                   VirtualizingStackPanel.IsVirtualizing="True"
                   VirtualizingStackPanel.VirtualizationMode="Recycling"
                   VirtualizingPanel.ScrollUnit="Pixel"
-                  VirtualizingPanel.CacheLength="2,2"
+                  VirtualizingPanel.CacheLength="1,1"
                   VirtualizingPanel.CacheLengthUnit="Page"
                   SelectionMode="Extended" MouseMove="ShelfListView_MouseMove" PreviewMouseLeftButtonDown="ShelfListView_PreviewMouseLeftButtonDown"
                   PreviewMouseLeftButtonUp="ShelfListView_PreviewMouseLeftButtonUp"
@@ -1561,7 +1561,7 @@
                                     </Style>
                                 </Border.Style>
                                 <Grid>
-                                    <Image Name="ItemIcon" Source="{Binding Icon}" Width="40" Height="40" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" CacheMode="BitmapCache">
+                                    <Image Name="ItemIcon" Source="{Binding Icon, IsAsync=True}" Width="40" Height="40" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" CacheMode="BitmapCache">
                                         <Image.Style>
                                             <Style TargetType="Image">
                                                 <Setter Property="Visibility" Value="Visible"/>
@@ -1602,7 +1602,7 @@
                                      </Style>
                                  </Border.Style>
                                  <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5">
-                                     <TextBlock Text="🖼" FontSize="22" HorizontalAlignment="Center"/>
+                                     <ui:SymbolIcon Symbol="Image24" FontSize="22" HorizontalAlignment="Center"/>
                                      <TextBlock Text="Image" FontSize="{StaticResource TypeMicro}" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
                                                 HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                  </StackPanel>
@@ -2012,23 +2012,23 @@
                                         <TextBlock FontSize="8" FontWeight="SemiBold" VerticalAlignment="Center">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
-                                                    <Setter Property="Text" Value="☁️ Cloud"/>
+                                                    <Setter Property="Text" Value="Cloud"/>
                                                     <Setter Property="Foreground" Value="{StaticResource SourceCloudColor}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding TransferMethod}" Value="Cloudflare">
-                                                            <Setter Property="Text" Value="🌐 Cloudflare"/>
+                                                            <Setter Property="Text" Value="Cloudflare"/>
                                                             <Setter Property="Foreground" Value="{StaticResource SourceCfColor}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding TransferMethod}" Value="LAN">
-                                                            <Setter Property="Text" Value="📡 LAN"/>
+                                                            <Setter Property="Text" Value="LAN"/>
                                                             <Setter Property="Foreground" Value="{StaticResource SourceLanColor}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding TransferMethod}" Value="ForceSend">
-                                                            <Setter Property="Text" Value="🎯 Direct"/>
+                                                            <Setter Property="Text" Value="Direct"/>
                                                             <Setter Property="Foreground" Value="{StaticResource SourceDirectColor}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding TransferMethod}" Value="Local">
-                                                            <Setter Property="Text" Value="📋 Local"/>
+                                                            <Setter Property="Text" Value="Local"/>
                                                             <Setter Property="Foreground" Value="{StaticResource SourceLocalColor}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -2043,7 +2043,7 @@
                             <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Margin="0,4,0,4">
                                 <TextBlock Name="TitleText" 
                                            Text="{Binding DisplayText}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" FontFamily="Segoe UI Emoji, Segoe UI" FontWeight="Medium" FontSize="{StaticResource TypeSubtitle}" LineHeight="19" TextWrapping="Wrap" 
-                                           TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" />
+                                           TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" CacheMode="BitmapCache" />
 
                                 <!-- Markdown Tag — lightweight visual indicator, no inline rendering -->
                                 <Border CornerRadius="4" Padding="6,1,6,1" Margin="0,3,0,0" HorizontalAlignment="Left">
@@ -2420,13 +2420,13 @@
             </Border>
             <emoji:TextBlock Text="Your shelf is empty" Opacity="0.45" FontWeight="SemiBold" FontSize="{StaticResource TypeSubtitle}" TextAlignment="Center"/>
             <emoji:TextBlock Opacity="0.28" FontSize="{StaticResource TypeSmall}" Margin="0,10,0,0" TextAlignment="Center" LineHeight="20">
-                <Run Text="⌨️ Press"/><Run Text=" Alt+C " FontWeight="SemiBold"/><Run Text="anywhere to open"/>
+                <Run Text="Press"/><Run Text=" Alt+C " FontWeight="SemiBold"/><Run Text="anywhere to open"/>
                 <LineBreak/>
-                <Run Text="🖱️ Shake mouse to summon"/>
+                <Run Text="Shake mouse to summon"/>
                 <LineBreak/>
-                <Run Text="📁 Drag files here to shelve"/>
+                <Run Text="Drag files here to shelve"/>
                 <LineBreak/>
-                <Run Text="🔍 "/><Run Text="Ctrl+F" FontWeight="SemiBold"/><Run Text=" to search your clips"/>
+                <Run Text=""/><Run Text="Ctrl+F" FontWeight="SemiBold"/><Run Text=" to search your clips"/>
             </emoji:TextBlock>
         </StackPanel>
 
@@ -2438,7 +2438,7 @@
                 <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" 
                         CornerRadius="{StaticResource RadiusSM}" Padding="12,6,12,6">
                     <emoji:TextBlock FontSize="{StaticResource TypeSmall}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center">
-                        <Run Text="⌨️" FontSize="{StaticResource TypeCaption}"/><Run Text=" Press "/><Run Text="Alt+C" FontWeight="SemiBold"/><Run Text=" anywhere to summon clipboard"/>
+                        <Run Text="" FontSize="{StaticResource TypeCaption}"/><Run Text=" Press "/><Run Text="Alt+C" FontWeight="SemiBold"/><Run Text=" anywhere to summon clipboard"/>
                     </emoji:TextBlock>
                 </Border>
             </StackPanel>

@@ -610,18 +610,18 @@ namespace FlyShelf
                                 try
                                 {
                                     Application.Current?.Dispatcher?.InvokeAsync(() =>
-                                        Windows.ToastWindow.ShowToast("⚡ Activating your Pro license..."));
+                                        Windows.ToastWindow.ShowToast("Activating your Pro license..."));
                                     bool success = await Classes.LicenseManager.ActivateLicenseAsync(keyCandidate);
                                     Application.Current?.Dispatcher?.InvokeAsync(() =>
                                     {
                                         if (success)
                                         {
-                                            Windows.ToastWindow.ShowToast("✅ FlyShelf Pro Activated! Restart to apply.");
+                                            Windows.ToastWindow.ShowToast("FlyShelf Pro Activated! Restart to apply.");
                                             Classes.Logger.LogAction("LICENSE", "One-click activation SUCCESS");
                                         }
                                         else
                                         {
-                                            Windows.ToastWindow.ShowToast("❌ Activation failed — check your key or internet.");
+                                            Windows.ToastWindow.ShowToast("Activation failed — check your key or internet.");
                                             Classes.Logger.LogAction("LICENSE", "One-click activation FAILED");
                                         }
                                     });
@@ -630,7 +630,7 @@ namespace FlyShelf
                                 {
                                     Classes.Logger.LogAction("LICENSE", $"One-click activation error: {ex.Message}");
                                     Application.Current?.Dispatcher?.InvokeAsync(() =>
-                                        Windows.ToastWindow.ShowToast("❌ Activation error — please try again."));
+                                        Windows.ToastWindow.ShowToast("Activation error — please try again."));
                                 }
                             });
                         }

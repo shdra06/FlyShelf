@@ -1,0 +1,358 @@
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:385:<TextBlock Grid.Column="1" x:Name="UpdateBannerText" Text="🚀 New version available — tap to update"
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:851:<emoji:TextBlock Text="😊" FontSize="{StaticResource TypeTitle}"
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:1605:<TextBlock Text="🖼" FontSize="22" HorizontalAlignment="Center"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:2015:<Setter Property="Text" Value="☁️ Cloud"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:2019:<Setter Property="Text" Value="🌐 Cloudflare"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:2023:<Setter Property="Text" Value="📡 LAN"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:2027:<Setter Property="Text" Value="🎯 Direct"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:2031:<Setter Property="Text" Value="📋 Local"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:2423:<Run Text="⌨️ Press"/><Run Text=" Alt+C " FontWeight="SemiBold"/><Run Text="anywhere to open"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:2425:<Run Text="🖱️ Shake mouse to summon"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:2427:<Run Text="📁 Drag files here to shelve"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:2429:<Run Text="🔍 "/><Run Text="Ctrl+F" FontWeight="SemiBold"/><Run Text=" to search your clips"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:2441:<Run Text="⌨️" FontSize="{StaticResource TypeCaption}"/><Run Text=" Press "/><Run Text="Alt+C" FontWeight="SemiBold"/><Run Text=" anywhere to summon clipboard"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:285:Windows.ToastWindow.ShowToast($"⚠️ Could not register {settings.HotkeyDisplayString} — another app may be using it. Change in Settings.");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:597:Windows.TipBadge.Show("context_menu_first_use", "⚡ Try Smart Actions for auto-detect features", cm.PlacementTarget as UIElement);
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:635:FlyShelf.Windows.ToastWindow.ShowToast("📋 Path copied!");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:646:FlyShelf.Windows.ToastWindow.ShowToast("📋 Formatted JSON copied!");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:669:FlyShelf.Windows.ToastWindow.ShowToast($"🔢 Result: {result} (copied!)");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:680:FlyShelf.Windows.ToastWindow.ShowToast("🔓 Decoded Base64 copied!");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:691:FlyShelf.Windows.ToastWindow.ShowToast($"📅 {dateStr} (copied!)");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:729:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No text content to process.");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:746:FlyShelf.Windows.ToastWindow.ShowToast("✅ AI result copied to clipboard!");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:760:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No text content to process.");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:774:FlyShelf.Windows.ToastWindow.ShowToast("🧠 AI working...");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:781:FlyShelf.Windows.ToastWindow.ShowToast("✅ AI result copied to clipboard!");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:786:FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ AI error: {ex.Message}");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:1461:UpdateBannerText.Text = $"🚀 New version v{ver} available — tap to update";
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:1619:Windows.ToastWindow.ShowToast($"⚠️ Could not register {s.HotkeyDisplayString} — another app may be using it.");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.EventHandlers.cs:317:FlyShelf.Classes.Logger.LogAction("UI_TRIGGER", "⚠️ Could not find active PeerManager.Instance within timeout");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.EventHandlers.cs:401:Windows.ToastWindow.ShowToast("Shelf cleared! 🧹");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.EventHandlers.cs:518:FlyShelf.Windows.ToastWindow.ShowToast("Locked as password card! 🔒");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.EventHandlers.cs:535:FlyShelf.Windows.ToastWindow.ShowToast("📦 Zip already exists!");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.EventHandlers.cs:538:FlyShelf.Windows.ToastWindow.ShowToast("📦 Creating zip archive...");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.EventHandlers.cs:550:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Create a zip first!");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.EventHandlers.cs:1175:FlyShelf.Windows.ToastWindow.ShowToast("URL Sanitized & Copied! 🛡️");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.EventHandlers.cs:1181:FlyShelf.Windows.ToastWindow.ShowToast("URL is already clean! ✨");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.EventHandlers.cs:1522:Windows.ToastWindow.ShowToast("👁 Clipboard monitoring resumed");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.EventHandlers.cs:1530:Windows.ToastWindow.ShowToast("👁 Clipboard monitoring resumed");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:51:FlyShelf.Windows.ToastWindow.ShowToast($"📄 Converting {checkedDocs.Count} DOC file(s) to PDF...");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:58:FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ {docs.Length - results.Length} DOC files failed to convert.");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:65:FlyShelf.Windows.ToastWindow.ShowToast($"🖼️ Formatting {checkedImages.Count} image(s) to PDF...");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:79:FlyShelf.Windows.ToastWindow.ShowToast($"❌ Failed to format: {img.FileName}");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:92:FlyShelf.Windows.ToastWindow.ShowToast("✅ Converted to PDF");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:140:FlyShelf.Windows.ToastWindow.ShowToast("✅ PDF added to clipboard");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:167:FlyShelf.Windows.ToastWindow.ShowToast($"⚡ Instant Merging {items.Count} files...");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:225:FlyShelf.Windows.ToastWindow.ShowToast("✅ Instant Merge complete!");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:230:await Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Instant Merge failed: {ex.Message}"));
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:407:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Translate requires an AI API key");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:411:FlyShelf.Windows.ToastWindow.ShowToast($"🌐 Translating to {targetLanguage}...");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:419:FlyShelf.Windows.ToastWindow.ShowToast($"🌐 Translated to {targetLanguage} — copied to clipboard!");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:444:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ PDF to Word conversion is not available in the Store version.");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:461:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ PDF file not found.");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:468:FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Cannot read PDF: {mergeItem.Error}");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:577:FlyShelf.Windows.ToastWindow.ShowToast("📄 Page order unchanged.");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:588:FlyShelf.Windows.ToastWindow.ShowToast($"✅ Reordered PDF saved: {System.IO.Path.GetFileName(outputPath)}");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:592:FlyShelf.Windows.ToastWindow.ShowToast($"❌ Failed to save reordered PDF: {ex.Message}");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:598:FlyShelf.Windows.ToastWindow.ShowToast($"❌ Reorder error: {ex.Message}");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:613:FlyShelf.Windows.ToastWindow.ShowToast("Locked as password card! 🔒");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:838:FlyShelf.Windows.ToastWindow.ShowToast($"Renamed to \"{newName}\" ✏️");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:858:FlyShelf.Windows.ToastWindow.ShowToast("Reverted to normal text card! 📋");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:944:FlyShelf.Windows.ToastWindow.ShowToast($"✂️ Split into {total} pages → {outputDir}");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:951:Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Split failed: {ex.Message}"));
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:1033:FlyShelf.Windows.ToastWindow.ShowToast($"🔒 Protected PDF saved: {System.IO.Path.GetFileName(outputPath)}");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:1039:Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Password protect failed: {ex.Message}"));
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:1135:FlyShelf.Windows.ToastWindow.ShowToast($"💧 Watermarked PDF saved: {System.IO.Path.GetFileName(outputPath)}");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:1141:Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Watermark failed: {ex.Message}"));
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:1193:FlyShelf.Windows.ToastWindow.ShowToast($"📝 Exported {i + 1}/{total} pages..."),
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:1198:FlyShelf.Windows.ToastWindow.ShowToast($"📝 Exported {total} pages as PNG → {outputDir}");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:1203:FlyShelf.Windows.ToastWindow.ShowToast($"❌ PDF→Images failed: {ex.Message}");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:1256:Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No extractable text found. Try OCR instead for scanned PDFs."));
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:1270:FlyShelf.Windows.ToastWindow.ShowToast($"📝 Text extracted ({text.Length} chars) and copied to clipboard");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.PdfMerge.cs:1276:Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Text extraction failed: {ex.Message}"));
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.Search.cs:105:Windows.TipBadge.Show("search_first_use", "🔍 Search text, files, or use / for commands", SearchBarContainer);
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.Interactions.cs:131:Windows.TipBadge.Show("doubleclick_hint", "🖱️ Double-click to open files directly", itemContainer2);
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.Interactions.cs:665:Windows.TipBadge.ShowLimited("ctrl_drag_path", "💡 Hold Ctrl to paste file path instead", 3, _dragPreviewWindow);
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.SendToDevice.cs:67:"LAN" => "⚡ LAN",
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.SendToDevice.cs:68:"Cloudflare" => "☁️ Cloud",
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.SendToDevice.cs:85:Header = "📡 Send to All Devices",
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.SendToDevice.cs:154:? $"✅ Sent to {sent} device{(sent != 1 ? "s" : "")}"
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.SendToDevice.cs:155:: $"⚠️ Sent to {sent}, failed {failed}"
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.SendToDevice.cs:172:if (showToast) Windows.ToastWindow.ShowToast($"⚠️ {peer.DeviceName} is offline");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.SendToDevice.cs:203:if (showToast) Windows.ToastWindow.ShowToast($"✅ Sent to {peer.DeviceName}");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.SendToDevice.cs:209:if (showToast) Windows.ToastWindow.ShowToast($"❌ Failed to send to {peer.DeviceName}");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.WndProc.cs:515:Windows.ToastWindow.ShowToast($"✦ {matchedShortcut.Label} Copied! (Manual Ctrl+V needed in Admin app)");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.WndProc.cs:527:Windows.ToastWindow.ShowToast($"✦ {matchedShortcut.Label} Auto-Pasted! ✦");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.WndProc.cs:613:Windows.ToastWindow.ShowToast("⚡ Activating your Pro license..."));
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.WndProc.cs:619:Windows.ToastWindow.ShowToast("✅ FlyShelf Pro Activated! Restart to apply.");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.WndProc.cs:624:Windows.ToastWindow.ShowToast("❌ Activation failed — check your key or internet.");
+e:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.WndProc.cs:633:Windows.ToastWindow.ShowToast("❌ Activation error — please try again."));
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml:54:<emoji:TextBlock Text="⚡" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml:65:<Button Content="⏸ All" Style="{StaticResource PauseButtonStyle}"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml:68:<Button Content="▶ All" Style="{StaticResource ResumeButtonStyle}"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml:71:<Button Content="🗑 Clear" Style="{StaticResource CancelButtonStyle}"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml:86:<emoji:TextBlock Text="📤" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml:97:<emoji:TextBlock Text="📥" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml:135:<TextBlock Text="🖥" FontSize="11" VerticalAlignment="Center" Margin="0,0,5,0" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml:177:<emoji:TextBlock Text="📂" FontSize="48" HorizontalAlignment="Center" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml:211:<TextBlock Text="⏸" FontSize="13" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml:219:<TextBlock Text="▶" FontSize="13" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml:235:<TextBlock Text="📂" FontSize="13" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml:366:<TextBlock Text="📂" FontSize="40" HorizontalAlignment="Center" Margin="0,0,0,8" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml:388:<TextBlock Text="📤" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml.cs:109:ToastWindow.ShowToast("⚠ Select a peer device first to send files");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TransferManagerWindow.xaml.cs:114:ToastWindow.ShowToast($"📤 Sending {files.Length} file(s) to {_vm.SelectedPeer.DeviceName}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml:30:<TextBlock Text="📡 Network Logs" Foreground="{DynamicResource ThemeAccentLight}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml:49:<ComboBoxItem Content="🔗 Peer" Tag="PEER" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml:50:<ComboBoxItem Content="📋 Clipboard" Tag="CLIPBOARD" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml:51:<ComboBoxItem Content="🌐 HTTP" Tag="HTTP" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml:52:<ComboBoxItem Content="☁ Cloudflare" Tag="CLOUDFLARE" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml:53:<ComboBoxItem Content="🔥 Firebase" Tag="FIREBASE" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml:54:<ComboBoxItem Content="📤 Push" Tag="PUSH" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml:55:<ComboBoxItem Content="⬇ Download" Tag="DOWNLOAD" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml:56:<ComboBoxItem Content="❌ Errors" Tag="ERROR" />
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml:76:<Button x:Name="ClearBtn" Content="🗑 Clear" Click="ClearLogs_Click"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml:78:<Button x:Name="CopyBtn" Content="📋 Copy All" Click="CopyLogs_Click" Margin="4,0,0,0"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml.cs:294:Content = (isLocal ? "🖥 " : "🌐 ") + device,
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml.cs:318:StatusText.Text = $"📡 {_filteredLogs.Count} entries shown ({_allLogs.Count} total) | {peerInfo}";
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml.cs:325:.Select(p => $"{p.DeviceName}: {(p.ActiveUrl.Contains("trycloudflare", StringComparison.OrdinalIgnoreCase) ? "☁ CF" : "🏠 LAN")}")
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml.cs:361:if (inside.Contains("PC", StringComparison.Ordinal) || inside.Contains("Mobile", StringComparison.Ordinal) || inside.Contains("💻", StringComparison.Ordinal) || inside.Contains("📱", StringComparison.Ordinal))
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NetworkLogsWindow.xaml.cs:415:ToastWindow.ShowToast($"📋 Copied {_filteredLogs.Count} log entries");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TableEditorWindow.xaml:153:<ui:Button Content="💾 Save" Appearance="Transparent" Padding="10,6" FontSize="12"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TableEditorWindow.xaml:186:<ui:Button x:Name="ToggleImageBtn" Content="🖼 Source" Appearance="Transparent"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TableEditorWindow.xaml.cs:107:ToggleImageBtn.Content = "🖼 Hide Source";
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TableEditorWindow.xaml.cs:118:ToggleImageBtn.Content = "🖼 Source";
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TableEditorWindow.xaml.cs:155:MethodBadgeText.Text = "⚡ Powered by FlyShelf";
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TableEditorWindow.IO.cs:77:ToastWindow.ShowToast("Table copied! Paste into Word 📋");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TableEditorWindow.IO.cs:95:ToastWindow.ShowToast("Table copied as CSV 📋");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TableEditorWindow.IO.cs:107:ToastWindow.ShowToast("Table copied as TSV 📋");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TableEditorWindow.IO.cs:119:ToastWindow.ShowToast("Table copied as Markdown 📋");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\TableEditorWindow.IO.cs:151:ToastWindow.ShowToast($"Table saved to {Path.GetFileName(dlg.FileName)} ✅");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\QuickLookWindow.Ocr.cs:214:FlyShelf.Windows.ToastWindow.ShowToast("All Image Text Copied to Clipboard! 📋");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\QuickLookWindow.Ocr.cs:235:FlyShelf.Windows.ToastWindow.ShowToast("QR Code Text Copied! 📋");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\QuickLookWindow.Image.cs:146:var menuItem = new System.Windows.Controls.MenuItem { Header = $"🌐 {lang}" };
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\QuickLookWindow.Image.cs:173:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Translate requires an AI API key");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\QuickLookWindow.Image.cs:189:FlyShelf.Windows.ToastWindow.ShowToast($"🌐 Translated to {targetLanguage}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\QuickLookWindow.Pdf.cs:265:FlyShelf.Windows.ToastWindow.ShowToast($"PDF saved as copy ✅ {Path.GetFileName(outputPath)}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\QuickLookWindow.Pdf.cs:276:FlyShelf.Windows.ToastWindow.ShowToast("💾 Saving PDF changes...");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\QuickLookWindow.Pdf.cs:335:FlyShelf.Windows.ToastWindow.ShowToast("✅ PDF saved successfully!");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml:37:<TextBlock x:Name="HeaderTitle" Text="📝 Note" Foreground="White"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml:124:<TextBlock Text="▾" FontSize="8" Foreground="#6B6B9B" VerticalAlignment="Center" Margin="1,0,0,0"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml:135:<TextBlock Text="☑" FontSize="12" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml:152:<TextBlock Text="⫸" FontSize="11" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml:158:<TextBlock Text="🔗" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml:161:<TextBlock Text="─" FontSize="11" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml:164:<TextBlock Text="❝" FontSize="13" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml:167:<TextBlock Text="⟨/⟩" FontSize="10" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center" FontFamily="Consolas"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml:170:<TextBlock Text="⏱" FontSize="11" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml:181:<TextBlock Text="🖊" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml.cs:723:if (paraText.StartsWith('☐') || paraText.StartsWith('☑'))
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml.cs:734:if (ch == "☐") { new TextRange(pos, nextPos).Text = "☑"; return; }
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml.cs:735:if (ch == "☑") { new TextRange(pos, nextPos).Text = "☐"; return; }
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml.cs:746:InsertText("☐ ");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml.cs:1058:FooterStatus.Text = _isPinned ? "📌 Pinned" : "Unpinned";
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NoteExpandWindow.xaml.cs:1305:InsertText("────────────────");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NotesAIWindow.xaml:23:<TextBlock Text="✨ AI Notes Assistant" FontSize="12.5" FontWeight="SemiBold" Opacity="0.85"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NotesAIWindow.xaml:100:<ui:Button x:Name="CopyBtn" Grid.Column="0" Content="📋 Copy Result" Click="Copy_Click"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NotesAIWindow.xaml.cs:94:ResultTextBox.Text = $"⚠️ Error processing note:\n\n{ex.Message}";
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NotesAIWindow.xaml.cs:113:ToastWindow.ShowToast("📋 Suggestion copied to clipboard.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NotesAIWindow.xaml.cs:115:ToastWindow.ShowToast("⚠️ Clipboard busy — try again.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NotesAIDiffWindow.xaml:71:<TextBlock Grid.Row="0" Text="✨ AI Improved" FontSize="11" FontWeight="SemiBold" Foreground="#10B981" Padding="10,6,10,4"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NotesAIDiffWindow.xaml:82:<ui:Button x:Name="DiscardBtn" Content="❌ Discard" Appearance="Danger" Click="Discard_Click" Margin="0,0,8,0" Padding="16,8"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\NotesAIDiffWindow.xaml:83:<ui:Button x:Name="KeepBtn" Content="✅ Keep Changes" Appearance="Success" Click="Keep_Click" Padding="16,8" IsEnabled="False"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PasswordWindow.xaml:23:<TextBlock Text="🔑  Security Lock Manager" FontSize="12.5" FontWeight="SemiBold" Opacity="0.75"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PasswordWindow.xaml.cs:90:FlyShelf.Windows.ToastWindow.ShowToast("Password copied! 🔑");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\ReminderCreateWindow.xaml:135:Content="◀" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\ReminderCreateWindow.xaml:169:Content="▶" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\ReminderCreateWindow.xaml:307:<TextBlock DockPanel.Dock="Right" Text="📅" FontSize="14" VerticalAlignment="Center" Margin="4,0,0,0"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\ReminderCreateWindow.xaml:347:<TextBlock DockPanel.Dock="Right" Text="⏰" FontSize="13" VerticalAlignment="Center" Margin="4,0,0,0"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\ReminderCreateWindow.xaml:458:<TextBlock Text="Set Reminder 🔔" HorizontalAlignment="Center"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\ReminderCreateWindow.xaml.cs:379:ToastWindow.ShowToast("Reminder set! 🔔");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\ReminderHistoryWindow.xaml.cs:158:ToastWindow.ShowToast("Reminder reactivated 🔔");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\ReminderHistoryWindow.xaml.cs:163:ToastWindow.ShowToast("Reminder done! ✅");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\OnboardingWindow.xaml:196:<TextBlock Text="✦" FontSize="22" Foreground="White"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\OnboardingWindow.xaml:231:<TextBlock Text="🖼" FontSize="22"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\OnboardingWindow.xaml.cs:42:NextBtnText.Text = index == TOTAL_STEPS - 1 ? "🚀 Get Started" : "Next →";
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\AiSetupPopup.xaml:156:<TextBlock Text="⚡ Setup AI" FontSize="20" FontWeight="Bold"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\AiSetupPopup.xaml:174:<TextBlock Text="💎" FontSize="26" HorizontalAlignment="Center"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\AiSetupPopup.xaml:187:<TextBlock Text="🤖" FontSize="26" HorizontalAlignment="Center"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\AiSetupPopup.xaml:200:<TextBlock Text="🧠" FontSize="26" HorizontalAlignment="Center"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\AiSetupPopup.xaml:272:Content="👁" FontSize="14"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\AiSetupPopup.xaml:302:Content="Advanced ▾" HorizontalAlignment="Left"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\AiSetupPopup.xaml:342:<TextBlock x:Name="testBtnIcon" Text="🔌 " FontSize="13"/>
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\AiSetupPopup.xaml:366:<TextBlock Text="🔒 Your key is encrypted locally and never leaves your device"
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\DragPreviewWindow.cs:379:grid.Children.Add(MakeEmojiIcon("🖼️", 120, 90));
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\DragPreviewWindow.cs:511:iconBorder.Child = MakeCenteredEmoji("🖼️");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\DragPreviewWindow.cs:516:iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("📕");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\DragPreviewWindow.cs:521:iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("📄");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\DragPreviewWindow.cs:526:iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("📊");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\DragPreviewWindow.cs:531:iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("🎬");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\DragPreviewWindow.cs:536:iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("🎵");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\DragPreviewWindow.cs:541:iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("📦");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\DragPreviewWindow.cs:546:iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("💻");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\DragPreviewWindow.cs:551:iconBorder.Child = MakeCenteredEmoji("🔗");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\DragPreviewWindow.cs:556:iconBorder.Child = MakeCenteredEmoji("📁");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\DragPreviewWindow.cs:562:iconBorder.Child = MakeCenteredEmoji("📋");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\DragPreviewWindow.cs:761:Text = "📋 Path",
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PageReorderWindow.xaml.cs:847:FlyShelf.Windows.ToastWindow.ShowToast("🔄 Page order reset to default");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PageReorderWindow.xaml.cs:881:ToastWindow.ShowToast($"⚠️ {Path.GetFileName(filePath)} has no pages.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PageReorderWindow.xaml.cs:908:ToastWindow.ShowToast($"✅ Added {pageCount} pages from {fileName}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PageReorderWindow.xaml.cs:912:ToastWindow.ShowToast($"❌ Failed to read {Path.GetFileName(filePath)}: {ex.Message}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PageReorderWindow.xaml.cs:930:ToastWindow.ShowToast("⚠️ Select pages to delete first.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PageReorderWindow.xaml.cs:936:ToastWindow.ShowToast("⚠️ Can't delete all pages — at least one page must remain.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PageReorderWindow.xaml.cs:961:ToastWindow.ShowToast("⚠️ No pages remaining.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PageReorderWindow.xaml.cs:974:ToastWindow.ShowToast("⚠️ Cannot overwrite original file when external pages are added.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PageReorderWindow.xaml.cs:980:ToastWindow.ShowToast("⚠️ No pages remaining.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PageReorderWindow.xaml.cs:1042:ToastWindow.ShowToast($"✅ Original file overwritten: {_item.FileName}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PageReorderWindow.xaml.cs:1050:ToastWindow.ShowToast($"❌ Failed to overwrite: {ex.Message}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PageReorderWindow.xaml.cs:1058:ToastWindow.ShowToast("❌ Failed to generate rotated/reordered PDF.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PdfMergeWindow.xaml.cs:521:ToastWindow.ShowToast($"✅ Saved {pageEntries.Count} pages → {outputName}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PdfMergeWindow.xaml.cs:527:ToastWindow.ShowToast("❌ Failed to save PDF pages.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PdfMergeWindow.xaml.cs:552:ToastWindow.ShowToast($"📄 Converting {Path.GetFileName(file)} to PDF...");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PdfMergeWindow.xaml.cs:560:ToastWindow.ShowToast($"❌ Failed to convert doc: {Path.GetFileName(file)}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PdfMergeWindow.xaml.cs:565:ToastWindow.ShowToast($"🖼️ Converting {Path.GetFileName(file)} to PDF...");
+e:\exeapps\FlyShelf\FlyShelf_PC\Windows\PdfMergeWindow.xaml.cs:576:ToastWindow.ShowToast($"❌ Failed to convert image: {Path.GetFileName(file)}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Licensing\UpgradePrompt.cs:90:"✨",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Licensing\UpgradePrompt.cs:497:Text = "👑",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Licensing\UpgradePrompt.cs:564:Text = "✨",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Licensing\UpgradePrompt.cs:585:Text = "🕐",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Licensing\UpgradePrompt.cs:641:upgradeBtnContent.Children.Add(new TextBlock { Text = "🔑", FontSize = 13, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Licensing\UpgradePrompt.cs:728:FlyShelf.Windows.ToastWindow.ShowToast("🛒 Opening payment page in your browser...");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Licensing\UpgradePrompt.cs:734:FlyShelf.Windows.ToastWindow.ShowToast("❌ Could not open browser. Please visit our website to upgrade.");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.cs:174:"LAN" => "📡",
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.cs:175:"Cloud" => "☀",
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.cs:176:"Cloudflare" => "🌐",
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.cs:177:_ => "📋"
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.cs:181:"Mobile" => "📱",
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.cs:182:"PC" => "💻",
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.cs:547:public string ExpandToggleText => IsExpanded ? "▴" : "▾";
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:39:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Document conversion is not available in the Store version."));
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:62:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No markdown content to convert"));
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:71:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ File not found — cannot convert"));
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:552:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Image file not found — cannot convert"));
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:715:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Image file not found — cannot convert"));
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:732:FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Unsupported target format: {targetFormat}"));
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:744:FlyShelf.Windows.ToastWindow.ShowToast($"Converting image to {ext.ToUpperInvariant()}... 🖼️")
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:784:FlyShelf.Windows.ToastWindow.ShowToast($"Image conversion failed ❌"));
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:794:FlyShelf.Windows.ToastWindow.ShowToast($"Image → {ext.ToUpperInvariant()} converted! ✅ {Path.GetFileName(outputPath)}");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:804:FlyShelf.Windows.ToastWindow.ShowToast($"Image conversion failed: {ex.Message} ❌")
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:822:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ CSV conversion is not available in the Store version."));
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:828:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ CSV file not found — cannot convert"));
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:871:FlyShelf.Windows.ToastWindow.ShowToast("CSV → XLSX conversion failed ❌"));
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Convert.cs:892:FlyShelf.Windows.ToastWindow.ShowToast($"CSV→XLSX failed: {ex.Message} ❌")
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Ocr.cs:92:FlyShelf.Windows.ToastWindow.ShowToast("🧠 AI OCR in progress... ⏳");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Ocr.cs:122:FlyShelf.Windows.ToastWindow.ShowToast("✅ AI OCR text copied to clipboard!");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Ocr.cs:127:FlyShelf.Windows.ToastWindow.ShowToast("⚠ AI OCR returned empty result");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Ocr.cs:132:FlyShelf.Windows.ToastWindow.ShowToast($"❌ AI OCR failed: {ex.Message}");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Ocr.cs:183:Content = "🔑 Set Up API Key",
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Ocr.cs:195:Content = "📋 Use Local (Weak)",
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.QrCode.cs:77:FlyShelf.Windows.ToastWindow.ShowToast("QR Code Extracted & Copied! 📋");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.QrCode.cs:174:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ PDF to Word conversion is not available in the Store version."));
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.QrCode.cs:204:FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word (via Word)...")
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.QrCode.cs:209:# ═══ Auto-dismiss Word's PDF conversion dialog ═══
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.QrCode.cs:309:FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word (native)...")
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.QrCode.cs:332:FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting via LibreOffice...")
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.QrCode.cs:382:FlyShelf.Windows.ToastWindow.ShowToast($"✅ Converted: {Path.GetFileName(outputPath)}");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.QrCode.cs:387:FlyShelf.Windows.ToastWindow.ShowToast("❌ Conversion failed — no converter available");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.QrCode.cs:394:FlyShelf.Windows.ToastWindow.ShowToast($"❌ PDF to Word error: {ex.Message}")
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.QrCode.cs:435:FlyShelf.Windows.ToastWindow.ShowToast("QR Code Extracted & Copied! 📋");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.QrCode.cs:441:FlyShelf.Windows.ToastWindow.ShowToast("No QR Code detected in image 🔍");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.TableExtract.cs:75:FlyShelf.Windows.ToastWindow.ShowToast("Extracting Table from Image... ⏳");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.TableExtract.cs:499:FlyShelf.Windows.ToastWindow.ShowToast("🧠 AI Table Extraction... ⏳");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.TableExtract.cs:546:FlyShelf.Windows.ToastWindow.ShowToast("✅ AI table data copied to clipboard!");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.TableExtract.cs:552:FlyShelf.Windows.ToastWindow.ShowToast("⚠ AI returned empty result");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.TableExtract.cs:557:FlyShelf.Windows.ToastWindow.ShowToast($"❌ AI Table Extract failed: {ex.Message}");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Actions.cs:720:FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No LAN peers connected.");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Actions.cs:724:FlyShelf.Windows.ToastWindow.ShowToast("📡 Syncing zip via LAN...");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Constructors.cs:358:listing.AppendLine(CultureInfo.InvariantCulture, $"📦 {entries.Count} file(s) in archive:");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Constructors.cs:413:listing.AppendLine(CultureInfo.InvariantCulture, $"📁 {FileName}/");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Constructors.cs:428:listing.AppendLine(CultureInfo.InvariantCulture, $"  📂 {name}/ ({subCount} items)");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\ClipboardItem.Constructors.cs:434:listing.AppendLine(CultureInfo.InvariantCulture, $"  📄 {name} ({FormatBytes(fSize)})");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\FlyShelfViewModel.cs:500:FlyShelf.Windows.ToastWindow.ShowToast("Copied to clipboard! 📋");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\FlyShelfViewModel.cs:720:FileName = $"⏳ Receiving {fileName}...",
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\FlyShelfViewModel.cs:726:RawContent = $"⏳ Downloading from {sourceDevice}...",
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\FlyShelfViewModel.Persistence.cs:570:Classes.Logger.LogAction($"{label} SYNC", "🔒 Blocked password item from file sync — password items are never synced");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\FlyShelfViewModel.Persistence.cs:580:FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) exceeds 50 GB Free tier sync limit."));
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\FlyShelfViewModel.Persistence.cs:673:FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Clipboard has {unpinnedCount} items. {remaining} slots remaining (max {maxUnpinnedItems}).");
+e:\exeapps\FlyShelf\FlyShelf_PC\ViewModels\FlyShelfViewModel.Persistence.cs:707:FlyShelf.Windows.ToastWindow.ShowToast($"🗑️ Clipboard full — removed {itemsToRemove.Count} oldest items.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.cs:67:return isCf ? ("Cloudflare", "☁ Cloud") : ("LAN", "📡 LAN");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.cs:303:Logger.LogAction("SECURITY", $"⛔ Rejected file:// path in sensitive directory from {capturedSource}: {fullPath}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.cs:371:FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}! 📱");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.cs:449:FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming transfer rejected: file exceeds 50 GB Free tier limit.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.cs:472:FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {rawName} from {sourceDevice}... 📥");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.cs:656:FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming archive rejected: exceeds 50 GB Free tier limit.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.cs:701:FlyShelf.Windows.ToastWindow.ShowToast($"Extracting batch data... 📦");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.cs:768:FlyShelf.Windows.ToastWindow.ShowToast($"📋 {rawName} copied to clipboard");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.cs:850:FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming relay rejected: exceeds 50 GB Free tier limit.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.cs:978:FlyShelf.Windows.ToastWindow.ShowToast($"📡 Relayed {rawName} ({sizeStr}) from {senderDevice}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.Routing.cs:142:Logger.LogAction("RATE_LIMIT", $"⛔ Rate limited {clientIp} (trusted={isTrustedPeer}, {(isWriteEndpoint ? "write" : "read")})");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.Routing.cs:178:Logger.LogAction("LAN_PAIR", $"⛔ Rate limited pair request from {clientIp}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.Routing.cs:210:Logger.LogAction("LAN_PAIR", $"📨 Pair request from {reqDeviceName} ({reqDeviceId}) @ {clientIp}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.Routing.cs:241:Logger.LogAction("LAN_PAIR", $"✅ Accepted LAN pair from {reqDeviceName}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.Routing.cs:260:Logger.LogAction("LAN_PAIR", $"❌ Rejected LAN pair from {reqDeviceName}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.Routing.cs:315:Logger.LogAction("WS", $"⛔ Loopback WebSocket connection rejected from self ({peerDeviceId})");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.Routing.cs:323:Logger.LogAction("WS", $"⛔ WebSocket connection rejected from blocked device: {peerDeviceId}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.Routing.cs:328:Logger.LogAction("WS", $"✅ Peer WebSocket accepted from {peerDeviceId}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.Routing.cs:824:FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming file {fileName} exceeds 50 GB Free tier limit.");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.Handlers.Routing.cs:882:FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {fileName} from {sourceDeviceName} (via WS)... 📥");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:64:Logger.LogAction("SECURITY", $"🚫 BLOCKED unauthenticated download request from {req.RemoteEndPoint}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:79:Logger.LogAction("SECURITY", $"🚫 BLOCKED path traversal attempt: {path} from {req.RemoteEndPoint}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:183:Logger.LogAction("SECURITY", $"⛔ /api/pair global rate-limit hit from {remoteIp}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:199:Logger.LogAction("SECURITY", $"⛔ /api/pair rate-limited IP: {remoteIp} ({ipState.count} fails)");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:252:FlyShelf.Windows.ToastWindow.ShowToast($"📱 {deviceName} paired successfully!");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:274:Logger.LogAction("SECURITY", $"⚠️ Failed pair attempt from {remoteIp} (key length={pairingKey?.Length ?? 0})");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:324:Logger.LogAction("PEER_ANNOUNCE", $"⛔ Rejected announce from {deviceName} — invalid pairing key");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:340:Logger.LogAction("PEER_ANNOUNCE", $"⛔ Rejected announce from {deviceName} — device ID {deviceId} not in paired devices list");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:350:Logger.LogAction("PEER_ANNOUNCE", $"📢 Received announce from {deviceName} (LAN={lanUrl} CF={cloudflareUrl})");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:418:FlyShelf.Windows.ToastWindow.ShowToast($"{friendlyType} received{sizeStr} via {transferMethod} 📥");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:458:FlyShelf.Windows.ToastWindow.ShowToast($"Saved: Group of {files.Length} files via {transferMethod} 📦");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:563:FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport}! 📥");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:609:Logger.LogAction("SECURITY", $"🚫 BLOCKED unauthenticated transfer offer from {req.RemoteEndPoint}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:663:Logger.LogAction("TRANSFER", $"📥 HTTP transfer offer from {deviceName}: {fileName} ({fileSize / 1024}KB), resume from {resumeFrom}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:695:Logger.LogAction("SECURITY", $"🚫 BLOCKED unauthenticated transfer upload from {req.RemoteEndPoint}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:735:Logger.LogAction("TRANSFER", $"📥 HTTP upload: {info.FileName} from pos {writePosition}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkSyncServer.FileTransfer.cs:767:Logger.LogAction("TRANSFER", $"✅ HTTP transfer complete: {info.FileName} ({totalWritten / 1024}KB) from {info.DeviceName}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\LanTransferSession.cs:193:TransferState.Queued => "⏳",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\LanTransferSession.cs:194:TransferState.Connecting => "🔗",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\LanTransferSession.cs:195:TransferState.Transferring => Direction == TransferDirection.Send ? "📤" : "📥",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\LanTransferSession.cs:196:TransferState.Paused => "⏸",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\LanTransferSession.cs:197:TransferState.Completed => "✅",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\LanTransferSession.cs:198:TransferState.Failed => "❌",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\LanTransferSession.cs:199:TransferState.Cancelled => "🚫",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\LanTransferSession.cs:200:_ => "❓"
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkFileQueue.cs:82:"Queued" => "⏳",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkFileQueue.cs:83:"Sending" => "📤",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkFileQueue.cs:84:"Sent" => "✅",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkFileQueue.cs:85:"Failed" => "❌",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkFileQueue.cs:86:_ => "❓"
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkFileQueue.cs:178:Logger.LogAction("FILEQUEUE", $"📁 Staged: {staged.FileName} ({staged.FileSizeText})");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkFileQueue.cs:249:Logger.LogAction("FILEQUEUE", $"📤 Sending {file.FileName} to {peer.DeviceName}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkFileQueue.cs:258:Logger.LogAction("FILEQUEUE", $"❌ Failed to offer {file.FileName} to {peer.DeviceName}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkFileQueue.cs:305:Logger.LogAction("FILEQUEUE", $"⏰ Transfer timed out: {file.FileName}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkFileQueue.cs:312:Logger.LogAction("FILEQUEUE", $"❌ Send error for {file.FileName}: {ex.Message}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkFileQueue.cs:343:Logger.LogAction("FILEQUEUE", $"📤 Sending {file.FileName} to {alivePeers.Count} peers");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkFileQueue.cs:403:Logger.LogAction("FILEQUEUE", $"❌ Failed to send {file.FileName} to {peer.DeviceName}: {ex.Message}");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Networking\NetworkFileQueue.cs:435:Logger.LogAction("FILEQUEUE", $"📤 Sending {queuedFiles.Count} files to all peers");
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Notes\NoteModels.cs:110:public string CollapseIcon => _isCollapsed ? "▸" : "▾";
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Notes\NoteModels.cs:175:[JsonIgnore] public string PinIcon => _isPinned ? "📌" : "";
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Notes\NoteTemplateDefinitions.cs:39:new Template("🛒", "Grocery List", "#22C55E", new[]
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Notes\NoteTemplateDefinitions.cs:47:new Template("💼", "Daily Standup", "#3B82F6", new[]
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Notes\NoteTemplateDefinitions.cs:55:new Template("📝", "Meeting Notes", "#6366F1", new[]
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Notes\NoteTemplateDefinitions.cs:64:new Template("🏋️", "Workout Planner", "#EF4444", new[]
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Notes\NoteTemplateDefinitions.cs:72:new Template("🎯", "Project Planning", "#00D2FF", new[]
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Notes\NoteTemplateDefinitions.cs:80:new Template("📊", "Weekly Review", "#F59E0B", new[]
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Notes\NoteTemplateDefinitions.cs:88:new Template("🧠", "Brain Dump", "#EC4899", new[]
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Notes\NoteTemplateDefinitions.cs:95:new Template("📚", "Reading Notes", "#A78BFA", new[]
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Productivity\TodoManager.cs:228:TodoRecurrence.Daily => "🔄 Daily",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Productivity\TodoManager.cs:229:TodoRecurrence.Weekly => "🔄 Weekly",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Productivity\TodoManager.cs:230:TodoRecurrence.Monthly => "🔄 Monthly",
+e:\exeapps\FlyShelf\FlyShelf_PC\Classes\Productivity\TodoManager.cs:283:public string CollapseIcon => _isExpanded ? "▾" : "▸";
+e:\exeapps\FlyShelf\FlyShelf_PC\App.SafeMode.cs:61:Text = "🚧",
+e:\exeapps\FlyShelf\FlyShelf_PC\App.xaml.cs:985:FlyShelf.Classes.Logger.LogAction("SHAKE", "✅ Shake-to-open gesture fully recognized! Checking constraints...");
+e:\exeapps\FlyShelf\FlyShelf_PC\App.xaml.cs:997:FlyShelf.Classes.Logger.LogAction("SHAKE", $"❌ Rejected: Exceeded Y-axis drift constraint. Drift: {netDriftY}px (Max allowed: 500px).");
+e:\exeapps\FlyShelf\FlyShelf_PC\App.xaml.cs:1002:FlyShelf.Classes.Logger.LogAction("SHAKE", $"🚀 Launching Clipboard Mini-Shelf at screen coordinates ({triggerX}, {triggerY}).");
+e:\exeapps\FlyShelf\FlyShelf_PC\App.xaml.cs:1008:FlyShelf.Classes.Logger.LogAction("SHAKE", "❌ Rejected: PDF Merger window is active.");
+e:\exeapps\FlyShelf\FlyShelf_PC\App.xaml.cs:1015:FlyShelf.Classes.Logger.LogAction("SHAKE", "❌ Rejected: Hub window is open.");
+e:\exeapps\FlyShelf\FlyShelf_PC\App.xaml.cs:1234:FlyShelf.Classes.Logger.LogAction("POWER", "⚡ PC resumed from sleep — force-restarting network in 5s");
+e:\exeapps\FlyShelf\FlyShelf_PC\App.xaml.cs:1251:FlyShelf.Classes.Logger.LogAction("POWER", "✅ Post-sleep recovery complete — forcing immediate tunnel health check");
+File not found: e:\exeapps\FlyShelf\FlyShelf_PC\Resources\Styles\HubClipboardItemTemplate.xaml

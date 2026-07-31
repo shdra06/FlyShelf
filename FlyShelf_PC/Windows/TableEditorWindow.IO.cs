@@ -74,7 +74,7 @@ namespace FlyShelf.Windows
                 
                 if (ClipboardHelper.SafeSetDataObject(dataObj, true))
                 {
-                    ToastWindow.ShowToast("Table copied! Paste into Word 📋");
+                    ToastWindow.ShowToast("Table copied! Paste into Word");
                 }
                 else
                 {
@@ -92,7 +92,7 @@ namespace FlyShelf.Windows
         {
             if (ClipboardHelper.SafeSetText(BuildCsv()))
             {
-                ToastWindow.ShowToast("Table copied as CSV 📋");
+                ToastWindow.ShowToast("Table copied as CSV");
             }
             else
             {
@@ -104,7 +104,7 @@ namespace FlyShelf.Windows
         {
             if (ClipboardHelper.SafeSetText(BuildTsv()))
             {
-                ToastWindow.ShowToast("Table copied as TSV 📋");
+                ToastWindow.ShowToast("Table copied as TSV");
             }
             else
             {
@@ -116,7 +116,7 @@ namespace FlyShelf.Windows
         {
             if (ClipboardHelper.SafeSetText(BuildMarkdown()))
             {
-                ToastWindow.ShowToast("Table copied as Markdown 📋");
+                ToastWindow.ShowToast("Table copied as Markdown");
             }
             else
             {
@@ -148,7 +148,7 @@ namespace FlyShelf.Windows
                     }
 
                     await File.WriteAllTextAsync(dlg.FileName, content, Encoding.UTF8);
-                    ToastWindow.ShowToast($"Table saved to {Path.GetFileName(dlg.FileName)} ✅");
+                    ToastWindow.ShowToast($"Table saved to {Path.GetFileName(dlg.FileName)}");
                 }
             }
             catch (Exception ex)

@@ -150,7 +150,7 @@
                                Click="ExportTsv_Click" Margin="0,2,4,2" ToolTip="Copy as tab-separated values" AutomationProperties.Name="Export as TSV"/>
                     <ui:Button Content="Markdown" Appearance="Transparent" Padding="10,6" FontSize="12"
                                Click="ExportMarkdown_Click" Margin="0,2,4,2" ToolTip="Copy as markdown table" AutomationProperties.Name="Export as Markdown"/>
-                    <ui:Button Content="💾 Save" Appearance="Transparent" Padding="10,6" FontSize="12"
+                    <ui:Button Content="Save" Appearance="Transparent" Padding="10,6" FontSize="12"
                                Click="SaveToFile_Click" Margin="0,2,8,2" ToolTip="Save to file (Ctrl+S)" AutomationProperties.Name="Save table to file"/>
 
                     <Border Width="1" Height="20" Background="{DynamicResource ThemeOverlayBorder}" Margin="4,0,8,0"/>
@@ -183,7 +183,7 @@
                 
                 <!-- Image toggle -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <ui:Button x:Name="ToggleImageBtn" Content="🖼 Source" Appearance="Transparent" 
+                    <ui:Button x:Name="ToggleImageBtn" Content="Source" Appearance="Transparent" 
                                Padding="10,6" FontSize="11" Click="ToggleImagePanel_Click" 
                                Margin="4,2" ToolTip="Toggle source image preview" AutomationProperties.Name="Toggle source image preview"/>
                 </StackPanel>

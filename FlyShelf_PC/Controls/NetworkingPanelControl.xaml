@@ -60,7 +60,7 @@
                 <!-- Status pill -->
                 <Border Grid.Column="2" CornerRadius="12" Padding="8,2" Margin="2,0,0,0" VerticalAlignment="Center"
                         Background="#18818CF8" BorderBrush="#30818CF8" BorderThickness="1">
-                    <TextBlock x:Name="NetPanelPeerCount" Text="0 devices" FontSize="10" Foreground="#A5B4FC" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="NetPanelPeerCount" Text = "0 devices" FontSize="10" Foreground="#A5B4FC" FontWeight="SemiBold"/>
                 </Border>
                     
                 <!-- Inline Pairing Code (visible only when pairing is active) -->
@@ -69,7 +69,7 @@
                         Background="#18F59E0B" BorderBrush="#30F59E0B" BorderThickness="1">
                     <StackPanel Orientation="Horizontal">
                         <ui:SymbolIcon Symbol="Key24" FontSize="10" Foreground="#F59E0B" Margin="0,0,5,0"/>
-                        <TextBlock x:Name="NetPanelPairingCodeText" Text="" FontSize="11" Foreground="#FCD34D" FontWeight="Bold"
+                        <TextBlock x:Name="NetPanelPairingCodeText" Text = "" FontSize="11" Foreground="#FCD34D" FontWeight="Bold"
                                    FontFamily="Consolas" VerticalAlignment="Center"/>
                         <Border CornerRadius="4" Cursor="Hand" Padding="3,1" Margin="6,0,0,0"
                                 Background="#20FFFFFF" PreviewMouseLeftButtonDown="NetPanel_DismissPairing_Click" ToolTip="Stop pairing">
@@ -85,7 +85,7 @@
                     <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#30F59E0B"/></Trigger></Style.Triggers></Style></Border.Style>
                     <StackPanel Orientation="Horizontal">
                         <ui:SymbolIcon Symbol="People24" FontSize="12" Foreground="#F59E0B" Margin="0,0,4,0"/>
-                        <TextBlock Text="Pair" FontSize="11" Foreground="#FCD34D" FontWeight="SemiBold"/>
+                        <TextBlock Text = "Pair" FontSize="11" Foreground="#FCD34D" FontWeight="SemiBold"/>
                     </StackPanel>
                 </Border>
                     
@@ -96,7 +96,7 @@
                     <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#30818CF8"/></Trigger></Style.Triggers></Style></Border.Style>
                     <StackPanel Orientation="Horizontal">
                         <ui:SymbolIcon Symbol="Wifi124" FontSize="12" Foreground="#818CF8" Margin="0,0,4,0"/>
-                        <TextBlock Text="Scan" FontSize="11" Foreground="#C4B5FD" FontWeight="SemiBold"/>
+                        <TextBlock Text = "Scan" FontSize="11" Foreground="#C4B5FD" FontWeight="SemiBold"/>
                     </StackPanel>
                 </Border>
                     
@@ -107,7 +107,7 @@
                     <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#30818CF8"/></Trigger></Style.Triggers></Style></Border.Style>
                     <StackPanel Orientation="Horizontal">
                         <ui:SymbolIcon Symbol="Add24" FontSize="12" Foreground="#818CF8" Margin="0,0,4,0"/>
-                        <TextBlock Text="+" FontSize="11" Foreground="#C4B5FD" FontWeight="SemiBold"/>
+                        <TextBlock Text = "+" FontSize="11" Foreground="#C4B5FD" FontWeight="SemiBold"/>
                     </StackPanel>
                 </Border>
                     
@@ -123,7 +123,7 @@
                     </Border.Background>
                     <StackPanel Orientation="Horizontal">
                         <ui:SymbolIcon Symbol="Send24" FontSize="12" Foreground="#10B981" Margin="0,0,4,0"/>
-                        <TextBlock Text="Send" FontSize="11" Foreground="#34D399" FontWeight="Bold"/>
+                        <TextBlock Text = "Send" FontSize="11" Foreground="#34D399" FontWeight="Bold"/>
                     </StackPanel>
                 </Border>
                     
@@ -135,10 +135,10 @@
                     <ui:SymbolIcon Symbol="MoreHorizontal24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="14"/>
                     <Border.ContextMenu>
                         <ContextMenu>
-                            <MenuItem Header="🔄  Refresh Devices" Click="NetPanel_RefreshDevices_MenuClick"/>
-                            <MenuItem Header="📋  Transfer Manager" Click="NetPanel_OpenTransferMgr_MenuClick"/>
+                            <MenuItem Header = "Refresh Devices" Click="NetPanel_RefreshDevices_MenuClick"/>
+                            <MenuItem Header = "Transfer Manager" Click="NetPanel_OpenTransferMgr_MenuClick"/>
                             <Separator/>
-                            <MenuItem Header="🗑️  Clear Queue" Click="NetPanel_ClearQueue_MenuClick"/>
+                            <MenuItem Header = "Clear Queue" Click="NetPanel_ClearQueue_MenuClick"/>
                         </ContextMenu>
                     </Border.ContextMenu>
                 </Border>
@@ -167,7 +167,7 @@
                         <!-- Section label -->
                         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="2,0,0,6">
                             <ui:SymbolIcon Symbol="PeopleTeam24" FontSize="12" Foreground="#64748B" Margin="0,0,6,0"/>
-                            <TextBlock Text="CONNECTED DEVICES" FontSize="10" Foreground="#475569" FontWeight="Bold" 
+                            <TextBlock Text = "CONNECTED DEVICES" FontSize="10" Foreground="#475569" FontWeight="Bold" 
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                             
@@ -195,7 +195,7 @@
                         <!-- Section label -->
                         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="2,0,0,6">
                             <ui:SymbolIcon Symbol="Wifi124" FontSize="12" Foreground="#F59E0B" Margin="0,0,6,0"/>
-                            <TextBlock Text="NEARBY DEVICES" FontSize="10" Foreground="#92400E" FontWeight="Bold" 
+                            <TextBlock Text = "NEARBY DEVICES" FontSize="10" Foreground="#92400E" FontWeight="Bold" 
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                             
@@ -209,9 +209,9 @@
                 <!-- ─── FILE QUEUE SECTION ─── -->
                 <StackPanel Margin="2,4,0,6" Orientation="Horizontal">
                     <ui:SymbolIcon Symbol="DocumentQueue24" FontSize="12" Foreground="#64748B" Margin="0,0,6,0"/>
-                    <TextBlock Text="FILE QUEUE" FontSize="10" Foreground="#475569" FontWeight="Bold" 
+                    <TextBlock Text = "FILE QUEUE" FontSize="10" Foreground="#475569" FontWeight="Bold" 
                                VerticalAlignment="Center"/>
-                    <TextBlock x:Name="NetPanelQueueStatus" Text="" FontSize="10" Foreground="#64748B" 
+                    <TextBlock x:Name="NetPanelQueueStatus" Text = "" FontSize="10" Foreground="#64748B" 
                                VerticalAlignment="Center" Margin="8,0,0,0"/>
                 </StackPanel>
                     
@@ -250,8 +250,8 @@
                             </Border.Background>
                             <ui:SymbolIcon Symbol="ArrowUpload24" FontSize="22" Foreground="#6366F1" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <TextBlock Text="Drop files here to send" FontSize="13" FontWeight="SemiBold" Foreground="#CBD5E1" TextAlignment="Center"/>
-                        <TextBlock Text="or copy a file — it auto-stages" FontSize="11" Foreground="#475569" TextAlignment="Center" Margin="0,4,0,0"/>
+                        <TextBlock Text = "Drop files here to send" FontSize="13" FontWeight="SemiBold" Foreground="#CBD5E1" TextAlignment="Center"/>
+                        <TextBlock Text = "or copy a file — it auto-stages" FontSize="11" Foreground="#475569" TextAlignment="Center" Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
                     

@@ -153,7 +153,7 @@
                     <StackPanel>
                         <!-- Header row -->
                         <Grid Margin="0,0,0,4">
-                            <TextBlock Text="⚡ Setup AI" FontSize="20" FontWeight="Bold"
+                            <TextBlock Text="Setup AI" FontSize="20" FontWeight="Bold"
                                        Foreground="#E2E8F0" VerticalAlignment="Center"/>
                             <Button Style="{StaticResource CloseButton}"
                                     HorizontalAlignment="Right" VerticalAlignment="Top"
@@ -171,7 +171,7 @@
                                     MouseLeftButtonDown="GeminiCard_Click" Tag="gemini"
                                     AutomationProperties.Name="Select Gemini AI provider">
                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <TextBlock Text="💎" FontSize="26" HorizontalAlignment="Center"/>
+                                    <ui:SymbolIcon Symbol="Diamond24" FontSize="26" HorizontalAlignment="Center"/>
                                     <TextBlock Text="Gemini" FontSize="13" FontWeight="SemiBold"
                                                Foreground="#E2E8F0" HorizontalAlignment="Center" Margin="0,4,0,2"/>
                                     <TextBlock Text="15 req/min free" FontSize="10" Foreground="#64748B"
@@ -184,7 +184,7 @@
                                     MouseLeftButtonDown="OpenAICard_Click" Tag="openai"
                                     AutomationProperties.Name="Select OpenAI provider">
                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <TextBlock Text="🤖" FontSize="26" HorizontalAlignment="Center"/>
+                                    <ui:SymbolIcon Symbol="Bot24" FontSize="26" HorizontalAlignment="Center"/>
                                     <TextBlock Text="OpenAI" FontSize="13" FontWeight="SemiBold"
                                                Foreground="#E2E8F0" HorizontalAlignment="Center" Margin="0,4,0,2"/>
                                     <TextBlock Text="Pay-per-use" FontSize="10" Foreground="#64748B"
@@ -197,7 +197,7 @@
                                     MouseLeftButtonDown="ClaudeCard_Click" Tag="claude"
                                     AutomationProperties.Name="Select Claude AI provider">
                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <TextBlock Text="🧠" FontSize="26" HorizontalAlignment="Center"/>
+                                    <ui:SymbolIcon Symbol="Brain24" FontSize="26" HorizontalAlignment="Center"/>
                                     <TextBlock Text="Claude" FontSize="13" FontWeight="SemiBold"
                                                Foreground="#E2E8F0" HorizontalAlignment="Center" Margin="0,4,0,2"/>
                                     <TextBlock Text="Pay-per-use" FontSize="10" Foreground="#64748B"
@@ -269,7 +269,7 @@
 
                             <!-- Eye toggle button -->
                             <Button x:Name="toggleVisibilityBtn" Grid.Column="1"
-                                    Content="👁" FontSize="14"
+                                    Content="" FontSize="14"
                                     Width="42" Background="#0F1D32"
                                     Click="ToggleVisibility_Click"
                                     ToolTip="Show/hide API key"
@@ -339,7 +339,7 @@
                                 Click="TestConnection_Click"
                                 AutomationProperties.Name="Test AI connection">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock x:Name="testBtnIcon" Text="🔌 " FontSize="13"/>
+                                <ui:SymbolIcon x:Name="testBtnIcon" Symbol="PlugConnected24" FontSize="13"/>
                                 <TextBlock x:Name="testBtnText" Text="Test Connection" FontSize="13"/>
                             </StackPanel>
                         </Button>
@@ -363,7 +363,7 @@
                         </Button>
 
                         <!-- Privacy note -->
-                        <TextBlock Text="🔒 Your key is encrypted locally and never leaves your device"
+                        <TextBlock Text="Your key is encrypted locally and never leaves your device"
                                    FontSize="10" Foreground="#475569" HorizontalAlignment="Center"
                                    Margin="0,0,0,4"/>
                     </StackPanel>

@@ -225,9 +225,9 @@ namespace FlyShelf.Classes
         [JsonIgnore]
         public string RecurrenceDisplay => _recurrence switch
         {
-            TodoRecurrence.Daily => "🔄 Daily",
-            TodoRecurrence.Weekly => "🔄 Weekly",
-            TodoRecurrence.Monthly => "🔄 Monthly",
+            TodoRecurrence.Daily => "Daily",
+            TodoRecurrence.Weekly => "Weekly",
+            TodoRecurrence.Monthly => "Monthly",
             _ => ""
         };
 

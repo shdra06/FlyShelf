@@ -79,7 +79,7 @@ namespace FlyShelf.Controls
             {
                 NotesBulletList.Visibility = Visibility.Visible;
                 NotesFreeformArea.Visibility = Visibility.Collapsed;
-                NotesModeToggleText.Text = "📄 Freeform";
+                NotesModeToggleText.Text = "Freeform";
 
                 // Auto-create a first bullet if the day is empty so user can start typing immediately
                 if (day.Bullets.Count == 0)
@@ -95,7 +95,7 @@ namespace FlyShelf.Controls
             }
 
             // Update day label
-            NotesCurrentDayLabel.Text = "Notes · " + day.DisplayDate;
+            NotesCurrentDayLabel.Text = "Notes ·" + day.DisplayDate;
         }
 
         private void RebuildSidebar()
@@ -146,7 +146,7 @@ namespace FlyShelf.Controls
             }
 
             var monthDate = new DateTime(year, month, 1);
-            NotesCurrentDayLabel.Text = "Notes · " + monthDate.ToString("MMMM yyyy", System.Globalization.CultureInfo.CurrentCulture);
+            NotesCurrentDayLabel.Text = "Notes ·" + monthDate.ToString("MMMM yyyy", System.Globalization.CultureInfo.CurrentCulture);
 
             UpdateSidebarSelectionVisuals();
 
@@ -164,7 +164,7 @@ namespace FlyShelf.Controls
 
             NotesBulletList.Visibility = Visibility.Visible;
             NotesFreeformArea.Visibility = Visibility.Collapsed;
-            NotesModeToggleText.Text = "📄 Month View";
+            NotesModeToggleText.Text = "Month View";
         }
 
         private void CurrentDayLabel_Click(object sender, MouseButtonEventArgs e)

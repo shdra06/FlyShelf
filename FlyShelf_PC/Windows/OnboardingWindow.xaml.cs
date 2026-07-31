@@ -39,7 +39,7 @@ namespace FlyShelf.Windows
             }
 
             // Update button text
-            NextBtnText.Text = index == TOTAL_STEPS - 1 ? "🚀 Get Started" : "Next →";
+            NextBtnText.Text = index == TOTAL_STEPS - 1 ? "Get Started" : "Next →";
 
             // Step 3: Auto-enable widget
             if (index == 2)

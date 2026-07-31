@@ -64,8 +64,8 @@ namespace FlyShelf
                     {
                         var transportLabel = peer.Transport switch
                         {
-                            "LAN" => "⚡ LAN",
-                            "Cloudflare" => "☁️ Cloud",
+                            "LAN" => "LAN",
+                            "Cloudflare" => "Cloud",
                             _ => peer.Transport
                         };
 
@@ -82,7 +82,7 @@ namespace FlyShelf
                     sendMenu.Items.Add(new Separator());
                     var allMi = new MenuItem
                     {
-                        Header = "📡 Send to All Devices",
+                        Header = "Send to All Devices",
                         FontWeight = FontWeights.SemiBold
                     };
                     allMi.Click += SendToAllDevices_Click;
@@ -151,8 +151,8 @@ namespace FlyShelf
 
                 Windows.ToastWindow.ShowToast(
                     failed == 0
-                        ? $"✅ Sent to {sent} device{(sent != 1 ? "s" : "")}"
-                        : $"⚠️ Sent to {sent}, failed {failed}"
+                        ? $"Sent to {sent} device{(sent != 1 ?"s" : "")}"
+                        : $"Sent to {sent}, failed {failed}"
                 );
             }
             catch (Exception ex)
@@ -169,7 +169,7 @@ namespace FlyShelf
         {
             if (string.IsNullOrEmpty(peer.ActiveUrl) || !peer.IsAlive)
             {
-                if (showToast) Windows.ToastWindow.ShowToast($"⚠️ {peer.DeviceName} is offline");
+                if (showToast) Windows.ToastWindow.ShowToast($"{peer.DeviceName} is offline");
                 return;
             }
 
@@ -200,13 +200,13 @@ namespace FlyShelf
 
             if (response.IsSuccessStatusCode)
             {
-                if (showToast) Windows.ToastWindow.ShowToast($"✅ Sent to {peer.DeviceName}");
+                if (showToast) Windows.ToastWindow.ShowToast($"Sent to {peer.DeviceName}");
                 Logger.LogAction("SEND", $"Sent {item.ItemType} to {peer.DeviceName} via {peer.Transport}");
                 SoundEffects.PlayTransferComplete();
             }
             else
             {
-                if (showToast) Windows.ToastWindow.ShowToast($"❌ Failed to send to {peer.DeviceName}");
+                if (showToast) Windows.ToastWindow.ShowToast($"Failed to send to {peer.DeviceName}");
                 Logger.LogAction("SEND", $"Send failed to {peer.DeviceName}: {response.StatusCode}");
                 SoundEffects.PlayError();
             }

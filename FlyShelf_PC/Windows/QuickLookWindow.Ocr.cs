@@ -211,7 +211,7 @@ namespace FlyShelf.Windows
             {
                 if (ClipboardHelper.SafeSetTextAllowCapture(textToCopy))
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("All Image Text Copied to Clipboard! 📋");
+                    FlyShelf.Windows.ToastWindow.ShowToast("All Image Text Copied to Clipboard!");
                 }
                 else
                 {
@@ -232,7 +232,7 @@ namespace FlyShelf.Windows
             {
                 if (ClipboardHelper.SafeSetText(_item.RawContent))
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("QR Code Text Copied! 📋");
+                    FlyShelf.Windows.ToastWindow.ShowToast("QR Code Text Copied!");
                 }
                 else
                 {

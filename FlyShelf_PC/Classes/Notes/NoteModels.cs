@@ -172,7 +172,7 @@ namespace FlyShelf.Classes
             set { if (_isPinned != value) { _isPinned = value; OnPropertyChanged(nameof(IsPinned)); OnPropertyChanged(nameof(PinIcon)); } }
         }
 
-        [JsonIgnore] public string PinIcon => _isPinned ? "📌" : "";
+        [JsonIgnore] public string PinIcon => _isPinned ? "" : "";
 
         // ── Sort Order (for drag-reorder) ───────────────────────
         private int _sortOrder;

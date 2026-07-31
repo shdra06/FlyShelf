@@ -139,7 +139,7 @@ namespace FlyShelf.Classes
 
                 if (IsRateLimited(clientIp, isWriteEndpoint, isTrustedPeer))
                 {
-                    Logger.LogAction("RATE_LIMIT", $"⛔ Rate limited {clientIp} (trusted={isTrustedPeer}, {(isWriteEndpoint ? "write" : "read")})");
+                    Logger.LogAction("RATE_LIMIT", $"Rate limited {clientIp} (trusted={isTrustedPeer}, {(isWriteEndpoint ?"write" : "read")})");
                     res.StatusCode = 429;
                     byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"429 Too Many Requests\"}");
                     res.ContentType = "application/json";
@@ -175,7 +175,7 @@ namespace FlyShelf.Classes
                         if (_pairRequestThrottle.TryGetValue(clientIp, out var lastRequest)
                             && (DateTime.UtcNow - lastRequest).TotalSeconds < 30)
                         {
-                            Logger.LogAction("LAN_PAIR", $"⛔ Rate limited pair request from {clientIp}");
+                            Logger.LogAction("LAN_PAIR", $"Rate limited pair request from {clientIp}");
                             res.StatusCode = 429;
                             res.Close();
                             return;
@@ -207,7 +207,7 @@ namespace FlyShelf.Classes
                             return;
                         }
 
-                        Logger.LogAction("LAN_PAIR", $"📨 Pair request from {reqDeviceName} ({reqDeviceId}) @ {clientIp}");
+                        Logger.LogAction("LAN_PAIR", $"Pair request from {reqDeviceName} ({reqDeviceId}) @ {clientIp}");
 
                         // Even already-paired devices must confirm re-pairing — prevents secret theft
                         // Fall through to the normal confirmation flow below
@@ -238,7 +238,7 @@ namespace FlyShelf.Classes
                             // Store the paired device locally (LAN-only, no Firebase)
                             DevicePairingManager.PairDeviceViaLan(reqDeviceId, reqDeviceName, reqDeviceType, clientIp, sharedSecret);
 
-                            Logger.LogAction("LAN_PAIR", $"✅ Accepted LAN pair from {reqDeviceName}");
+                            Logger.LogAction("LAN_PAIR", $"Accepted LAN pair from {reqDeviceName}");
 
                             var responseData = new
                             {
@@ -257,7 +257,7 @@ namespace FlyShelf.Classes
                         }
                         else
                         {
-                            Logger.LogAction("LAN_PAIR", $"❌ Rejected LAN pair from {reqDeviceName}");
+                            Logger.LogAction("LAN_PAIR", $"Rejected LAN pair from {reqDeviceName}");
                             var rejectData = new { accepted = false };
                             string json = JsonSerializer.Serialize(rejectData);
                             byte[] data = Encoding.UTF8.GetBytes(json);
@@ -312,7 +312,7 @@ namespace FlyShelf.Classes
                     string peerDeviceId = req.Headers["X-Device-Id"] ?? req.QueryString["deviceId"] ?? "unknown";
                     if (peerDeviceId == SettingsManager.Current.DeviceId)
                     {
-                        Logger.LogAction("WS", $"⛔ Loopback WebSocket connection rejected from self ({peerDeviceId})");
+                        Logger.LogAction("WS", $"Loopback WebSocket connection rejected from self ({peerDeviceId})");
                         res.StatusCode = 403;
                         res.Close();
                         return;
@@ -320,12 +320,12 @@ namespace FlyShelf.Classes
                     // SECURITY: Block WebSocket connections from recently-unpaired devices
                     if (DevicePairingManager.IsDeviceBlocked(peerDeviceId))
                     {
-                        Logger.LogAction("WS", $"⛔ WebSocket connection rejected from blocked device: {peerDeviceId}");
+                        Logger.LogAction("WS", $"WebSocket connection rejected from blocked device: {peerDeviceId}");
                         res.StatusCode = 403;
                         res.Close();
                         return;
                     }
-                    Logger.LogAction("WS", $"✅ Peer WebSocket accepted from {peerDeviceId}");
+                    Logger.LogAction("WS", $"Peer WebSocket accepted from {peerDeviceId}");
                     var wsContext = await context.AcceptWebSocketAsync(null);
                     _ = Task.Run(() => HandlePeerWebSocket(wsContext.WebSocket, peerDeviceId));
                 }
@@ -821,7 +821,7 @@ namespace FlyShelf.Classes
                                     {
                                         Logger.LogAction("WS", $"File receipt rejected — {fileName} ({fileSize} bytes) exceeds 50 GB limit on Free tier.");
                                         _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                                            FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming file {fileName} exceeds 50 GB Free tier limit.");
+                                            FlyShelf.Windows.ToastWindow.ShowToast($"Incoming file {fileName} exceeds 50 GB Free tier limit.");
                                         });
 
                                         // Drain the WebSocket bytes to keep it alive
@@ -879,7 +879,7 @@ namespace FlyShelf.Classes
                                     else
                                     {
                                         _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                                            FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {fileName} from {sourceDeviceName} (via WS)... 📥");
+                                            FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {fileName} from {sourceDeviceName} (via WS)...");
                                         });
                                     }
 

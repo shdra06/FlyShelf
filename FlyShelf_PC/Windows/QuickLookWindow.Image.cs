@@ -143,7 +143,7 @@ namespace FlyShelf.Windows
             var menu = new System.Windows.Controls.ContextMenu();
             foreach (var lang in _translateLanguages)
             {
-                var menuItem = new System.Windows.Controls.MenuItem { Header = $"🌐 {lang}" };
+                var menuItem = new System.Windows.Controls.MenuItem { Header = $"{lang}" };
                 string targetLang = lang; // capture for closure
                 menuItem.Click += async (s, ev) =>
                 {
@@ -170,7 +170,7 @@ namespace FlyShelf.Windows
             // Check AI availability
             if (!FlyShelf.Classes.AiProviderService.Instance.IsAvailable)
             {
-                FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Translate requires an AI API key");
+                FlyShelf.Windows.ToastWindow.ShowToast("Translate requires an AI API key");
                 return;
             }
 
@@ -186,7 +186,7 @@ namespace FlyShelf.Windows
                 {
                     TextPreview.Text = translated;
                     HeaderTitle.Text = $"Translated to {targetLanguage}";
-                    FlyShelf.Windows.ToastWindow.ShowToast($"🌐 Translated to {targetLanguage}");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Translated to {targetLanguage}");
                     FlyShelf.Classes.Logger.LogAction("TRANSLATE", $"Translated {sourceText.Length} chars to {targetLanguage}");
                 }
                 else

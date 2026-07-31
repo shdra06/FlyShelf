@@ -64,7 +64,7 @@ namespace FlyShelf.Classes
                       || !string.IsNullOrEmpty(req.Headers["Cf-Ray"])
                       || !string.IsNullOrEmpty(req.Headers["X-Forwarded-For"])
                       || req.Headers["X-Forwarded-Proto"] == "https";
-            return isCf ? ("Cloudflare", "☁ Cloud") : ("LAN", "📡 LAN");
+            return isCf ? ("Cloudflare", "Cloud") : ("LAN", "LAN");
         }
 
         /// <summary>

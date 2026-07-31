@@ -128,7 +128,7 @@ namespace FlyShelf
                         // ═══ Contextual Tip: Double-click to open ═══
                         // Show before paste+hide so the tip appears anchored to the card
                         if (!string.IsNullOrEmpty(clipboardObj.FilePath))
-                            Windows.TipBadge.Show("doubleclick_hint", "🖱️ Double-click to open files directly", itemContainer2);
+                            Windows.TipBadge.Show("doubleclick_hint", "Double-click to open files directly", itemContainer2);
 
                         await CopyItemAndPaste(clipboardObj, hideWindow: true);
 
@@ -662,7 +662,7 @@ namespace FlyShelf
                             // Only show for items with a file path (not text-only), and only the first 3 times
                             if (!string.IsNullOrEmpty(firstItem.FilePath) && _dragPreviewWindow != null)
                             {
-                                Windows.TipBadge.ShowLimited("ctrl_drag_path", "💡 Hold Ctrl to paste file path instead", 3, _dragPreviewWindow);
+                                Windows.TipBadge.ShowLimited("ctrl_drag_path", "Hold Ctrl to paste file path instead", 3, _dragPreviewWindow);
                             }
                         }
                         catch (Exception previewEx)

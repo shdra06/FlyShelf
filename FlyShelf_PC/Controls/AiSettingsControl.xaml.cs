@@ -35,14 +35,14 @@ namespace FlyShelf.Controls
                 string key = settings.AiApiKey;
                 AiApiKeyBox.Text = key.Length > 8 ? string.Concat(key.AsSpan(0, 4), "...", key.AsSpan(key.Length - 4)) : "••••••••";
                 AiApiKeyBox.Tag = "masked"; // Track that it's showing masked value
-                AiApiKeyStatus.Text = "✅ API key configured";
+                AiApiKeyStatus.Text = "API key configured";
                 AiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
             }
             else
             {
                 AiApiKeyBox.Text = "";
                 AiApiKeyBox.Tag = null;
-                AiApiKeyStatus.Text = "⚠️ No API key set — some features use local processing";
+                AiApiKeyStatus.Text = "No API key set — some features use local processing";
                 AiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B"));
             }
 
@@ -119,15 +119,15 @@ namespace FlyShelf.Controls
             {
                 AiApiKeyBox.Text = newKey.Length > 8 ? string.Concat(newKey.AsSpan(0, 4), "...", newKey.AsSpan(newKey.Length - 4)) : "••••••••";
                 AiApiKeyBox.Tag = "masked";
-                AiApiKeyStatus.Text = "✅ API key saved and encrypted!";
+                AiApiKeyStatus.Text = "API key saved and encrypted!";
                 AiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
-                Windows.ToastWindow.ShowToast("🔑 API key saved!");
+                Windows.ToastWindow.ShowToast("API key saved!");
             }
             else
             {
-                AiApiKeyStatus.Text = "⚠️ API key cleared";
+                AiApiKeyStatus.Text = "API key cleared";
                 AiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B"));
-                Windows.ToastWindow.ShowToast("🔑 API key cleared");
+                Windows.ToastWindow.ShowToast("API key cleared");
             }
 
             UpdateProviderStatus();

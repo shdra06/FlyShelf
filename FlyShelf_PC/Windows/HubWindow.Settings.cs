@@ -78,7 +78,7 @@ namespace FlyShelf.Windows
             if (SummonHotkeyLabel != null)
                 SummonHotkeyLabel.Text = $"{s.HotkeyDisplayString} / Widget popup";
             if (ShortcutsHotkeyLabel != null)
-                ShortcutsHotkeyLabel.Text = s.HotkeyDisplayString.Replace(" ", "");
+                ShortcutsHotkeyLabel.Text = s.HotkeyDisplayString.Replace("","");
         }
 
         private void ChangeHotkey_Click(object sender, RoutedEventArgs e)
@@ -143,7 +143,7 @@ namespace FlyShelf.Windows
                 if ((mod & 0x0001) != 0) mparts.Add("Alt");
                 if ((mod & 0x0004) != 0) mparts.Add("Shift");
                 if ((mod & 0x0008) != 0) mparts.Add("Win");
-                HotkeyRecorderText.Text = string.Join(" + ", mparts) + " + ...";
+                HotkeyRecorderText.Text = string.Join("+ ", mparts) +" + ...";
                 return;
             }
 
@@ -172,7 +172,7 @@ namespace FlyShelf.Windows
                 HotkeyWarningBar.Visibility = Visibility.Collapsed;
                 StopRecording();
                 BuildHotkeyKeycaps();
-                ToastWindow.ShowToast($"✅ Hotkey changed to {s.HotkeyDisplayString}");
+                ToastWindow.ShowToast($"Hotkey changed to {s.HotkeyDisplayString}");
             }
             else
             {
@@ -183,9 +183,9 @@ namespace FlyShelf.Windows
                 if ((mod & 0x0004) != 0) fparts.Add("Shift");
                 if ((mod & 0x0008) != 0) fparts.Add("Win");
                 fparts.Add(keyName);
-                HotkeyRecorderText.Text = string.Join("+", fparts) + " ❌";
+                HotkeyRecorderText.Text = string.Join("+", fparts) +"";
                 HotkeyWarningBar.Visibility = Visibility.Visible;
-                HotkeyWarningText.Text = $"⚠️ {string.Join(" + ", fparts)} is used by another application";
+                HotkeyWarningText.Text = $"{string.Join("+", fparts)} is used by another application";
             }
         }
 
@@ -215,7 +215,7 @@ namespace FlyShelf.Windows
             HotkeyWarningBar.Visibility = Visibility.Collapsed;
             StopRecording();
             BuildHotkeyKeycaps();
-            ToastWindow.ShowToast("✅ Hotkey reset to Alt + C");
+            ToastWindow.ShowToast("Hotkey reset to Alt + C");
         }
 
         private void RunDiagnostics_Click(object sender, RoutedEventArgs e)
@@ -224,7 +224,7 @@ namespace FlyShelf.Windows
             try
             {
                 if (btn != null) btn.IsEnabled = false;
-                ToastWindow.ShowToast("🔍 Network diagnostics started...");
+                ToastWindow.ShowToast("Network diagnostics started...");
                 System.Threading.Tasks.Task.Run(() =>
                 {
                     try
@@ -232,7 +232,7 @@ namespace FlyShelf.Windows
                         Logger.DumpNetworkDiagnostics();
                         Dispatcher.Invoke(() =>
                         {
-                            ToastWindow.ShowToast("🔍  Network diagnostics captured!");
+                            ToastWindow.ShowToast("Network diagnostics captured!");
                             if (btn != null) btn.IsEnabled = true;
 #if !MSIX_STORE
                             RefreshLogs_Click(null, null);
@@ -243,7 +243,7 @@ namespace FlyShelf.Windows
                     {
                         Dispatcher.Invoke(() =>
                         {
-                            ToastWindow.ShowToast($"❌ Diagnostics failed: {ex.Message}");
+                            ToastWindow.ShowToast($"Diagnostics failed: {ex.Message}");
                             if (btn != null) btn.IsEnabled = true;
                         });
                     }
@@ -251,7 +251,7 @@ namespace FlyShelf.Windows
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"❌ Diagnostics failed: {ex.Message}");
+                ToastWindow.ShowToast($"Diagnostics failed: {ex.Message}");
                 if (btn != null) btn.IsEnabled = true;
             }
         }
@@ -260,11 +260,11 @@ namespace FlyShelf.Windows
         {
             try
             {
-                string logsDir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
+                string logsDir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "FlyShelf","Logs");
                 if (!System.IO.Directory.Exists(logsDir)) System.IO.Directory.CreateDirectory(logsDir);
                 System.Diagnostics.Process.Start("explorer.exe", logsDir);
             }
-            catch { ToastWindow.ShowToast("❌ Could not open folder", 2000); }
+            catch { ToastWindow.ShowToast("Could not open folder", 2000); }
         }
 
 #if !MSIX_STORE
@@ -282,7 +282,7 @@ namespace FlyShelf.Windows
                 _networkLogsWindow = new NetworkLogsWindow();
                 WindowHelper.ShowInForeground(_networkLogsWindow);
             }
-            catch { ToastWindow.ShowToast("❌ Could not open folder", 2000); }
+            catch { ToastWindow.ShowToast("Could not open folder", 2000); }
         }
 #endif // !MSIX_STORE
 
@@ -312,15 +312,15 @@ namespace FlyShelf.Windows
 
             btn.IsEnabled = false;
             var origContent = btn.Content;
-            btn.Content = "⏳...";
+            btn.Content ="...";
 
             try
             {
                 if (string.IsNullOrEmpty(activeUrl))
                 {
-                    ClipboardHelper.SafeSetText($"⚠ Device '{deviceName}' has no active URL — cannot fetch remote data.\nDevice may be offline. Try Force Sync first.");
-                    ToastWindow.ShowToast($"⚠ {deviceName} is offline");
-                    btn.Content = "❌ Offline";
+                    ClipboardHelper.SafeSetText($"Device '{deviceName}' has no active URL  cannot fetch remote data.\nDevice may be offline. Try Force Sync first.");
+                    ToastWindow.ShowToast($"{deviceName} is offline");
+                    btn.Content ="Offline";
                     await Task.Delay(1500);
                     return;
                 }
@@ -330,17 +330,17 @@ namespace FlyShelf.Windows
                 string pin = SettingsManager.Current?.WebClientPinToken;
 
                 var sb = new System.Text.StringBuilder();
-                sb.AppendLine("═══════════════════════════════════════════════════════════");
-                sb.AppendLine(CultureInfo.InvariantCulture, $"  FlyShelf Remote Diagnostic — {deviceName}");
+                sb.AppendLine("");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"FlyShelf Remote Diagnostic  {deviceName}");
                 sb.AppendLine(CultureInfo.InvariantCulture, $"  URL: {activeUrl}");
                 sb.AppendLine(CultureInfo.InvariantCulture, $"  Fetched: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                sb.AppendLine("═══════════════════════════════════════════════════════════");
+                sb.AppendLine("");
 
                 // ── SECTION 1: Health ──
                 sb.AppendLine();
-                sb.AppendLine("┌─────────────────────────────────────────────────────────┐");
-                sb.AppendLine("│  DEVICE HEALTH                                          │");
-                sb.AppendLine("└─────────────────────────────────────────────────────────┘");
+                sb.AppendLine("");
+                sb.AppendLine("DEVICE HEALTH");
+                sb.AppendLine("");
                 try
                 {
                     var hc = HttpClientPool.Default;
@@ -348,16 +348,16 @@ namespace FlyShelf.Windows
                     using var healthDoc = System.Text.Json.JsonDocument.Parse(healthResp);
                     var h = healthDoc.RootElement;
 
-                    string version = h.TryGetProperty("version", out var vp) ? vp.GetString() ?? "?" : "?";
-                    string devId = h.TryGetProperty("deviceId", out var dp) ? dp.GetString() ?? "?" : "?";
-                    string devType = h.TryGetProperty("deviceType", out var dtp) ? dtp.GetString() ?? "?" : "?";
+                    string version = h.TryGetProperty("version", out var vp) ? vp.GetString() ??"?":"?";
+                    string devId = h.TryGetProperty("deviceId", out var dp) ? dp.GetString() ??"?":"?";
+                    string devType = h.TryGetProperty("deviceType", out var dtp) ? dtp.GetString() ??"?":"?";
                     int uptime = h.TryGetProperty("uptime", out var up) ? up.GetInt32() : 0;
                     int peers = h.TryGetProperty("peers", out var pp) ? pp.GetInt32() : 0;
-                    string lanUrl = "", cfUrl = "";
+                    string lanUrl = "", cfUrl ="";
                     if (h.TryGetProperty("transport", out var tr))
                     {
-                        lanUrl = tr.TryGetProperty("lan", out var lp) ? lp.GetString() ?? "" : "";
-                        cfUrl = tr.TryGetProperty("cloudflare", out var cp) ? cp.GetString() ?? "" : "";
+                        lanUrl = tr.TryGetProperty("lan", out var lp) ? lp.GetString() ??"" : "";
+                        cfUrl = tr.TryGetProperty("cloudflare", out var cp) ? cp.GetString() ??"" : "";
                     }
 
                     string uptimeStr = uptime >= 3600 ? $"{uptime/3600}h {(uptime%3600)/60}m" : $"{uptime/60}m {uptime%60}s";
@@ -366,19 +366,19 @@ namespace FlyShelf.Windows
                     sb.AppendLine(CultureInfo.InvariantCulture, $"  Type:       {devType}");
                     sb.AppendLine(CultureInfo.InvariantCulture, $"  Uptime:     {uptimeStr}");
                     sb.AppendLine(CultureInfo.InvariantCulture, $"  Peers:      {peers} connected");
-                    sb.AppendLine(CultureInfo.InvariantCulture, $"  LAN:        {(string.IsNullOrEmpty(lanUrl) ? "—" : lanUrl)}");
-                    sb.AppendLine(CultureInfo.InvariantCulture, $"  Cloudflare: {(string.IsNullOrEmpty(cfUrl) ? "—" : cfUrl)}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"LAN:        {(string.IsNullOrEmpty(lanUrl) ? "" : lanUrl)}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"Cloudflare: {(string.IsNullOrEmpty(cfUrl) ? "" : cfUrl)}");
                 }
                 catch (Exception ex)
                 {
-                    sb.AppendLine(CultureInfo.InvariantCulture, $"  ❌ Failed to fetch health: {ex.Message}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"Failed to fetch health: {ex.Message}");
                 }
 
                 // ── SECTION 2: Clipboard Contents ──
                 sb.AppendLine();
-                sb.AppendLine("┌─────────────────────────────────────────────────────────┐");
-                sb.AppendLine("│  CLIPBOARD CONTENTS                                     │");
-                sb.AppendLine("└─────────────────────────────────────────────────────────┘");
+                sb.AppendLine("");
+                sb.AppendLine("CLIPBOARD CONTENTS");
+                sb.AppendLine("");
                 try
                 {
                     var sc = HttpClientPool.Default;
@@ -387,7 +387,7 @@ namespace FlyShelf.Windows
                         syncReq.Headers.Add("X-Pairing-Key", pairingKey);
                     if (!string.IsNullOrEmpty(pin))
                         syncReq.Headers.Add("Authorization", $"Bearer {pin}");
-                    syncReq.Headers.Add("X-FlyShelf-Client", "DesktopSync");
+                    syncReq.Headers.Add("X-FlyShelf-Client","DesktopSync");
 
                     var syncHttpResp = await sc.SendAsync(syncReq);
                     var syncResp = await syncHttpResp.Content.ReadAsStringAsync();
@@ -397,35 +397,35 @@ namespace FlyShelf.Windows
                     foreach (var item in syncDoc.RootElement.EnumerateArray())
                     {
                         idx++;
-                        string type = item.TryGetProperty("Type", out var tp) ? tp.GetString() ?? "?" : "?";
-                        string title = item.TryGetProperty("Title", out var ttp) ? ttp.GetString() ?? "" : "";
-                        string raw = item.TryGetProperty("Raw", out var rp) ? rp.GetString() ?? "" : "";
-                        string fileName = item.TryGetProperty("FileName", out var fnp) ? fnp.GetString() ?? "" : "";
-                        string time = item.TryGetProperty("Time", out var tmp) ? tmp.GetString() ?? "" : "";
-                        string source = item.TryGetProperty("SourceDeviceName", out var sp) ? sp.GetString() ?? "" : "";
-                        string sourceType = item.TryGetProperty("SourceDeviceType", out var stp) ? stp.GetString() ?? "" : "";
-                        string previewUrl = item.TryGetProperty("PreviewUrl", out var pvp) ? pvp.GetString() ?? "" : "";
-                        string downloadUrl = item.TryGetProperty("DownloadUrl", out var dup) ? dup.GetString() ?? "" : "";
+                        string type = item.TryGetProperty("Type", out var tp) ? tp.GetString() ??"?":"?";
+                        string title = item.TryGetProperty("Title", out var ttp) ? ttp.GetString() ??"" : "";
+                        string raw = item.TryGetProperty("Raw", out var rp) ? rp.GetString() ??"" : "";
+                        string fileName = item.TryGetProperty("FileName", out var fnp) ? fnp.GetString() ??"" : "";
+                        string time = item.TryGetProperty("Time", out var tmp) ? tmp.GetString() ??"" : "";
+                        string source = item.TryGetProperty("SourceDeviceName", out var sp) ? sp.GetString() ??"" : "";
+                        string sourceType = item.TryGetProperty("SourceDeviceType", out var stp) ? stp.GetString() ??"" : "";
+                        string previewUrl = item.TryGetProperty("PreviewUrl", out var pvp) ? pvp.GetString() ??"" : "";
+                        string downloadUrl = item.TryGetProperty("DownloadUrl", out var dup) ? dup.GetString() ??"" : "";
 
                         string icon = type switch
                         {
-                            "Text" => "📝", "Url" => "🔗", "Image" => "🖼️",
-                            "QRCode" => "📱", "File" => "📎", "Pdf" => "📄", _ => "📋"
+"Text"=>"","Url"=>"","Image"=>"",
+"QRCode"=>"","File"=>"","Pdf"=>"", _ =>""
                         };
 
                         sb.AppendLine();
-                        sb.AppendLine(CultureInfo.InvariantCulture, $"  {icon} [{idx}] {type.ToUpper(CultureInfo.InvariantCulture)} — {time}");
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"{icon} [{idx}] {type.ToUpper(CultureInfo.InvariantCulture)}  {time}");
                         if (!string.IsNullOrEmpty(title)) sb.AppendLine(CultureInfo.InvariantCulture, $"     Title:  {title}");
                         if (!string.IsNullOrEmpty(fileName) && fileName != title) sb.AppendLine(CultureInfo.InvariantCulture, $"     File:   {fileName}");
                         if (!string.IsNullOrEmpty(source)) sb.AppendLine(CultureInfo.InvariantCulture, $"     From:   {source} ({sourceType})");
 
-                        if (type == "Text" || type == "Url")
+                        if (type == "Text" || type =="Url")
                         {
                             string preview = raw.Length > 200 ? string.Concat(raw.AsSpan(0, 200), "...") : raw;
-                            preview = preview.Replace("\r\n", "\\n").Replace("\n", "\\n");
+                            preview = preview.Replace("\r\n","\\n").Replace("\n","\\n");
                             sb.AppendLine(CultureInfo.InvariantCulture, $"     Content: {preview}");
                         }
-                        else if (type == "Image" || type == "QRCode")
+                        else if (type == "Image" || type =="QRCode")
                         {
                             if (!string.IsNullOrEmpty(previewUrl)) sb.AppendLine(CultureInfo.InvariantCulture, $"     Preview: {baseUrl}{previewUrl}");
                             if (!string.IsNullOrEmpty(downloadUrl) && downloadUrl.StartsWith('/')) sb.AppendLine(CultureInfo.InvariantCulture, $"     Download: {baseUrl}{downloadUrl}");
@@ -438,20 +438,20 @@ namespace FlyShelf.Windows
                     }
 
                     if (idx == 0) sb.AppendLine("  (clipboard is empty)");
-                    else sb.AppendLine(CultureInfo.InvariantCulture, $"\n  — {idx} items on clipboard");
+                    else sb.AppendLine(CultureInfo.InvariantCulture, $"\n   {idx} items on clipboard");
                 }
-                catch (Exception ex) { sb.AppendLine(CultureInfo.InvariantCulture, $"  ❌ Failed to fetch clipboard: {ex.Message}"); }
+                catch (Exception ex) { sb.AppendLine(CultureInfo.InvariantCulture, $"Failed to fetch clipboard: {ex.Message}"); }
 
                 // ── SECTION 3: Logs ──
                 sb.AppendLine();
-                sb.AppendLine("┌─────────────────────────────────────────────────────────┐");
-                sb.AppendLine("│  NETWORK LOGS (last 200)                                │");
-                sb.AppendLine("└─────────────────────────────────────────────────────────┘");
+                sb.AppendLine("");
+                sb.AppendLine("NETWORK LOGS (last 200)");
+                sb.AppendLine("");
                 try
                 {
                     var lc = HttpClientPool.Default;
                     var logReq = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, $"{baseUrl}/api/logs?lines=200");
-                    logReq.Headers.Add("X-FlyShelf-Client", "DesktopSync");
+                    logReq.Headers.Add("X-FlyShelf-Client","DesktopSync");
                     if (!string.IsNullOrEmpty(pairingKey)) logReq.Headers.Add("X-Pairing-Key", pairingKey);
                     if (!string.IsNullOrEmpty(pin)) logReq.Headers.Add("Authorization", $"Bearer {pin}");
 
@@ -468,7 +468,7 @@ namespace FlyShelf.Windows
                             {
                                 string line = "";
                                 if (logEl.ValueKind == System.Text.Json.JsonValueKind.Object)
-                                    line = logEl.TryGetProperty("log", out var lpp) ? lpp.GetString() ?? "" : "";
+                                    line = logEl.TryGetProperty("log", out var lpp) ? lpp.GetString() ??"" : "";
                                 else if (logEl.ValueKind == System.Text.Json.JsonValueKind.String)
                                     line = logEl.GetString() ?? "";
                                 if (string.IsNullOrWhiteSpace(line)) continue;
@@ -477,27 +477,27 @@ namespace FlyShelf.Windows
                                 count++;
                             }
                         }
-                        sb.AppendLine(CultureInfo.InvariantCulture, $"\n— {count} log entries (health noise filtered)");
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"\n {count} log entries (health noise filtered)");
                     }
-                    else { sb.AppendLine(CultureInfo.InvariantCulture, $"  ❌ HTTP {logResp.StatusCode}: {logJson}"); }
+                    else { sb.AppendLine(CultureInfo.InvariantCulture, $"HTTP {logResp.StatusCode}: {logJson}"); }
                 }
-                catch (Exception ex) { sb.AppendLine(CultureInfo.InvariantCulture, $"  ❌ Failed to fetch logs: {ex.Message}"); }
+                catch (Exception ex) { sb.AppendLine(CultureInfo.InvariantCulture, $"Failed to fetch logs: {ex.Message}"); }
 
                 ClipboardHelper.SafeSetText(sb.ToString());
-                ToastWindow.ShowToast($"📋 Full diagnostic from {deviceName} copied!");
-                btn.Content = "✅ Copied";
+                ToastWindow.ShowToast($"Full diagnostic from {deviceName} copied!");
+                btn.Content ="Copied";
                 await Task.Delay(1500);
             }
             catch (TaskCanceledException)
             {
-                ToastWindow.ShowToast($"⏱ Timeout fetching from {deviceName}");
-                btn.Content = "❌ Timeout";
+                ToastWindow.ShowToast($"Timeout fetching from {deviceName}");
+                btn.Content ="Timeout";
                 await Task.Delay(1500);
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"❌ Failed: {ex.Message}");
-                btn.Content = "❌ Error";
+                ToastWindow.ShowToast($"Failed: {ex.Message}");
+                btn.Content ="Error";
                 await Task.Delay(1500);
             }
             finally
@@ -514,13 +514,13 @@ namespace FlyShelf.Windows
             try
             {
                 var vm = DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
-                if (vm?.LocalServer == null) { ToastWindow.ShowToast("❌ Server instance not found"); return; }
+                if (vm?.LocalServer == null) { ToastWindow.ShowToast("Server instance not found"); return; }
 
-                ServerDiagnosticsLog.Text = "⏳ Stopping server...\n";
+                ServerDiagnosticsLog.Text ="Stopping server...\n";
                 ServerDiagnosticsLog.Foreground = TryFindResource("WarningColor") as Brush ?? new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
 
                 vm.LocalServer.Stop();
-                ServerDiagnosticsLog.Text += "✅ Server stopped.\n⏳ Starting server...\n";
+                ServerDiagnosticsLog.Text +="Server stopped.\n Starting server...\n";
 
                 _ = Task.Run(async () =>
                 {
@@ -537,7 +537,7 @@ namespace FlyShelf.Windows
                                 ServerDiagnosticsLog.Text = diagnostics;
                                 ServerDiagnosticsLog.Foreground = TryFindResource("SuccessColor") as Brush ?? new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81));
                             }
-                            ToastWindow.ShowToast("🔄 Server restarted — check diagnostics below");
+                            ToastWindow.ShowToast("Server restarted  check diagnostics below");
                         }
                         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Server restart error: {ex.Message}"); }
                     });
@@ -545,7 +545,7 @@ namespace FlyShelf.Windows
             }
             catch (Exception ex)
             {
-                ServerDiagnosticsLog.Text = $"❌ Restart failed: {ex.Message}";
+                ServerDiagnosticsLog.Text = $"Restart failed: {ex.Message}";
                 ServerDiagnosticsLog.Foreground = TryFindResource("DangerColor") as Brush ?? new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
             }
         }
@@ -563,16 +563,16 @@ namespace FlyShelf.Windows
                     $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
                     $"======================================\n\n{diagnostics}";
                 ClipboardHelper.SafeSetText(systemInfo);
-                ToastWindow.ShowToast("📋 Server diagnostics copied — share this with the developer!");
+                ToastWindow.ShowToast("Server diagnostics copied  share this with the developer!");
             }
-            catch (Exception ex) { ToastWindow.ShowToast($"❌ Failed: {ex.Message}"); }
+            catch (Exception ex) { ToastWindow.ShowToast($"Failed: {ex.Message}"); }
         }
 
         private string GetServerDiagnostics()
         {
             try
             {
-                string logPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs", "activity_log.txt");
+                string logPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf","Logs","activity_log.txt");
                 if (!System.IO.File.Exists(logPath)) return "No log file found.";
                 var allLines = System.IO.File.ReadAllLines(logPath);
                 int startIdx = Math.Max(0, allLines.Length - 500);
@@ -775,7 +775,7 @@ namespace FlyShelf.Windows
                     }
                     System.Windows.Clipboard.SetDataObject(dataObj, true);
                 }
-                catch (Exception ex) { ToastWindow.ShowToast("❌ Clipboard busy — try again", 2000); }
+                catch (Exception ex) { ToastWindow.ShowToast("Clipboard busy  try again", 2000); }
             }
         }
 
@@ -879,7 +879,7 @@ namespace FlyShelf.Windows
                     doc.Save(saveDialog.FileName);
                 });
 
-                Dispatcher.Invoke(() => ToastWindow.ShowToast("✅ PDF saved successfully!", 2500));
+                Dispatcher.Invoke(() => ToastWindow.ShowToast("PDF saved successfully!", 2500));
 
                 // Deselect all after merge
                 foreach (var item in selected)
@@ -1123,13 +1123,13 @@ namespace FlyShelf.Windows
                         bool contentMatch = clip.RawContent != null && clip.RawContent.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0;
                         bool formatMatch = clip.FormatIdentifier != null && clip.FormatIdentifier.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0;
                         
-                        bool extMatch = !string.IsNullOrEmpty(clip.Extension) && string.Equals(clip.Extension.Replace(".", "", StringComparison.Ordinal).Trim(), q, StringComparison.OrdinalIgnoreCase);
+                        bool extMatch = !string.IsNullOrEmpty(clip.Extension) && string.Equals(clip.Extension.Replace(".","", StringComparison.Ordinal).Trim(), q, StringComparison.OrdinalIgnoreCase);
                         bool pathExtMatch = false;
                         if (!string.IsNullOrEmpty(clip.FilePath))
                         {
                             try
                             {
-                                string ext = System.IO.Path.GetExtension(clip.FilePath).Replace(".", "", StringComparison.Ordinal).Trim();
+                                string ext = System.IO.Path.GetExtension(clip.FilePath).Replace(".","", StringComparison.Ordinal).Trim();
                                 pathExtMatch = string.Equals(ext, q, StringComparison.OrdinalIgnoreCase);
                             }
                             catch { } // Best-effort: failure is acceptable
@@ -1166,14 +1166,14 @@ namespace FlyShelf.Windows
         private void UninstallFlyShelf_Click(object sender, RoutedEventArgs e)
         {
             var result = MessageBox.Show(
-                "⚠️ Are you sure you want to uninstall FlyShelf?\n\n" +
+"Are you sure you want to uninstall FlyShelf?\n\n"+
                 "This will permanently delete:\n" +
-                "  • All clipboard history & images\n" +
-                "  • All settings & preferences\n" +
-                "  • All synced files\n" +
-                "  • All paired device data\n" +
-                "  • All logs & certificates\n" +
-                "  • Auto-start registry entry\n\n" +
+"All clipboard history & images\n"+
+"All settings & preferences\n"+
+"All synced files\n"+
+"All paired device data\n"+
+"All logs & certificates\n"+
+"Auto-start registry entry\n\n"+
                 "This action cannot be undone.",
                 "Uninstall FlyShelf",
                 MessageBoxButton.YesNo,
@@ -1317,7 +1317,7 @@ namespace FlyShelf.Windows
                         }
                         else
                         {
-                            if (!text.StartsWith("[Locked] ", StringComparison.Ordinal)) item.Content = "[Locked] " + text;
+                            if (!text.StartsWith("[Locked] ", StringComparison.Ordinal)) item.Content ="[Locked] " + text;
                         }
                     }
                     else
@@ -1472,7 +1472,7 @@ namespace FlyShelf.Windows
                     {
                         FlyShelf.Classes.LicenseManager.DeactivateLicense();
                         RefreshLicenseUI();
-                        FlyShelf.Windows.ToastWindow.ShowToast("License deactivated — reverted to Free tier.");
+                        FlyShelf.Windows.ToastWindow.ShowToast("License deactivated  reverted to Free tier.");
                     }
                 }
                 else
@@ -1518,7 +1518,7 @@ namespace FlyShelf.Windows
             {
                 FlyShelf.Classes.LicenseManager.DeactivateLicense();
                 RefreshLicenseUI();
-                FlyShelf.Windows.ToastWindow.ShowToast("License deactivated — reverted to Free tier.");
+                FlyShelf.Windows.ToastWindow.ShowToast("License deactivated  reverted to Free tier.");
             }
         }
 
@@ -1543,16 +1543,16 @@ namespace FlyShelf.Windows
             if (!string.IsNullOrEmpty(settings.AiApiKey))
             {
                 string key = settings.AiApiKey;
-                HubAiApiKeyBox.Text = key.Length > 8 ? string.Concat(key.AsSpan(0, 4), "...", key.AsSpan(key.Length - 4)) : "••••••••";
+                HubAiApiKeyBox.Text = key.Length > 8 ? string.Concat(key.AsSpan(0, 4), "...", key.AsSpan(key.Length - 4)) : "";
                 HubAiApiKeyBox.Tag = "masked";
-                HubAiApiKeyStatus.Text = "✅ API key configured";
+                HubAiApiKeyStatus.Text ="API key configured";
                 HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
             }
             else
             {
                 HubAiApiKeyBox.Text = "";
                 HubAiApiKeyBox.Tag = null;
-                HubAiApiKeyStatus.Text = "⚠️ No API key set — paste one above to enable cloud AI";
+                HubAiApiKeyStatus.Text ="No API key set  paste one above to enable cloud AI";
                 HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B"));
             }
 
@@ -1584,7 +1584,7 @@ namespace FlyShelf.Windows
         {
             var provider = AiProviderService.Instance.ActiveProviderName;
             bool hasKey = AiProviderService.Instance.HasCloudApiKey;
-            HubAiCurrentStatus.Text = $"Provider: {provider} | API Key: {(hasKey ? "✅ Configured" : "❌ Not set")} | AI: {(SettingsManager.Current.AiEnabled ? "Enabled" : "Disabled")}";
+            HubAiCurrentStatus.Text = $"Provider: {provider} | API Key: {(hasKey ? " Configured" : "Not set")} | AI: {(SettingsManager.Current.AiEnabled ? "Enabled" : "Disabled")}";
         }
 
         private void HubAiApiKeySave_Click(object sender, RoutedEventArgs e)
@@ -1599,14 +1599,14 @@ namespace FlyShelf.Windows
 
             if (!string.IsNullOrEmpty(newKey))
             {
-                HubAiApiKeyBox.Text = newKey.Length > 8 ? string.Concat(newKey.AsSpan(0, 4), "...", newKey.AsSpan(newKey.Length - 4)) : "••••••••";
+                HubAiApiKeyBox.Text = newKey.Length > 8 ? string.Concat(newKey.AsSpan(0, 4), "...", newKey.AsSpan(newKey.Length - 4)) : "";
                 HubAiApiKeyBox.Tag = "masked";
-                HubAiApiKeyStatus.Text = "✅ API key saved and encrypted!";
+                HubAiApiKeyStatus.Text ="API key saved and encrypted!";
                 HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
             }
             else
             {
-                HubAiApiKeyStatus.Text = "⚠️ API key cleared";
+                HubAiApiKeyStatus.Text ="API key cleared";
                 HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B"));
             }
             UpdateHubProviderStatus();

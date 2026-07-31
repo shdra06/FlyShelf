@@ -518,13 +518,13 @@ namespace FlyShelf.Windows
                     var dataObj = new DataObject();
                     dataObj.SetData(DataFormats.FileDrop, new string[] { outputPath });
                     _viewModel.HandleDrop(dataObj, true);
-                    ToastWindow.ShowToast($"✅ Saved {pageEntries.Count} pages → {outputName}");
+                    ToastWindow.ShowToast($"Saved {pageEntries.Count} pages → {outputName}");
                 });
                 System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{outputPath}\"");
             }
             else
             {
-                ToastWindow.ShowToast("❌ Failed to save PDF pages.");
+                ToastWindow.ShowToast("Failed to save PDF pages.");
             }
         }
 
@@ -549,7 +549,7 @@ namespace FlyShelf.Windows
                     }
                     else if (ext == ".doc" || ext == ".docx")
                     {
-                        ToastWindow.ShowToast($"📄 Converting {Path.GetFileName(file)} to PDF...");
+                        ToastWindow.ShowToast($"Converting {Path.GetFileName(file)} to PDF...");
                         string pdfPath = await FlyShelf.Classes.ConversionUtils.ConvertDocToPdfAsync(file);
                         if (!string.IsNullOrEmpty(pdfPath) && File.Exists(pdfPath))
                         {
@@ -557,12 +557,12 @@ namespace FlyShelf.Windows
                         }
                         else
                         {
-                            ToastWindow.ShowToast($"❌ Failed to convert doc: {Path.GetFileName(file)}");
+                            ToastWindow.ShowToast($"Failed to convert doc: {Path.GetFileName(file)}");
                         }
                     }
                     else if (ext == ".jpg" || ext == ".jpeg" || ext == ".png")
                     {
-                        ToastWindow.ShowToast($"🖼️ Converting {Path.GetFileName(file)} to PDF...");
+                        ToastWindow.ShowToast($"Converting {Path.GetFileName(file)} to PDF...");
                         try
                         {
                             string pdfPath = await System.Threading.Tasks.Task.Run(() => FlyShelf.Classes.ConversionUtils.ConvertImageToPdf(file));
@@ -573,7 +573,7 @@ namespace FlyShelf.Windows
                         }
                         catch (Exception ex)
                         {
-                            ToastWindow.ShowToast($"❌ Failed to convert image: {Path.GetFileName(file)}");
+                            ToastWindow.ShowToast($"Failed to convert image: {Path.GetFileName(file)}");
                             FlyShelf.Classes.Logger.LogAction("MERGE_ADD_IMAGE_ERR", ex.ToString());
                         }
                     }

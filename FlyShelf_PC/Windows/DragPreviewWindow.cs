@@ -376,7 +376,7 @@ namespace FlyShelf.Windows
             }
             else
             {
-                grid.Children.Add(MakeEmojiIcon("🖼️", 120, 90));
+                grid.Children.Add(MakeEmojiIcon("Image", 120, 90));
             }
 
             // Filename overlay at bottom (dark gradient bar)
@@ -508,58 +508,58 @@ namespace FlyShelf.Windows
                     }
                     else
                     {
-                        iconBorder.Child = MakeCenteredEmoji("🖼️");
+                        iconBorder.Child = MakeCenteredEmoji("Image");
                     }
                     break;
 
                 case ClipboardItemType.Pdf:
-                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("📕");
+                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("Book");
                     iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 239, 68, 68));
                     break;
 
                 case ClipboardItemType.Document:
-                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("📄");
+                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("Document");
                     iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 59, 130, 246));
                     break;
 
                 case ClipboardItemType.Presentation:
-                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("📊");
+                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("DataBarVertical");
                     iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 245, 158, 11));
                     break;
 
                 case ClipboardItemType.Video:
-                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("🎬");
+                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("Video");
                     iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 168, 85, 247));
                     break;
 
                 case ClipboardItemType.Audio:
-                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("🎵");
+                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("MusicNote1");
                     iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 236, 72, 153));
                     break;
 
                 case ClipboardItemType.Archive:
-                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("📦");
+                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("Box");
                     iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 245, 158, 11));
                     break;
 
                 case ClipboardItemType.Code:
-                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("💻");
+                    iconBorder.Child = item.Icon != null ? MakeSmallIcon(item.Icon) : MakeCenteredEmoji("Desktop");
                     iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 16, 185, 129));
                     break;
 
                 case ClipboardItemType.Url:
-                    iconBorder.Child = MakeCenteredEmoji("🔗");
+                    iconBorder.Child = MakeCenteredEmoji("Link");
                     iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 59, 130, 246));
                     break;
 
                 case ClipboardItemType.Folder:
-                    iconBorder.Child = MakeCenteredEmoji("📁");
+                    iconBorder.Child = MakeCenteredEmoji("Folder");
                     iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 245, 158, 11));
                     break;
 
                 case ClipboardItemType.Text:
                 default:
-                    iconBorder.Child = MakeCenteredEmoji("📋");
+                    iconBorder.Child = MakeCenteredEmoji("Clipboard");
                     iconBorder.Background = Helpers.BrushHelper.Frozen(Color.FromArgb(30, 148, 163, 184));
                     break;
             }
@@ -758,7 +758,7 @@ namespace FlyShelf.Windows
                             Opacity = 0,
                             Child = new TextBlock
                             {
-                                Text = "📋 Path",
+                                Text = "Path",
                                 FontSize = 9,
                                 FontWeight = FontWeights.SemiBold,
                                 Foreground = Helpers.BrushHelper.Frozen(Color.FromRgb(20, 20, 28))

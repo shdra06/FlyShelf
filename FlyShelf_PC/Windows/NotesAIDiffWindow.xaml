@@ -68,7 +68,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="✨ AI Improved" FontSize="11" FontWeight="SemiBold" Foreground="#10B981" Padding="10,6,10,4"/>
+                    <TextBlock Grid.Row="0" Text="AI Improved" FontSize="11" FontWeight="SemiBold" Foreground="#10B981" Padding="10,6,10,4"/>
                     <TextBox Grid.Row="1" x:Name="ImprovedTextBox" TextWrapping="Wrap" AcceptsReturn="True"
                              Background="Transparent" BorderThickness="0" Foreground="#E8E8F0" Padding="10,4,10,8"
                              FontSize="12.5" VerticalScrollBarVisibility="Auto" CaretBrush="#E8E8F0"
@@ -79,8 +79,8 @@
 
         <!-- Buttons -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="12,8,12,12">
-            <ui:Button x:Name="DiscardBtn" Content="❌ Discard" Appearance="Danger" Click="Discard_Click" Margin="0,0,8,0" Padding="16,8"/>
-            <ui:Button x:Name="KeepBtn" Content="✅ Keep Changes" Appearance="Success" Click="Keep_Click" Padding="16,8" IsEnabled="False"/>
+            <ui:Button x:Name="DiscardBtn" Content="Discard" Appearance="Danger" Click="Discard_Click" Margin="0,0,8,0" Padding="16,8"/>
+            <ui:Button x:Name="KeepBtn" Content="Keep Changes" Appearance="Success" Click="Keep_Click" Padding="16,8" IsEnabled="False"/>
         </StackPanel>
     </Grid>
 </mica:MicaWindow>

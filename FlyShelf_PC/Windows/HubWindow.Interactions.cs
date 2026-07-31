@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -39,10 +39,10 @@ namespace FlyShelf.Windows
                 e.Handled = true;
                 if (item.HasZipArchive)
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("📦 Zip already exists!");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Zip already exists!");
                     return;
                 }
-                FlyShelf.Windows.ToastWindow.ShowToast("📦 Creating zip archive...");
+                FlyShelf.Windows.ToastWindow.ShowToast("Creating zip archive...");
                 item.CreateZipArchive();
             }
         }
@@ -54,7 +54,7 @@ namespace FlyShelf.Windows
                 e.Handled = true;
                 if (!item.HasZipArchive)
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Create a zip first!");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Create a zip first!");
                     return;
                 }
                 _ = item.SyncZipViaLanAsync();
@@ -83,12 +83,12 @@ namespace FlyShelf.Windows
                             
                             FlyShelf.Classes.ClipboardHelper.SafeSetText(cleanUrl, suppressEcho: true, echoDelayMs: 500);
                             _viewModel.SchedulePersistHistoryPublic(); // PERF: throttled
-                            FlyShelf.Windows.ToastWindow.ShowToast("URL Sanitized & Copied! 🛡️");
+                            FlyShelf.Windows.ToastWindow.ShowToast("URL Sanitized & Copied!");
                             FlyShelf.Classes.Logger.LogAction("URL_SANITY", $"Successfully stripped tracking metrics from URL. Result: {cleanUrl}");
                         }
                         else
                         {
-                            FlyShelf.Windows.ToastWindow.ShowToast("URL is already clean! ✨");
+                            FlyShelf.Windows.ToastWindow.ShowToast("URL is already clean!");
                         }
                     }
                     catch (Exception ex)
@@ -111,7 +111,7 @@ namespace FlyShelf.Windows
                     item.FileName = "Protected Password";
                 }
                 item.GeneratePasswordIcon();
-                FlyShelf.Windows.ToastWindow.ShowToast("Locked as password card! 🔒");
+                FlyShelf.Windows.ToastWindow.ShowToast("Locked as password card!");
 
                 _viewModel.SchedulePersistHistoryPublic(); // PERF: throttled
             }
@@ -135,7 +135,7 @@ namespace FlyShelf.Windows
                 {
                     item.CompileAndRunNative();
                 }
-                else if (item.SmartActionType == "OpenPDF" || item.SmartActionType == "JoinMeeting" || item.SmartActionType == "OpenBrowser")
+                else if (item.SmartActionType == "OpenPDF" || item.SmartActionType =="JoinMeeting"|| item.SmartActionType =="OpenBrowser")
                 {
                     string target = item.SmartActionType == "OpenPDF" ? item.FilePath : item.RawContent;
                     try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { } // Best-effort: failure is acceptable
@@ -240,13 +240,13 @@ namespace FlyShelf.Windows
                         targetImage.RenderTransform = null;
 
                     item.Icon = freshBitmap;
-                    FlyShelf.Classes.Logger.LogAction("ROTATE", "Rotated 90° in-place (Alt UI): " + System.IO.Path.GetFileName(filePath));
+                    FlyShelf.Classes.Logger.LogAction("ROTATE","Rotated 90° in-place (Alt UI): " + System.IO.Path.GetFileName(filePath));
                 }
                 catch (Exception ex)
                 {
                     if (targetImage != null)
                         targetImage.RenderTransform = null;
-                    FlyShelf.Classes.Logger.LogAction("ROTATE", "Failed: " + ex.Message);
+                    FlyShelf.Classes.Logger.LogAction("ROTATE","Failed: " + ex.Message);
                 }
             }
             });

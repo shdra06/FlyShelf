@@ -268,7 +268,7 @@ namespace FlyShelf.Windows
                         IsLanActive = !string.IsNullOrEmpty(peer?.LanUrl) && (peer?.IsAlive ?? false),
                         IsCloudActive = !string.IsNullOrEmpty(peer?.CloudflareUrl) && (peer?.IsAlive ?? false),
                         StatusText = peer?.IsAlive == true
-                            ? $"Connected via {peer.Transport} • Last seen {peer.LastSeen:HH:mm:ss}"
+                            ? $"Connected via {peer.Transport}  Last seen {peer.LastSeen:HH:mm:ss}"
                             : "Offline"
                     };
                 }).ToList();
@@ -289,7 +289,7 @@ namespace FlyShelf.Windows
         {
             DevicePairingManager.RegeneratePairingKey();
             RefreshQRCode();
-            Windows.ToastWindow.ShowToast("New QR code generated! ✅");
+            Windows.ToastWindow.ShowToast("New QR code generated!");
         }
 
         private void CopyPairingInfo_Click(object sender, RoutedEventArgs e)
@@ -302,7 +302,7 @@ namespace FlyShelf.Windows
                 string payload = DevicePairingManager.BuildQRPayload(localUrl, globalUrl, pin);
                 if (ClipboardHelper.SafeSetText(payload))
                 {
-                    Windows.ToastWindow.ShowToast("Pairing info copied! 📋");
+                    Windows.ToastWindow.ShowToast("Pairing info copied!");
                 }
             }
             catch { } // Best-effort: failure is acceptable
@@ -312,18 +312,18 @@ namespace FlyShelf.Windows
         {
             try
             {
-                Windows.ToastWindow.ShowToast("🔄 Force syncing peers...");
+                Windows.ToastWindow.ShowToast("Force syncing peers...");
                 if (PeerManager.Instance != null)
                 {
                     await PeerManager.Instance.ForceResync();
                 }
                 RefreshPairedDevicesList();
-                Windows.ToastWindow.ShowToast("✅ Peer sync complete!");
+                Windows.ToastWindow.ShowToast("Peer sync complete!");
             }
             catch (Exception ex)
             {
                 Logger.LogAction("HUB", $"Force sync failed: {ex.Message}");
-                Windows.ToastWindow.ShowToast("⚠️ Sync failed — check logs");
+                Windows.ToastWindow.ShowToast("Sync failed  check logs");
             }
         }
 
@@ -344,7 +344,7 @@ namespace FlyShelf.Windows
                 PairingCodeDisplay.Text = "...";
                 string code = await DevicePairingManager.PublishPairingCode();
                 PairingCodeDisplay.Text = code;
-                Windows.ToastWindow.ShowToast($"Code generated: {code} (expires in 5 min) 🔑");
+                Windows.ToastWindow.ShowToast($"Code generated: {code} (expires in 5 min)");
             }
             catch (Exception ex)
             {
@@ -360,7 +360,7 @@ namespace FlyShelf.Windows
                 string code = RemoteCodeInput?.Text?.Trim().ToUpper(CultureInfo.InvariantCulture) ?? "";
                 if (string.IsNullOrEmpty(code) || code.Length != 6)
                 {
-                    Windows.ToastWindow.ShowToast("⚠️ Enter a 6-character code");
+                    Windows.ToastWindow.ShowToast("Enter a 6-character code");
                     return;
                 }
 
@@ -369,14 +369,14 @@ namespace FlyShelf.Windows
                 var (success, deviceName) = await DevicePairingManager.ConnectByCode(code);
                 if (success)
                 {
-                    Windows.ToastWindow.ShowToast($"✅ Paired with {deviceName}!");
+                    Windows.ToastWindow.ShowToast($"Paired with {deviceName}!");
                     RefreshPairedDevicesList();
                     RemoteCodeInput.Text = "";
 
                     // Restart Firebase listener so it reads from the newly adopted pairing key scope
                     _viewModel.CloudListener?.StopPolling();
                     _viewModel.CloudListener?.StartPolling();
-                    Logger.LogAction("PAIR CODE", "Firebase listener restarted for new pairing key scope");
+                    Logger.LogAction("PAIR CODE","Firebase listener restarted for new pairing key scope");
 
                     // Immediately attempt P2P connection to the new device for instant LAN/Cloud status
                     _ = Task.Run(async () =>
@@ -394,12 +394,12 @@ namespace FlyShelf.Windows
                 }
                 else if (!string.IsNullOrEmpty(deviceName))
                 {
-                    Windows.ToastWindow.ShowToast($"⚠️ Found {deviceName} but couldn't connect — make sure it's online");
+                    Windows.ToastWindow.ShowToast($"Found {deviceName} but couldn't connect  make sure it's online");
                 }
                 else
                 {
-                    Windows.ToastWindow.ShowToast($"❌ Code {code} not found — check the other device has internet and re-generate the code");
-                    Logger.LogAction("PAIR CODE", $"Code {code} lookup returned null — not found in Firebase");
+                    Windows.ToastWindow.ShowToast($"Code {code} not found  check the other device has internet and re-generate the code");
+                    Logger.LogAction("PAIR CODE", $"Code {code} lookup returned null  not found in Firebase");
                 }
             });
         }
@@ -412,11 +412,11 @@ namespace FlyShelf.Windows
             {
                 if (ClipboardHelper.SafeSetText(Classes.ColorHelper.ToHex(item.ColorR, item.ColorG, item.ColorB)))
                 {
-                    Windows.ToastWindow.ShowToast($"Hex copied: {item.DetectedColor} 🎨");
+                    Windows.ToastWindow.ShowToast($"Hex copied: {item.DetectedColor}");
                 }
                 else
                 {
-                    Windows.ToastWindow.ShowToast("Clipboard busy — try again");
+                    Windows.ToastWindow.ShowToast("Clipboard busy  try again");
                 }
             }
         }
@@ -428,11 +428,11 @@ namespace FlyShelf.Windows
                 string rgb = Classes.ColorHelper.ToRgb(item.ColorR, item.ColorG, item.ColorB);
                 if (ClipboardHelper.SafeSetText(rgb))
                 {
-                    Windows.ToastWindow.ShowToast($"RGB copied: {rgb} 🎨");
+                    Windows.ToastWindow.ShowToast($"RGB copied: {rgb}");
                 }
                 else
                 {
-                    Windows.ToastWindow.ShowToast("Clipboard busy — try again");
+                    Windows.ToastWindow.ShowToast("Clipboard busy  try again");
                 }
             }
         }
@@ -444,11 +444,11 @@ namespace FlyShelf.Windows
                 string hsl = Classes.ColorHelper.ToHsl(item.ColorR, item.ColorG, item.ColorB);
                 if (ClipboardHelper.SafeSetText(hsl))
                 {
-                    Windows.ToastWindow.ShowToast($"HSL copied: {hsl} 🎨");
+                    Windows.ToastWindow.ShowToast($"HSL copied: {hsl}");
                 }
                 else
                 {
-                    Windows.ToastWindow.ShowToast("Clipboard busy — try again");
+                    Windows.ToastWindow.ShowToast("Clipboard busy  try again");
                 }
             }
         }
@@ -467,7 +467,7 @@ namespace FlyShelf.Windows
                 ThemeCombo.Items.Clear();
 
                 // "None" option to disable mascot themes and revert to default FlyShelf wallpaper
-                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "None (Default)", Tag = "" });
+                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "None (Default)", Tag ="" });
 
                 // Only mascot theme packs — display modes (Mica/Acrylic/FlyShelf) are now in Background Style cards
                 var themes = ThemeManager.Instance.GetInstalledThemes();
@@ -489,7 +489,7 @@ namespace FlyShelf.Windows
                     if (!hasRealSprites) continue;
 
                     int idx = ThemeCombo.Items.Count;
-                    string themeLabel = LicenseManager.CanUseTheme(theme.Name) ? theme.Name : "🔒 " + theme.Name;
+                    string themeLabel = LicenseManager.CanUseTheme(theme.Name) ? theme.Name : "" + theme.Name;
                     ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = themeLabel, Tag = theme.Name });
 
                     if (savedMode == "theme" && theme.Name.Equals(activeTheme, System.StringComparison.OrdinalIgnoreCase))
@@ -504,7 +504,7 @@ namespace FlyShelf.Windows
                 // Update Acrylic Blur label based on license state
                 if (DisplayBtn_Glass_Label != null)
                 {
-                    DisplayBtn_Glass_Label.Text = LicenseManager.CanUseGlassTheme() ? "Acrylic Blur" : "🔒 Acrylic Blur";
+                    DisplayBtn_Glass_Label.Text = LicenseManager.CanUseGlassTheme() ? "Acrylic Blur" : "Acrylic Blur";
                 }
             }
             catch (Exception ex)
@@ -560,7 +560,7 @@ namespace FlyShelf.Windows
                     SettingsManager.Current.ThemeDisplayMode = "desktop";
                     SettingsManager.Save();
                     HighlightActiveDisplayMode();
-                    ToastWindow.ShowToast("🖼️ Default FlyShelf wallpaper");
+                    ToastWindow.ShowToast("Default FlyShelf wallpaper");
 
                     Dispatcher.InvokeAsync(async () =>
                     {
@@ -576,7 +576,7 @@ namespace FlyShelf.Windows
                 if (!Classes.LicenseManager.CanUseTheme(tag))
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        Windows.ToastWindow.ShowToast("🔒 Unlock Premium to use this option!"));
+                        Windows.ToastWindow.ShowToast("Unlock Premium to use this option!"));
                     UpgradePrompt.ShowThemeLimit(this);
                     RevertThemeComboSelection();
                     return;
@@ -681,19 +681,19 @@ namespace FlyShelf.Windows
                     string importedName = ThemeManager.Instance.ImportTheme(dialog.FileName);
                     if (importedName != null)
                     {
-                        ToastWindow.ShowToast($"🎨 Theme '{importedName}' imported!");
+                        ToastWindow.ShowToast($"Theme '{importedName}' imported!");
                         ThemeManager.Instance.SetActiveTheme(importedName);
                         PopulateThemeCombo();
                     }
                     else
                     {
-                        ToastWindow.ShowToast("❌ Invalid theme file — must contain a manifest.json");
+                        ToastWindow.ShowToast("Invalid theme file  must contain a manifest.json");
                     }
                 }
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"❌ Import failed: {ex.Message}");
+                ToastWindow.ShowToast($"Import failed: {ex.Message}");
             }
         }
 
@@ -704,7 +704,7 @@ namespace FlyShelf.Windows
                 string activeTheme = SettingsManager.Current.ActiveThemeName;
                 if (string.IsNullOrEmpty(activeTheme))
                 {
-                    ToastWindow.ShowToast("⚠️ No theme is currently active");
+                    ToastWindow.ShowToast("No theme is currently active");
                     return;
                 }
 
@@ -719,18 +719,18 @@ namespace FlyShelf.Windows
                     bool deleted = ThemeManager.Instance.DeleteTheme(activeTheme);
                     if (deleted)
                     {
-                        ToastWindow.ShowToast($"🗑️ Theme '{activeTheme}' deleted");
+                        ToastWindow.ShowToast($"Theme '{activeTheme}' deleted");
                         PopulateThemeCombo();
                     }
                     else
                     {
-                        ToastWindow.ShowToast("❌ Could not delete theme folder");
+                        ToastWindow.ShowToast("Could not delete theme folder");
                     }
                 }
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"❌ Delete failed: {ex.Message}");
+                ToastWindow.ShowToast($"Delete failed: {ex.Message}");
             }
         }
 
@@ -770,13 +770,13 @@ namespace FlyShelf.Windows
                 if (tag == "__glass__" && !Classes.LicenseManager.CanUseGlassTheme())
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        Windows.ToastWindow.ShowToast("🔒 Unlock Premium to use this option!"));
+                        Windows.ToastWindow.ShowToast("Unlock Premium to use this option!"));
                     UpgradePrompt.ShowThemeLimit(this);
                     return;
                 }
 
                 // Always clean up Glass theme first when switching away
-                if (tag != "__glass__" && SettingsManager.Current.ThemeDisplayMode == "glass")
+                if (tag != "__glass__" && SettingsManager.Current.ThemeDisplayMode =="glass")
                     ThemeManager.Instance.RemoveGlassTheme();
 
                 if (tag == "__mica__")
@@ -784,7 +784,7 @@ namespace FlyShelf.Windows
                     // Mica Blur mode — pure system blur, no wallpaper, no mascot
                     SettingsManager.Current.ThemeDisplayMode = "mica";
                     ThemeManager.Instance.SetActiveTheme(null);
-                    ToastWindow.ShowToast("✨ Mica Blur");
+                    ToastWindow.ShowToast("Mica Blur");
                 }
                 else if (tag == "__glass__")
                 {
@@ -793,14 +793,14 @@ namespace FlyShelf.Windows
                     ThemeManager.Instance.SetActiveTheme(null);
                     ThemeManager.Instance.ApplyGlassTheme();
                     ThemeManager.Instance.ApplyAeroThemeOverrides("__glass__");
-                    ToastWindow.ShowToast("✨ Acrylic Blur");
+                    ToastWindow.ShowToast("Acrylic Blur");
                 }
                 else if (tag == "__desktop__")
                 {
                     // FlyShelf mode — desktop wallpaper on clipboard, no mascot
                     SettingsManager.Current.ThemeDisplayMode = "desktop";
                     ThemeManager.Instance.SetActiveTheme(null);
-                    ToastWindow.ShowToast("✨ FlyShelf");
+                    ToastWindow.ShowToast("FlyShelf");
                 }
 
                 SettingsManager.Save();
@@ -895,7 +895,7 @@ namespace FlyShelf.Windows
                     // "desktop", so PropertyChanged never fires and the wallpaper never updates.
                     // Raising ActiveThemeChanged with null triggers the handler unconditionally.
                     ThemeManager.Instance.ForceThemeRefresh();
-                    ToastWindow.ShowToast("🎨 Default + FlyShelf");
+                    ToastWindow.ShowToast("Default + FlyShelf");
 
                     // Refresh wallpaper preview after the MainWindow theme handler has applied the desktop wallpaper
                     Dispatcher.InvokeAsync(async () =>
@@ -909,7 +909,7 @@ namespace FlyShelf.Windows
                     ThemeManager.Instance.ApplyColorTheme(themeName);
                     SettingsManager.Save();
                     HighlightActiveColorTheme();
-                    ToastWindow.ShowToast($"🎨 Color theme: {themeName}");
+                    ToastWindow.ShowToast($"Color theme: {themeName}");
                 }
 
                 // Respawn clipboard so the user sees the color change immediately

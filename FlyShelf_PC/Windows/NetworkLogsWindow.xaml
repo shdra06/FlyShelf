@@ -27,7 +27,7 @@
         <!-- ═══ Title Bar ═══ -->
         <Border Grid.Row="0" Background="{DynamicResource ThemeOverlayBg}">
             <DockPanel Margin="14,0">
-                <TextBlock Text="📡 Network Logs" Foreground="{DynamicResource ThemeAccentLight}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                <TextBlock Text="Network Logs" Foreground="{DynamicResource ThemeAccentLight}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
                 <TextBlock x:Name="TitleDeviceInfo" Text="" Foreground="{DynamicResource ThemeTextMuted}" FontSize="11" VerticalAlignment="Center" Margin="12,0,0,0" />
             </DockPanel>
         </Border>
@@ -46,14 +46,14 @@
                     <!-- Category filter -->
                     <ComboBox x:Name="CategoryFilter" Width="130" SelectionChanged="CategoryFilterChanged" ToolTip="Filter by log category">
                         <ComboBoxItem Content="All Categories" IsSelected="True" Tag="" />
-                        <ComboBoxItem Content="🔗 Peer" Tag="PEER" />
-                        <ComboBoxItem Content="📋 Clipboard" Tag="CLIPBOARD" />
-                        <ComboBoxItem Content="🌐 HTTP" Tag="HTTP" />
-                        <ComboBoxItem Content="☁ Cloudflare" Tag="CLOUDFLARE" />
-                        <ComboBoxItem Content="🔥 Firebase" Tag="FIREBASE" />
-                        <ComboBoxItem Content="📤 Push" Tag="PUSH" />
+                        <ComboBoxItem Content="Peer" Tag="PEER" />
+                        <ComboBoxItem Content="Clipboard" Tag="CLIPBOARD" />
+                        <ComboBoxItem Content="HTTP" Tag="HTTP" />
+                        <ComboBoxItem Content="Cloudflare" Tag="CLOUDFLARE" />
+                        <ComboBoxItem Content="Firebase" Tag="FIREBASE" />
+                        <ComboBoxItem Content="Push" Tag="PUSH" />
                         <ComboBoxItem Content="⬇ Download" Tag="DOWNLOAD" />
-                        <ComboBoxItem Content="❌ Errors" Tag="ERROR" />
+                        <ComboBoxItem Content="Errors" Tag="ERROR" />
                     </ComboBox>
 
                     <Rectangle Width="1" Fill="{DynamicResource ThemeSeparator}" Margin="8,2" />
@@ -73,9 +73,9 @@
 
                     <Rectangle Width="1" Fill="{DynamicResource ThemeSeparator}" Margin="8,2" />
 
-                    <Button x:Name="ClearBtn" Content="🗑 Clear" Click="ClearLogs_Click" 
+                    <Button x:Name="ClearBtn" Content="Clear" Click="ClearLogs_Click" 
                             Background="{DynamicResource DangerBgSubtle}" Foreground="{DynamicResource DangerColor}" BorderThickness="0" Padding="10,3" Cursor="Hand" />
-                    <Button x:Name="CopyBtn" Content="📋 Copy All" Click="CopyLogs_Click" Margin="4,0,0,0"
+                    <Button x:Name="CopyBtn" Content="Copy All" Click="CopyLogs_Click" Margin="4,0,0,0"
                             Background="{DynamicResource ThemeAccentBg}" Foreground="{DynamicResource ThemeAccentLight}" BorderThickness="0" Padding="10,3" Cursor="Hand" />
                 </StackPanel>
             </DockPanel>

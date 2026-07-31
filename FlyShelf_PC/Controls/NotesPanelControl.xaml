@@ -35,7 +35,7 @@
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0"
                                 Cursor="Hand" MouseLeftButtonDown="CurrentDayLabel_Click" ToolTip="Toggle Day / Month View">
                         <ui:SymbolIcon Symbol="List24" Foreground="#8B5CF6" FontSize="14" Margin="0,0,5,0"/>
-                        <TextBlock x:Name="NotesCurrentDayLabel" Text="27, May" FontSize="12" FontWeight="SemiBold" 
+                        <TextBlock x:Name="NotesCurrentDayLabel" Text = "27, May" FontSize="12" FontWeight="SemiBold" 
                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
 
@@ -43,13 +43,13 @@
                     <StackPanel x:Name="NotesSyncStatusIndicator" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" 
                                 HorizontalAlignment="Left" Margin="10,0,0,0" Opacity="0.7">
                         <Ellipse x:Name="NotesSyncDot" Width="6" Height="6" Fill="#10B981" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                        <TextBlock x:Name="NotesSyncText" Text="Synced" FontSize="9" Foreground="#10B981" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="NotesSyncText" Text = "Synced" FontSize="9" Foreground="#10B981" VerticalAlignment="Center"/>
                     </StackPanel>
 
                     <!-- Mode toggle: Bullets ↔ Freeform -->
                     <Border Grid.Column="3" CornerRadius="8" Cursor="Hand" MouseLeftButtonDown="NotesModeToggle_Click" Padding="8,3" Margin="0,0,4,0"
                             Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" ToolTip="Toggle Bullets / Freeform">
-                        <TextBlock x:Name="NotesModeToggleText" Text="📄 Freeform" FontSize="10" FontWeight="SemiBold" 
+                        <TextBlock x:Name="NotesModeToggleText" Text = "Freeform" FontSize="10" FontWeight="SemiBold" 
                                    Foreground="#C4B5FD" VerticalAlignment="Center"/>
                     </Border>
 
@@ -122,7 +122,7 @@
                         <Border DockPanel.Dock="Top" Cursor="Hand" Height="22"
                                 Background="Transparent"
                                 MouseLeftButtonDown="NotesSidebarToggle_Click" ToolTip="Collapse Sidebar">
-                            <TextBlock x:Name="NotesSidebarCollapseIcon" Text="◂" FontSize="13" FontWeight="Bold"
+                            <TextBlock x:Name="NotesSidebarCollapseIcon" Text = "◂" FontSize="13" FontWeight="Bold"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
                                        VerticalAlignment="Center" HorizontalAlignment="Center"/>
                         </Border>
@@ -140,10 +140,10 @@
                                                 ToolTip="{Binding FullLabel}">
                                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                                 <!-- Day number -->
-                                                <TextBlock Text="{Binding DayNumber}" FontSize="12" FontWeight="Bold" 
+                                                <TextBlock Text = "{Binding DayNumber}" FontSize="12" FontWeight="Bold" 
                                                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextAlignment="Center" Margin="0,-2,0,0"/>
                                                 <!-- Abbreviated Month -->
-                                                <TextBlock Text="{Binding MonthName}" FontSize="7" FontWeight="SemiBold" 
+                                                <TextBlock Text = "{Binding MonthName}" FontSize="7" FontWeight="SemiBold" 
                                                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center" Margin="0,-2,0,0" Opacity="0.8"/>
                                             </StackPanel>
                                         </Border>
@@ -159,7 +159,7 @@
                         Cursor="Hand" Visibility="Collapsed"
                         Background="Transparent" BorderThickness="0"
                         MouseLeftButtonDown="NotesSidebarToggle_Click" ToolTip="Show Sidebar" Panel.ZIndex="5">
-                    <TextBlock Text="▸" FontSize="16" FontWeight="Bold"
+                    <TextBlock Text = "▸" FontSize="16" FontWeight="Bold"
                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
                                VerticalAlignment="Center" HorizontalAlignment="Center"/>
                 </Border>
@@ -189,11 +189,11 @@
                                                 </Style>
                                             </Border.Style>
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding MonthName}" FontSize="12" FontWeight="SemiBold" 
+                                                <TextBlock Text = "{Binding MonthName}" FontSize="12" FontWeight="SemiBold" 
                                                            Foreground="#D0D0E0" VerticalAlignment="Center"/>
-                                                <TextBlock Text="{Binding YearText}" FontSize="10" FontWeight="Medium" 
+                                                <TextBlock Text = "{Binding YearText}" FontSize="10" FontWeight="Medium" 
                                                            Foreground="#7878A0" VerticalAlignment="Center" Margin="6,0,0,0"/>
-                                                <TextBlock Text="{Binding DayCount}" FontSize="9" FontWeight="Medium" 
+                                                <TextBlock Text = "{Binding DayCount}" FontSize="9" FontWeight="Medium" 
                                                            Foreground="#5858A0" VerticalAlignment="Center" Margin="8,0,0,0"/>
                                             </StackPanel>
                                         </Border>
@@ -292,14 +292,14 @@
                                                         <SolidColorBrush Color="{Binding DeviceDotColor}"/>
                                                     </Ellipse.Fill>
                                                     <Ellipse.ToolTip>
-                                                        <TextBlock Text="{Binding DeviceTooltip}"/>
+                                                        <TextBlock Text = "{Binding DeviceTooltip}"/>
                                                     </Ellipse.ToolTip>
                                                 </Ellipse>
                                                 
                                                 <!-- Bullet Header (Topic) -->
                                                 <Grid Grid.Column="1" Margin="4,0,8,0">
                                                     <TextBox x:Name="NoteBulletHeaderBox"
-                                                             Text="{Binding Header, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
+                                                             Text = "{Binding Header, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
                                                              FontSize="13" FontWeight="SemiBold"
                                                              Background="Transparent" BorderThickness="0" Padding="0"
                                                              Foreground="#F3F4F6" CaretBrush="#F3F4F6"
@@ -321,7 +321,7 @@
                                                             </Style>
                                                         </TextBox.Style>
                                                     </TextBox>
-                                                    <TextBlock Text="Add header..." FontSize="13" FontWeight="SemiBold"
+                                                    <TextBlock Text = "Add header..." FontSize="13" FontWeight="SemiBold"
                                                                Foreground="#6B7280" IsHitTestVisible="False" VerticalAlignment="Center" Margin="0">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
@@ -340,7 +340,7 @@
                                                 </Grid>
 
                                                 <!-- Last Edited Timestamp (always visible) -->
-                                                <TextBlock Grid.Column="2" Text="{Binding LastEditedDisplay}" FontSize="10.5" 
+                                                <TextBlock Grid.Column="2" Text = "{Binding LastEditedDisplay}" FontSize="10.5" 
                                                            Foreground="#8B8BA8" VerticalAlignment="Center" Margin="0,0,6,0"
                                                            IsHitTestVisible="False" Opacity="0.8"/>
                                                 
@@ -365,7 +365,7 @@
                                                         </Border.Style>
                                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                             <ui:SymbolIcon Symbol="Sparkle24" FontSize="11" Foreground="#A78BFA" VerticalAlignment="Center" Margin="0,0,2,0"/>
-                                                            <TextBlock Text="AI" FontSize="9.5" FontWeight="SemiBold" Foreground="#A78BFA" VerticalAlignment="Center"/>
+                                                            <TextBlock Text = "AI" FontSize="9.5" FontWeight="SemiBold" Foreground="#A78BFA" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                     </Border>
                                                     <!-- More options dropdown button -->
@@ -392,7 +392,7 @@
                                                 <Border x:Name="BulletCollapseBtn" Grid.Column="4" CornerRadius="4" Cursor="Hand" Padding="4,1"
                                                         MouseLeftButtonDown="NoteBulletCollapse_Click" Background="Transparent"
                                                         VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding CollapseIcon}" FontSize="11" FontWeight="Bold" 
+                                                    <TextBlock Text = "{Binding CollapseIcon}" FontSize="11" FontWeight="Bold" 
                                                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
                                                 </Border>
                                             </Grid>
@@ -424,7 +424,7 @@
                                                     </Style>
                                                 </Border.Style>
                                                 <TextBox x:Name="NoteBulletContentBox"
-                                                         Text="{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
+                                                         Text = "{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
                                                          TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="False"
 
                                                          FontSize="12" Background="Transparent" BorderThickness="0" Padding="0,2"
@@ -485,13 +485,13 @@
                                                                         <ColumnDefinition Width="*"/>
                                                                     </Grid.ColumnDefinitions>
                                                                     <!-- sub-bullet dot -->
-                                                                    <TextBlock Grid.Column="0" Text="◦" FontSize="11"
+                                                                    <TextBlock Grid.Column="0" Text = "◦" FontSize="11"
                                                                                Foreground="#80A78BFA" VerticalAlignment="Top"
                                                                                Margin="0,3,5,0"/>
                                                                     <!-- sub-bullet text -->
                                                                     <TextBox Grid.Column="1"
                                                                              x:Name="SubBulletTextBox"
-                                                                             Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
+                                                                             Text = "{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
                                                                              TextWrapping="Wrap" AcceptsReturn="False" AcceptsTab="False"
                                                                              FontSize="11.5" Background="Transparent" BorderThickness="0"
                                                                              Padding="0,1" Foreground="#C8C8E0"
@@ -624,7 +624,7 @@
                                                     <DataTemplate>
                                                         <Border CornerRadius="4" Padding="5,1,5,1" Margin="0,0,3,2"
                                                                 Background="#208B5CF6" BorderBrush="#308B5CF6" BorderThickness="1">
-                                                            <TextBlock Text="{Binding}" FontSize="10" Foreground="#C4B5FD"/>
+                                                            <TextBlock Text = "{Binding}" FontSize="10" Foreground="#C4B5FD"/>
                                                         </Border>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
@@ -666,7 +666,7 @@
                                                 <StackPanel>
                                                     <!-- Note Title -->
                                                     <TextBox x:Name="FreeformSectionTitleBox" 
-                                                             Text="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
+                                                             Text = "{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
                                                              FontSize="13.5" FontWeight="SemiBold"
                                                              Background="Transparent" BorderThickness="0" 
                                                              Foreground="#CDD6F4" CaretBrush="#CDD6F4"
@@ -732,7 +732,7 @@
                                                              Foreground="#E8E8F0"
                                                              CaretBrush="#E8E8F0"
                                                              SelectionBrush="#608B5CF6"
-                                                             Text="{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
+                                                             Text = "{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
                                                              TextChanged="NotesFreeformBox_TextChanged"
                                                              GotFocus="NotesFreeformBox_GotFocus"
                                                              PreviewKeyDown="NotesFreeformBox_PreviewKeyDown"
@@ -821,8 +821,8 @@
                             </Style>
                         </StackPanel.Style>
                         <ui:SymbolIcon Symbol="List24" FontSize="28" Foreground="#308B5CF6" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                        <TextBlock Text="No bullets yet" Opacity="0.35" FontSize="12" FontWeight="Medium" TextAlignment="Center"/>
-                        <TextBlock Text="Click + to add your first note" Opacity="0.2" FontSize="10.5" TextAlignment="Center" Margin="0,4,0,0"/>
+                        <TextBlock Text = "No bullets yet" Opacity="0.35" FontSize="12" FontWeight="Medium" TextAlignment="Center"/>
+                        <TextBlock Text = "Click + to add your first note" Opacity="0.2" FontSize="10.5" TextAlignment="Center" Margin="0,4,0,0"/>
                     </StackPanel>
                 </Grid>
 
@@ -843,11 +843,11 @@
                                             </Grid.ColumnDefinitions>
                                             <!-- Date badge -->
                                             <Border Grid.Column="0" Background="#158B5CF6" Padding="4,6">
-                                                <TextBlock Text="{Binding DateLabel}" FontSize="9" FontWeight="Bold" 
+                                                <TextBlock Text = "{Binding DateLabel}" FontSize="9" FontWeight="Bold" 
                                                            Foreground="#C4B5FD" TextAlignment="Center" TextWrapping="Wrap"/>
                                             </Border>
                                             <!-- Content preview -->
-                                            <TextBlock Grid.Column="1" Text="{Binding Content}" FontSize="11" TextTrimming="CharacterEllipsis" 
+                                            <TextBlock Grid.Column="1" Text = "{Binding Content}" FontSize="11" TextTrimming="CharacterEllipsis" 
                                                        MaxHeight="42" TextWrapping="Wrap" Margin="8,6" 
                                                        Foreground="#E8E8F0"/>
                                         </Grid>

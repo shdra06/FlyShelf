@@ -300,7 +300,7 @@ namespace FlyShelf.Classes
                         }
                         else if (isSensitive)
                         {
-                            Logger.LogAction("SECURITY", $"⛔ Rejected file:// path in sensitive directory from {capturedSource}: {fullPath}");
+                            Logger.LogAction("SECURITY", $"Rejected file:// path in sensitive directory from {capturedSource}: {fullPath}");
                         }
                     }
                 }
@@ -368,7 +368,7 @@ namespace FlyShelf.Classes
                 // Suppress clipboard monitor during our write
                 ClipboardHelper.SafeSetText(capturedText, suppressEcho: true, echoDelayMs: 500);
                 
-                FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}! 📱");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}!");
                 // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
                 NotifyClipboardChanged(clip.ItemType.ToString(), capturedText.Length > 40 ? capturedText.Substring(0, 40) : capturedText);
             });
@@ -446,7 +446,7 @@ namespace FlyShelf.Classes
                     try { await WriteJsonResponse(res, false, "File size exceeds 50 GB limit for Free tier."); } catch { } // Best-effort: failure is acceptable
                     res.Close();
                     _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming transfer rejected: file exceeds 50 GB Free tier limit.");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Incoming transfer rejected: file exceeds 50 GB Free tier limit.");
                     });
                     return;
                 }
@@ -469,7 +469,7 @@ namespace FlyShelf.Classes
                 else
                 {
                     _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {rawName} from {sourceDevice}... 📥");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {rawName} from {sourceDevice}...");
                     });
                 }
 
@@ -653,7 +653,7 @@ namespace FlyShelf.Classes
                 try { await WriteJsonResponse(res, false, "File size exceeds 50 GB limit for Free tier."); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                    FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming archive rejected: exceeds 50 GB Free tier limit.");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Incoming archive rejected: exceeds 50 GB Free tier limit.");
                 });
                 return;
             }
@@ -698,7 +698,7 @@ namespace FlyShelf.Classes
                 {
                     _lastArchiveToastTime = DateTime.Now;
                     _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Extracting batch data... 📦");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Extracting batch data...");
                     });
                 }
 
@@ -765,7 +765,7 @@ namespace FlyShelf.Classes
                             var fileList = new System.Collections.Specialized.StringCollection();
                             lock (batchList) { foreach (var f in batchList) fileList.Add(f); }
                             ClipboardHelper.SafeSetFileDropList(fileList);
-                            FlyShelf.Windows.ToastWindow.ShowToast($"📋 {rawName} copied to clipboard");
+                            FlyShelf.Windows.ToastWindow.ShowToast($"{rawName} copied to clipboard");
                             
                             // Insert proper file entry into FlyShelf (clickable → opens in default app)
                             var clip = new ClipboardItem
@@ -847,7 +847,7 @@ namespace FlyShelf.Classes
                 try { await WriteJsonResponse(res, false, "File size exceeds 50 GB limit for Free tier."); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                    FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming relay rejected: exceeds 50 GB Free tier limit.");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Incoming relay rejected: exceeds 50 GB Free tier limit.");
                 });
                 return;
             }
@@ -975,7 +975,7 @@ namespace FlyShelf.Classes
 
                 _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast($"📡 Relayed {rawName} ({sizeStr}) from {senderDevice}");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Relayed {rawName} ({sizeStr}) from {senderDevice}");
                 });
 
                 res.StatusCode = 200;

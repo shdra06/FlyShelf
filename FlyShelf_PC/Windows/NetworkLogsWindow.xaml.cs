@@ -291,7 +291,7 @@ namespace FlyShelf.Windows
                     bool isLocal = device.Equals(_localDevice, StringComparison.OrdinalIgnoreCase);
                     var tab = new RadioButton
                     {
-                        Content = (isLocal ? "🖥 " : "🌐 ") + device,
+                        Content = (isLocal ? "" : "") + device,
                         Tag = tag,
                         GroupName = "DeviceFilter",
                         Style = (Style)FindResource("FilterTab"),
@@ -315,14 +315,14 @@ namespace FlyShelf.Windows
                 ? $"{aliveCount}/{peerCount} peers alive"
                 : "No peers connected";
 
-            StatusText.Text = $"📡 {_filteredLogs.Count} entries shown ({_allLogs.Count} total) | {peerInfo}";
+            StatusText.Text = $"{_filteredLogs.Count} entries shown ({_allLogs.Count} total) | {peerInfo}";
 
             // Show peer URLs in status right
             if (peers != null)
             {
                 var urls = peers.Values
                     .Where(p => !string.IsNullOrEmpty(p.ActiveUrl))
-                    .Select(p => $"{p.DeviceName}: {(p.ActiveUrl.Contains("trycloudflare", StringComparison.OrdinalIgnoreCase) ? "☁ CF" : "🏠 LAN")}")
+                    .Select(p => $"{p.DeviceName}: {(p.ActiveUrl.Contains("trycloudflare", StringComparison.OrdinalIgnoreCase) ? "CF" : "LAN")}")
                     .ToList();
                 StatusRight.Text = string.Join(" | ", urls);
             }
@@ -358,7 +358,7 @@ namespace FlyShelf.Windows
                 if (closeIdx > 0 && closeIdx < 20)
                 {
                     string inside = line.Substring(1, closeIdx - 1);
-                    if (inside.Contains("PC", StringComparison.Ordinal) || inside.Contains("Mobile", StringComparison.Ordinal) || inside.Contains("💻", StringComparison.Ordinal) || inside.Contains("📱", StringComparison.Ordinal))
+                    if (inside.Contains("PC", StringComparison.Ordinal) || inside.Contains("Mobile", StringComparison.Ordinal) || inside.Contains("", StringComparison.Ordinal) || inside.Contains("", StringComparison.Ordinal))
                     {
                         return line.Substring(closeIdx + 1).TrimStart();
                     }
@@ -412,7 +412,7 @@ namespace FlyShelf.Windows
                 var text = string.Join(Environment.NewLine, _filteredLogs.Select(l => $"[{l.DeviceName}] {l.LogText}"));
                 if (ClipboardHelper.SafeSetText(text))
                 {
-                    ToastWindow.ShowToast($"📋 Copied {_filteredLogs.Count} log entries");
+                    ToastWindow.ShowToast($"Copied {_filteredLogs.Count} log entries");
                 }
             }
             catch { } // Best-effort: failure is acceptable

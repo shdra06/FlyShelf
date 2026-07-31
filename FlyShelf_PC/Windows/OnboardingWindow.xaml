@@ -228,7 +228,7 @@
                                                 <GradientStop Color="#F59E0B" Offset="1"/>
                                             </LinearGradientBrush>
                                         </Border.Background>
-                                        <TextBlock Text="🖼" FontSize="22"
+                                        <TextBlock Text="" FontSize="22"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <TextBlock Text="FlyShelf Style" FontSize="15" FontWeight="Bold"

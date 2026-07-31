@@ -36,7 +36,7 @@ namespace FlyShelf.ViewModels
         {
 #if MSIX_STORE
             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Document conversion is not available in the Store version."));
+                FlyShelf.Windows.ToastWindow.ShowToast("Document conversion is not available in the Store version."));
             return;
 #else
             if (!FlyShelf.Classes.LicenseManager.CanConvertDoc())
@@ -59,7 +59,7 @@ namespace FlyShelf.ViewModels
                         if (string.IsNullOrEmpty(mdContent))
                         {
                             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                                FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No markdown content to convert"));
+                                FlyShelf.Windows.ToastWindow.ShowToast("No markdown content to convert"));
                             return;
                         }
                         workFilePath = Path.Combine(Path.GetTempPath(), $"FlyShelf_MD_{DateTime.Now:yyyyMMdd_HHmmss}.md");
@@ -68,7 +68,7 @@ namespace FlyShelf.ViewModels
                     else if (string.IsNullOrEmpty(workFilePath) || !File.Exists(workFilePath))
                     {
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            FlyShelf.Windows.ToastWindow.ShowToast("⚠️ File not found — cannot convert"));
+                            FlyShelf.Windows.ToastWindow.ShowToast("File not found — cannot convert"));
                         return;
                     }
 
@@ -549,7 +549,7 @@ namespace FlyShelf.ViewModels
             if (!IsImagePreview || string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath))
             {
                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Image file not found — cannot convert"));
+                    FlyShelf.Windows.ToastWindow.ShowToast("Image file not found — cannot convert"));
                 return;
             }
 
@@ -712,7 +712,7 @@ namespace FlyShelf.ViewModels
             if (!IsImagePreview || string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath))
             {
                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Image file not found — cannot convert"));
+                    FlyShelf.Windows.ToastWindow.ShowToast("Image file not found — cannot convert"));
                 return;
             }
 
@@ -729,7 +729,7 @@ namespace FlyShelf.ViewModels
             if (fmt != "png" && fmt != "jpg" && fmt != "jpeg")
             {
                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Unsupported target format: {targetFormat}"));
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Unsupported target format: {targetFormat}"));
                 return;
             }
 
@@ -741,7 +741,7 @@ namespace FlyShelf.ViewModels
                 try
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Converting image to {ext.ToUpperInvariant()}... 🖼️")
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Converting image to {ext.ToUpperInvariant()}...")
                     );
 
                     string outputPath = Path.Combine(
@@ -781,7 +781,7 @@ namespace FlyShelf.ViewModels
                     if (!File.Exists(outputPath) || new FileInfo(outputPath).Length == 0)
                     {
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            FlyShelf.Windows.ToastWindow.ShowToast($"Image conversion failed ❌"));
+                            FlyShelf.Windows.ToastWindow.ShowToast($"Image conversion failed"));
                         return;
                     }
 
@@ -791,7 +791,7 @@ namespace FlyShelf.ViewModels
                         dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { outputPath });
                         var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
                         (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Image → {ext.ToUpperInvariant()} converted! ✅ {Path.GetFileName(outputPath)}");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Image → {ext.ToUpperInvariant()} converted! {Path.GetFileName(outputPath)}");
                         FlyShelf.Classes.LicenseManager.RecordImageToPdf();
 
                         // Scroll to top after a short delay so the new item is visible
@@ -801,7 +801,7 @@ namespace FlyShelf.ViewModels
                 catch (Exception ex)
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Image conversion failed: {ex.Message} ❌")
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Image conversion failed: {ex.Message}")
                     );
                 }
             });
@@ -819,13 +819,13 @@ namespace FlyShelf.ViewModels
         {
 #if MSIX_STORE
             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                FlyShelf.Windows.ToastWindow.ShowToast("⚠️ CSV conversion is not available in the Store version."));
+                FlyShelf.Windows.ToastWindow.ShowToast("CSV conversion is not available in the Store version."));
             return;
 #else
             if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath))
             {
                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ CSV file not found — cannot convert"));
+                    FlyShelf.Windows.ToastWindow.ShowToast("CSV file not found — cannot convert"));
                 return;
             }
 
@@ -868,7 +868,7 @@ namespace FlyShelf.ViewModels
                     if (!File.Exists(xlsxPath) || new FileInfo(xlsxPath).Length == 0)
                     {
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            FlyShelf.Windows.ToastWindow.ShowToast("CSV → XLSX conversion failed ❌"));
+                            FlyShelf.Windows.ToastWindow.ShowToast("CSV → XLSX conversion failed"));
                         return;
                     }
 
@@ -889,7 +889,7 @@ namespace FlyShelf.ViewModels
                 catch (Exception ex)
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowToast($"CSV→XLSX failed: {ex.Message} ❌")
+                        FlyShelf.Windows.ToastWindow.ShowToast($"CSV→XLSX failed: {ex.Message}")
                     );
                 }
             });

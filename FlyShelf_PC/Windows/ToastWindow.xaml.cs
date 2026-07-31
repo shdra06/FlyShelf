@@ -146,6 +146,8 @@ namespace FlyShelf.Windows
             
             ProgressTitle.Text = title;
             ProgressPercent.Text = $"{Math.Clamp(percent, 0, 100)}%";
+            // Reset color (may have been green from previous completion checkmark)
+            ProgressPercent.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "ThemeTextMuted");
             
             // Resolve accent color
             Color accentColor;
@@ -449,6 +451,8 @@ namespace FlyShelf.Windows
         public static void ShowProgress(string title, int percent, string accentKey = "InfoColor")
         {
             try { if (!FlyShelf.Classes.SettingsManager.Current.EnableNotifications) return; } catch { }
+            // Widget handles conversion progress when active — don't show toast too
+            if (Controls.FlyShelfWidgetControl.Instance != null) return;
 
             Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
@@ -464,8 +468,22 @@ namespace FlyShelf.Windows
                         // If a progress toast is already visible, just update in-place
                         if (wasAlreadyShowing && _pooledInstance.IsVisible)
                         {
-                            _pooledInstance.ProgressTitle.Text = title;
-                            _pooledInstance.ProgressPercent.Text = $"{Math.Clamp(percent, 0, 100)}%";
+                            _pooledInstance._customDurationMs = percent >= 100 ? 600 : 0;
+                            
+                            if (percent >= 100)
+                            {
+                                // Completion: show "✓ Done" instead of "100%"
+                                _pooledInstance.ProgressTitle.Text = title;
+                                _pooledInstance.ProgressPercent.Text = "✓";
+                                _pooledInstance.ProgressPercent.Foreground = 
+                                    new System.Windows.Media.SolidColorBrush(
+                                        System.Windows.Media.Color.FromRgb(52, 211, 153));
+                            }
+                            else
+                            {
+                                _pooledInstance.ProgressTitle.Text = title;
+                                _pooledInstance.ProgressPercent.Text = $"{Math.Clamp(percent, 0, 100)}%";
+                            }
                             _pooledInstance.UpdateProgressBarWidth(percent);
                             
                             // Reset the dismiss timer on each update
@@ -474,7 +492,7 @@ namespace FlyShelf.Windows
                         }
 
                         _isShowing = true;
-                        _pooledInstance._customDurationMs = percent >= 100 ? 2000 : 0; // Quick dismiss when done
+                        _pooledInstance._customDurationMs = percent >= 100 ? 600 : 0; // Near-instant dismiss when done
                         _pooledInstance.ConfigureForProgress(title, percent, accentKey);
 
                         if (!_pooledInstance.IsLoaded)

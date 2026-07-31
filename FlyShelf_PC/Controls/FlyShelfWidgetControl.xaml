@@ -8,8 +8,8 @@
              Background="Transparent">
     
     <Grid Name="WidgetGrid" Background="Transparent" MouseLeftButtonDown="WidgetGrid_MouseLeftButtonDown" Cursor="Hand">
-        <Border Name="WidgetBorder" Background="#11FFFFFF" CornerRadius="8" Padding="5,4"
-                HorizontalAlignment="Left" RenderTransformOrigin="0,0.5">
+        <Border Name="WidgetBorder" Background="#11FFFFFF" CornerRadius="8" Padding="6,4"
+                RenderTransformOrigin="0,0.5">
             <Border.RenderTransform>
                 <ScaleTransform x:Name="WidgetBounceScale" ScaleX="1" ScaleY="1"/>
             </Border.RenderTransform>
@@ -18,9 +18,9 @@
                 <Image Source="{DynamicResource ThemeLogoIcon}" Width="20" Height="20" 
                        RenderOptions.BitmapScalingMode="HighQuality"/>
                 <TextBlock Foreground="White" FontSize="14" FontWeight="SemiBold" 
-                           Text="Fly" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                           Text="Fly" Margin="6,0,0,0" VerticalAlignment="Center"/>
                 
-                <!-- ═══ Dynamic Status Panel (icon-based, expands horizontally) ═══ -->
+                <!-- ═══ Dynamic Status Panel ═══ -->
                 <Border x:Name="StatusPanel" ClipToBounds="True" Width="0" Margin="0">
                     <StackPanel x:Name="StatusContent" Orientation="Horizontal" 
                                 VerticalAlignment="Center" Opacity="0"
@@ -31,38 +31,26 @@
                         
                         <!-- Thin separator -->
                         <Border Width="1" Height="14" Background="#30FFFFFF" 
-                                Margin="6,0,4,0" VerticalAlignment="Center"/>
+                                Margin="8,0,5,0" VerticalAlignment="Center"/>
                         
-                        <!-- Source format pill -->
-                        <Border x:Name="SourcePill" CornerRadius="3" Padding="3,1"
-                                Background="#CC2563EB" VerticalAlignment="Center">
-                            <TextBlock x:Name="SourceLabel" Text="DOC" FontSize="7.5" 
-                                       FontWeight="Bold" Foreground="White"
-                                       VerticalAlignment="Center"/>
-                        </Border>
+                        <!-- Source format icon (vector) -->
+                        <Image x:Name="SourceIcon" Width="14" Height="14" 
+                               RenderOptions.BitmapScalingMode="HighQuality"
+                               VerticalAlignment="Center"/>
                         
-                        <!-- Arrow → (vector) -->
-                        <Path Data="M 0,5 L 6,5 M 4,2.5 L 7,5 L 4,7.5" 
-                              Stroke="#70FFFFFF" StrokeThickness="1.2"
-                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                              StrokeLineJoin="Round"
-                              Width="8" Height="10" Margin="3,0"
-                              VerticalAlignment="Center" Stretch="Uniform"/>
+                        <!-- Arrow → -->
+                        <TextBlock Text="→" FontSize="10" Foreground="#60FFFFFF"
+                                   Margin="3,0" VerticalAlignment="Center"/>
                         
-                        <!-- Target format pill -->
-                        <Border x:Name="TargetPill" CornerRadius="3" Padding="3,1"
-                                Background="#CCDC2626" VerticalAlignment="Center">
-                            <TextBlock x:Name="TargetLabel" Text="PDF" FontSize="7.5"
-                                       FontWeight="Bold" Foreground="White"
-                                       VerticalAlignment="Center"/>
-                        </Border>
+                        <!-- Target format icon (vector) -->
+                        <Image x:Name="TargetIcon" Width="14" Height="14"
+                               RenderOptions.BitmapScalingMode="HighQuality"
+                               VerticalAlignment="Center"/>
                         
-                        <!-- Spinner / Checkmark / Error indicator -->
+                        <!-- Spinner / Checkmark / Error -->
                         <Grid Width="14" Height="14" VerticalAlignment="Center" Margin="4,0,1,0">
-                            <!-- Track ring -->
                             <Ellipse x:Name="SpinnerTrack" Width="12" Height="12" 
                                      Stroke="#25FFFFFF" StrokeThickness="1.5" Fill="Transparent"/>
-                            <!-- Spinning arc -->
                             <Path x:Name="SpinnerArc" Stroke="#818CF8"
                                   StrokeThickness="1.5" 
                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round"
@@ -81,21 +69,17 @@
                                     </PathGeometry>
                                 </Path.Data>
                             </Path>
-                            <!-- Checkmark -->
                             <Path x:Name="CheckmarkPath" 
                                   Data="M 3,7 L 5.5,10 L 11,4" 
                                   Stroke="#34D399" StrokeThickness="1.8"
                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" 
                                   StrokeLineJoin="Round"
-                                  Visibility="Collapsed"
-                                  Width="14" Height="14"/>
-                            <!-- Error X -->
+                                  Visibility="Collapsed" Width="14" Height="14"/>
                             <Path x:Name="ErrorPath" 
                                   Data="M 3.5,3.5 L 10.5,10.5 M 10.5,3.5 L 3.5,10.5" 
                                   Stroke="#F87171" StrokeThickness="1.8"
                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                  Visibility="Collapsed"
-                                  Width="14" Height="14"/>
+                                  Visibility="Collapsed" Width="14" Height="14"/>
                         </Grid>
                     </StackPanel>
                 </Border>

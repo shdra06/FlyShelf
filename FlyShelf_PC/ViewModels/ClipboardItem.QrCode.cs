@@ -74,7 +74,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                                FlyShelf.Windows.ToastWindow.ShowToast("QR Code Extracted & Copied! 📋");
+                                FlyShelf.Windows.ToastWindow.ShowToast("QR Code Extracted & Copied!");
                                 FlyShelf.Classes.LicenseManager.RecordQrScan();
 
                             });
@@ -171,7 +171,7 @@ namespace FlyShelf.ViewModels
         {
 #if MSIX_STORE
             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                FlyShelf.Windows.ToastWindow.ShowToast("⚠️ PDF to Word conversion is not available in the Store version."));
+                FlyShelf.Windows.ToastWindow.ShowToast("PDF to Word conversion is not available in the Store version."));
             return;
 #else
             if (!FlyShelf.Classes.LicenseManager.CanConvertDoc())
@@ -201,7 +201,7 @@ namespace FlyShelf.ViewModels
                     if (Type.GetTypeFromProgID("Word.Application") != null)
                     {
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word (via Word)...")
+                            FlyShelf.Windows.ToastWindow.ShowToast("Converting PDF to Word (via Word)...")
                         );
 
                         // PowerShell script with auto-dialog dismissal for Word's PDF conversion prompt
@@ -306,7 +306,7 @@ try {{
                     if (!converted)
                     {
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word (native)...")
+                            FlyShelf.Windows.ToastWindow.ShowToast("Converting PDF to Word (native)...")
                         );
 
                         // Delete any partial Word output before native attempt
@@ -329,7 +329,7 @@ try {{
                         if (loPath != null)
                         {
                             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                                FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting via LibreOffice...")
+                                FlyShelf.Windows.ToastWindow.ShowToast("Converting via LibreOffice...")
                             );
 
                             string outDir = Path.GetDirectoryName(outputPath) ?? Path.GetTempPath();
@@ -379,19 +379,19 @@ try {{
 
                             Process.Start("explorer.exe", $"/select,\"{outputPath}\"");
 
-                            FlyShelf.Windows.ToastWindow.ShowToast($"✅ Converted: {Path.GetFileName(outputPath)}");
+                            FlyShelf.Windows.ToastWindow.ShowToast($"Converted: {Path.GetFileName(outputPath)}");
                             FlyShelf.Classes.LicenseManager.RecordDocConversion();
                         }
                         else
                         {
-                            FlyShelf.Windows.ToastWindow.ShowToast("❌ Conversion failed — no converter available");
+                            FlyShelf.Windows.ToastWindow.ShowToast("Conversion failed — no converter available");
                         }
                     });
                 }
                 catch (Exception ex)
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowToast($"❌ PDF to Word error: {ex.Message}")
+                        FlyShelf.Windows.ToastWindow.ShowToast($"PDF to Word error: {ex.Message}")
                     );
                 }
             });
@@ -432,13 +432,13 @@ try {{
 
                             FlyShelf.Classes.ClipboardHelper.SafeSetText(result.Text, suppressEcho: true, echoDelayMs: 500);
 
-                            FlyShelf.Windows.ToastWindow.ShowToast("QR Code Extracted & Copied! 📋");
+                            FlyShelf.Windows.ToastWindow.ShowToast("QR Code Extracted & Copied!");
                             FlyShelf.Classes.LicenseManager.RecordQrScan();
                         });
                     }
                     else
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast("No QR Code detected in image 🔍");
+                        FlyShelf.Windows.ToastWindow.ShowToast("No QR Code detected in image");
                     }
                 }
             }

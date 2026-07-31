@@ -190,14 +190,14 @@ namespace FlyShelf.Classes
 
         public string StateIcon => _state switch
         {
-            TransferState.Queued => "⏳",
-            TransferState.Connecting => "🔗",
-            TransferState.Transferring => Direction == TransferDirection.Send ? "📤" : "📥",
-            TransferState.Paused => "⏸",
-            TransferState.Completed => "✅",
-            TransferState.Failed => "❌",
-            TransferState.Cancelled => "🚫",
-            _ => "❓"
+            TransferState.Queued => "",
+            TransferState.Connecting => "",
+            TransferState.Transferring => Direction == TransferDirection.Send ? "" : "",
+            TransferState.Paused => "",
+            TransferState.Completed => "",
+            TransferState.Failed => "",
+            TransferState.Cancelled => "",
+            _ => ""
         };
 
         public string DirectionIcon => Direction == TransferDirection.Send ? "→" : "←";

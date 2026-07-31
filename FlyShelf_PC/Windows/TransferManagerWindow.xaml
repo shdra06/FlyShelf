@@ -4,6 +4,7 @@
         xmlns:controls="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
         xmlns:classes="clr-namespace:FlyShelf.Classes"
         xmlns:vm="clr-namespace:FlyShelf.ViewModels"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:emoji="clr-namespace:Emoji.Wpf;assembly=Emoji.Wpf"
         Title="FlyShelf — Transfer Manager"
         Height="650" Width="850"
@@ -51,7 +52,7 @@
             <DockPanel Margin="14,0">
                 <!-- Title -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <emoji:TextBlock Text="⚡" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <ui:SymbolIcon Symbol="Flash24" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" />
                     <TextBlock Text="Transfer Manager" 
                                Foreground="{DynamicResource ThemeAccentLight}" 
                                FontWeight="SemiBold" FontSize="13" 
@@ -62,13 +63,13 @@
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right"
                             WindowChrome.IsHitTestVisibleInChrome="True">
                     <!-- Bulk actions -->
-                    <Button Content="⏸ All" Style="{StaticResource PauseButtonStyle}"
+                    <Button Content="All" Style="{StaticResource PauseButtonStyle}"
                             Command="{Binding PauseAllCommand}" ToolTip="Pause all active transfers"
                             FontSize="11" Padding="6,3" Margin="0,0,2,0" />
                     <Button Content="▶ All" Style="{StaticResource ResumeButtonStyle}"
                             Command="{Binding ResumeAllCommand}" ToolTip="Resume all paused transfers"
                             FontSize="11" Padding="6,3" Margin="0,0,2,0" />
-                    <Button Content="🗑 Clear" Style="{StaticResource CancelButtonStyle}"
+                    <Button Content="Clear" Style="{StaticResource CancelButtonStyle}"
                             Command="{Binding ClearCompletedCommand}" ToolTip="Clear completed transfers"
                             FontSize="11" Padding="6,3" Margin="0,0,8,0" />
                 </StackPanel>
@@ -83,7 +84,7 @@
                 <!-- Upload speed -->
                 <Border Style="{StaticResource UploadSpeedBadge}">
                     <StackPanel Orientation="Horizontal">
-                        <emoji:TextBlock Text="📤" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0" />
+                        <ui:SymbolIcon Symbol="ArrowUpload24" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0" />
                         <TextBlock Text="Upload" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
                                    FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
                         <TextBlock Text="{Binding TotalUploadSpeedText}" 
@@ -94,7 +95,7 @@
                 <!-- Download speed -->
                 <Border Style="{StaticResource DownloadSpeedBadge}">
                     <StackPanel Orientation="Horizontal">
-                        <emoji:TextBlock Text="📥" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0" />
+                        <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0" />
                         <TextBlock Text="Download" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
                                    FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
                         <TextBlock Text="{Binding TotalDownloadSpeedText}" 
@@ -132,7 +133,7 @@
                 <!-- Peer count -->
                 <Border Style="{StaticResource DashboardStatCard}">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🖥" FontSize="11" VerticalAlignment="Center" Margin="0,0,5,0" />
+                        <ui:SymbolIcon Symbol="Desktop24" FontSize="11" VerticalAlignment="Center" Margin="0,0,5,0" />
                         <TextBlock Text="{Binding PeerCountText}" 
                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
                                    FontSize="11" VerticalAlignment="Center" />
@@ -174,7 +175,7 @@
             <StackPanel Style="{StaticResource EmptyStateContainer}"
                         Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12" Opacity="0.6">
-                    <emoji:TextBlock Text="📂" FontSize="48" HorizontalAlignment="Center" />
+                    <ui:SymbolIcon Symbol="Folder24" FontSize="48" HorizontalAlignment="Center" />
                 </StackPanel>
                 <TextBlock Text="No transfers yet" 
                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
@@ -208,7 +209,7 @@
                                                     Command="{Binding DataContext.PauseCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                     CommandParameter="{Binding}"
                                                     ToolTip="Pause transfer">
-                                                <TextBlock Text="⏸" FontSize="13" />
+                                                <ui:SymbolIcon Symbol="Pause24" FontSize="13" />
                                             </Button>
                                             <!-- Resume (visible when paused) -->
                                             <Button Style="{StaticResource ResumeButtonStyle}"
@@ -232,7 +233,7 @@
                                                     Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                     CommandParameter="{Binding}"
                                                     ToolTip="Open file location">
-                                                <TextBlock Text="📂" FontSize="13" />
+                                                <ui:SymbolIcon Symbol="Folder24" FontSize="13" />
                                             </Button>
                                         </StackPanel>
 
@@ -363,7 +364,7 @@
                         CornerRadius="16" Margin="20" VerticalAlignment="Center" HorizontalAlignment="Center"
                         Padding="40,30">
                     <StackPanel HorizontalAlignment="Center">
-                        <TextBlock Text="📂" FontSize="40" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                        <ui:SymbolIcon Symbol="Folder24" FontSize="40" HorizontalAlignment="Center" Margin="0,0,0,8" />
                         <TextBlock Text="Drop files to send" 
                                    Foreground="#A78BFA" FontSize="16" FontWeight="SemiBold"
                                    HorizontalAlignment="Center" />
@@ -385,7 +386,7 @@
                         Command="{Binding SendFileCommand}"
                         ToolTip="Choose a file to send">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="📤" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <ui:SymbolIcon Symbol="ArrowUpload24" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0" />
                         <TextBlock Text="Send File" FontSize="12" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>

@@ -317,13 +317,13 @@ namespace FlyShelf.Controls
                     int caretPos = tb.CaretIndex;
                     tb.Text = tb.Text[..NOTES_HARD_LIMIT];
                     tb.CaretIndex = Math.Min(caretPos, NOTES_HARD_LIMIT);
-                    Windows.ToastWindow.ShowToast("⚠️ Note limit reached (10,000 chars max)");
+                    Windows.ToastWindow.ShowToast("Note limit reached (10,000 chars max)");
                 }
                 // Soft warning at 5K characters
                 else if (tb.Text.Length > NOTES_SOFT_LIMIT && !_notesCharLimitWarned)
                 {
                     _notesCharLimitWarned = true;
-                    Windows.ToastWindow.ShowToast("📝 Note is getting long (5,000+ chars) — limit is 10,000");
+                    Windows.ToastWindow.ShowToast("Note is getting long (5,000+ chars) — limit is 10,000");
                 }
 
                 if (tb.IsFocused && tb.DataContext is NoteBullet bullet)
@@ -494,7 +494,7 @@ namespace FlyShelf.Controls
                 if (!LicenseManager.IsPro)
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        Windows.ToastWindow.ShowToast("⚠️ Embedding 2 images per bullet is a Pro feature."));
+                        Windows.ToastWindow.ShowToast("Embedding 2 images per bullet is a Pro feature."));
                     return false;
                 }
 
@@ -759,7 +759,7 @@ namespace FlyShelf.Controls
             {
                 NotesBulletList.Visibility = Visibility.Visible;
                 NotesFreeformArea.Visibility = Visibility.Collapsed;
-                NotesModeToggleText.Text = "📄 Freeform";
+                NotesModeToggleText.Text = "Freeform";
 
                 ActivateWindowRequested?.Invoke(this, EventArgs.Empty);
                 if (_selectedNoteDay.Bullets.Count == 0)

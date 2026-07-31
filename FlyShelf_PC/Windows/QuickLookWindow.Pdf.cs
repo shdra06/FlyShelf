@@ -262,7 +262,7 @@ namespace FlyShelf.Windows
                 dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { outputPath });
                 var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
                 (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
-                FlyShelf.Windows.ToastWindow.ShowToast($"PDF saved as copy ✅ {Path.GetFileName(outputPath)}");
+                FlyShelf.Windows.ToastWindow.ShowToast($"PDF saved as copy {Path.GetFileName(outputPath)}");
                 mainWin?.ScrollClipboardToTop();
             }
             });
@@ -273,7 +273,7 @@ namespace FlyShelf.Windows
             try
             {
                 LoadingProgress.Visibility = Visibility.Visible;
-                FlyShelf.Windows.ToastWindow.ShowToast("💾 Saving PDF changes...");
+                FlyShelf.Windows.ToastWindow.ShowToast("Saving PDF changes...");
 
                 await System.Threading.Tasks.Task.Run(() =>
                 {
@@ -332,7 +332,7 @@ namespace FlyShelf.Windows
                     }
                 });
 
-                FlyShelf.Windows.ToastWindow.ShowToast("✅ PDF saved successfully!");
+                FlyShelf.Windows.ToastWindow.ShowToast("PDF saved successfully!");
                 _isPdfModified = false;
                 
                 bool isOverwrite = string.Equals(targetPath, _item.FilePath, StringComparison.OrdinalIgnoreCase);

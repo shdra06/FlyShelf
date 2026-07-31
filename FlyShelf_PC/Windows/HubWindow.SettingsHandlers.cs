@@ -31,7 +31,7 @@ namespace FlyShelf.Windows
                 fileToSend = item.ZippedArchivePath;
                 if (string.IsNullOrEmpty(fileToSend) || !System.IO.File.Exists(fileToSend))
                 {
-                    ToastWindow.ShowToast("⏳ Zip is still being prepared, try again in a moment...");
+                    ToastWindow.ShowToast("Zip is still being prepared, try again in a moment...");
                     return;
                 }
             }
@@ -41,7 +41,7 @@ namespace FlyShelf.Windows
             }
             else
             {
-                ToastWindow.ShowToast("❌ No file available to send");
+                ToastWindow.ShowToast("No file available to send");
                 return;
             }
 
@@ -71,7 +71,7 @@ namespace FlyShelf.Windows
             var stack = new StackPanel();
             var header = new TextBlock
             {
-                Text = "📡 Send to Device",
+                Text ="Send to Device",
                 FontSize = 13,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("MicaWPF.Brushes.TextFillColorPrimary"),
@@ -131,8 +131,8 @@ namespace FlyShelf.Windows
 
                     var deviceStack = new StackPanel { Orientation = Orientation.Horizontal };
 
-                    string typeEmoji = deviceId.StartsWith("Mobile_", StringComparison.OrdinalIgnoreCase) ? "📱" : "💻";
-                    string transportEmoji = transport == "LAN" ? "📡" : "🌐";
+                    string typeEmoji = deviceId.StartsWith("Mobile_", StringComparison.OrdinalIgnoreCase) ? "" : "";
+                    string transportEmoji = transport == "LAN" ? "" : "";
 
                     deviceStack.Children.Add(new TextBlock
                     {
@@ -167,7 +167,7 @@ namespace FlyShelf.Windows
                     deviceBtn.MouseLeftButtonDown += async (s, args) =>
                     {
                         popup.IsOpen = false;
-                        ToastWindow.ShowToast($"📡 Sending {capturedItem.FileName} to {capturedDeviceName}...");
+                        ToastWindow.ShowToast($"Sending {capturedItem.FileName} to {capturedDeviceName}...");
 
                         bool success = false;
                         try
@@ -182,12 +182,12 @@ namespace FlyShelf.Windows
 
                         if (success)
                         {
-                            ToastWindow.ShowToast($"✅ Sent to {capturedDeviceName}!");
+                            ToastWindow.ShowToast($"Sent to {capturedDeviceName}!");
                         }
                         else
                         {
                             // P2P is the only transfer path — Firebase is never used for content relay
-                            ToastWindow.ShowToast($"❌ Send failed — {capturedDeviceName} is unreachable. Ensure both devices are online.");
+                            ToastWindow.ShowToast($"Send failed  {capturedDeviceName} is unreachable. Ensure both devices are online.");
                         }
                     };
 
@@ -238,9 +238,9 @@ namespace FlyShelf.Windows
             try
             {
                 string ext = System.IO.Path.GetExtension(item.FilePath).ToLowerInvariant();
-                if (ext != ".zip" && ext != ".apk")
+                if (ext != ".zip" && ext !=".apk")
                 {
-                    ToastWindow.ShowToast("⚠️ Only .zip and .apk extraction is supported");
+                    ToastWindow.ShowToast("Only .zip and .apk extraction is supported");
                     return;
                 }
 
@@ -259,12 +259,12 @@ namespace FlyShelf.Windows
                 string targetDir = System.IO.Path.Combine(baseDir, baseName);
                 System.IO.Directory.CreateDirectory(targetDir);
                 System.IO.Compression.ZipFile.ExtractToDirectory(item.FilePath, targetDir, overwriteFiles: true);
-                ToastWindow.ShowToast($"✅ Extracted to {targetDir}");
+                ToastWindow.ShowToast($"Extracted to {targetDir}");
                 System.Diagnostics.Process.Start("explorer.exe", targetDir);
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"❌ Extract failed: {ex.Message}");
+                ToastWindow.ShowToast($"Extract failed: {ex.Message}");
                 Logger.LogAction("EXTRACT", $"Archive extraction error: {ex}");
             }
         }
@@ -301,13 +301,13 @@ namespace FlyShelf.Windows
             {
                 MergePdfFloatingBar.Visibility = Visibility.Visible;
                 if (checkedImages.Count > 0 && checkedPdfs.Count == 0 && checkedDocs.Count == 0)
-                { MergeBarText.Text = $"{checkedImages.Count} Images selected"; MergeBarBtn.Content = "Merge Images"; MergeBarBtn.ToolTip = $"Merge {checkedImages.Count} images into a single PDF"; }
+                { MergeBarText.Text = $"{checkedImages.Count} Images selected"; MergeBarBtn.Content ="Merge Images"; MergeBarBtn.ToolTip = $"Merge {checkedImages.Count} images into a single PDF"; }
                 else if (checkedDocs.Count > 0 && checkedPdfs.Count == 0 && checkedImages.Count == 0 && checkedDocs.Count == 1)
-                { MergeBarText.Text = "1 DOC selected"; MergeBarBtn.Content = "Convert to PDF"; MergeBarBtn.ToolTip = "Convert DOC/DOCX to PDF"; }
+                { MergeBarText.Text = "1 DOC selected"; MergeBarBtn.Content ="Convert to PDF"; MergeBarBtn.ToolTip ="Convert DOC/DOCX to PDF"; }
                 else if (checkedDocs.Count > 0 && checkedPdfs.Count == 0 && checkedImages.Count == 0)
-                { MergeBarText.Text = $"{checkedDocs.Count} DOCs selected"; MergeBarBtn.Content = "Convert DOCs"; MergeBarBtn.ToolTip = $"Convert {checkedDocs.Count} DOC files to PDF"; }
+                { MergeBarText.Text = $"{checkedDocs.Count} DOCs selected"; MergeBarBtn.Content ="Convert DOCs"; MergeBarBtn.ToolTip = $"Convert {checkedDocs.Count} DOC files to PDF"; }
                 else
-                { MergeBarText.Text = $"{totalChecked} Files selected"; MergeBarBtn.Content = "Merge Files"; MergeBarBtn.ToolTip = $"Convert & merge all {totalChecked} files"; }
+                { MergeBarText.Text = $"{totalChecked} Files selected"; MergeBarBtn.Content ="Merge Files"; MergeBarBtn.ToolTip = $"Convert & merge all {totalChecked} files"; }
             }
             else { MergePdfFloatingBar.Visibility = Visibility.Collapsed; }
         }
@@ -322,18 +322,18 @@ namespace FlyShelf.Windows
 
             if (checkedDocs.Count > 0)
             {
-                ToastWindow.ShowToast($"📄 Converting {checkedDocs.Count} DOC file(s) to PDF...");
+                ToastWindow.ShowToast($"Converting {checkedDocs.Count} DOC file(s) to PDF...");
                 foreach (var doc in checkedDocs)
                 {
                     string pdfPath = await ConversionUtils.ConvertDocToPdfAsync(doc.FilePath);
                     if (!string.IsNullOrEmpty(pdfPath) && System.IO.File.Exists(pdfPath)) convertedPdfPaths.Add(pdfPath);
-                    else ToastWindow.ShowToast($"❌ Failed to convert: {doc.FileName}");
+                    else ToastWindow.ShowToast($"Failed to convert: {doc.FileName}");
                 }
             }
 
             if (checkedImages.Count > 0)
             {
-                ToastWindow.ShowToast($"🖼️ Formatting {checkedImages.Count} image(s) to PDF...");
+                ToastWindow.ShowToast($"Formatting {checkedImages.Count} image(s) to PDF...");
                 foreach (var img in checkedImages)
                 {
                     try
@@ -341,7 +341,7 @@ namespace FlyShelf.Windows
                         string pdfPath = await System.Threading.Tasks.Task.Run(() => ConversionUtils.ConvertImageToPdf(img.FilePath));
                         if (!string.IsNullOrEmpty(pdfPath) && System.IO.File.Exists(pdfPath)) convertedPdfPaths.Add(pdfPath);
                     }
-                    catch (Exception ex) { ToastWindow.ShowToast($"❌ Failed to format: {img.FileName}"); Logger.LogAction("IMAGE2PDF_ERR", ex.ToString()); }
+                    catch (Exception ex) { ToastWindow.ShowToast($"Failed to format: {img.FileName}"); Logger.LogAction("IMAGE2PDF_ERR", ex.ToString()); }
                 }
             }
 
@@ -352,7 +352,7 @@ namespace FlyShelf.Windows
                 var newItem = new ClipboardItem(convertedPdfPaths[0]);
                 _viewModel.DroppedItems.Insert(0, newItem);
                 _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-                ToastWindow.ShowToast("✅ Converted to PDF");
+                ToastWindow.ShowToast("Converted to PDF");
                 return;
             }
 
@@ -377,7 +377,7 @@ namespace FlyShelf.Windows
                 var newItem = new ClipboardItem(allPdfs[0].FilePath);
                 _viewModel.DroppedItems.Insert(0, newItem);
                 _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-                ToastWindow.ShowToast("✅ PDF added to clipboard");
+                ToastWindow.ShowToast("PDF added to clipboard");
             }
             else { ToastWindow.ShowToast("Select 2+ files to merge, or 1 image/doc to convert."); }
         }

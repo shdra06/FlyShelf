@@ -144,7 +144,7 @@ namespace FlyShelf.Windows
             // Show the update notification banner if an update was already detected
             if (UpdateManager.GlobalUpdateAvailable)
             {
-                HubUpdateBannerText.Text = $"≡ƒÜÇ FlyShelf v{UpdateManager.GlobalLatestVersion} is available ΓÇö update now!";
+                HubUpdateBannerText.Text = $"FlyShelf v{UpdateManager.GlobalLatestVersion} is available — update now!";
                 HubUpdateBanner.Visibility = Visibility.Visible;
             }
             // Subscribe to future update detections
@@ -172,7 +172,7 @@ namespace FlyShelf.Windows
             {
                 if (hasUpdate)
                 {
-                    LatestVersionText.Text = $"ΓåÆ v{_updateManager.LatestVersion} available!";
+                    LatestVersionText.Text = $"v{_updateManager.LatestVersion} available!";
                     ChangelogText.Text = _updateManager.Changelog;
                     ChangelogPanel.Visibility = Visibility.Visible;
                     UpdateBtn.Content = "Downloading...";
@@ -184,7 +184,7 @@ namespace FlyShelf.Windows
                     if (success)
                     {
                         UpdateBtn.Content = "Restarting...";
-                        UpdateStatusText.Text = "Γ£à Update downloaded! Restarting now...";
+                        UpdateStatusText.Text = "Update downloaded! Restarting now...";
                         UpdatePctText.Text = "100%";
 
                         // Auto-apply after a brief moment so user sees the status
@@ -199,7 +199,7 @@ namespace FlyShelf.Windows
                 }
                 else
                 {
-                    UpdateBtn.Content = "Γ£ô Up to Date";
+                    UpdateBtn.Content = "Up to Date";
                     UpdateBtn.IsEnabled = false;
                     UpdateProgressPanel.Visibility = Visibility.Collapsed;
 
@@ -432,7 +432,7 @@ namespace FlyShelf.Windows
             int count = _viewModel.DroppedItems.Count;
             _viewModel.ClearShelf();
             UpdateEmptyState();
-            ToastWindow.ShowToast($"Cleared {count} items ≡ƒùæ├»┬╕┬Å");
+            ToastWindow.ShowToast($"Cleared {count} items");
         }
 
         private bool _isApplicationShuttingDown = false;
@@ -526,7 +526,7 @@ namespace FlyShelf.Windows
             {
                 if (updateAvailable && !_hubUpdateBannerDismissed)
                 {
-                    HubUpdateBannerText.Text = $"≡ƒÜÇ FlyShelf v{UpdateManager.GlobalLatestVersion} is available ΓÇö update now!";
+                    HubUpdateBannerText.Text = $"FlyShelf v{UpdateManager.GlobalLatestVersion} is available — update now!";
                     HubUpdateBanner.Visibility = Visibility.Visible;
                 }
             });

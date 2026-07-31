@@ -102,7 +102,7 @@ namespace FlyShelf
                     SearchTextBox.CaretIndex = 0;
 
                     // ═══ Contextual Tip: First search ═══
-                    Windows.TipBadge.Show("search_first_use", "🔍 Search text, files, or use / for commands", SearchBarContainer);
+                    Windows.TipBadge.Show("search_first_use", "Search text, files, or use / for commands", SearchBarContainer);
                 }, System.Windows.Threading.DispatcherPriority.Input);
 
                 // Trigger mascot search animation

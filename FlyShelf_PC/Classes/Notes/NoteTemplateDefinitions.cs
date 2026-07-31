@@ -36,7 +36,7 @@ namespace FlyShelf.Classes
 
         internal static readonly Template[] All = new[]
         {
-            new Template("🛒", "Grocery List", "#22C55E", new[]
+            new Template("", "Grocery List", "#22C55E", new[]
             {
                 ("Dairy", "Milk, Eggs, Cheese, Yogurt"),
                 ("Produce", "Veggies, Fruits, Herbs"),
@@ -44,7 +44,7 @@ namespace FlyShelf.Classes
                 ("Frozen & Snacks", "")
             }),
 
-            new Template("💼", "Daily Standup", "#3B82F6", new[]
+            new Template("", "Daily Standup", "#3B82F6", new[]
             {
                 ("Yesterday", ""),
                 ("Today", ""),
@@ -52,7 +52,7 @@ namespace FlyShelf.Classes
                 ("Notes", "")
             }),
 
-            new Template("📝", "Meeting Notes", "#6366F1", new[]
+            new Template("", "Meeting Notes", "#6366F1", new[]
             {
                 ("Attendees", ""),
                 ("Agenda", ""),
@@ -61,7 +61,7 @@ namespace FlyShelf.Classes
                 ("Follow-up", "")
             }),
 
-            new Template("🏋️", "Workout Planner", "#EF4444", new[]
+            new Template("", "Workout Planner", "#EF4444", new[]
             {
                 ("Warmup", "5 min cardio"),
                 ("Main Set", ""),
@@ -69,7 +69,7 @@ namespace FlyShelf.Classes
             }),
 
             // ── Group 2: separator before this item ──
-            new Template("🎯", "Project Planning", "#00D2FF", new[]
+            new Template("", "Project Planning", "#00D2FF", new[]
             {
                 ("Goal", ""),
                 ("Tasks", ""),
@@ -77,7 +77,7 @@ namespace FlyShelf.Classes
                 ("Risks & Mitigations", "")
             }, separatorBefore: true),
 
-            new Template("📊", "Weekly Review", "#F59E0B", new[]
+            new Template("", "Weekly Review", "#F59E0B", new[]
             {
                 ("Wins", ""),
                 ("Challenges", ""),
@@ -85,14 +85,14 @@ namespace FlyShelf.Classes
                 ("Next Week Priorities", "")
             }),
 
-            new Template("🧠", "Brain Dump", "#EC4899", new[]
+            new Template("", "Brain Dump", "#EC4899", new[]
             {
                 ("Ideas", ""),
                 ("To Research", ""),
                 ("Questions", "")
             }),
 
-            new Template("📚", "Reading Notes", "#A78BFA", new[]
+            new Template("", "Reading Notes", "#A78BFA", new[]
             {
                 ("Key Takeaways", ""),
                 ("Quotes", ""),

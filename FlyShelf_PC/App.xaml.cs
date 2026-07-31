@@ -982,7 +982,7 @@ public partial class App : Application
                                     // Effortless and natural trigger after 4 reversals
                                     if (_shakeCount >= 4)
                                     {
-                                        FlyShelf.Classes.Logger.LogAction("SHAKE", "✅ Shake-to-open gesture fully recognized! Checking constraints...");
+                                        FlyShelf.Classes.Logger.LogAction("SHAKE", "Shake-to-open gesture fully recognized! Checking constraints...");
                                         _shakeCount = 0;
                                         _lastSigDirX = 0;
                                         _lastSigDirY = 0;
@@ -994,25 +994,25 @@ public partial class App : Application
                                         int netDriftY = Math.Abs(triggerY - _shakeStartY);
                                         if (netDriftY > 500)
                                         {
-                                            FlyShelf.Classes.Logger.LogAction("SHAKE", $"❌ Rejected: Exceeded Y-axis drift constraint. Drift: {netDriftY}px (Max allowed: 500px).");
+                                            FlyShelf.Classes.Logger.LogAction("SHAKE", $"Rejected: Exceeded Y-axis drift constraint. Drift: {netDriftY}px (Max allowed: 500px).");
                                             return;
                                         }
 
                                         System.Threading.Interlocked.Exchange(ref _lastClipboardLaunchTime, Environment.TickCount64);
-                                        FlyShelf.Classes.Logger.LogAction("SHAKE", $"🚀 Launching Clipboard Mini-Shelf at screen coordinates ({triggerX}, {triggerY}).");
+                                        FlyShelf.Classes.Logger.LogAction("SHAKE", $"Launching Clipboard Mini-Shelf at screen coordinates ({triggerX}, {triggerY}).");
 
                                         _instance?.Dispatcher.InvokeAsync(() => 
                                         {
                                             if (ActiveMergeWindow != null && ActiveMergeWindow.IsActive)
                                             {
-                                                FlyShelf.Classes.Logger.LogAction("SHAKE", "❌ Rejected: PDF Merger window is active.");
+                                                FlyShelf.Classes.Logger.LogAction("SHAKE", "Rejected: PDF Merger window is active.");
                                                 return;
                                             }
                                             // Don't shake-spawn clipboard while the Hub is open — the user's mouse
                                             // movement to click the Hub button can trigger false shake detection.
                                             if (_mainWinInstance != null && _mainWinInstance.IsHubWindowOpen)
                                             {
-                                                FlyShelf.Classes.Logger.LogAction("SHAKE", "❌ Rejected: Hub window is open.");
+                                                FlyShelf.Classes.Logger.LogAction("SHAKE", "Rejected: Hub window is open.");
                                                 return;
                                             }
                                             _instance.LaunchClipboardManager(triggerX, triggerY, false, 0, false);
@@ -1231,7 +1231,7 @@ public partial class App : Application
     {
         if (ev.Mode == Microsoft.Win32.PowerModes.Resume)
         {
-            FlyShelf.Classes.Logger.LogAction("POWER", "⚡ PC resumed from sleep — force-restarting network in 5s");
+            FlyShelf.Classes.Logger.LogAction("POWER", "PC resumed from sleep — force-restarting network in 5s");
             _ = System.Threading.Tasks.Task.Run(async () =>
             {
                 await System.Threading.Tasks.Task.Delay(5000); // Wait for network stack to stabilize
@@ -1248,7 +1248,7 @@ public partial class App : Application
                 }
                 
                 FlyShelf.Classes.Logger.DumpNetworkDiagnostics();
-                FlyShelf.Classes.Logger.LogAction("POWER", "✅ Post-sleep recovery complete — forcing immediate tunnel health check");
+                FlyShelf.Classes.Logger.LogAction("POWER", "Post-sleep recovery complete — forcing immediate tunnel health check");
 
                 // Force immediate tunnel health check on wake — don't wait 4 minutes for health timer
                 try

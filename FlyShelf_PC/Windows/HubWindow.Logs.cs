@@ -1,4 +1,4 @@
-// ---------------------------------------------------------------
+﻿// ---------------------------------------------------------------
 // HubWindow — Logs, Diagnostics & Drag-Drop
 // RefreshLogs, SendAllLogs, CopyNetworkLogs, SendLogsToDashboard
 // Window_Drop, DragEnter, DragOver, DragLeave
@@ -48,7 +48,7 @@ namespace FlyShelf.Windows
                     // Build a comprehensive diagnostic report from all log sources,
                     // filtering out redundant GET /api/health noise
                     var rpt = new System.Text.StringBuilder();
-                    string logsDir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
+                    string logsDir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "FlyShelf","Logs");
 
                     // Helper: filter out standalone GET /api/health lines (noise from 60s health monitor)
                     // Keep lines that mention health in an ERROR context
@@ -86,7 +86,7 @@ namespace FlyShelf.Windows
                                 // Flush previous repeat group
                                 if (repeatCount > 2)
                                 {
-                                    dedupedLines.Add(string.Create(CultureInfo.InvariantCulture, $"    ↑↑↑ repeated {repeatCount}× (collapsed)"));
+                                    dedupedLines.Add(string.Create(CultureInfo.InvariantCulture, $"repeated {repeatCount}× (collapsed)"));
                                 }
                                 else if (repeatCount == 2)
                                 {
@@ -102,14 +102,14 @@ namespace FlyShelf.Windows
                         // Flush final group
                         if (repeatCount > 2)
                         {
-                            dedupedLines.Add(string.Create(CultureInfo.InvariantCulture, $"    ↑↑↑ repeated {repeatCount}× (collapsed)"));
+                            dedupedLines.Add(string.Create(CultureInfo.InvariantCulture, $"repeated {repeatCount}× (collapsed)"));
                         }
 
                         if (dedupedLines.Any())
                         {
-                            rpt.AppendLine("════════════════════════════════════════════════════════════");
+                            rpt.AppendLine("");
                             rpt.AppendLine("  ACTIVITY LOG");
-                            rpt.AppendLine("════════════════════════════════════════════════════════════");
+                            rpt.AppendLine("");
                             foreach (var line in dedupedLines) rpt.AppendLine(line);
                         }
                     }
@@ -122,9 +122,9 @@ namespace FlyShelf.Windows
                         if (lines.Any())
                         {
                             rpt.AppendLine();
-                            rpt.AppendLine("════════════════════════════════════════════════════════════");
+                            rpt.AppendLine("");
                             rpt.AppendLine("  NETWORK DIAGNOSTICS");
-                            rpt.AppendLine("════════════════════════════════════════════════════════════");
+                            rpt.AppendLine("");
                             foreach (var line in lines) rpt.AppendLine(line);
                         }
                     }
@@ -137,9 +137,9 @@ namespace FlyShelf.Windows
                         if (lines.Any())
                         {
                             rpt.AppendLine();
-                            rpt.AppendLine("════════════════════════════════════════════════════════════");
+                            rpt.AppendLine("");
                             rpt.AppendLine("  SERVER TROUBLESHOOTING");
-                            rpt.AppendLine("════════════════════════════════════════════════════════════");
+                            rpt.AppendLine("");
                             foreach (var line in lines) rpt.AppendLine(line.TrimEnd('\r'));
                         }
                     }
@@ -149,28 +149,28 @@ namespace FlyShelf.Windows
 
                 if (report.Length == 0)
                 {
-                    ToastWindow.ShowToast("⚠️  No logs to send");
+                    ToastWindow.ShowToast("No logs to send");
                     return;
                 }
 
                 // Prepend system info header
                 var header = new System.Text.StringBuilder();
-                header.AppendLine("═════════════════════════════════════════════════════════════");
+                header.AppendLine("");
                 header.AppendLine("  FlyShelf Full Diagnostic Report");
                 header.AppendLine(CultureInfo.InvariantCulture, $"  PC: {Environment.MachineName}");
                 header.AppendLine(CultureInfo.InvariantCulture, $"  OS: {Environment.OSVersion}");
                 header.AppendLine(CultureInfo.InvariantCulture, $"  Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 header.AppendLine(CultureInfo.InvariantCulture, $"  Version: {UpdateManager.CurrentVersion}");
-                header.AppendLine("═════════════════════════════════════════════════════════════");
+                header.AppendLine("");
                 header.AppendLine();
                 header.Append(report);
 
                 Classes.ClipboardHelper.SafeSetText(header.ToString());
-                ToastWindow.ShowToast("📋 All logs copied to clipboard (health-check noise filtered) — paste and send!");
+                ToastWindow.ShowToast("All logs copied to clipboard (health-check noise filtered)  paste and send!");
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"❌ Failed to copy: {ex.Message}");
+                ToastWindow.ShowToast($"Failed to copy: {ex.Message}");
             }
         }
 
@@ -180,11 +180,11 @@ namespace FlyShelf.Windows
             {
                 string logs = Logger.GetRecentNetworkLogs(200);
                 Classes.ClipboardHelper.SafeSetText(logs);
-                ToastWindow.ShowToast("📋 Network logs copied to clipboard (last 200 lines)");
+                ToastWindow.ShowToast("Network logs copied to clipboard (last 200 lines)");
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"❌ Failed to copy: {ex.Message}");
+                ToastWindow.ShowToast($"Failed to copy: {ex.Message}");
             }
         }
         private async void SendLogsToDashboard_Click(object sender, RoutedEventArgs e)
@@ -204,28 +204,28 @@ namespace FlyShelf.Windows
 
                 if (logLines.Count == 0)
                 {
-                    ToastWindow.ShowToast("⚠️  No network logs to send");
+                    ToastWindow.ShowToast("No network logs to send");
                     SendLogsToDashboardBtn.IsEnabled = true;
                     return;
                 }
 
                 // ── Always save a local diagnostic file ──
-                string logsDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
+                string logsDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf","Logs");
                 System.IO.Directory.CreateDirectory(logsDir);
                 string deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
-                string deviceTag = deviceName.Replace(" ", "_").Replace("/", "_");
+                string deviceTag = deviceName.Replace("","_").Replace("/","_");
                 string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture);
                 string fileName = $"diagnostic_{deviceTag}_{timestamp}.log";
                 string filePath = System.IO.Path.Combine(logsDir, fileName);
 
                 var sb = new System.Text.StringBuilder();
-                sb.AppendLine("════════════════════════════════════════════════════════════════════════════════");
-                sb.AppendLine(CultureInfo.InvariantCulture, $"  FlyShelf Diagnostic Log — {deviceName}");
+                sb.AppendLine("");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"FlyShelf Diagnostic Log  {deviceName}");
                 sb.AppendLine(CultureInfo.InvariantCulture, $"  Captured: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 sb.AppendLine(CultureInfo.InvariantCulture, $"  PC Host:  {Environment.MachineName}");
                 sb.AppendLine(CultureInfo.InvariantCulture, $"  OS:       {Environment.OSVersion}");
                 sb.AppendLine(CultureInfo.InvariantCulture, $"  Entries:  {logLines.Count}");
-                sb.AppendLine("════════════════════════════════════════════════════════════════════════════════");
+                sb.AppendLine("");
                 sb.AppendLine();
                 foreach (var line in logLines)
                     sb.AppendLine(line);
@@ -242,17 +242,17 @@ namespace FlyShelf.Windows
                         var client = HttpClientPool.Quick;
                         var json = System.Text.Json.JsonSerializer.Serialize(logLines);
                         var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
-                        content.Headers.Add("X-FlyShelf-Client", "DesktopApp");
+                        content.Headers.Add("X-FlyShelf-Client","DesktopApp");
                         content.Headers.Add("X-Device-Name", deviceName);
                         var res = await client.PostAsync($"{serverUrl}/api/logs", content);
                         dashboardSuccess = res.IsSuccessStatusCode;
                     }
-                    catch { /* Server POST failed — file is still saved */ }
+                    catch { /* Server POST failed  file is still saved */ }
                 }
 
-                string msg = string.Create(CultureInfo.InvariantCulture, $"✅ {logLines.Count} entries saved → {fileName}");
-                if (dashboardSuccess) msg += "\n📊 Also pushed to web dashboard";
-                msg += $"\n📁  {logsDir}";
+                string msg = string.Create(CultureInfo.InvariantCulture, $"{logLines.Count} entries saved  {fileName}");
+                if (dashboardSuccess) msg +="\n Also pushed to web dashboard";
+                msg += $"\n  {logsDir}";
                 ToastWindow.ShowToast(msg);
 
                 // Open the Logs folder so user can grab the file
@@ -260,7 +260,7 @@ namespace FlyShelf.Windows
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"❌ Failed: {ex.Message}");
+                ToastWindow.ShowToast($"Failed: {ex.Message}");
             }
             finally
             {

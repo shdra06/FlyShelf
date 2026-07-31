@@ -1,4 +1,4 @@
-// ---------------------------------------------------------------
+﻿// ---------------------------------------------------------------
 // HubWindow — Networking Command Center Handlers
 // Inner tab switching (Devices/Queue/History/Nearby), file staging,
 // transfer history UI, nearby device scanning, and send-to context menus.
@@ -89,7 +89,7 @@ namespace FlyShelf.Windows
                         _networkRefreshTimer?.Stop();
                 };
 
-                Logger.LogAction("NETWORK_HUB", "Networking Command Center initialized");
+                Logger.LogAction("NETWORK_HUB","Networking Command Center initialized");
             }
             catch (Exception ex)
             {
@@ -250,7 +250,7 @@ namespace FlyShelf.Windows
                 if (sender is Button btn)
                 {
                     btn.IsEnabled = false;
-                    btn.Content = "⏳ Sending...";
+                    btn.Content ="Sending...";
                 }
 
                 await NetworkFileQueue.Instance.SendAllToAll();
@@ -259,13 +259,13 @@ namespace FlyShelf.Windows
                 if (sender is Button btn2)
                 {
                     btn2.IsEnabled = true;
-                    btn2.Content = "📤 Send All to All Peers";
+                    btn2.Content ="Send All to All Peers";
                 }
             }
             catch (Exception ex)
             {
                 Logger.LogAction("NETWORK_HUB", $"Send all error: {ex.Message}");
-                if (sender is Button btn3) { btn3.IsEnabled = true; btn3.Content = "📤 Send All to All Peers"; }
+                if (sender is Button btn3) { btn3.IsEnabled = true; btn3.Content ="Send All to All Peers"; }
             }
         }
 
@@ -357,7 +357,7 @@ namespace FlyShelf.Windows
                     .FirstOrDefault(p => p.DeviceId == deviceId && p.IsAlive);
                 if (peer == null)
                 {
-                    ToastWindow.ShowToast("⚠️ Device not connected");
+                    ToastWindow.ShowToast("Device not connected");
                     return;
                 }
 
@@ -391,7 +391,7 @@ namespace FlyShelf.Windows
                 try
                 {
                     ClipboardHelper.SafeSetText(url);
-                    ToastWindow.ShowToast("📋 IP copied to clipboard");
+                    ToastWindow.ShowToast("IP copied to clipboard");
                 }
                 catch { } // Best-effort: failure is acceptable
             }
@@ -430,7 +430,7 @@ namespace FlyShelf.Windows
                 else if (_historyFilter == "Received")
                     entries = entries.Where(e => e.Direction == "Received");
                 else if (_historyFilter == "Failed")
-                    entries = entries.Where(e => e.Status == "Failed" || e.Status == "Cancelled");
+                    entries = entries.Where(e => e.Status == "Failed" || e.Status =="Cancelled");
 
                 // Apply device filter
                 if (!string.IsNullOrEmpty(filterDeviceId))
@@ -502,7 +502,7 @@ namespace FlyShelf.Windows
                     if (dialog.ShowDialog() == true)
                     {
                         await File.WriteAllTextAsync(dialog.FileName, csv);
-                        ToastWindow.ShowToast($"📊 History exported to {Path.GetFileName(dialog.FileName)}");
+                        ToastWindow.ShowToast($"History exported to {Path.GetFileName(dialog.FileName)}");
                     }
                 }
             }
@@ -523,7 +523,7 @@ namespace FlyShelf.Windows
                     {
                         // Try to find the file — history entries may not have the full path
                         // so we show a toast indicating retry
-                        ToastWindow.ShowToast($"🔄 Retry not available yet — re-send via File Queue");
+                        ToastWindow.ShowToast($"Retry not available yet  re-send via File Queue");
                     }
                 }
                 await System.Threading.Tasks.Task.CompletedTask;
@@ -541,7 +541,7 @@ namespace FlyShelf.Windows
                 if (sender is Button btn)
                 {
                     btn.IsEnabled = false;
-                    btn.Content = "⏳ Scanning...";
+                    btn.Content ="Scanning...";
                 }
 
                 // Trigger UDP broadcast for nearby discovery
@@ -551,7 +551,7 @@ namespace FlyShelf.Windows
                 }
                 else
                 {
-                    ToastWindow.ShowToast("📡 Nearby discovery not available yet");
+                    ToastWindow.ShowToast("Nearby discovery not available yet");
                 }
 
                 // Re-enable after 5 seconds
@@ -562,7 +562,7 @@ namespace FlyShelf.Windows
                     if (sender is Button btn2)
                     {
                         btn2.IsEnabled = true;
-                        btn2.Content = "🔍 Scan for Nearby Devices";
+                        btn2.Content ="Scan for Nearby Devices";
                     }
                     RefreshNearbyDevices();
                 };
@@ -590,7 +590,7 @@ namespace FlyShelf.Windows
                 string? ip = NearbyManualIpInput?.Text?.Trim();
                 if (string.IsNullOrEmpty(ip))
                 {
-                    ToastWindow.ShowToast("⚠️ Enter an IP address");
+                    ToastWindow.ShowToast("Enter an IP address");
                     return;
                 }
 
@@ -598,7 +598,7 @@ namespace FlyShelf.Windows
                 int port = NetworkSyncServer.Instance?.CurrentPort ?? 8080;
                 string url = ip.Contains(':') ? $"http://{ip}" : $"http://{ip}:{port}";
 
-                ToastWindow.ShowToast($"🔗 Connecting to {ip}...");
+                ToastWindow.ShowToast($"Connecting to {ip}...");
 
                 // Use PeerManager to add manual peer and attempt handshake
                 if (PeerManager.Instance != null)
@@ -607,19 +607,19 @@ namespace FlyShelf.Windows
                     bool success = await PeerManager.Instance.AddManualPeer(deviceId, ip, url);
                     if (success)
                     {
-                        ToastWindow.ShowToast($"✅ Connected to device at {ip}");
+                        ToastWindow.ShowToast($"Connected to device at {ip}");
                         RefreshDevices_Click(null, null);
                     }
                     else
                     {
-                        ToastWindow.ShowToast($"❌ Could not reach {ip} — check IP and firewall");
+                        ToastWindow.ShowToast($"Could not reach {ip}  check IP and firewall");
                     }
                 }
             }
             catch (Exception ex)
             {
                 Logger.LogAction("NETWORK_HUB", $"Manual connect error: {ex.Message}");
-                ToastWindow.ShowToast($"❌ Connection failed: {ex.Message}");
+                ToastWindow.ShowToast($"Connection failed: {ex.Message}");
             }
         }
 
@@ -631,7 +631,7 @@ namespace FlyShelf.Windows
                 try
                 {
                     _ = NearbyDiscovery.Instance?.ConnectToDevice(device);
-                    ToastWindow.ShowToast($"🔗 Connecting to {device.DeviceName}...");
+                    ToastWindow.ShowToast($"Connecting to {device.DeviceName}...");
                 }
                 catch { } // Best-effort: failure is acceptable
             }
@@ -643,7 +643,7 @@ namespace FlyShelf.Windows
             {
                 if (sender is FrameworkElement fe && fe.DataContext is NearbyDeviceInfo device)
                 {
-                    ToastWindow.ShowToast($"🔗 Sending pair request to {device.DeviceName}...");
+                    ToastWindow.ShowToast($"Sending pair request to {device.DeviceName}...");
 
                     // Generate nonce for this pairing session
                     string nonce = Guid.NewGuid().ToString("N");
@@ -661,7 +661,7 @@ namespace FlyShelf.Windows
                     };
 
                     string url = $"http://{device.IpAddress}:{device.HttpPort}/api/lan/pair-request";
-                    var http = HttpClientPool.Download; // Use Download (10min timeout) — 60s CTS limits actual wait
+                    var http = HttpClientPool.Download; // Use Download (10min timeout)  60s CTS limits actual wait
                     var content = new System.Net.Http.StringContent(
                         System.Text.Json.JsonSerializer.Serialize(pairRequest),
                         System.Text.Encoding.UTF8, "application/json");
@@ -678,7 +678,7 @@ namespace FlyShelf.Windows
                     {
                         string remoteDeviceId = root.TryGetProperty("deviceId", out var rid) ? rid.GetString() ?? device.DeviceId : device.DeviceId;
                         string remoteDeviceName = root.TryGetProperty("deviceName", out var rn) ? rn.GetString() ?? device.DeviceName : device.DeviceName;
-                        string sharedSecret = root.TryGetProperty("sharedSecret", out var ss) ? ss.GetString() ?? "" : "";
+                        string sharedSecret = root.TryGetProperty("sharedSecret", out var ss) ? ss.GetString() ??"" : "";
                         int remoteHttpPort = root.TryGetProperty("httpPort", out var rhp) ? rhp.GetInt32() : device.HttpPort;
                         int remoteTransferPort = root.TryGetProperty("transferPort", out var rtp) ? rtp.GetInt32() : device.TransferPort;
 
@@ -695,11 +695,11 @@ namespace FlyShelf.Windows
                         RefreshNearbyDevices();
                         RefreshPairedDevicesList();
 
-                        ToastWindow.ShowToast($"✅ Paired with {remoteDeviceName} via LAN!");
+                        ToastWindow.ShowToast($"Paired with {remoteDeviceName} via LAN!");
                     }
                     else
                     {
-                        ToastWindow.ShowToast($"❌ {device.DeviceName} rejected the pair request");
+                        ToastWindow.ShowToast($"{device.DeviceName} rejected the pair request");
                     }
                 }
             });

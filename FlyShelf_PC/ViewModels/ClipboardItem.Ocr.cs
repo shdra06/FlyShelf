@@ -89,7 +89,7 @@ namespace FlyShelf.ViewModels
         {
             try
             {
-                FlyShelf.Windows.ToastWindow.ShowToast("🧠 AI OCR in progress... ⏳");
+                FlyShelf.Windows.ToastWindow.ShowToast("AI OCR in progress...");
 
                 byte[] imageBytes = await Task.Run(() =>
                 {
@@ -119,17 +119,17 @@ namespace FlyShelf.ViewModels
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
                         try { FlyShelf.Classes.ClipboardHelper.SafeSetText(result); } catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("OCR", $"Clipboard write failed: {ex.Message}"); }
-                        FlyShelf.Windows.ToastWindow.ShowToast("✅ AI OCR text copied to clipboard!");
+                        FlyShelf.Windows.ToastWindow.ShowToast("AI OCR text copied to clipboard!");
                     });
                 }
                 else
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠ AI OCR returned empty result");
+                    FlyShelf.Windows.ToastWindow.ShowToast("AI OCR returned empty result");
                 }
             }
             catch (Exception ex)
             {
-                FlyShelf.Windows.ToastWindow.ShowToast($"❌ AI OCR failed: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast($"AI OCR failed: {ex.Message}");
                 Classes.Logger.LogAction("AI_OCR", $"Failed: {ex.Message}");
             }
         }
@@ -180,7 +180,7 @@ namespace FlyShelf.ViewModels
 
                 var aiBtn = new System.Windows.Controls.Button
                 {
-                    Content = "🔑 Set Up API Key",
+                    Content = "Set Up API Key",
                     Padding = new System.Windows.Thickness(16, 8, 16, 8),
                     Margin = new System.Windows.Thickness(0, 0, 10, 0),
                     FontSize = 13,
@@ -192,7 +192,7 @@ namespace FlyShelf.ViewModels
 
                 var localBtn = new System.Windows.Controls.Button
                 {
-                    Content = "📋 Use Local (Weak)",
+                    Content = "Use Local (Weak)",
                     Padding = new System.Windows.Thickness(16, 8, 16, 8),
                     FontSize = 13,
                     Background = new System.Windows.Media.SolidColorBrush(

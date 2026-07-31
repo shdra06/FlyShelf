@@ -155,12 +155,12 @@ namespace FlyShelf.Windows
                     reminder.IsDone = false;
                     ReminderManager.ScheduleSave();
                     ReminderScheduler.ClearShownId(reminder.Id);
-                    ToastWindow.ShowToast("Reminder reactivated 🔔");
+                    ToastWindow.ShowToast("Reminder reactivated");
                 }
                 else
                 {
                     ReminderManager.DismissReminder(reminder.Id);
-                    ToastWindow.ShowToast("Reminder done! ✅");
+                    ToastWindow.ShowToast("Reminder done!");
                 }
                 RefreshList();
             }

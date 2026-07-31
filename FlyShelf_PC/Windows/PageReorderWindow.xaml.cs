@@ -844,7 +844,7 @@ namespace FlyShelf.Windows
 
             _selectedIndices.Clear();
             RebuildGrid(true);
-            FlyShelf.Windows.ToastWindow.ShowToast("🔄 Page order reset to default");
+            FlyShelf.Windows.ToastWindow.ShowToast("Page order reset to default");
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -878,7 +878,7 @@ namespace FlyShelf.Windows
 
                     if (pageCount == 0)
                     {
-                        ToastWindow.ShowToast($"⚠️ {Path.GetFileName(filePath)} has no pages.");
+                        ToastWindow.ShowToast($"{Path.GetFileName(filePath)} has no pages.");
                         continue;
                     }
 
@@ -905,11 +905,11 @@ namespace FlyShelf.Windows
                     // Load thumbnails for the new file
                     _ = LoadThumbnailsAsync(filePath, pageCount);
 
-                    ToastWindow.ShowToast($"✅ Added {pageCount} pages from {fileName}");
+                    ToastWindow.ShowToast($"Added {pageCount} pages from {fileName}");
                 }
                 catch (Exception ex)
                 {
-                    ToastWindow.ShowToast($"❌ Failed to read {Path.GetFileName(filePath)}: {ex.Message}");
+                    ToastWindow.ShowToast($"Failed to read {Path.GetFileName(filePath)}: {ex.Message}");
                 }
             }
 
@@ -927,13 +927,13 @@ namespace FlyShelf.Windows
         {
             if (_selectedIndices.Count == 0)
             {
-                ToastWindow.ShowToast("⚠️ Select pages to delete first.");
+                ToastWindow.ShowToast("Select pages to delete first.");
                 return;
             }
 
             if (_selectedIndices.Count >= _pageEntries.Count)
             {
-                ToastWindow.ShowToast("⚠️ Can't delete all pages — at least one page must remain.");
+                ToastWindow.ShowToast("Can't delete all pages — at least one page must remain.");
                 return;
             }
 
@@ -958,7 +958,7 @@ namespace FlyShelf.Windows
         {
             if (_pageEntries.Count == 0)
             {
-                ToastWindow.ShowToast("⚠️ No pages remaining.");
+                ToastWindow.ShowToast("No pages remaining.");
                 return;
             }
             WasConfirmed = true;
@@ -971,13 +971,13 @@ namespace FlyShelf.Windows
             {
             if (HasExternalPages)
             {
-                ToastWindow.ShowToast("⚠️ Cannot overwrite original file when external pages are added.");
+                ToastWindow.ShowToast("Cannot overwrite original file when external pages are added.");
                 return;
             }
 
             if (_pageEntries.Count == 0)
             {
-                ToastWindow.ShowToast("⚠️ No pages remaining.");
+                ToastWindow.ShowToast("No pages remaining.");
                 return;
             }
 
@@ -1039,7 +1039,7 @@ namespace FlyShelf.Windows
                         File.Delete(tempPath);
                     });
 
-                    ToastWindow.ShowToast($"✅ Original file overwritten: {_item.FileName}");
+                    ToastWindow.ShowToast($"Original file overwritten: {_item.FileName}");
                     
                     WasOverwritten = true;
                     WasConfirmed = true; 
@@ -1047,7 +1047,7 @@ namespace FlyShelf.Windows
                 }
                 catch (Exception ex)
                 {
-                    ToastWindow.ShowToast($"❌ Failed to overwrite: {ex.Message}");
+                    ToastWindow.ShowToast($"Failed to overwrite: {ex.Message}");
                     OverwriteBtn.IsEnabled = true;
                     ConfirmBtn.IsEnabled = true;
                     OverwriteBtn.Content = "Save & Overwrite";
@@ -1055,7 +1055,7 @@ namespace FlyShelf.Windows
             }
             else
             {
-                ToastWindow.ShowToast("❌ Failed to generate rotated/reordered PDF.");
+                ToastWindow.ShowToast("Failed to generate rotated/reordered PDF.");
                 OverwriteBtn.IsEnabled = true;
                 ConfirmBtn.IsEnabled = true;
                 OverwriteBtn.Content = "Save & Overwrite";

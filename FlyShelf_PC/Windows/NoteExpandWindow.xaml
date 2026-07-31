@@ -34,7 +34,7 @@
                         </LinearGradientBrush>
                     </Border.Background>
                     <Grid>
-                        <TextBlock x:Name="HeaderTitle" Text="📝 Note" Foreground="White" 
+                        <TextBlock x:Name="HeaderTitle" Text="Note" Foreground="White" 
                                    VerticalAlignment="Center" Margin="12,0,0,0" 
                                    FontWeight="SemiBold" FontSize="12" IsHitTestVisible="False"/>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0">
@@ -155,7 +155,7 @@
                         <!-- Row 2: Insert + Colors + Tools -->
                         <StackPanel Orientation="Horizontal" Margin="2,1">
                             <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="LinkBtn_Click" ToolTip="Insert link (Ctrl+K)">
-                                <TextBlock Text="🔗" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                <ui:SymbolIcon Symbol="Link24" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                             </Border>
                             <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="DividerBtn_Click" ToolTip="Divider (Ctrl+D)">
                                 <TextBlock Text="─" FontSize="11" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
@@ -167,7 +167,7 @@
                                 <TextBlock Text="⟨/⟩" FontSize="10" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center" FontFamily="Consolas"/>
                             </Border>
                             <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="TimestampBtn_Click" ToolTip="Timestamp (Ctrl+T)">
-                                <TextBlock Text="⏱" FontSize="11" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                <ui:SymbolIcon Symbol="Timer24" FontSize="11" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                             </Border>
                             <Border Width="1" Background="#2A2A45" Margin="4,4,4,4"/>
                             <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="TextColorBtn_Click" ToolTip="Text color">
@@ -178,7 +178,7 @@
                             </Border>
                             <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="HighlightBtn_Click" ToolTip="Highlight color">
                                 <StackPanel>
-                                    <TextBlock Text="🖊" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                    <ui:SymbolIcon Symbol="Star24" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                     <Border x:Name="HighlightColorIndicator" Height="2" CornerRadius="1" Background="#FBBF24" Margin="0,-1,0,0"/>
                                 </StackPanel>
                             </Border>

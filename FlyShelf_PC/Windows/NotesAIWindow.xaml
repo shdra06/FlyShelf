@@ -20,7 +20,7 @@
         <Border Height="40" VerticalAlignment="Top" Background="Transparent" 
                 MouseLeftButtonDown="TitleBar_MouseDown" Panel.ZIndex="10">
             <Grid>
-                <TextBlock Text="✨ AI Notes Assistant" FontSize="12.5" FontWeight="SemiBold" Opacity="0.85" 
+                <TextBlock Text="AI Notes Assistant" FontSize="12.5" FontWeight="SemiBold" Opacity="0.85" 
                             VerticalAlignment="Center" Margin="16,0,0,0"
                             Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
                 <Button HorizontalAlignment="Right" Margin="0,0,4,0" Padding="10,6" 
@@ -97,7 +97,7 @@
                 </Grid.ColumnDefinitions>
                 
                 <!-- Copy output button (Left aligned) -->
-                <ui:Button x:Name="CopyBtn" Grid.Column="0" Content="📋 Copy Result" Click="Copy_Click" 
+                <ui:Button x:Name="CopyBtn" Grid.Column="0" Content="Copy Result" Click="Copy_Click" 
                            Appearance="Secondary" Width="120" Height="32" CornerRadius="8" HorizontalAlignment="Left" Visibility="Collapsed" AutomationProperties.Name="Copy AI result"/>
 
                 <!-- Action buttons (Right aligned) -->

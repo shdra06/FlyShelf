@@ -106,12 +106,12 @@ namespace FlyShelf.Windows
                 {
                     if (_vm.SelectedPeer == null)
                     {
-                        ToastWindow.ShowToast("⚠ Select a peer device first to send files");
+                        ToastWindow.ShowToast("Select a peer device first to send files");
                         return;
                     }
 
                     _vm.HandleFileDrop(files);
-                    ToastWindow.ShowToast($"📤 Sending {files.Length} file(s) to {_vm.SelectedPeer.DeviceName}");
+                    ToastWindow.ShowToast($"Sending {files.Length} file(s) to {_vm.SelectedPeer.DeviceName}");
                 }
             }
             e.Handled = true;

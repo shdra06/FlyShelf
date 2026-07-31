@@ -33,32 +33,26 @@ namespace FlyShelf.Controls
                 var menu = new ContextMenu();
 
                 // Helper: colorful emoji menu item using Emoji.Wpf
-                MenuItem EmojiMenuItem(string emoji, string label, string[] template)
+                MenuItem EmojiMenuItem(string label, string[] template)
                 {
                     var sp = new StackPanel { Orientation = Orientation.Horizontal };
-                    var emojiBlock = new Emoji.Wpf.TextBlock
-                    {
-                        Text = emoji, FontSize = 14,
-                        VerticalAlignment = VerticalAlignment.Center,
-                        Margin = new Thickness(0, 0, 8, 0)
-                    };
                     var labelBlock = new TextBlock
                     {
                         Text = label, FontSize = 13,
                         Foreground = new SolidColorBrush(ThemeColors.CatppuccinText),
                         VerticalAlignment = VerticalAlignment.Center
                     };
-                    sp.Children.Add(emojiBlock);
+
                     sp.Children.Add(labelBlock);
                     var mi = new MenuItem { Header = sp };
                     mi.Click += (s, ev) => ApplyTodoTemplate(template);
                     return mi;
                 }
 
-                menu.Items.Add(EmojiMenuItem("🛒", "Grocery Shopping", s_groceryTemplate));
-                menu.Items.Add(EmojiMenuItem("🧹", "Weekly Chores", s_choresTemplate));
-                menu.Items.Add(EmojiMenuItem("💼", "Work Standup Routine", s_workStandupTemplate));
-                menu.Items.Add(EmojiMenuItem("✈️", "Travel Packing", s_travelPackingTemplate));
+                menu.Items.Add(EmojiMenuItem("Grocery Shopping", s_groceryTemplate));
+                menu.Items.Add(EmojiMenuItem("Weekly Chores", s_choresTemplate));
+                menu.Items.Add(EmojiMenuItem("Work Standup Routine", s_workStandupTemplate));
+                menu.Items.Add(EmojiMenuItem("Travel Packing", s_travelPackingTemplate));
 
                 menu.PlacementTarget = fe;
                 menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
@@ -122,16 +116,16 @@ namespace FlyShelf.Controls
         {
                 var menu = new ContextMenu();
 
-                var today = new MenuItem { Header = "📅 Today" };
+                var today = new MenuItem { Header = "Today" };
                 today.Click += (s, ev) => { item.DueDate = DateTime.Today; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
-                var tomorrow = new MenuItem { Header = "📅 Tomorrow" };
+                var tomorrow = new MenuItem { Header = "Tomorrow" };
                 tomorrow.Click += (s, ev) => { item.DueDate = DateTime.Today.AddDays(1); item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
-                var nextWeek = new MenuItem { Header = "📅 Next Week" };
+                var nextWeek = new MenuItem { Header = "Next Week" };
                 nextWeek.Click += (s, ev) => { item.DueDate = DateTime.Today.AddDays(7); item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
-                var pickDate = new MenuItem { Header = "📅 Pick Date..." };
+                var pickDate = new MenuItem { Header = "Pick Date..." };
                 pickDate.Click += (s, ev) =>
                 {
                     var popup = new System.Windows.Controls.Primitives.Popup
@@ -233,7 +227,7 @@ namespace FlyShelf.Controls
 
                 menu.Items.Add(new Separator());
 
-                var customItem = new MenuItem { Header = "✏️ Custom..." };
+                var customItem = new MenuItem { Header = "Custom..." };
                 customItem.Click += (s, ev) =>
                 {
                     var popup = new System.Windows.Controls.Primitives.Popup
@@ -498,7 +492,7 @@ namespace FlyShelf.Controls
 
                     // Priority submenu  —— tag icon
                     var priorityMenu = new MenuItem { Header = "Priority" };
-                    priorityMenu.Icon = MI("🏷", "#F59E0B");
+
                     var pHigh = new MenuItem { Header = "High" };
                     pHigh.Icon = Dot("#EF4444");
                     pHigh.Click += (s, ev) => { item.Priority = TodoPriority.High; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
@@ -509,7 +503,7 @@ namespace FlyShelf.Controls
                     pLow.Icon = Dot("#22C55E");
                     pLow.Click += (s, ev) => { item.Priority = TodoPriority.Low; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
                     var pNone = new MenuItem { Header = "Clear Priority" };
-                    pNone.Icon = MI("✕", "#6B7280");
+
                     pNone.Click += (s, ev) => { item.Priority = TodoPriority.None; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
                     priorityMenu.Items.Add(pHigh);
                     priorityMenu.Items.Add(pMed);
@@ -519,19 +513,19 @@ namespace FlyShelf.Controls
 
                     // Due Date  —— green calendar icon
                     var dueDate = new MenuItem { Header = "Due Date" };
-                    dueDate.Icon = MI("📅", "#22C55E");
+
                     dueDate.Click += (s, ev) => Dispatcher.BeginInvoke(new Action(() => OpenDueDateMenu(fe, item)));
                     menu.Items.Add(dueDate);
 
                     // Tags  —— cyan tag icon
                     var tags = new MenuItem { Header = "Tags" };
-                    tags.Icon = MI("🏷", "#00D2FF");
+
                     tags.Click += (s, ev) => Dispatcher.BeginInvoke(new Action(() => OpenTagMenu(fe, item)));
                     menu.Items.Add(tags);
 
                     // Color  —— pink palette icon
                     var color = new MenuItem { Header = "Color" };
-                    color.Icon = MI("🎨", "#EC4899");
+
                     color.Click += (s, ev) => Dispatcher.BeginInvoke(new Action(() => OpenColorMenu(fe, item)));
                     menu.Items.Add(color);
 
@@ -539,7 +533,7 @@ namespace FlyShelf.Controls
 
                     // Add Subtask  —— green plus icon
                     var addSub = new MenuItem { Header = "Add Subtask" };
-                    addSub.Icon = MI("➕", "#22C55E");
+
                     addSub.Click += (s, ev) =>
                     {
                         var subTask = new TodoItem { Text = "", CreatedAt = DateTime.Now };
@@ -556,7 +550,7 @@ namespace FlyShelf.Controls
                     // Description toggle  —— indigo notes icon
                     bool hasDesc = item.IsDescriptionVisible || !string.IsNullOrWhiteSpace(item.Description);
                     var desc = new MenuItem { Header = hasDesc ? "Hide Description" : "Show Description" };
-                    desc.Icon = MI("📝", "#6366F1");
+
                     desc.Click += (s, ev) =>
                     {
                         item.IsDescriptionVisible = !item.IsDescriptionVisible;
@@ -574,7 +568,7 @@ namespace FlyShelf.Controls
                         _ => "Set Recurrence (→ Daily)"
                     };
                     var rec = new MenuItem { Header = recLabel };
-                    rec.Icon = MI("🔄", "#8B5CF6");
+
                     rec.Click += (s, ev) =>
                     {
                         item.Recurrence = item.Recurrence switch
@@ -594,7 +588,7 @@ namespace FlyShelf.Controls
 
                     // Delete  —— red trash icon
                     var deleteItem = new MenuItem { Header = "Delete" };
-                    deleteItem.Icon = MI("🗑", "#EF4444");
+
                     deleteItem.Foreground = new SolidColorBrush(ThemeColors.ErrorRed);
                     deleteItem.Click += (s, ev) =>
                     {
@@ -695,13 +689,13 @@ namespace FlyShelf.Controls
         {
             var menu = new ContextMenu();
 
-            var today = new MenuItem { Header = "📅 Today" };
+            var today = new MenuItem { Header = "Today" };
             today.Click += (s, ev) => { item.DueDate = DateTime.Today; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
-            var tomorrow = new MenuItem { Header = "📅 Tomorrow" };
+            var tomorrow = new MenuItem { Header = "Tomorrow" };
             tomorrow.Click += (s, ev) => { item.DueDate = DateTime.Today.AddDays(1); item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
-            var nextWeek = new MenuItem { Header = "📅 Next Week" };
+            var nextWeek = new MenuItem { Header = "Next Week" };
             nextWeek.Click += (s, ev) => { item.DueDate = DateTime.Today.AddDays(7); item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
             var clear = new MenuItem { Header = "Clear" };

@@ -171,15 +171,15 @@ namespace FlyShelf.ViewModels
             {
                 string emoji = TransferMethod switch
                 {
-                    "LAN" => "📡",
-                    "Cloud" => "☀",
-                    "Cloudflare" => "🌐",
-                    _ => "📋"
+                    "LAN" => "",
+                    "Cloud" => "",
+                    "Cloudflare" => "",
+                    _ => ""
                 };
                 string deviceEmoji = SourceDeviceType switch
                 {
-                    "Mobile" => "📱",
-                    "PC" => "💻",
+                    "Mobile" => "",
+                    "PC" => "",
                     _ => ""
                 };
                 if (SourceDeviceName == "Local") return $"{emoji} Local";

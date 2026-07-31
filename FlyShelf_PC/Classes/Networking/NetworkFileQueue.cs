@@ -79,11 +79,11 @@ namespace FlyShelf.Classes
 
         public string StatusIcon => _status switch
         {
-            "Queued" => "⏳",
-            "Sending" => "📤",
-            "Sent" => "✅",
-            "Failed" => "❌",
-            _ => "❓"
+            "Queued" => "",
+            "Sending" => "",
+            "Sent" => "",
+            "Failed" => "",
+            _ => ""
         };
 
         public string AddedAtText
@@ -175,7 +175,7 @@ namespace FlyShelf.Classes
                 StagedFiles.Add(staged);
             });
 
-            Logger.LogAction("FILEQUEUE", $"📁 Staged: {staged.FileName} ({staged.FileSizeText})");
+            Logger.LogAction("FILEQUEUE", $"Staged: {staged.FileName} ({staged.FileSizeText})");
         }
 
         /// <summary>
@@ -246,7 +246,7 @@ namespace FlyShelf.Classes
             file.TargetDeviceName = peer.DeviceName;
             file.Progress = 0.0;
 
-            Logger.LogAction("FILEQUEUE", $"📤 Sending {file.FileName} to {peer.DeviceName}");
+            Logger.LogAction("FILEQUEUE", $"Sending {file.FileName} to {peer.DeviceName}");
 
             try
             {
@@ -255,7 +255,7 @@ namespace FlyShelf.Classes
                 {
                     file.Status = "Failed";
                     file.ErrorMessage = "Failed to initiate transfer";
-                    Logger.LogAction("FILEQUEUE", $"❌ Failed to offer {file.FileName} to {peer.DeviceName}");
+                    Logger.LogAction("FILEQUEUE", $"Failed to offer {file.FileName} to {peer.DeviceName}");
                     return;
                 }
 
@@ -302,14 +302,14 @@ namespace FlyShelf.Classes
                 {
                     file.Status = "Failed";
                     file.ErrorMessage = "Transfer timed out";
-                    Logger.LogAction("FILEQUEUE", $"⏰ Transfer timed out: {file.FileName}");
+                    Logger.LogAction("FILEQUEUE", $"Transfer timed out: {file.FileName}");
                 }
             }
             catch (Exception ex)
             {
                 file.Status = "Failed";
                 file.ErrorMessage = ex.Message;
-                Logger.LogAction("FILEQUEUE", $"❌ Send error for {file.FileName}: {ex.Message}");
+                Logger.LogAction("FILEQUEUE", $"Send error for {file.FileName}: {ex.Message}");
             }
         }
 
@@ -340,7 +340,7 @@ namespace FlyShelf.Classes
                 return;
             }
 
-            Logger.LogAction("FILEQUEUE", $"📤 Sending {file.FileName} to {alivePeers.Count} peers");
+            Logger.LogAction("FILEQUEUE", $"Sending {file.FileName} to {alivePeers.Count} peers");
             file.Status = "Sending";
             file.Progress = 0.0;
 
@@ -400,7 +400,7 @@ namespace FlyShelf.Classes
                 {
                     failCount++;
                     lastError = ex.Message;
-                    Logger.LogAction("FILEQUEUE", $"❌ Failed to send {file.FileName} to {peer.DeviceName}: {ex.Message}");
+                    Logger.LogAction("FILEQUEUE", $"Failed to send {file.FileName} to {peer.DeviceName}: {ex.Message}");
                 }
             }
 
@@ -432,7 +432,7 @@ namespace FlyShelf.Classes
                 return;
             }
 
-            Logger.LogAction("FILEQUEUE", $"📤 Sending {queuedFiles.Count} files to all peers");
+            Logger.LogAction("FILEQUEUE", $"Sending {queuedFiles.Count} files to all peers");
 
             foreach (var file in queuedFiles)
             {

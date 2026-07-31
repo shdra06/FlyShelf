@@ -304,7 +304,7 @@
                                 </Style>
                             </Border.Style>
                             <DockPanel>
-                                <TextBlock DockPanel.Dock="Right" Text="📅" FontSize="14" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                <ui:SymbolIcon DockPanel.Dock="Right" Symbol="Calendar24" FontSize="14" VerticalAlignment="Center" Margin="4,0,0,0"/>
                                 <TextBlock x:Name="DateDisplay" FontSize="13" Foreground="{DynamicResource ThemeTextPrimary}"
                                            VerticalAlignment="Center"/>
                             </DockPanel>
@@ -344,7 +344,7 @@
                                 </Style>
                             </Border.Style>
                             <DockPanel>
-                                <TextBlock DockPanel.Dock="Right" Text="⏰" FontSize="13" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                <ui:SymbolIcon DockPanel.Dock="Right" Symbol="Clock24" FontSize="13" VerticalAlignment="Center" Margin="4,0,0,0"/>
                                 <TextBlock x:Name="TimeDisplay" FontSize="13" Foreground="{DynamicResource ThemeTextPrimary}"
                                            VerticalAlignment="Center"/>
                             </DockPanel>
@@ -455,7 +455,7 @@
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
-                    <TextBlock Text="Set Reminder 🔔" HorizontalAlignment="Center"
+                    <TextBlock Text="Set Reminder" HorizontalAlignment="Center"
                                FontSize="14" FontWeight="SemiBold" Foreground="White"/>
                 </Border>
 

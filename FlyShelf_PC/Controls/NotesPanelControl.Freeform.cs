@@ -253,13 +253,13 @@ namespace FlyShelf.Controls
                     int caretPos = tb.CaretIndex;
                     tb.Text = tb.Text[..NOTES_HARD_LIMIT];
                     tb.CaretIndex = Math.Min(caretPos, NOTES_HARD_LIMIT);
-                    Windows.ToastWindow.ShowToast("⚠️ Section limit reached (10,000 chars max)");
+                    Windows.ToastWindow.ShowToast("Section limit reached (10,000 chars max)");
                 }
                 // Soft warning at 5K characters (once per session per note)
                 else if (tb.Text.Length > NOTES_SOFT_LIMIT && !_notesCharLimitWarned)
                 {
                     _notesCharLimitWarned = true;
-                    Windows.ToastWindow.ShowToast("📝 Section is getting long (5,000+ chars) — limit is 10,000");
+                    Windows.ToastWindow.ShowToast("Section is getting long (5,000+ chars) — limit is 10,000");
                 }
 
                 // Content is synced via TwoWay binding to FreeformSection.Content
@@ -580,7 +580,7 @@ namespace FlyShelf.Controls
             {
                 if (string.IsNullOrWhiteSpace(section.Content))
                 {
-                    Windows.ToastWindow.ShowToast("⚠️ Note is empty. Type something first!");
+                    Windows.ToastWindow.ShowToast("Note is empty. Type something first!");
                     return;
                 }
 
@@ -618,7 +618,7 @@ namespace FlyShelf.Controls
                 _notesUndoText = null;
                 _notesUndoSection = null;
                 NotesUndoBtn.Visibility = Visibility.Collapsed;
-                Windows.ToastWindow.ShowToast("↩️ Undo applied");
+                Windows.ToastWindow.ShowToast("↩ Undo applied");
             }
         }
     }

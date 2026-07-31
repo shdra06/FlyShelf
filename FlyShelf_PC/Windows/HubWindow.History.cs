@@ -1,4 +1,4 @@
-// ═══════════════════════════════════════════════════════════════════════
+﻿// ═══════════════════════════════════════════════════════════════════════
 // HubWindow.History.cs — Clipboard history management: duplicate sweeper,
 // timeframe-based cleanup, and retention settings.
 // Part of the HubWindow partial class split.
@@ -28,7 +28,7 @@ namespace FlyShelf.Windows
                     if (days == 0 && !LicenseManager.IsPro)
                     {
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            Windows.ToastWindow.ShowToast("🔒 Unlock Premium to use this option!"));
+                            Windows.ToastWindow.ShowToast("Unlock Premium to use this option!"));
 
                         _isRetentionChanging = true;
                         try
@@ -49,7 +49,7 @@ namespace FlyShelf.Windows
 
                         MessageBox.Show(
                             "Disabling auto-cleanup (Never delete unpinned history) is a Pro feature.\n\nUpgrade to Pro to unlock the Never option!",
-                            "FlyShelf — Pro Feature",
+"FlyShelf  Pro Feature",
                             MessageBoxButton.OK,
                             MessageBoxImage.Information);
 
@@ -78,7 +78,7 @@ namespace FlyShelf.Windows
                 var items = _viewModel.DroppedItems.ToList();
                 if (items.Count == 0)
                 {
-                    ToastWindow.ShowToast("Clipboard history is empty. 📋");
+                    ToastWindow.ShowToast("Clipboard history is empty.");
                     return;
                 }
 
@@ -116,14 +116,14 @@ namespace FlyShelf.Windows
 
                 if (itemsToDelete.Count == 0)
                 {
-                    ToastWindow.ShowToast("No duplicates found! ✿");
+                    ToastWindow.ShowToast("No duplicates found!");
                     return;
                 }
 
                 // Perform fast bulk removal
                 _viewModel.BulkRemoveItems(itemsToDelete);
 
-                ToastWindow.ShowToast($"Successfully swept {itemsToDelete.Count} duplicate(s)! 🧹");
+                ToastWindow.ShowToast($"Successfully swept {itemsToDelete.Count} duplicate(s)!");
             }
             catch (Exception ex)
             {
@@ -182,13 +182,13 @@ namespace FlyShelf.Windows
 
                     if (itemsToDelete.Count == 0)
                     {
-                        ToastWindow.ShowToast($"No entries found from the {timeframeName}. ✿");
+                        ToastWindow.ShowToast($"No entries found from the {timeframeName}.");
                         return;
                     }
 
                     _viewModel.BulkRemoveItems(itemsToDelete);
 
-                    ToastWindow.ShowToast($"Successfully deleted {itemsToDelete.Count} entry/entries! 🧹");
+                    ToastWindow.ShowToast($"Successfully deleted {itemsToDelete.Count} entry/entries!");
                 }
             }
             catch (Exception ex)

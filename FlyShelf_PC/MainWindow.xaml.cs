@@ -282,7 +282,7 @@ namespace FlyShelf
                 var settings = Classes.SettingsManager.Current;
                 bool hotkeyRegistered = RegisterHotKey(hwnd, HOTKEY_ID, settings.HotkeyModifier | MOD_NOREPEAT, settings.HotkeyKey);
                 if (!hotkeyRegistered)
-                    Windows.ToastWindow.ShowToast($"⚠️ Could not register {settings.HotkeyDisplayString} — another app may be using it. Change in Settings.");
+                    Windows.ToastWindow.ShowToast($"Could not register {settings.HotkeyDisplayString} — another app may be using it. Change in Settings.");
                 Classes.Logger.LogAction("HOTKEY", $"{settings.HotkeyDisplayString} registered: {hotkeyRegistered}");
 
                 if (Classes.SettingsManager.Current.EnableQuickPasteHotkeys)
@@ -594,7 +594,7 @@ namespace FlyShelf
                 PopulateSendToDeviceMenu(cm);
 
                 // ═══ Contextual Tip: First context menu ═══
-                Windows.TipBadge.Show("context_menu_first_use", "⚡ Try Smart Actions for auto-detect features", cm.PlacementTarget as UIElement);
+                Windows.TipBadge.Show("context_menu_first_use", "Try Smart Actions for auto-detect features", cm.PlacementTarget as UIElement);
             }
         }
 
@@ -632,7 +632,7 @@ namespace FlyShelf
                 && !string.IsNullOrEmpty(item.FilePath))
             {
                 FlyShelf.Classes.ClipboardHelper.SafeSetTextAllowCapture(item.FilePath);
-                FlyShelf.Windows.ToastWindow.ShowToast("📋 Path copied!");
+                FlyShelf.Windows.ToastWindow.ShowToast("Path copied!");
             }
         }
 
@@ -643,7 +643,7 @@ namespace FlyShelf
                 string raw = item.RawContent ?? item.FileName ?? "";
                 string pretty = FlyShelf.Classes.SmartContentDetector.PrettyPrintJson(raw);
                 try { Clipboard.SetText(pretty); } catch { }
-                FlyShelf.Windows.ToastWindow.ShowToast("📋 Formatted JSON copied!");
+                FlyShelf.Windows.ToastWindow.ShowToast("Formatted JSON copied!");
             }
         }
 
@@ -666,7 +666,7 @@ namespace FlyShelf
                 string expr = (item.RawContent ?? item.FileName ?? "").Trim();
                 string result = FlyShelf.Classes.SmartContentDetector.EvaluateMath(expr);
                 try { Clipboard.SetText(result); } catch { }
-                FlyShelf.Windows.ToastWindow.ShowToast($"🔢 Result: {result} (copied!)");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Result: {result} (copied!)");
             }
         }
 
@@ -677,7 +677,7 @@ namespace FlyShelf
                 string raw = (item.RawContent ?? item.FileName ?? "").Trim();
                 string decoded = FlyShelf.Classes.SmartContentDetector.DecodeBase64(raw);
                 try { Clipboard.SetText(decoded); } catch { }
-                FlyShelf.Windows.ToastWindow.ShowToast("🔓 Decoded Base64 copied!");
+                FlyShelf.Windows.ToastWindow.ShowToast("Decoded Base64 copied!");
             }
         }
 
@@ -688,7 +688,7 @@ namespace FlyShelf
                 string raw = (item.RawContent ?? item.FileName ?? "").Trim();
                 string dateStr = FlyShelf.Classes.SmartContentDetector.EpochToDateTime(raw);
                 try { Clipboard.SetText(dateStr); } catch { }
-                FlyShelf.Windows.ToastWindow.ShowToast($"📅 {dateStr} (copied!)");
+                FlyShelf.Windows.ToastWindow.ShowToast($"{dateStr} (copied!)");
             }
         }
 
@@ -726,7 +726,7 @@ namespace FlyShelf
                 string text = item.RawContent ?? item.FileName ?? "";
                 if (string.IsNullOrWhiteSpace(text))
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No text content to process.");
+                    FlyShelf.Windows.ToastWindow.ShowToast("No text content to process.");
                     return;
                 }
 
@@ -743,7 +743,7 @@ namespace FlyShelf
                 if (WindowHelper.ShowDialogInForeground(aiWindow, this) == true && aiWindow.IsApplied)
                 {
                     try { Clipboard.SetText(aiWindow.ResultText); } catch { }
-                    FlyShelf.Windows.ToastWindow.ShowToast("✅ AI result copied to clipboard!");
+                    FlyShelf.Windows.ToastWindow.ShowToast("AI result copied to clipboard!");
                 }
             }
         }
@@ -757,7 +757,7 @@ namespace FlyShelf
                     string text = item.RawContent ?? item.FileName ?? "";
                     if (string.IsNullOrWhiteSpace(text))
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No text content to process.");
+                        FlyShelf.Windows.ToastWindow.ShowToast("No text content to process.");
                         return;
                     }
 
@@ -771,19 +771,19 @@ namespace FlyShelf
 
                     try
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast("🧠 AI working...");
+                        FlyShelf.Windows.ToastWindow.ShowToast("AI working...");
                         string result = await System.Threading.Tasks.Task.Run(async () =>
                             await FlyShelf.Classes.AiProviderService.Instance.GenerateAsync(text, systemPrompt));
 
                         if (!string.IsNullOrWhiteSpace(result))
                         {
                             try { Clipboard.SetText(result); } catch { }
-                            FlyShelf.Windows.ToastWindow.ShowToast("✅ AI result copied to clipboard!");
+                            FlyShelf.Windows.ToastWindow.ShowToast("AI result copied to clipboard!");
                         }
                     }
                     catch (Exception ex)
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ AI error: {ex.Message}");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"AI error: {ex.Message}");
                     }
                 }
             }
@@ -1458,7 +1458,7 @@ namespace FlyShelf
                 if (updateAvailable && !_updateBannerDismissed)
                 {
                     string ver = Classes.UpdateManager.GlobalLatestVersion;
-                    UpdateBannerText.Text = $"🚀 New version v{ver} available — tap to update";
+                    UpdateBannerText.Text = $"New version v{ver} available — tap to update";
                     UpdateNotificationBanner.Visibility = Visibility.Visible;
                 }
             });
@@ -1616,7 +1616,7 @@ namespace FlyShelf
             var s = Classes.SettingsManager.Current;
             bool ok = RegisterHotKey(handle, HOTKEY_ID, s.HotkeyModifier | MOD_NOREPEAT, s.HotkeyKey);
             if (!ok)
-                Windows.ToastWindow.ShowToast($"⚠️ Could not register {s.HotkeyDisplayString} — another app may be using it.");
+                Windows.ToastWindow.ShowToast($"Could not register {s.HotkeyDisplayString} — another app may be using it.");
             Classes.Logger.LogAction("HOTKEY", $"ReRegister {s.HotkeyDisplayString}: {ok}");
             return ok;
         }

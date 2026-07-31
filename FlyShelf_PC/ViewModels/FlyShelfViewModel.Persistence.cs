@@ -567,7 +567,7 @@ namespace FlyShelf.ViewModels
             // SECURITY: Password items must NEVER be synced to any device
             if (item.IsPassword)
             {
-                Classes.Logger.LogAction($"{label} SYNC", "🔒 Blocked password item from file sync — password items are never synced");
+                Classes.Logger.LogAction($"{label} SYNC", "Blocked password item from file sync — password items are never synced");
                 return;
             }
 
@@ -577,7 +577,7 @@ namespace FlyShelf.ViewModels
                 if (fSize > Classes.LicenseManager.FREE_SYNC_SIZE_LIMIT && !Classes.LicenseManager.IsPro)
                 {
                     Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) exceeds 50 GB Free tier sync limit."));
+                        FlyShelf.Windows.ToastWindow.ShowToast($"{Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) exceeds 50 GB Free tier sync limit."));
                     return;
                 }
 
@@ -670,7 +670,7 @@ namespace FlyShelf.ViewModels
                     if (unpinnedCount % step == 0)
                     {
                         int remaining = maxUnpinnedItems - unpinnedCount;
-                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Clipboard has {unpinnedCount} items. {remaining} slots remaining (max {maxUnpinnedItems}).");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Clipboard has {unpinnedCount} items. {remaining} slots remaining (max {maxUnpinnedItems}).");
                     }
                 }
             }
@@ -704,7 +704,7 @@ namespace FlyShelf.ViewModels
                     filesToCleanup.Add((item.FilePath, item.ZippedArchivePath, item.ItemType));
                 }
 
-                FlyShelf.Windows.ToastWindow.ShowToast($"🗑️ Clipboard full — removed {itemsToRemove.Count} oldest items.");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Clipboard full — removed {itemsToRemove.Count} oldest items.");
 
                 // Background cleanup
                 _ = System.Threading.Tasks.Task.Run(() =>

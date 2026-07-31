@@ -717,11 +717,11 @@ namespace FlyShelf.ViewModels
                 var peerInstance = FlyShelf.Classes.PeerManager.Instance;
                 if (peerInstance == null)
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No LAN peers connected.");
+                    FlyShelf.Windows.ToastWindow.ShowToast("No LAN peers connected.");
                     return;
                 }
 
-                FlyShelf.Windows.ToastWindow.ShowToast("📡 Syncing zip via LAN...");
+                FlyShelf.Windows.ToastWindow.ShowToast("Syncing zip via LAN...");
                 int delivered = await peerInstance.PushFileToAllPeers(
                     ZippedArchivePath, FileName ?? "Archive", "Archive");
 

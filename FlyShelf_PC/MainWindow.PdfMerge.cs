@@ -48,21 +48,21 @@ namespace FlyShelf
             // Convert DOC/DOCX files to PDF first (Batch optimized)
             if (checkedDocs.Count > 0)
             {
-                FlyShelf.Windows.ToastWindow.ShowToast($"📄 Converting {checkedDocs.Count} DOC file(s) to PDF...");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Converting {checkedDocs.Count} DOC file(s) to PDF...");
                 string[] docs = checkedDocs.Select(d => d.FilePath).ToArray();
                 string[] results = await ConversionUtils.ConvertDocsToPdfsAsync(docs);
                 convertedPdfPaths.AddRange(results);
 
                 if (results.Length < docs.Length)
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ {docs.Length - results.Length} DOC files failed to convert.");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"{docs.Length - results.Length} DOC files failed to convert.");
                 }
             }
 
             // Convert Images to PDF next
             if (checkedImages.Count > 0)
             {
-                FlyShelf.Windows.ToastWindow.ShowToast($"🖼️ Formatting {checkedImages.Count} image(s) to PDF...");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Formatting {checkedImages.Count} image(s) to PDF...");
 
                 foreach (var img in checkedImages)
                 {
@@ -76,7 +76,7 @@ namespace FlyShelf
                     }
                     catch (Exception ex)
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"❌ Failed to format: {img.FileName}");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Failed to format: {img.FileName}");
                         FlyShelf.Classes.Logger.LogAction("IMAGE2PDF_ERR", ex.ToString());
                     }
                 }
@@ -89,7 +89,7 @@ namespace FlyShelf
                 var newItem = new ClipboardItem(convertedPdfPaths[0]);
                 _viewModel.DroppedItems.Insert(0, newItem);
                 _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-                FlyShelf.Windows.ToastWindow.ShowToast("✅ Converted to PDF");
+                FlyShelf.Windows.ToastWindow.ShowToast("Converted to PDF");
                 return;
             }
 
@@ -137,7 +137,7 @@ namespace FlyShelf
                 _viewModel.DroppedItems.Insert(0, newItem);
                 Classes.ClipboardHistoryManager.AppendToJournal(newItem);
                 _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-                FlyShelf.Windows.ToastWindow.ShowToast("✅ PDF added to clipboard");
+                FlyShelf.Windows.ToastWindow.ShowToast("PDF added to clipboard");
             }
             else
             {
@@ -164,7 +164,7 @@ namespace FlyShelf
                     return;
                 }
 
-                FlyShelf.Windows.ToastWindow.ShowToast($"⚡ Instant Merging {items.Count} files...");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Instant Merging {items.Count} files...");
                 LoadingProgress.Visibility = Visibility.Visible;
 
                 await System.Threading.Tasks.Task.Run(async () =>
@@ -222,12 +222,12 @@ namespace FlyShelf
                             _viewModel.DroppedItems.Insert(0, newItem);
                             Classes.ClipboardHistoryManager.AppendToJournal(newItem);
                             _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-                            FlyShelf.Windows.ToastWindow.ShowToast("✅ Instant Merge complete!");
+                            FlyShelf.Windows.ToastWindow.ShowToast("Instant Merge complete!");
                         });
                     }
                     catch (Exception ex)
                     {
-                        await Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Instant Merge failed: {ex.Message}"));
+                        await Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"Instant Merge failed: {ex.Message}"));
                     }
                 });
             }
@@ -404,11 +404,11 @@ namespace FlyShelf
                 // Check AI availability
                 if (!AiProviderService.Instance.IsAvailable)
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Translate requires an AI API key");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Translate requires an AI API key");
                     return;
                 }
 
-                FlyShelf.Windows.ToastWindow.ShowToast($"🌐 Translating to {targetLanguage}...");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Translating to {targetLanguage}...");
 
                 string translated = await AiProviderService.Instance.TranslateAsync(clipItem.RawContent, targetLanguage);
 
@@ -416,7 +416,7 @@ namespace FlyShelf
                 {
                     if (ClipboardHelper.SafeSetText(translated))
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"🌐 Translated to {targetLanguage} — copied to clipboard!");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Translated to {targetLanguage} — copied to clipboard!");
                     }
                     else
                     {
@@ -441,7 +441,7 @@ namespace FlyShelf
         {
 #if MSIX_STORE
             await System.Threading.Tasks.Task.CompletedTask; // suppress async warning
-            FlyShelf.Windows.ToastWindow.ShowToast("⚠️ PDF to Word conversion is not available in the Store version.");
+            FlyShelf.Windows.ToastWindow.ShowToast("PDF to Word conversion is not available in the Store version.");
 #else
             await System.Threading.Tasks.Task.CompletedTask; // suppress async warning
             // Delegate to ClipboardItem's smart dual-strategy converter
@@ -458,14 +458,14 @@ namespace FlyShelf
                 var clipItem = GetClipItemFromSender(sender);
                 if (clipItem == null || string.IsNullOrEmpty(clipItem.FilePath) || !System.IO.File.Exists(clipItem.FilePath))
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ PDF file not found.");
+                    FlyShelf.Windows.ToastWindow.ShowToast("PDF file not found.");
                     return;
                 }
 
                 var mergeItem = new FlyShelf.Windows.PdfMergeItem(clipItem.FilePath);
                 if (!mergeItem.IsValid)
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Cannot read PDF: {mergeItem.Error}");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Cannot read PDF: {mergeItem.Error}");
                     return;
                 }
 
@@ -574,7 +574,7 @@ namespace FlyShelf
 
                         if (orderUnchanged)
                         {
-                            FlyShelf.Windows.ToastWindow.ShowToast("📄 Page order unchanged.");
+                            FlyShelf.Windows.ToastWindow.ShowToast("Page order unchanged.");
                             return;
                         }
 
@@ -585,17 +585,17 @@ namespace FlyShelf
                             Arguments = $"/select,\"{outputPath}\"",
                             UseShellExecute = true
                         });
-                        FlyShelf.Windows.ToastWindow.ShowToast($"✅ Reordered PDF saved: {System.IO.Path.GetFileName(outputPath)}");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Reordered PDF saved: {System.IO.Path.GetFileName(outputPath)}");
                     }
                     catch (Exception ex)
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"❌ Failed to save reordered PDF: {ex.Message}");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Failed to save reordered PDF: {ex.Message}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                FlyShelf.Windows.ToastWindow.ShowToast($"❌ Reorder error: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Reorder error: {ex.Message}");
             }
         }
 
@@ -610,7 +610,7 @@ namespace FlyShelf
                 item.FileName = "Protected Password";
             }
             item.GeneratePasswordIcon();
-            FlyShelf.Windows.ToastWindow.ShowToast("Locked as password card! 🔒");
+            FlyShelf.Windows.ToastWindow.ShowToast("Locked as password card!");
 
             // Open the View/Edit dialog
             OpenPasswordManagerWindow(item, false);
@@ -835,7 +835,7 @@ namespace FlyShelf
                 if (!string.IsNullOrEmpty(newName))
                 {
                     item.FileName = newName;
-                    FlyShelf.Windows.ToastWindow.ShowToast($"Renamed to \"{newName}\" ✏️");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Renamed to \"{newName}\"");
                 }
             }
         }
@@ -855,7 +855,7 @@ namespace FlyShelf
             item.Extension = "TEXT";
             item.FileName = (item.RawContent?.Length ?? 0) > 800 ? string.Concat(item.RawContent.AsSpan(0, 800), "...") : item.RawContent;
             item.Icon = null; // Reverts back to standard text template
-            FlyShelf.Windows.ToastWindow.ShowToast("Reverted to normal text card! 📋");
+            FlyShelf.Windows.ToastWindow.ShowToast("Reverted to normal text card!");
         }
 
         private void RenamePasswordSpecific_Click(object sender, RoutedEventArgs e)
@@ -941,14 +941,14 @@ namespace FlyShelf
 
                         Dispatcher.InvokeAsync(() =>
                         {
-                            FlyShelf.Windows.ToastWindow.ShowToast($"✂️ Split into {total} pages → {outputDir}");
+                            FlyShelf.Windows.ToastWindow.ShowToast($"Split into {total} pages → {outputDir}");
                             try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = outputDir, UseShellExecute = true }); } catch { }
                         });
                     }
                 }
                 catch (Exception ex)
                 {
-                    Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Split failed: {ex.Message}"));
+                    Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"Split failed: {ex.Message}"));
                 }
             });
         }
@@ -1030,13 +1030,13 @@ namespace FlyShelf
 
                     Dispatcher.InvokeAsync(() =>
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"🔒 Protected PDF saved: {System.IO.Path.GetFileName(outputPath)}");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Protected PDF saved: {System.IO.Path.GetFileName(outputPath)}");
                         _viewModel.HandleDrop(new System.Windows.DataObject(System.Windows.DataFormats.FileDrop, new[] { outputPath }), true);
                     });
                 }
                 catch (Exception ex)
                 {
-                    Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Password protect failed: {ex.Message}"));
+                    Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"Password protect failed: {ex.Message}"));
                 }
             });
         }
@@ -1132,13 +1132,13 @@ namespace FlyShelf
 
                     Dispatcher.InvokeAsync(() =>
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"💧 Watermarked PDF saved: {System.IO.Path.GetFileName(outputPath)}");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Watermarked PDF saved: {System.IO.Path.GetFileName(outputPath)}");
                         _viewModel.HandleDrop(new System.Windows.DataObject(System.Windows.DataFormats.FileDrop, new[] { outputPath }), true);
                     });
                 }
                 catch (Exception ex)
                 {
-                    Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Watermark failed: {ex.Message}"));
+                    Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"Watermark failed: {ex.Message}"));
                 }
             });
         }
@@ -1190,17 +1190,17 @@ namespace FlyShelf
                     if ((i + 1) % 5 == 0)
                     {
                         await Dispatcher.InvokeAsync(() =>
-                            FlyShelf.Windows.ToastWindow.ShowToast($"📝 Exported {i + 1}/{total} pages..."),
+                            FlyShelf.Windows.ToastWindow.ShowToast($"Exported {i + 1}/{total} pages..."),
                             System.Windows.Threading.DispatcherPriority.Background);
                     }
                 }
 
-                FlyShelf.Windows.ToastWindow.ShowToast($"📝 Exported {total} pages as PNG → {outputDir}");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Exported {total} pages as PNG → {outputDir}");
                 try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = outputDir, UseShellExecute = true }); } catch { }
             }
             catch (Exception ex)
             {
-                FlyShelf.Windows.ToastWindow.ShowToast($"❌ PDF→Images failed: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast($"PDF→Images failed: {ex.Message}");
             }
         }
 
@@ -1253,7 +1253,7 @@ namespace FlyShelf
                     string text = sb.ToString().Trim();
                     if (string.IsNullOrWhiteSpace(text))
                     {
-                        Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No extractable text found. Try OCR instead for scanned PDFs."));
+                        Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast("No extractable text found. Try OCR instead for scanned PDFs."));
                         return;
                     }
 
@@ -1267,13 +1267,13 @@ namespace FlyShelf
                     Dispatcher.InvokeAsync(() =>
                     {
                         try { ClipboardHelper.SafeSetText(text); } catch { }
-                        FlyShelf.Windows.ToastWindow.ShowToast($"📝 Text extracted ({text.Length} chars) and copied to clipboard");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Text extracted ({text.Length} chars) and copied to clipboard");
                         _viewModel.HandleDrop(new System.Windows.DataObject(System.Windows.DataFormats.FileDrop, new[] { txtPath }), true);
                     });
                 }
                 catch (Exception ex)
                 {
-                    Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"❌ Text extraction failed: {ex.Message}"));
+                    Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"Text extraction failed: {ex.Message}"));
                 }
             });
         }

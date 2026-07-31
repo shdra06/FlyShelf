@@ -87,7 +87,7 @@ namespace FlyShelf.Classes
                 "AI Notes Assistant",
                 "AI features (Summarize, Rewrite, Organize) are exclusive to FlyShelf Pro.",
                 "Upgrade to FlyShelf Pro to unlock local AI notes enhancements!",
-                "✨",
+                "",
                 owner);
         }
 
@@ -494,7 +494,7 @@ namespace FlyShelf.Classes
 
             var crownIcon = new TextBlock
             {
-                Text = "👑",
+                Text = "",
                 FontSize = 28,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 10, 0)
@@ -561,7 +561,7 @@ namespace FlyShelf.Classes
             var upgradeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
             var bulletIcon = new TextBlock
             {
-                Text = "✨",
+                Text = "",
                 FontSize = 13,
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, 1, 8, 0)
@@ -582,7 +582,7 @@ namespace FlyShelf.Classes
             var resetRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 0) };
             var clockIcon = new TextBlock
             {
-                Text = "🕐",
+                Text = "",
                 FontSize = 13,
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, 1, 8, 0)
@@ -638,7 +638,7 @@ namespace FlyShelf.Classes
             };
             // Use a StackPanel for icon + text in button
             var upgradeBtnContent = new StackPanel { Orientation = Orientation.Horizontal };
-            upgradeBtnContent.Children.Add(new TextBlock { Text = "🔑", FontSize = 13, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+            upgradeBtnContent.Children.Add(new TextBlock { Text = "", FontSize = 13, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
             upgradeBtnContent.Children.Add(new TextBlock { Text = "Upgrade Now", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
             upgradeBtn.Content = upgradeBtnContent;
             upgradeBtn.Click += (s, e) =>
@@ -725,13 +725,13 @@ namespace FlyShelf.Classes
                         FileName = paymentUrl,
                         UseShellExecute = true
                     });
-                    FlyShelf.Windows.ToastWindow.ShowToast("🛒 Opening payment page in your browser...");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Opening payment page in your browser...");
                 }
             }
             catch (Exception ex)
             {
                 FlyShelf.Classes.Logger.LogAction("LICENSE", $"Failed to open checkout: {ex.Message}");
-                FlyShelf.Windows.ToastWindow.ShowToast("❌ Could not open browser. Please visit our website to upgrade.");
+                FlyShelf.Windows.ToastWindow.ShowToast("Could not open browser. Please visit our website to upgrade.");
             }
         }
     }

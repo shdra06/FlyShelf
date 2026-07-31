@@ -34,43 +34,36 @@ namespace FlyShelf.Controls
                 var menu = new ContextMenu();
 
                 // Helper: colorful emoji menu item using Emoji.Wpf
-                MenuItem EmojiMenuItem(string emoji, string label, (string header, string content)[] template)
+                MenuItem EmojiMenuItem(string label, (string header, string content)[] template)
                 {
                     var sp = new StackPanel { Orientation = Orientation.Horizontal };
-                    var emojiBlock = new Emoji.Wpf.TextBlock
-                    {
-                        Text = emoji, FontSize = 14,
-                        VerticalAlignment = VerticalAlignment.Center,
-                        Margin = new Thickness(0, 0, 10, 0)
-                    };
                     var labelBlock = new TextBlock
                     {
                         Text = label, FontSize = 13,
                         Foreground = FrozenBrush(ThemeColors.CatppuccinText),
                         VerticalAlignment = VerticalAlignment.Center
                     };
-                    sp.Children.Add(emojiBlock);
                     sp.Children.Add(labelBlock);
                     var mi = new MenuItem { Header = sp, Padding = new Thickness(4, 4, 4, 4) };
                     mi.Click += (s, ev) => ApplyNotesTemplateWithHeaders(template);
                     return mi;
                 }
 
-                menu.Items.Add(EmojiMenuItem("🛒", "Grocery List", new[] {
+                menu.Items.Add(EmojiMenuItem("Grocery List", new[] {
                     ("Dairy", "Milk, Eggs, Cheese, Yogurt"),
                     ("Produce", "Veggies, Fruits, Herbs"),
                     ("Pantry", "Bread, Rice, Pasta, Cereal"),
                     ("Frozen & Snacks", "")
                 }));
 
-                menu.Items.Add(EmojiMenuItem("💼", "Daily Standup", new[] {
+                menu.Items.Add(EmojiMenuItem("Daily Standup", new[] {
                     ("Yesterday", ""),
                     ("Today", ""),
                     ("Blockers", ""),
                     ("Notes", "")
                 }));
 
-                menu.Items.Add(EmojiMenuItem("📝", "Meeting Notes", new[] {
+                menu.Items.Add(EmojiMenuItem("Meeting Notes", new[] {
                     ("Attendees", ""),
                     ("Agenda", ""),
                     ("Discussion", ""),
@@ -78,7 +71,7 @@ namespace FlyShelf.Controls
                     ("Follow-up", "")
                 }));
 
-                menu.Items.Add(EmojiMenuItem("🏋️", "Workout Planner", new[] {
+                menu.Items.Add(EmojiMenuItem("Workout Planner", new[] {
                     ("Warmup", "5 min cardio"),
                     ("Main Set", ""),
                     ("Cooldown", "Stretching & foam roll")
@@ -86,27 +79,27 @@ namespace FlyShelf.Controls
 
                 menu.Items.Add(new Separator());
 
-                menu.Items.Add(EmojiMenuItem("🎯", "Project Planning", new[] {
+                menu.Items.Add(EmojiMenuItem("Project Planning", new[] {
                     ("Goal", ""),
                     ("Tasks", ""),
                     ("Timeline", ""),
                     ("Risks & Mitigations", "")
                 }));
 
-                menu.Items.Add(EmojiMenuItem("📊", "Weekly Review", new[] {
+                menu.Items.Add(EmojiMenuItem("Weekly Review", new[] {
                     ("Wins", ""),
                     ("Challenges", ""),
                     ("Lessons Learned", ""),
                     ("Next Week Priorities", "")
                 }));
 
-                menu.Items.Add(EmojiMenuItem("🧠", "Brain Dump", new[] {
+                menu.Items.Add(EmojiMenuItem("Brain Dump", new[] {
                     ("Ideas", ""),
                     ("To Research", ""),
                     ("Questions", "")
                 }));
 
-                menu.Items.Add(EmojiMenuItem("📚", "Reading Notes", new[] {
+                menu.Items.Add(EmojiMenuItem("Reading Notes", new[] {
                     ("Key Takeaways", ""),
                     ("Quotes", ""),
                     ("Reflections", "")
@@ -233,7 +226,7 @@ namespace FlyShelf.Controls
                         if (_cachedBulletMoreMenu.Items[0] is MenuItem pinItem)
                         {
                             pinItem.Header = bullet.IsPinned ? "Unpin" : "Pin to Top";
-                            pinItem.Icon = MakeBulletMenuIcon(bullet.IsPinned ? "📌" : "📍", "#F59E0B");
+
                         }
 
                         // Tags submenu (index 2): update IsChecked + icons for preset tags
@@ -264,13 +257,13 @@ namespace FlyShelf.Controls
 
                     // Pin / Unpin  ── amber pin icon
                     var pin = new MenuItem { Header = bullet.IsPinned ? "Unpin" : "Pin to Top" };
-                    pin.Icon = MakeBulletMenuIcon(bullet.IsPinned ? "📌" : "📍", "#F59E0B");
+
                     pin.Click += (s, ev) => { if (_cachedBulletMoreMenu?.Tag is NoteBullet b) { b.IsPinned = !b.IsPinned; NoteManager.MarkDirty(); } };
                     menu.Items.Add(pin);
 
                     // Color submenu  ── palette icon
                     var colorMenu = new MenuItem { Header = "Color" };
-                    colorMenu.Icon = MakeBulletMenuIcon("🎨", "#EC4899");
+
                     var noteColors = new (string Hex, string Name)[]
                     {
                         ("#FF4444", "Red"), ("#F59E0B", "Amber"), ("#22C55E", "Green"),
@@ -290,14 +283,14 @@ namespace FlyShelf.Controls
                     }
                     colorMenu.Items.Add(new Separator());
                     var clearColor = new MenuItem { Header = "Clear Color" };
-                    clearColor.Icon = MakeBulletMenuIcon("✕", "#6B7280");
+
                     clearColor.Click += (s, ev) => { if (_cachedBulletMoreMenu?.Tag is NoteBullet b) { b.Color = ""; NoteManager.MarkDirty(); } };
                     colorMenu.Items.Add(clearColor);
                     menu.Items.Add(colorMenu);
 
                     // Tags submenu  ── cyan tag icon
                     var tagMenu = new MenuItem { Header = "Tags" };
-                    tagMenu.Icon = MakeBulletMenuIcon("🏷", "#00D2FF");
+
                     string[] presetTags = s_notePresetTags;
                     foreach (var tag in presetTags)
                     {
@@ -320,7 +313,7 @@ namespace FlyShelf.Controls
                     }
                     tagMenu.Items.Add(new Separator());
                     var customTag = new MenuItem { Header = "Custom Tag..." };
-                    customTag.Icon = MakeBulletMenuIcon("✏", "#8B5CF6");
+
                     customTag.Click += (s, ev) =>
                     {
                         if (_cachedBulletMoreMenu?.Tag is not NoteBullet b) return;
@@ -372,7 +365,7 @@ namespace FlyShelf.Controls
 
                     // Copy as Text  ── blue clipboard icon
                     var copyText = new MenuItem { Header = "Copy as Text" };
-                    copyText.Icon = MakeBulletMenuIcon("📋", "#3B82F6");
+
                     copyText.Click += (s, ev) =>
                     {
                         if (_cachedBulletMoreMenu?.Tag is NoteBullet b)
@@ -387,7 +380,7 @@ namespace FlyShelf.Controls
 
                     // Copy as Markdown  ── indigo markdown icon
                     var copyMd = new MenuItem { Header = "Copy as Markdown" };
-                    copyMd.Icon = MakeBulletMenuIcon("📝", "#6366F1");
+
                     copyMd.Click += (s, ev) =>
                     {
                         if (_cachedBulletMoreMenu?.Tag is NoteBullet b)
@@ -404,7 +397,7 @@ namespace FlyShelf.Controls
 
                     // Set Reminder  ── amber bell icon
                     var reminderItem = new MenuItem { Header = "Set Reminder" };
-                    reminderItem.Icon = MakeBulletMenuIcon("⏰", "#F59E0B");
+
                     reminderItem.Click += (s, ev) =>
                     {
                         if (_cachedBulletMoreMenu?.Tag is NoteBullet b)
@@ -429,7 +422,7 @@ namespace FlyShelf.Controls
 
                     // Delete  ── red trash icon
                     var deleteItem = new MenuItem { Header = "Delete" };
-                    deleteItem.Icon = MakeBulletMenuIcon("🗑", "#EF4444");
+
                     deleteItem.Foreground = FrozenBrush(ThemeColors.ErrorRed);
                     deleteItem.Click += (s, ev) =>
                     {
@@ -512,7 +505,7 @@ namespace FlyShelf.Controls
         {
             if (string.IsNullOrWhiteSpace(originalText))
             {
-                Windows.ToastWindow.ShowToast("⚠️ Note is empty. Type something first!");
+                Windows.ToastWindow.ShowToast("Note is empty. Type something first!");
                 return;
             }
 
@@ -605,7 +598,7 @@ namespace FlyShelf.Controls
 
             if (isCloudOnly && !hasCloudKey && !WindowsAIService.Instance.IsAvailable)
             {
-                Windows.ToastWindow.ShowToast("⚠️ This feature requires an AI API key. Click ⚡ in Settings to configure.");
+                Windows.ToastWindow.ShowToast("This feature requires an AI API key. Click ⚡ in Settings to configure.");
                 return;
             }
 
@@ -657,10 +650,9 @@ namespace FlyShelf.Controls
                     if (day != null)
                     {
                         var sortMenu = new MenuItem { Header = "Sort Bullets" };
-                        sortMenu.Icon = MI("📊", "#00D2FF");
 
                         var sortPinned = new MenuItem { Header = "Pinned First" };
-                        sortPinned.Icon = MI("📌", "#F59E0B");
+
                         sortPinned.Click += (s, ev) =>
                         {
                             var sorted = day.Bullets.OrderByDescending(b => b.IsPinned).ThenBy(b => b.SortOrder).ToList();
@@ -670,7 +662,7 @@ namespace FlyShelf.Controls
                         sortMenu.Items.Add(sortPinned);
 
                         var sortAZ = new MenuItem { Header = "Header A-Z" };
-                        sortAZ.Icon = MI("🔤", "#3B82F6");
+
                         sortAZ.Click += (s, ev) =>
                         {
                             var sorted = day.Bullets.OrderBy(b => b.Header ?? "").ThenBy(b => b.SortOrder).ToList();
@@ -680,7 +672,7 @@ namespace FlyShelf.Controls
                         sortMenu.Items.Add(sortAZ);
 
                         var sortEdited = new MenuItem { Header = "Last Edited" };
-                        sortEdited.Icon = MI("🕐", "#8B5CF6");
+
                         sortEdited.Click += (s, ev) =>
                         {
                             var sorted = day.Bullets.OrderByDescending(b => b.LastEdited).ToList();
@@ -690,7 +682,7 @@ namespace FlyShelf.Controls
                         sortMenu.Items.Add(sortEdited);
 
                         var sortCreated = new MenuItem { Header = "Created" };
-                        sortCreated.Icon = MI("📅", "#22C55E");
+
                         sortCreated.Click += (s, ev) =>
                         {
                             var sorted = day.Bullets.OrderByDescending(b => b.CreatedAt).ToList();
@@ -706,10 +698,9 @@ namespace FlyShelf.Controls
                     if (day != null)
                     {
                         var exportMenu = new MenuItem { Header = "Export" };
-                        exportMenu.Icon = MI("📋", "#3B82F6");
 
                         var copyMd = new MenuItem { Header = "Copy as Markdown" };
-                        copyMd.Icon = MI("📝", "#6366F1");
+
                         copyMd.Click += (s, ev) =>
                         {
                             string md = NoteManager.ExportToMarkdown(day);
@@ -718,7 +709,7 @@ namespace FlyShelf.Controls
                         exportMenu.Items.Add(copyMd);
 
                         var copyTxt = new MenuItem { Header = "Copy as Text" };
-                        copyTxt.Icon = MI("📋", "#3B82F6");
+
                         copyTxt.Click += (s, ev) =>
                         {
                             string txt = NoteManager.ExportToText(day);
@@ -734,10 +725,9 @@ namespace FlyShelf.Controls
                     // ── Templates submenu ── amber document icon
                     // TODO: Deduplicate — these templates are also defined in NotesTemplates_Click (~line 1990)
                     var templatesMenu = new MenuItem { Header = "Templates" };
-                    templatesMenu.Icon = MI("📄", "#F59E0B");
 
                     var tGrocery = new MenuItem { Header = "Grocery List" };
-                    tGrocery.Icon = MI("🛒", "#22C55E");
+
                     tGrocery.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
                         ("Dairy", "Milk, Eggs, Cheese, Yogurt"),
                         ("Produce", "Veggies, Fruits, Herbs"),
@@ -747,7 +737,7 @@ namespace FlyShelf.Controls
                     templatesMenu.Items.Add(tGrocery);
 
                     var tStandup = new MenuItem { Header = "Daily Standup" };
-                    tStandup.Icon = MI("💼", "#3B82F6");
+
                     tStandup.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
                         ("Yesterday", ""),
                         ("Today", ""),
@@ -757,7 +747,7 @@ namespace FlyShelf.Controls
                     templatesMenu.Items.Add(tStandup);
 
                     var tMeeting = new MenuItem { Header = "Meeting Notes" };
-                    tMeeting.Icon = MI("📝", "#6366F1");
+
                     tMeeting.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
                         ("Attendees", ""),
                         ("Agenda", ""),
@@ -768,7 +758,7 @@ namespace FlyShelf.Controls
                     templatesMenu.Items.Add(tMeeting);
 
                     var tWorkout = new MenuItem { Header = "Workout Planner" };
-                    tWorkout.Icon = MI("🏋", "#EF4444");
+
                     tWorkout.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
                         ("Warmup", "5 min cardio"),
                         ("Main Set", ""),
@@ -777,7 +767,7 @@ namespace FlyShelf.Controls
                     templatesMenu.Items.Add(tWorkout);
 
                     var tProject = new MenuItem { Header = "Project Planning" };
-                    tProject.Icon = MI("📋", "#00D2FF");
+
                     tProject.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
                         ("Goals", ""),
                         ("Tasks", ""),
@@ -787,7 +777,7 @@ namespace FlyShelf.Controls
                     templatesMenu.Items.Add(tProject);
 
                     var tBrainDump = new MenuItem { Header = "Brain Dump" };
-                    tBrainDump.Icon = MI("🧠", "#EC4899");
+
                     tBrainDump.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
                         ("Ideas", ""),
                         ("To Process", ""),
@@ -820,7 +810,7 @@ namespace FlyShelf.Controls
                 {
                     var menu = new ContextMenu();
 
-                    var sortPinned = new MenuItem { Header = "📌 Pinned First" };
+                    var sortPinned = new MenuItem { Header = "Pinned First" };
                     sortPinned.Click += (s, ev) =>
                     {
                         var sorted = day.Bullets.OrderByDescending(b => b.IsPinned).ThenBy(b => b.SortOrder).ToList();
@@ -829,7 +819,7 @@ namespace FlyShelf.Controls
                     };
                     menu.Items.Add(sortPinned);
 
-                    var sortAZ = new MenuItem { Header = "🔤 Header A-Z" };
+                    var sortAZ = new MenuItem { Header = "Header A-Z" };
                     sortAZ.Click += (s, ev) =>
                     {
                         var sorted = day.Bullets.OrderBy(b => b.Header ?? "").ThenBy(b => b.SortOrder).ToList();
@@ -838,7 +828,7 @@ namespace FlyShelf.Controls
                     };
                     menu.Items.Add(sortAZ);
 
-                    var sortEdited = new MenuItem { Header = "🕐 Last Edited" };
+                    var sortEdited = new MenuItem { Header = "Last Edited" };
                     sortEdited.Click += (s, ev) =>
                     {
                         var sorted = day.Bullets.OrderByDescending(b => b.LastEdited).ToList();
@@ -847,7 +837,7 @@ namespace FlyShelf.Controls
                     };
                     menu.Items.Add(sortEdited);
 
-                    var sortCreated = new MenuItem { Header = "📅 Created" };
+                    var sortCreated = new MenuItem { Header = "Created" };
                     sortCreated.Click += (s, ev) =>
                     {
                         var sorted = day.Bullets.OrderByDescending(b => b.CreatedAt).ToList();
@@ -876,7 +866,7 @@ namespace FlyShelf.Controls
                 {
                     var menu = new ContextMenu();
 
-                    var copyMd = new MenuItem { Header = "📋 Copy as Markdown" };
+                    var copyMd = new MenuItem { Header = "Copy as Markdown" };
                     copyMd.Click += (s, ev) =>
                     {
                         string md = NoteManager.ExportToMarkdown(_selectedNoteDay);
@@ -884,7 +874,7 @@ namespace FlyShelf.Controls
                     };
                     menu.Items.Add(copyMd);
 
-                    var copyTxt = new MenuItem { Header = "📋 Copy as Text" };
+                    var copyTxt = new MenuItem { Header = "Copy as Text" };
                     copyTxt.Click += (s, ev) =>
                     {
                         string txt = NoteManager.ExportToText(_selectedNoteDay);

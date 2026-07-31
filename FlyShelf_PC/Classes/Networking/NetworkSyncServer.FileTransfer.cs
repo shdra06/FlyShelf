@@ -61,7 +61,7 @@ namespace FlyShelf.Classes
                 pairingKey = req.QueryString["key"];
             if (string.IsNullOrEmpty(pairingKey) || !DevicePairingManager.IsDevicePaired(pairingKey))
             {
-                Logger.LogAction("SECURITY", $"🚫 BLOCKED unauthenticated download request from {req.RemoteEndPoint}");
+                Logger.LogAction("SECURITY", $"BLOCKED unauthenticated download request from {req.RemoteEndPoint}");
                 try { res.StatusCode = 403; res.Close(); } catch { } // Best-effort: failure is acceptable
                 return;
             }
@@ -76,7 +76,7 @@ namespace FlyShelf.Classes
             // SECURITY: Path sandbox — reject files outside allowed directories
             if (!IsPathAllowed(path))
             {
-                Logger.LogAction("SECURITY", $"🚫 BLOCKED path traversal attempt: {path} from {req.RemoteEndPoint}");
+                Logger.LogAction("SECURITY", $"BLOCKED path traversal attempt: {path} from {req.RemoteEndPoint}");
                 try
                 {
                     byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"403 — Access denied: path not in allowed directory\"}");
@@ -180,7 +180,7 @@ namespace FlyShelf.Classes
                     res.StatusCode = 429;
                     res.ContentType = "application/json";
                     try { res.OutputStream.Write(tooMany, 0, tooMany.Length); } catch { } // Best-effort: failure is acceptable
-                    Logger.LogAction("SECURITY", $"⛔ /api/pair global rate-limit hit from {remoteIp}");
+                    Logger.LogAction("SECURITY", $"/api/pair global rate-limit hit from {remoteIp}");
                     return;
                 }
 
@@ -196,7 +196,7 @@ namespace FlyShelf.Classes
                         res.StatusCode = 429;
                         res.ContentType = "application/json";
                         try { res.OutputStream.Write(blocked, 0, blocked.Length); } catch { } // Best-effort: failure is acceptable
-                        Logger.LogAction("SECURITY", $"⛔ /api/pair rate-limited IP: {remoteIp} ({ipState.count} fails)");
+                        Logger.LogAction("SECURITY", $"/api/pair rate-limited IP: {remoteIp} ({ipState.count} fails)");
                         return;
                     }
                 }
@@ -249,7 +249,7 @@ namespace FlyShelf.Classes
                     // Show toast on PC
                     _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"📱 {deviceName} paired successfully!");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"{deviceName} paired successfully!");
                     });
                 }
                 else
@@ -271,7 +271,7 @@ namespace FlyShelf.Classes
                     res.StatusCode = 403;
                     res.ContentType = "application/json";
                     res.OutputStream.Write(err, 0, err.Length);
-                    Logger.LogAction("SECURITY", $"⚠️ Failed pair attempt from {remoteIp} (key length={pairingKey?.Length ?? 0})");
+                    Logger.LogAction("SECURITY", $"Failed pair attempt from {remoteIp} (key length={pairingKey?.Length ?? 0})");
                 }
             }
             catch (Exception ex)
@@ -321,7 +321,7 @@ namespace FlyShelf.Classes
                 // Validate pairing key
                 if (string.IsNullOrEmpty(pairingKey) || !DevicePairingManager.IsDevicePaired(pairingKey))
                 {
-                    Logger.LogAction("PEER_ANNOUNCE", $"⛔ Rejected announce from {deviceName} — invalid pairing key");
+                    Logger.LogAction("PEER_ANNOUNCE", $"Rejected announce from {deviceName} — invalid pairing key");
                     byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Invalid pairing key\"}");
                     res.StatusCode = 403;
                     res.ContentType = "application/json";
@@ -337,7 +337,7 @@ namespace FlyShelf.Classes
                     bool deviceKnown = pairedDevices.Any(d => d.DeviceId == deviceId);
                     if (!deviceKnown)
                     {
-                        Logger.LogAction("PEER_ANNOUNCE", $"⛔ Rejected announce from {deviceName} — device ID {deviceId} not in paired devices list");
+                        Logger.LogAction("PEER_ANNOUNCE", $"Rejected announce from {deviceName} — device ID {deviceId} not in paired devices list");
                         byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Device not recognized\"}");
                         res.StatusCode = 403;
                         res.ContentType = "application/json";
@@ -347,7 +347,7 @@ namespace FlyShelf.Classes
                     }
                 }
 
-                Logger.LogAction("PEER_ANNOUNCE", $"📢 Received announce from {deviceName} (LAN={lanUrl} CF={cloudflareUrl})");
+                Logger.LogAction("PEER_ANNOUNCE", $"Received announce from {deviceName} (LAN={lanUrl} CF={cloudflareUrl})");
 
                 // Handle the announce in PeerManager (creates/updates peer, handshakes back if needed)
                 if (PeerManager.Instance != null)
@@ -415,7 +415,7 @@ namespace FlyShelf.Classes
                     }
                     catch { } // Best-effort: failure is acceptable
                     string friendlyType = FlyShelf.Classes.FormatHelper.GetFileTypeFriendly(filePath);
-                    FlyShelf.Windows.ToastWindow.ShowToast($"{friendlyType} received{sizeStr} via {transferMethod} 📥");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"{friendlyType} received{sizeStr} via {transferMethod}");
                     // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
                     NotifyClipboardChanged("File", System.IO.Path.GetFileName(filePath));
                 }
@@ -455,7 +455,7 @@ namespace FlyShelf.Classes
                     foreach (var f in files) clipList.Add(f);
                     ClipboardHelper.SafeSetFileDropList(clipList, suppressEcho: true, echoDelayMs: 100);
 
-                    FlyShelf.Windows.ToastWindow.ShowToast($"Saved: Group of {files.Length} files via {transferMethod} 📦");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Saved: Group of {files.Length} files via {transferMethod}");
                     NotifyClipboardChanged("Group", groupItem.FileName);
                 }
                 catch (Exception ex)
@@ -560,7 +560,7 @@ namespace FlyShelf.Classes
                     // Suppress clipboard monitor during our write
                     ClipboardHelper.SafeSetText(capturedText, suppressEcho: true, echoDelayMs: 100);
                     
-                    FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport}! 📥");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport}!");
                     // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
                     NotifyClipboardChanged(clip.ItemType.ToString(), capturedText.Length > 40 ? capturedText.Substring(0, 40) : capturedText);
                 }
@@ -606,7 +606,7 @@ namespace FlyShelf.Classes
                 pairingKey = req.QueryString["key"];
             if (string.IsNullOrEmpty(pairingKey) || !DevicePairingManager.IsDevicePaired(pairingKey))
             {
-                Logger.LogAction("SECURITY", $"🚫 BLOCKED unauthenticated transfer offer from {req.RemoteEndPoint}");
+                Logger.LogAction("SECURITY", $"BLOCKED unauthenticated transfer offer from {req.RemoteEndPoint}");
                 try { res.StatusCode = 403; res.Close(); } catch { } // Best-effort: failure is acceptable
                 return;
             }
@@ -660,7 +660,7 @@ namespace FlyShelf.Classes
                     CreatedAt = DateTime.UtcNow
                 };
 
-                Logger.LogAction("TRANSFER", $"📥 HTTP transfer offer from {deviceName}: {fileName} ({fileSize / 1024}KB), resume from {resumeFrom}");
+                Logger.LogAction("TRANSFER", $"HTTP transfer offer from {deviceName}: {fileName} ({fileSize / 1024}KB), resume from {resumeFrom}");
 
                 var response = new
                 {
@@ -692,7 +692,7 @@ namespace FlyShelf.Classes
                 pairingKey = req.QueryString["key"];
             if (string.IsNullOrEmpty(pairingKey) || !DevicePairingManager.IsDevicePaired(pairingKey))
             {
-                Logger.LogAction("SECURITY", $"🚫 BLOCKED unauthenticated transfer upload from {req.RemoteEndPoint}");
+                Logger.LogAction("SECURITY", $"BLOCKED unauthenticated transfer upload from {req.RemoteEndPoint}");
                 try { res.StatusCode = 403; res.Close(); } catch { } // Best-effort: failure is acceptable
                 return;
             }
@@ -732,7 +732,7 @@ namespace FlyShelf.Classes
                     return;
                 }
 
-                Logger.LogAction("TRANSFER", $"📥 HTTP upload: {info.FileName} from pos {writePosition}");
+                Logger.LogAction("TRANSFER", $"HTTP upload: {info.FileName} from pos {writePosition}");
 
                 // Stream write with 1MB buffer
                 using var fs = new FileStream(info.FilePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 1048576, FileOptions.Asynchronous);
@@ -764,7 +764,7 @@ namespace FlyShelf.Classes
                     _pendingHttpTransfers.TryRemove(transferId, out _);
                     // Inject into clipboard
                     InjectReceivedFile(info.FilePath, info.DeviceName, "HTTP", "Mobile");
-                    Logger.LogAction("TRANSFER", $"✅ HTTP transfer complete: {info.FileName} ({totalWritten / 1024}KB) from {info.DeviceName}");
+                    Logger.LogAction("TRANSFER", $"HTTP transfer complete: {info.FileName} ({totalWritten / 1024}KB) from {info.DeviceName}");
                 }
 
                 var response = new

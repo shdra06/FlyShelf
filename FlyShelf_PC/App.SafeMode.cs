@@ -58,7 +58,7 @@ public partial class App
                 Margin = new Thickness(0, 0, 0, 12)
             };
             titlePanel.Children.Add(new System.Windows.Controls.TextBlock {
-                Text = "🚧",
+                Text = "",
                 FontSize = 28,
                 Margin = new Thickness(0, 0, 12, 0),
                 VerticalAlignment = VerticalAlignment.Center

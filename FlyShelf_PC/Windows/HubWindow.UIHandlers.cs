@@ -1,4 +1,4 @@
-// ═══════════════════════════════════════════════════════════════════════
+﻿// ═══════════════════════════════════════════════════════════════════════
 // HubWindow.UIHandlers.cs — Settings UI click handlers: incognito mode,
 // size reset/steppers/preview, widget alignment buttons, and widget toggle.
 // Part of the HubWindow partial class split.
@@ -20,7 +20,7 @@ namespace FlyShelf.Windows
             {
                 Classes.IncognitoManager.DisableIncognito();
                 UpdateIncognitoUI();
-                ToastWindow.ShowToast("👁 Clipboard monitoring resumed");
+                ToastWindow.ShowToast("Clipboard monitoring resumed");
                 return;
             }
 
@@ -35,14 +35,14 @@ namespace FlyShelf.Windows
             // Pro gate for 6h and 8h
             if (hours >= 6 && !LicenseManager.IsPro)
             {
-                ToastWindow.ShowToast("🔒 6+ hour incognito requires Pro!");
+                ToastWindow.ShowToast("6+ hour incognito requires Pro!");
                 UpgradePrompt.ShowActivationDialog(this);
                 return;
             }
 
             Classes.IncognitoManager.EnableIncognito(hours);
             UpdateIncognitoUI();
-            ToastWindow.ShowToast($"🕶 Incognito enabled for {hours}h");
+            ToastWindow.ShowToast($"Incognito enabled for {hours}h");
         }
 
         internal void UpdateIncognitoUI()
@@ -58,7 +58,7 @@ namespace FlyShelf.Windows
                 string remaining = Classes.IncognitoManager.RemainingTimeText;
                 if (!string.IsNullOrEmpty(remaining))
                 {
-                    IncognitoStatusText.Text = $"🕶 Active — {remaining}";
+                    IncognitoStatusText.Text = $"Active  {remaining}";
                     IncognitoStatusText.Visibility = Visibility.Visible;
                 }
             }
@@ -89,7 +89,7 @@ namespace FlyShelf.Windows
 
         private void SizingLockedCard_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            ToastWindow.ShowToast("🔒 Unlock Premium to use this option!");
+            ToastWindow.ShowToast("Unlock Premium to use this option!");
             UpgradePrompt.ShowActivationDialog(this);
             e.Handled = true;
         }

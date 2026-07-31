@@ -104,7 +104,7 @@ namespace FlyShelf.Windows
             SplitterColumnDef.Width = new GridLength(6);
             PanelSplitter.Width = 6;
             PanelSplitter.Visibility = Visibility.Visible;
-            ToggleImageBtn.Content = "🖼 Hide Source";
+            ToggleImageBtn.Content = "Hide Source";
         }
 
         private void HideImagePanel()
@@ -115,7 +115,7 @@ namespace FlyShelf.Windows
             SplitterColumnDef.Width = new GridLength(0);
             PanelSplitter.Width = 0;
             PanelSplitter.Visibility = Visibility.Collapsed;
-            ToggleImageBtn.Content = "🖼 Source";
+            ToggleImageBtn.Content = "Source";
         }
 
         private void ToggleImagePanel_Click(object sender, RoutedEventArgs e)
@@ -152,7 +152,7 @@ namespace FlyShelf.Windows
             if (string.IsNullOrEmpty(_extractionMethod)) return;
 
             MethodBadge.Visibility = Visibility.Visible;
-            MethodBadgeText.Text = "⚡ Powered by FlyShelf";
+            MethodBadgeText.Text = "Powered by FlyShelf";
             var badgeAccent = TryFindResource("ThemeAccent") as SolidColorBrush;
             var badgeColor = badgeAccent?.Color ?? Color.FromRgb(0, 210, 255);
             MethodBadge.Background = new SolidColorBrush(Color.FromArgb(26, badgeColor.R, badgeColor.G, badgeColor.B));

@@ -91,7 +91,7 @@ namespace FlyShelf.Windows
             {
                 LoadingView.Visibility = Visibility.Collapsed;
                 ResultView.Visibility = Visibility.Visible;
-                ResultTextBox.Text = $"⚠️ Error processing note:\n\n{ex.Message}";
+                ResultTextBox.Text = $"Error processing note:\n\n{ex.Message}";
                 ResultTextBox.IsReadOnly = true;
                 ApplyBtn.IsEnabled = false;
             }
@@ -110,9 +110,9 @@ namespace FlyShelf.Windows
             if (!string.IsNullOrWhiteSpace(ResultTextBox.Text))
             {
                 if (ClipboardHelper.SafeSetText(ResultTextBox.Text))
-                    ToastWindow.ShowToast("📋 Suggestion copied to clipboard.");
+                    ToastWindow.ShowToast("Suggestion copied to clipboard.");
                 else
-                    ToastWindow.ShowToast("⚠️ Clipboard busy — try again.");
+                    ToastWindow.ShowToast("Clipboard busy — try again.");
             }
         }
 

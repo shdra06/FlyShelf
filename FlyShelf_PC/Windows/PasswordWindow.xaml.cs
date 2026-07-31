@@ -87,7 +87,7 @@ namespace FlyShelf.Windows
             {
                 if (FlyShelf.Classes.ClipboardHelper.SafeSetText(currentPassword))
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("Password copied! 🔑");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Password copied!");
                 }
                 else
                 {

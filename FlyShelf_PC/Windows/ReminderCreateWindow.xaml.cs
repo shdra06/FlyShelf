@@ -376,7 +376,7 @@ namespace FlyShelf.Windows
             ReminderManager.AddReminder(title, notes, dueAtUtc, "", _selectedRepeat);
 
             Logger.LogAction("REMINDER", $"Created: \"{title}\" due {combinedLocal:MMM dd h:mm tt} repeat={_selectedRepeat}");
-            ToastWindow.ShowToast("Reminder set! 🔔");
+            ToastWindow.ShowToast("Reminder set!");
 
             // Immediately hide then close to ensure the window disappears
             try { Hide(); } catch { } // Best-effort: failure is acceptable

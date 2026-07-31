@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -13,41 +12,15 @@ namespace FlyShelf.Controls
     public partial class FlyShelfWidgetControl : UserControl
     {
         private MainWindow? _mainWindow;
-
-        // ═══ Mini-Notification State ═══
         private bool _isExpanded;
         private bool _isAnimating;
-        private const double EXPANDED_CONTENT_WIDTH = 88;
-        private const double BOUNCE_BUFFER = 18;
+        private const double EXPANDED_CONTENT_WIDTH = 76;
+        private const double BOUNCE_BUFFER = 16;
         private System.Windows.Threading.DispatcherTimer? _autoDismissTimer;
         private Storyboard? _spinnerStoryboard;
 
-        /// <summary>Global singleton for cross-component access.</summary>
         public static FlyShelfWidgetControl? Instance { get; private set; }
-
-        /// <summary>Callback to resize native TaskbarWindow. Set by TaskbarWindow.</summary>
         public Action? OnSizeChangeRequested { get; set; }
-
-        // ═══ Format Pill Styles ═══
-        private static readonly Dictionary<string, (string label, Color bg)> _formatStyles = new(StringComparer.OrdinalIgnoreCase)
-        {
-            { "PDF",  ("PDF",  Color.FromArgb(0xCC, 0xDC, 0x26, 0x26)) }, // Red
-            { "DOC",  ("DOC",  Color.FromArgb(0xCC, 0x25, 0x63, 0xEB)) }, // Blue
-            { "DOCX", ("DOC",  Color.FromArgb(0xCC, 0x25, 0x63, 0xEB)) },
-            { "RTF",  ("RTF",  Color.FromArgb(0xCC, 0x25, 0x63, 0xEB)) },
-            { "MD",   ("MD",   Color.FromArgb(0xCC, 0x6B, 0x72, 0x80)) }, // Gray
-            { "TXT",  ("TXT",  Color.FromArgb(0xCC, 0x6B, 0x72, 0x80)) },
-            { "LOG",  ("LOG",  Color.FromArgb(0xCC, 0x6B, 0x72, 0x80)) },
-            { "PNG",  ("PNG",  Color.FromArgb(0xCC, 0x05, 0x96, 0x69)) }, // Green
-            { "JPG",  ("JPG",  Color.FromArgb(0xCC, 0x05, 0x96, 0x69)) },
-            { "JPEG", ("JPG",  Color.FromArgb(0xCC, 0x05, 0x96, 0x69)) },
-            { "WEBP", ("IMG",  Color.FromArgb(0xCC, 0x05, 0x96, 0x69)) },
-            { "BMP",  ("BMP",  Color.FromArgb(0xCC, 0x05, 0x96, 0x69)) },
-            { "GIF",  ("GIF",  Color.FromArgb(0xCC, 0x05, 0x96, 0x69)) },
-            { "CSV",  ("CSV",  Color.FromArgb(0xCC, 0xD9, 0x77, 0x06)) }, // Amber
-            { "XLSX", ("XLS",  Color.FromArgb(0xCC, 0x05, 0x96, 0x69)) },
-            { "XLS",  ("XLS",  Color.FromArgb(0xCC, 0x05, 0x96, 0x69)) },
-        };
 
         public FlyShelfWidgetControl()
         {
@@ -60,44 +33,34 @@ namespace FlyShelf.Controls
         public (double Width, double Height) CalculateSize(double dpiScale)
         {
             return _isExpanded
-                ? (68 + EXPANDED_CONTENT_WIDTH + BOUNCE_BUFFER, 36)
-                : (68, 36);
+                ? (72 + EXPANDED_CONTENT_WIDTH + BOUNCE_BUFFER, 36)
+                : (72, 36);
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        //  PUBLIC API
-        // ═══════════════════════════════════════════════════════════════
+        // ═══ PUBLIC API ═══
 
         /// <summary>
-        /// Shows an icon-based conversion notification: [SRC] → [TGT] + spinner.
-        /// Thread-safe. sourceExt/targetExt are file extensions without dot (e.g. "DOC", "PDF").
+        /// Shows [SourceIcon] → [TargetIcon] + spinner on the widget.
+        /// Uses vector DrawingImage icons from FileTypeIcons.xaml.
         /// </summary>
         public void ShowConversionNotification(string sourceExt, string targetExt)
         {
             if (!Dispatcher.CheckAccess())
-            {
-                Dispatcher.InvokeAsync(() => ShowConversionNotification(sourceExt, targetExt));
-                return;
-            }
+            { Dispatcher.InvokeAsync(() => ShowConversionNotification(sourceExt, targetExt)); return; }
 
             try
             {
-                // Configure format pills
-                ConfigurePill(SourcePill, SourceLabel, sourceExt);
-                ConfigurePill(TargetPill, TargetLabel, targetExt);
+                SourceIcon.Source = GetIconForFormat(sourceExt);
+                TargetIcon.Source = GetIconForFormat(targetExt);
 
-                // Show spinner, hide completion indicators
                 SpinnerTrack.Visibility = Visibility.Visible;
                 SpinnerArc.Visibility = Visibility.Visible;
                 CheckmarkPath.Visibility = Visibility.Collapsed;
                 ErrorPath.Visibility = Visibility.Collapsed;
                 StartSpinner();
 
-                if (_isExpanded && !_isAnimating)
-                    return; // Already showing — just update pills
-
-                if (!_isExpanded)
-                    AnimateExpand();
+                if (_isExpanded && !_isAnimating) return;
+                if (!_isExpanded) AnimateExpand();
             }
             catch (Exception ex)
             {
@@ -105,14 +68,10 @@ namespace FlyShelf.Controls
             }
         }
 
-        /// <summary>
-        /// Completes the notification — crossfades spinner to checkmark, auto-contracts after 1.8s.
-        /// </summary>
         public void CompleteMiniNotification(string? _ = null)
         {
             if (!Dispatcher.CheckAccess()) { Dispatcher.InvokeAsync(() => CompleteMiniNotification(_)); return; }
             if (!_isExpanded) return;
-
             try
             {
                 StopSpinner();
@@ -127,14 +86,10 @@ namespace FlyShelf.Controls
             }
         }
 
-        /// <summary>
-        /// Shows error state — crossfades to red X, auto-contracts after 3s.
-        /// </summary>
         public void ErrorMiniNotification(string? _ = null)
         {
             if (!Dispatcher.CheckAccess()) { Dispatcher.InvokeAsync(() => ErrorMiniNotification(_)); return; }
             if (!_isExpanded) return;
-
             try
             {
                 StopSpinner();
@@ -150,7 +105,6 @@ namespace FlyShelf.Controls
             }
         }
 
-        /// <summary>Immediately contracts and hides the notification.</summary>
         public void DismissMiniNotification()
         {
             if (!Dispatcher.CheckAccess()) { Dispatcher.InvokeAsync(DismissMiniNotification); return; }
@@ -158,17 +112,14 @@ namespace FlyShelf.Controls
             if (_isExpanded) AnimateContract();
         }
 
-        // Keep legacy API for ToastWindow compatibility
+        // Legacy compat for ToastWindow
         public void ShowMiniNotification(string text, WidgetNotifyType type = WidgetNotifyType.Progress)
         {
-            // For backward compat — try to parse format from text, else show generic
             if (!Dispatcher.CheckAccess()) { Dispatcher.InvokeAsync(() => ShowMiniNotification(text, type)); return; }
-            // Generic: just show spinner with current pills
             if (!_isExpanded && !_isAnimating)
             {
-                // Default to generic conversion icon
-                ConfigurePill(SourcePill, SourceLabel, "DOC");
-                ConfigurePill(TargetPill, TargetLabel, "PDF");
+                SourceIcon.Source = GetIconForFormat("DOC");
+                TargetIcon.Source = GetIconForFormat("PDF");
                 SpinnerTrack.Visibility = Visibility.Visible;
                 SpinnerArc.Visibility = Visibility.Visible;
                 CheckmarkPath.Visibility = Visibility.Collapsed;
@@ -180,76 +131,68 @@ namespace FlyShelf.Controls
                 ScheduleAutoDismiss(type == WidgetNotifyType.Error ? 3000 : 2000);
         }
 
-        public void UpdateMiniNotification(string text) { /* No-op: icon mode has no text */ }
+        public void UpdateMiniNotification(string text) { /* No-op in icon mode */ }
 
-        // ═══════════════════════════════════════════════════════════════
-        //  FORMAT PILL CONFIGURATION
-        // ═══════════════════════════════════════════════════════════════
+        // ═══ ICON RESOLUTION ═══
 
-        private static void ConfigurePill(Border pill, TextBlock label, string ext)
+        /// <summary>
+        /// Maps a file extension to the corresponding DrawingImage vector icon.
+        /// Falls back to DocIcon for unknown formats.
+        /// </summary>
+        private ImageSource? GetIconForFormat(string ext)
         {
-            string cleanExt = ext.TrimStart('.').ToUpperInvariant();
-            if (_formatStyles.TryGetValue(cleanExt, out var style))
+            string clean = ext.TrimStart('.').ToUpperInvariant();
+            string resourceKey = clean switch
             {
-                label.Text = style.label;
-                pill.Background = new SolidColorBrush(style.bg);
+                "PDF" => "PdfIcon",
+                "DOC" or "DOCX" or "RTF" or "ODT" or "TXT" or "MD" or "LOG" => "DocIcon",
+                "PPT" or "PPTX" or "ODP" => "PptIcon",
+                "PNG" or "JPG" or "JPEG" or "BMP" or "GIF" or "WEBP" or "TIFF" or "SVG" or "ICO" => "ImageIcon",
+                "CSV" or "XLS" or "XLSX" or "ODS" => "PptIcon", // Closest match — amber/chart
+                _ => "DocIcon"
+            };
+
+            try
+            {
+                return Application.Current?.TryFindResource(resourceKey) as ImageSource;
             }
-            else
+            catch
             {
-                label.Text = cleanExt.Length > 3 ? cleanExt[..3] : cleanExt;
-                pill.Background = new SolidColorBrush(Color.FromArgb(0xCC, 0x6B, 0x72, 0x80));
+                return null;
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        //  ANIMATIONS
-        // ═══════════════════════════════════════════════════════════════
+        // ═══ ANIMATIONS ═══
 
         private void AnimateExpand()
         {
             if (_isAnimating) return;
             _isAnimating = true;
             _isExpanded = true;
-
-            // Resize native window first (transparent extra space is invisible)
             OnSizeChangeRequested?.Invoke();
 
             var sb = new Storyboard();
 
-            // Width reveal
             var widthAnim = new DoubleAnimation(0, EXPANDED_CONTENT_WIDTH, TimeSpan.FromMilliseconds(260))
-            {
-                EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.2 }
-            };
+            { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.2 } };
             Storyboard.SetTarget(widthAnim, StatusPanel);
             Storyboard.SetTargetProperty(widthAnim, new PropertyPath(WidthProperty));
             sb.Children.Add(widthAnim);
 
-            // Content fade-in (staggered)
             var fadeAnim = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160))
-            {
-                BeginTime = TimeSpan.FromMilliseconds(70),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            };
+            { BeginTime = TimeSpan.FromMilliseconds(70), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
             Storyboard.SetTarget(fadeAnim, StatusContent);
             Storyboard.SetTargetProperty(fadeAnim, new PropertyPath(OpacityProperty));
             sb.Children.Add(fadeAnim);
 
-            // Content bounce (spring settle)
             var bounceX = new DoubleAnimation(0.8, 1.0, TimeSpan.FromMilliseconds(320))
-            {
-                BeginTime = TimeSpan.FromMilliseconds(80),
-                EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.25 }
-            };
+            { BeginTime = TimeSpan.FromMilliseconds(80), EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.25 } };
             Storyboard.SetTarget(bounceX, StatusContent);
             Storyboard.SetTargetProperty(bounceX, new PropertyPath("RenderTransform.ScaleX"));
             sb.Children.Add(bounceX);
 
             var bounceY = new DoubleAnimation(0.8, 1.0, TimeSpan.FromMilliseconds(320))
-            {
-                BeginTime = TimeSpan.FromMilliseconds(80),
-                EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.25 }
-            };
+            { BeginTime = TimeSpan.FromMilliseconds(80), EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.25 } };
             Storyboard.SetTarget(bounceY, StatusContent);
             Storyboard.SetTargetProperty(bounceY, new PropertyPath("RenderTransform.ScaleY"));
             sb.Children.Add(bounceY);
@@ -265,23 +208,16 @@ namespace FlyShelf.Controls
 
             var sb = new Storyboard();
 
-            // Fade out
             var fadeAnim = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(100))
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
-            };
+            { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
             Storyboard.SetTarget(fadeAnim, StatusContent);
             Storyboard.SetTargetProperty(fadeAnim, new PropertyPath(OpacityProperty));
             sb.Children.Add(fadeAnim);
 
-            // Width collapse
             double curWidth = StatusPanel.Width;
             if (double.IsNaN(curWidth) || curWidth <= 0) curWidth = EXPANDED_CONTENT_WIDTH;
             var widthAnim = new DoubleAnimation(curWidth, 0, TimeSpan.FromMilliseconds(200))
-            {
-                BeginTime = TimeSpan.FromMilliseconds(40),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
-            };
+            { BeginTime = TimeSpan.FromMilliseconds(40), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
             Storyboard.SetTarget(widthAnim, StatusPanel);
             Storyboard.SetTargetProperty(widthAnim, new PropertyPath(WidthProperty));
             sb.Children.Add(widthAnim);
@@ -300,28 +236,19 @@ namespace FlyShelf.Controls
             sb.Begin();
         }
 
-        // ═══ SPINNER ═══
-
         private void StartSpinner()
         {
             StopSpinner();
             _spinnerStoryboard = new Storyboard();
-            var rotateAnim = new DoubleAnimation(0, 360, TimeSpan.FromMilliseconds(900))
-            {
-                RepeatBehavior = RepeatBehavior.Forever
-            };
-            Storyboard.SetTarget(rotateAnim, SpinnerArc);
-            Storyboard.SetTargetProperty(rotateAnim, new PropertyPath("RenderTransform.Angle"));
-            _spinnerStoryboard.Children.Add(rotateAnim);
+            var r = new DoubleAnimation(0, 360, TimeSpan.FromMilliseconds(900)) { RepeatBehavior = RepeatBehavior.Forever };
+            Storyboard.SetTarget(r, SpinnerArc);
+            Storyboard.SetTargetProperty(r, new PropertyPath("RenderTransform.Angle"));
+            _spinnerStoryboard.Children.Add(r);
             _spinnerStoryboard.Begin();
         }
 
         private void StopSpinner()
-        {
-            try { _spinnerStoryboard?.Stop(); _spinnerStoryboard = null; } catch { }
-        }
-
-        // ═══ AUTO-DISMISS ═══
+        { try { _spinnerStoryboard?.Stop(); _spinnerStoryboard = null; } catch { } }
 
         private void ScheduleAutoDismiss(int ms)
         {
@@ -332,11 +259,9 @@ namespace FlyShelf.Controls
         }
 
         private void CancelAutoDismiss()
-        {
-            try { _autoDismissTimer?.Stop(); _autoDismissTimer = null; } catch { }
-        }
+        { try { _autoDismissTimer?.Stop(); _autoDismissTimer = null; } catch { } }
 
-        // ═══ CLICK HANDLER (preserved) ═══
+        // ═══ CLICK HANDLER ═══
 
         private void WidgetGrid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
@@ -352,26 +277,16 @@ namespace FlyShelf.Controls
                     double scaleX = monitor.dpiX / 96.0;
                     double scaleY = monitor.dpiY / 96.0;
                     if (scaleX > 0 && scaleY > 0)
-                    {
-                        logicalX = pt.X / scaleX;
-                        logicalY = pt.Y / scaleY;
-                    }
+                    { logicalX = pt.X / scaleX; logicalY = pt.Y / scaleY; }
                 }
                 catch { }
             }
             else
             {
                 try
-                {
-                    var point = PointToScreen(e.GetPosition(this));
-                    logicalX = point.X;
-                    logicalY = point.Y;
-                }
+                { var point = PointToScreen(e.GetPosition(this)); logicalX = point.X; logicalY = point.Y; }
                 catch
-                {
-                    logicalX = System.Windows.SystemParameters.PrimaryScreenWidth / 2;
-                    logicalY = System.Windows.SystemParameters.PrimaryScreenHeight / 2;
-                }
+                { logicalX = System.Windows.SystemParameters.PrimaryScreenWidth / 2; logicalY = System.Windows.SystemParameters.PrimaryScreenHeight / 2; }
             }
 
             FlyShelf.Classes.Logger.LogAction("TELEMETRY", $"Widget left click received, screen point=({logicalX}, {logicalY})");

@@ -497,7 +497,7 @@ namespace FlyShelf.ViewModels
                     string content = !string.IsNullOrEmpty(item.RawContent) ? item.RawContent : item.FileName;
                     if (!string.IsNullOrEmpty(content))
                         Classes.ClipboardHelper.SafeSetTextAllowCapture(content);
-                    FlyShelf.Windows.ToastWindow.ShowToast("Copied to clipboard! 📋");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Copied to clipboard!");
                     try { Classes.AnimationTriggerService.Instance.OnCopy(); } catch { } // Best-effort: failure is acceptable
                 }
                 catch { } // Best-effort: failure is acceptable
@@ -717,13 +717,13 @@ namespace FlyShelf.ViewModels
         {
             var placeholder = new ClipboardItem
             {
-                FileName = $"⏳ Receiving {fileName}...",
+                FileName = $"Receiving {fileName}...",
                 Extension = "DOWNLOADING",
                 ItemType = ClipboardItemType.File,
                 FormattedSize = FormatBytesStatic(totalBytes),
                 TransferProgress = 0.1,
                 TransferStatusText = $"Connecting to {sourceDevice}...",
-                RawContent = $"⏳ Downloading from {sourceDevice}...",
+                RawContent = $"Downloading from {sourceDevice}...",
                 SourceDeviceName = sourceDevice,
                 SourceDeviceType = sourceDeviceType,
                 TransferMethod = transferMethod

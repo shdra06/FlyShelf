@@ -72,7 +72,7 @@ namespace FlyShelf.ViewModels
         {
             try
             {
-                FlyShelf.Windows.ToastWindow.ShowToast("Extracting Table from Image... ⏳");
+                FlyShelf.Windows.ToastWindow.ShowToast("Extracting Table from Image...");
 
                 string finalJsonPayload = string.Empty;
                 string extractionMethod = string.Empty;
@@ -496,7 +496,7 @@ namespace FlyShelf.ViewModels
         {
             try
             {
-                FlyShelf.Windows.ToastWindow.ShowToast("🧠 AI Table Extraction... ⏳");
+                FlyShelf.Windows.ToastWindow.ShowToast("AI Table Extraction...");
 
                 byte[] imageBytes = await Task.Run(() =>
                 {
@@ -543,18 +543,18 @@ namespace FlyShelf.ViewModels
                         {
                             // Fallback: copy to clipboard
                             try { FlyShelf.Classes.ClipboardHelper.SafeSetTextAllowCapture(result); } catch { }
-                            FlyShelf.Windows.ToastWindow.ShowToast("✅ AI table data copied to clipboard!");
+                            FlyShelf.Windows.ToastWindow.ShowToast("AI table data copied to clipboard!");
                         }
                     });
                 }
                 else
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠ AI returned empty result");
+                    FlyShelf.Windows.ToastWindow.ShowToast("AI returned empty result");
                 }
             }
             catch (Exception ex)
             {
-                FlyShelf.Windows.ToastWindow.ShowToast($"❌ AI Table Extract failed: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast($"AI Table Extract failed: {ex.Message}");
                 Classes.Logger.LogAction("AI_TABLE", $"Failed: {ex.Message}");
             }
         }

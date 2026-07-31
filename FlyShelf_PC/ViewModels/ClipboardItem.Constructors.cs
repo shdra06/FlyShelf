@@ -355,7 +355,7 @@ namespace FlyShelf.ViewModels
                                     .Take(50)
                                     .ToList();
                                 var listing = new System.Text.StringBuilder();
-                                listing.AppendLine(CultureInfo.InvariantCulture, $"📦 {entries.Count} file(s) in archive:");
+                                listing.AppendLine(CultureInfo.InvariantCulture, $"{entries.Count} file(s) in archive:");
                                 long totalSize = 0;
                                 foreach (var entry in entries)
                                 {
@@ -410,7 +410,7 @@ namespace FlyShelf.ViewModels
                             
                             // Build contents listing
                             var listing = new System.Text.StringBuilder();
-                            listing.AppendLine(CultureInfo.InvariantCulture, $"📁 {FileName}/");
+                            listing.AppendLine(CultureInfo.InvariantCulture, $"{FileName}/");
                             listing.AppendLine(CultureInfo.InvariantCulture, $"   {allFiles.Length} file(s), {allDirs.Length} subfolder(s)");
                             listing.AppendLine();
                             
@@ -425,13 +425,13 @@ namespace FlyShelf.ViewModels
                                 {
                                     int subCount = 0;
                                     try { subCount = Directory.GetFileSystemEntries(entry).Length; } catch { } // Best-effort: failure is acceptable
-                                    listing.AppendLine(CultureInfo.InvariantCulture, $"  📂 {name}/ ({subCount} items)");
+                                    listing.AppendLine(CultureInfo.InvariantCulture, $"{name}/ ({subCount} items)");
                                 }
                                 else
                                 {
                                     long fSize = 0;
                                     try { fSize = new FileInfo(entry).Length; } catch { } // Best-effort: failure is acceptable
-                                    listing.AppendLine(CultureInfo.InvariantCulture, $"  📄 {name} ({FormatBytes(fSize)})");
+                                    listing.AppendLine(CultureInfo.InvariantCulture, $"{name} ({FormatBytes(fSize)})");
                                 }
                             }
                             if (allTopItems.Length > 30)

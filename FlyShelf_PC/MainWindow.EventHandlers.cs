@@ -314,7 +314,7 @@ namespace FlyShelf
                     }
                     await System.Threading.Tasks.Task.Delay(100);
                 }
-                FlyShelf.Classes.Logger.LogAction("UI_TRIGGER", "⚠️ Could not find active PeerManager.Instance within timeout");
+                FlyShelf.Classes.Logger.LogAction("UI_TRIGGER", "Could not find active PeerManager.Instance within timeout");
             });
         }
 
@@ -398,7 +398,7 @@ namespace FlyShelf
         {
             ToggleClearConfirmPanel(false);
             _viewModel.ClearShelf();
-            Windows.ToastWindow.ShowToast("Shelf cleared! 🧹");
+            Windows.ToastWindow.ShowToast("Shelf cleared!");
         }
 
         private void ClearShelf_Cancel(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -515,7 +515,7 @@ namespace FlyShelf
                     item.FileName = "Protected Password";
                 }
                 item.GeneratePasswordIcon();
-                FlyShelf.Windows.ToastWindow.ShowToast("Locked as password card! 🔒");
+                FlyShelf.Windows.ToastWindow.ShowToast("Locked as password card!");
 
                 // Save to history immediately
                 _viewModel.PersistHistoryPublic();
@@ -532,10 +532,10 @@ namespace FlyShelf
                 e.Handled = true;
                 if (item.HasZipArchive)
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("📦 Zip already exists!");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Zip already exists!");
                     return;
                 }
-                FlyShelf.Windows.ToastWindow.ShowToast("📦 Creating zip archive...");
+                FlyShelf.Windows.ToastWindow.ShowToast("Creating zip archive...");
                 item.CreateZipArchive();
             }
         }
@@ -547,7 +547,7 @@ namespace FlyShelf
                 e.Handled = true;
                 if (!item.HasZipArchive)
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Create a zip first!");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Create a zip first!");
                     return;
                 }
                 _ = item.SyncZipViaLanAsync();
@@ -1172,13 +1172,13 @@ namespace FlyShelf
                             _viewModel.SchedulePersistHistoryPublic(); // PERF: throttled — settings change is non-critical
 
                             // 3. Show a premium visual toast
-                            FlyShelf.Windows.ToastWindow.ShowToast("URL Sanitized & Copied! 🛡️");
+                            FlyShelf.Windows.ToastWindow.ShowToast("URL Sanitized & Copied!");
                             
                             FlyShelf.Classes.Logger.LogAction("URL_SANITY", $"Successfully stripped tracking metrics from URL. Result: {cleanUrl}");
                         }
                         else
                         {
-                            FlyShelf.Windows.ToastWindow.ShowToast("URL is already clean! ✨");
+                            FlyShelf.Windows.ToastWindow.ShowToast("URL is already clean!");
                         }
                     }
                     catch (Exception ex)
@@ -1519,7 +1519,7 @@ namespace FlyShelf
         {
             e.Handled = true;
             Classes.IncognitoManager.DisableIncognito();
-            Windows.ToastWindow.ShowToast("👁 Clipboard monitoring resumed");
+            Windows.ToastWindow.ShowToast("Clipboard monitoring resumed");
         }
 
         private void IncognitoToggle_Click(object sender, RoutedEventArgs e)
@@ -1527,7 +1527,7 @@ namespace FlyShelf
             if (IncognitoToggle != null && IncognitoToggle.IsChecked == false)
             {
                 Classes.IncognitoManager.DisableIncognito();
-                Windows.ToastWindow.ShowToast("👁 Clipboard monitoring resumed");
+                Windows.ToastWindow.ShowToast("Clipboard monitoring resumed");
             }
         }
 
