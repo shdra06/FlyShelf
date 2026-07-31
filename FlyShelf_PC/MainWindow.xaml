@@ -2043,7 +2043,7 @@
                             <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Margin="0,4,0,4">
                                 <TextBlock Name="TitleText" 
                                            Text="{Binding DisplayText}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" FontFamily="Segoe UI Emoji, Segoe UI" FontWeight="Medium" FontSize="{StaticResource TypeSubtitle}" LineHeight="19" TextWrapping="Wrap" 
-                                           TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" CacheMode="BitmapCache" />
+                                           TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" />
 
                                 <!-- Markdown Tag — lightweight visual indicator, no inline rendering -->
                                 <Border CornerRadius="4" Padding="6,1,6,1" Margin="0,3,0,0" HorizontalAlignment="Left">
