@@ -497,7 +497,7 @@ namespace FlyShelf.Classes
                         // smooth animation (< 0.8 px/frame → total coast ~2px), stop immediately.
                         // This prevents step-wise micro-animations — micro-scrolls just stop
                         // cleanly where the finger left off.
-                        if (state.IsTouchpad && Math.Abs(state.Velocity) < 0.15)
+                        if (state.IsTouchpad && Math.Abs(state.Velocity) < 0.50)
                         {
                             state.Velocity = 0.0;
                             state.TrueOffset = Math.Round(state.TrueOffset);
@@ -513,23 +513,26 @@ namespace FlyShelf.Classes
                         state.CoastStartVelocity = state.Velocity;
                         state.CoastStartOffset = state.TrueOffset;
 
-                        // ═══ COAST-SPECIFIC FRICTION (snappier than active phase) ═══
-                        // Active phase uses gentle friction (0.96/0.93) for smooth finger-tracking.
-                        // Coast phase uses tighter friction (0.90/0.87) so deceleration is ~40% shorter
-                        // and feels responsive rather than floaty.
+                        // ═══ SEAMLESS TRANSITION ═══
+                        // Compute the coast decay rate from the SAME velocity-adaptive friction
+                        // that was running during active input. This ensures zero deceleration
+                        // jump at the transition — the coast curve is a mathematically exact
+                        // continuation of the active friction curve.
                         if (state.IsTouchpad)
                         {
                             double absV = Math.Abs(state.Velocity);
-                            double slowCoastFriction = 0.90;  // Active: 0.96 → Coast: 0.90
-                            double fastCoastFriction = 0.87;  // Active: 0.93 → Coast: 0.87
+                            double slowFriction = 0.96;
+                            double fastFriction = 0.93;
+                            // Wider transition band (2-20 px/frame) — must match active phase
                             double t = Math.Clamp((absV - 2.0) / 18.0, 0.0, 1.0);
                             t = t * t * (3.0 - 2.0 * t);
-                            double coastFrictionPerFrame = slowCoastFriction + (fastCoastFriction - slowCoastFriction) * t;
-                            state.CoastDecayPerMs = Math.Pow(coastFrictionPerFrame, 1.0 / TargetFrameMs);
+                            double frictionPerFrame = slowFriction + (fastFriction - slowFriction) * t;
+                            // Convert per-frame friction to per-ms: f_ms = f_frame^(1/16.667)
+                            state.CoastDecayPerMs = Math.Pow(frictionPerFrame, 1.0 / TargetFrameMs);
                         }
                         else
                         {
-                            state.CoastDecayPerMs = 0.9935;  // Was 0.9962 — ~40% shorter mouse coast
+                            state.CoastDecayPerMs = 0.9962;
                         }
                     }
 
@@ -556,11 +559,12 @@ namespace FlyShelf.Classes
                     sv.ScrollToVerticalOffset(state.TrueOffset);
                     state.LastSetOffset = state.TrueOffset;
 
-                    // Stop condition: velocity below visual perception (< 0.15 px/frame ≈ 9px/sec).
-                    // Low threshold ensures the scroll fades to rest imperceptibly instead of
-                    // stopping abruptly with visible micro-steps. The analytical coast formula
-                    // means this longer tail costs zero extra CPU.
-                    if (Math.Abs(state.Velocity) < 0.15)
+                    // Stop condition: velocity is imperceptible (< 0.5 px/frame = 30px/sec)
+                    // No Math.Round — rounding snaps position by up to 0.5px which causes
+                    // a visible jitter on the final frame. Just stop at the exact sub-pixel
+                    // position. ClearType is restored HERE (not mid-coast) to avoid a
+                    // mid-deceleration text re-render shift.
+                    if (Math.Abs(state.Velocity) < 0.50)
                     {
                         state.Velocity = 0.0;
                         state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);

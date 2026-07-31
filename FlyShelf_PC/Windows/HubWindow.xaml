@@ -1,4 +1,4 @@
-﻿<controls:MicaWindow x:Class="FlyShelf.Windows.HubWindow"
+<controls:MicaWindow x:Class="FlyShelf.Windows.HubWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
@@ -1363,7 +1363,7 @@
                                                         <ColumnDefinition Width="Auto"/>
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="" FontSize="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                    <ui:SymbolIcon Symbol="Warning24" FontSize="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                         <TextBlock Text="This feature is not available in the Microsoft Store version." 
                                                                    FontSize="{StaticResource TypeBody}" FontWeight="SemiBold" Foreground="#F59E0B" TextWrapping="Wrap"/>
@@ -1887,7 +1887,7 @@
                                             </ui:Button>
                                             <ui:Button x:Name="FileQueueClearBtn" Grid.Column="2" Padding="10,6" FontSize="{StaticResource TypeSmall}">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="" FontSize="{StaticResource TypeBody}" Margin="0,0,4,0"/>
+                                                    <ui:SymbolIcon Symbol="Delete24" FontSize="{StaticResource TypeBody}" Margin="0,0,4,0"/>
                                                     <TextBlock Text="Clear Queue" FontSize="{StaticResource TypeSmall}" FontWeight="SemiBold"/>
                                                 </StackPanel>
                                             </ui:Button>
@@ -2032,19 +2032,19 @@
                                                 <RadioButton x:Name="HistoryFilterAll" Style="{StaticResource HistoryFilterStyle}" Content="All" IsChecked="True"/>
                                                 <RadioButton x:Name="HistoryFilterSent" Style="{StaticResource HistoryFilterStyle}">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <emoji:TextBlock Text="" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                        <ui:SymbolIcon Symbol="ArrowUpload24" Margin="0,0,5,0" VerticalAlignment="Center"/>
                                                         <TextBlock Text="Sent" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </RadioButton>
                                                 <RadioButton x:Name="HistoryFilterReceived" Style="{StaticResource HistoryFilterStyle}">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <emoji:TextBlock Text="" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                        <ui:SymbolIcon Symbol="ArrowDownload24" Margin="0,0,5,0" VerticalAlignment="Center"/>
                                                         <TextBlock Text="Received" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </RadioButton>
                                                 <RadioButton x:Name="HistoryFilterFailed" Style="{StaticResource HistoryFilterStyle}">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <emoji:TextBlock Text="" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                        <ui:SymbolIcon Symbol="Warning24" Margin="0,0,5,0" VerticalAlignment="Center"/>
                                                         <TextBlock Text="Failed" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </RadioButton>
@@ -2056,7 +2056,7 @@
                                             <!-- Export CSV -->
                                             <ui:Button x:Name="HistoryExportCsvBtn" Grid.Column="2" Padding="10,6" FontSize="{StaticResource TypeSmall}" Margin="0,0,6,0">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <emoji:TextBlock Text="" FontSize="{StaticResource TypeSmall}" Margin="0,0,4,0"/>
+                                                    <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="{StaticResource TypeSmall}" Margin="0,0,4,0"/>
                                                     <TextBlock Text="Export CSV" FontSize="{StaticResource TypeSmall}" FontWeight="SemiBold"/>
                                                 </StackPanel>
                                             </ui:Button>
@@ -2064,7 +2064,7 @@
                                             <!-- Clear -->
                                             <ui:Button x:Name="HistoryClearBtn" Grid.Column="3" Padding="10,6" FontSize="{StaticResource TypeSmall}">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <emoji:TextBlock Text="" FontSize="{StaticResource TypeSmall}" Margin="0,0,4,0"/>
+                                                    <ui:SymbolIcon Symbol="Delete24" FontSize="{StaticResource TypeSmall}" Margin="0,0,4,0"/>
                                                     <TextBlock Text="Clear" FontSize="{StaticResource TypeSmall}" FontWeight="SemiBold"/>
                                                 </StackPanel>
                                             </ui:Button>
@@ -2728,7 +2728,7 @@
                             <!-- ═══ SECTION 3: SIZE & LAYOUT ═══ -->
                             <StackPanel Margin="0,18,0,4">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <ui:SymbolIcon Symbol="ResizeLarge24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="Size &amp; Layout" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
                                 </StackPanel>
                                 <Border Height="1" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,8,0,12"/>
@@ -2907,7 +2907,7 @@
                             <!-- ═══ SECTION 4: WIDGET ═══ -->
                             <StackPanel Margin="0,18,0,4">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <ui:SymbolIcon Symbol="AppsList24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="Widget" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
                                 </StackPanel>
                                 <Border Height="1" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,8,0,12"/>
@@ -4161,7 +4161,7 @@
                                 <Border Grid.Column="0" Style="{StaticResource PremiumSettingStyle}" Cursor="Hand" MouseLeftButtonDown="ReplayOnboarding_Click">
                                     <StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                            <TextBlock Text="" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,6,0"/>
+                                            <ui:SymbolIcon Symbol="Info24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,6,0"/>
                                             <TextBlock Text="Tutorial &amp; Help" FontWeight="Bold" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
                                         </StackPanel>
                                         <TextBlock Text="Replay the onboarding guide and learn FlyShelf shortcuts" FontSize="{StaticResource TypeSmall}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap"/>

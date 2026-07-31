@@ -78,7 +78,7 @@ namespace FlyShelf.Windows
             if (SummonHotkeyLabel != null)
                 SummonHotkeyLabel.Text = $"{s.HotkeyDisplayString} / Widget popup";
             if (ShortcutsHotkeyLabel != null)
-                ShortcutsHotkeyLabel.Text = s.HotkeyDisplayString.Replace("","");
+                ShortcutsHotkeyLabel.Text = s.HotkeyDisplayString;
         }
 
         private void ChangeHotkey_Click(object sender, RoutedEventArgs e)

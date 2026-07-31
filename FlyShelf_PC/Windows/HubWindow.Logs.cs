@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------
+// ---------------------------------------------------------------
 // HubWindow — Logs, Diagnostics & Drag-Drop
 // RefreshLogs, SendAllLogs, CopyNetworkLogs, SendLogsToDashboard
 // Window_Drop, DragEnter, DragOver, DragLeave
@@ -213,7 +213,7 @@ namespace FlyShelf.Windows
                 string logsDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf","Logs");
                 System.IO.Directory.CreateDirectory(logsDir);
                 string deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
-                string deviceTag = deviceName.Replace("","_").Replace("/","_");
+                string deviceTag = deviceName.Replace(" ","_").Replace("/","_");
                 string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture);
                 string fileName = $"diagnostic_{deviceTag}_{timestamp}.log";
                 string filePath = System.IO.Path.Combine(logsDir, fileName);

@@ -1129,18 +1129,20 @@ namespace FlyShelf
                     // Fix 5: Reset anchor for cheap visibility accumulation
                     _anchorValid = false;
 
-                    // ═══ PASS 1: Always-loaded first 5 images (cheap, covers top of list) ═══
+                    // ═══ PASS 1: Always-loaded first 6 images (cheap, covers top of list) ═══
                     // These are always kept loaded for instant visibility on summon.
-                    // Only do the loading pass if we're near the top OR if a first-5 image needs loading.
+                    // They are NEVER evicted, even when scrolled far off-screen.
+                    var _alwaysLoadedImageIndices = new HashSet<int>();
                     {
                         int imgCount = 0;
-                        int topScanLimit = Math.Min(count, 50); // Only scan first 50 items for first-5 check
-                        for (int i = 0; i < topScanLimit && imgCount < 5; i++)
+                        int topScanLimit = Math.Min(count, 80); // Scan first 80 items to find first 6 images
+                        for (int i = 0; i < topScanLimit && imgCount < 6; i++)
                         {
                             var item = ShelfListView.Items[i] as ClipboardItem;
                             if (item == null) continue;
                             if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode) continue;
                             imgCount++;
+                            _alwaysLoadedImageIndices.Add(i);
 
                             if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality)
                             {
@@ -1168,7 +1170,7 @@ namespace FlyShelf
                                     }
                                 });
                             }
-                            // First 5 images are never evicted
+                            // First 6 images are never evicted
                             item.LeftViewportTime = null;
                         }
                     }
@@ -1335,6 +1337,13 @@ namespace FlyShelf
 
                             // Off-Screen / Scrolled Out: Skip eviction if pinned
                             if (item.IsPinned)
+                            {
+                                item.LeftViewportTime = null;
+                                continue;
+                            }
+
+                            // Never evict the first 6 images — they stay loaded permanently
+                            if (_alwaysLoadedImageIndices.Contains(i))
                             {
                                 item.LeftViewportTime = null;
                                 continue;
