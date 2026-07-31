@@ -966,12 +966,8 @@ namespace FlyShelf
 
             // Mark that active scrolling is happening, and suppress hover buttons.
             // Only fire PropertyChanged on state TRANSITIONS to avoid 60 binding re-evaluations/sec.
-            // PERF: Only suppress hover on actual viewport-position scroll events, NOT on
-            // extent-height changes from card expansion/collapse. Card expand changes
-            // ExtentHeight which fires ScrollChanged, but the viewport didn't actually scroll.
-            bool isUserScroll = Math.Abs(e.ViewportHeightChange) < 0.5 && Math.Abs(e.ExtentHeightChange) < e.VerticalChange * 2;
             if (!_viewModel.IsScrolling) _viewModel.IsScrolling = true;
-            if (_viewModel.AllowHover && isUserScroll) _viewModel.AllowHover = false;
+            if (_viewModel.AllowHover) _viewModel.AllowHover = false;
 
             // Start or reset the timer to reset IsScrolling back to false after a delay
             if (_scrollDecayTimer == null)

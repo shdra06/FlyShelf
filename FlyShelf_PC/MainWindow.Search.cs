@@ -24,9 +24,8 @@ namespace FlyShelf
         private bool _isClosingSearch = false;   // re-entrancy guard for CloseSearch
         private bool _isApplyingFilter = false;  // PERF: guard to prevent triple filter reapplication during category switch
         private DateTime _overflowPopupLastClosed = DateTime.MinValue;
-        private System.Windows.Threading.DispatcherTimer? _reapplyFilterDebounce; // PERF: coalesce rapid ReapplyActiveFilters calls
+        private System.Windows.Threading.DispatcherTimer _reapplyFilterDebounce; // PERF: coalesce rapid ReapplyActiveFilters calls
         private DateTime _lastFilterApplyTime = DateTime.MinValue; // PERF: throttle filter re-evaluation
-        private string? _pendingFilterCategory = null; // PERF: tracks pending debounced filter category
 
         private void SearchToggle_Click(object sender, RoutedEventArgs e)
         {
@@ -618,12 +617,6 @@ namespace FlyShelf
                 // Close any active text search first
                 if (_isSearchActive) CloseSearch();
 
-                // PERF: Stop scroll-related timers before filter application.
-                // During active scrolling, the live-load timer and smooth-scroll physics
-                // compete with the filter's synchronous collection refresh for UI thread time.
-                _scrollLiveLoadTimer?.Stop();
-                _scrollHighQualityTimer?.Stop();
-
                 var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
                 if (view == null) return;
 
@@ -663,13 +656,8 @@ namespace FlyShelf
 
                 // Reduce bottom padding for filtered views — prevents excessive empty overscroll area
                 // that makes the list feel "stuck" when only a few items remain.
-                // PERF: Defer padding mutation to Background priority so it doesn't interrupt
-                // the current render frame (especially important during active scrolling).
-                Dispatcher.InvokeAsync(() =>
-                {
-                    if (ShelfListView != null)
-                        ShelfListView.Padding = new Thickness(0, 0, 0, 80);
-                }, System.Windows.Threading.DispatcherPriority.Background);
+                if (ShelfListView != null)
+                    ShelfListView.Padding = new Thickness(0, 0, 0, 80);
 
                 // Highlight the filter button to indicate active filter (use theme accent)
                 SortFilterBtn.Foreground = TryFindResource("SystemAccentColorLight1Brush") as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.DodgerBlue;
@@ -728,9 +716,14 @@ namespace FlyShelf
                         view.Filter = null;
                     }
                 }
-                // PERF: Removed redundant ShelfListView.Items.Filter and AltShelfListView.Items.Filter
-                // assignments that were causing 2 extra synchronous collection refreshes on top of the
-                // CollectionViewSource.GetDefaultView refresh already completed above.
+                if (ShelfListView != null && ShelfListView.Items.CanFilter)
+                {
+                    ShelfListView.Items.Filter = null;
+                }
+                if (AltShelfListView != null && AltShelfListView.Items.CanFilter)
+                {
+                    AltShelfListView.Items.Filter = null;
+                }
             }
             finally
             {
@@ -739,13 +732,8 @@ namespace FlyShelf
             _viewModel.IsSearchActive = false;
 
             // Restore full bottom padding for unfiltered clipboard view
-            // PERF: Defer to Background priority so layout invalidation doesn't
-            // interrupt current render frame during active scrolling.
-            Dispatcher.InvokeAsync(() =>
-            {
-                if (ShelfListView != null)
-                    ShelfListView.Padding = new Thickness(0, 0, 0, 250);
-            }, System.Windows.Threading.DispatcherPriority.Background);
+            if (ShelfListView != null)
+                ShelfListView.Padding = new Thickness(0, 0, 0, 250);
 
             // Reset button color
             SortFilterBtn.Foreground = TryFindResource("MicaWPF.Brushes.TextFillColorSecondary") as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Gray;
@@ -764,30 +752,11 @@ namespace FlyShelf
 
         internal void ReapplyActiveFilters()
         {
-            // PERF: Use the debounce timer to coalesce rapid ReapplyActiveFilters calls
-            // into a single filter pass. Without this, CollectionChanged events can trigger
-            // 3-5 redundant filter refreshes in quick succession.
-            if (_reapplyFilterDebounce == null)
-            {
-                _reapplyFilterDebounce = new System.Windows.Threading.DispatcherTimer
-                {
-                    Interval = TimeSpan.FromMilliseconds(100)
-                };
-                _reapplyFilterDebounce.Tick += (s, ev) =>
-                {
-                    _reapplyFilterDebounce.Stop();
-                    ReapplyActiveFiltersCore();
-                };
-            }
-            _reapplyFilterDebounce.Stop();
-            _reapplyFilterDebounce.Start();
-        }
-
-        private void ReapplyActiveFiltersCore()
-        {
             try
             {
                 // PERF: Throttle — skip if we applied a filter very recently (< 50ms ago)
+                // This prevents cascading re-evaluations when CollectionChanged fires
+                // multiple times in rapid succession (e.g., drag-drop + clipboard copy).
                 if ((DateTime.UtcNow - _lastFilterApplyTime).TotalMilliseconds < 50)
                     return;
 
@@ -799,6 +768,7 @@ namespace FlyShelf
                 if (_activeCategoryFilter != null)
                 {
                     // PERF: Pre-build predicate with captured category string
+                    // instead of evaluating switch per-item.
                     string category = _activeCategoryFilter;
                     filterPredicate = category switch
                     {
@@ -812,6 +782,7 @@ namespace FlyShelf
                 }
                 else if (_isSearchActive)
                 {
+                    // Use the correct search box based on active UI mode
                     string searchText = _isAltUIActive ? AltSearchTextBox?.Text : SearchTextBox?.Text;
                     string q = searchText?.Trim() ?? "";
                     if (!string.IsNullOrWhiteSpace(q))
@@ -826,6 +797,8 @@ namespace FlyShelf
                 }
 
                 // PERF: Only set Filter on the currently ACTIVE ListView.
+                // The hidden ListView doesn't need filtering — it wastes an entire
+                // pass over all items. Filter it lazily when the UI mode switches.
                 var activeListView = _isAltUIActive ? altListView : listView;
                 if (activeListView != null && activeListView.CanFilter)
                 {

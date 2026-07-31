@@ -505,11 +505,11 @@ namespace FlyShelf.ViewModels
                 {
                     _isExpanded = value;
                     _rawContentPreview = null; // invalidate preview — expanded state changed
-                    // PERF: Single null notification tells WPF "all properties changed",
-                    // batching all 5 dependent binding updates (IsExpanded, CollapsedMaxHeight,
-                    // ExpandToggleText, DisplayText, RawContentPreview) into one layout pass
-                    // instead of 5 separate measure/arrange cycles.
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsExpanded)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExpandToggleText)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayText)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContentPreview)));
                 }
             }
         }
