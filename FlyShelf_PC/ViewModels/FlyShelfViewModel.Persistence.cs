@@ -413,6 +413,15 @@ namespace FlyShelf.ViewModels
 
                             d.IsPinned = true;
 
+                            // Regenerate non-serialized icons (Icon is [JsonIgnore])
+                            // Must match the regeneration logic in LoadPersistedHistoryAsync
+                            if (d.IsPassword)
+                                d.GeneratePasswordIcon();
+                            else if (d.ItemType == ClipboardItemType.Folder)
+                                d.GenerateFolderIcon();
+                            else if (d.ItemType == ClipboardItemType.Document && d.Extension == ".MD")
+                                d.GenerateMarkdownIcon();
+
                             bool isGeneralFile = d.ItemType == ClipboardItemType.File || d.ItemType == ClipboardItemType.Document ||
                                 d.ItemType == ClipboardItemType.Pdf || d.ItemType == ClipboardItemType.Archive ||
                                 d.ItemType == ClipboardItemType.Video || d.ItemType == ClipboardItemType.Audio ||

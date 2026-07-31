@@ -1135,7 +1135,7 @@ namespace FlyShelf
                     var _alwaysLoadedImageIndices = new HashSet<int>();
                     {
                         int imgCount = 0;
-                        int topScanLimit = Math.Min(count, 80); // Scan first 80 items to find first 6 images
+                        int topScanLimit = Math.Min(count, 50); // Scan first 50 items to find first 6 images
                         for (int i = 0; i < topScanLimit && imgCount < 6; i++)
                         {
                             var item = ShelfListView.Items[i] as ClipboardItem;
