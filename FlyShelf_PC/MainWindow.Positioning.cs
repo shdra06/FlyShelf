@@ -1064,12 +1064,15 @@ namespace FlyShelf
                 {
                     if (!this.IsVisible) { _isRenderingThumbnails = false; return; }
 
-                    // Skip expensive thumbnail evaluation during fast scrolling
+                    // Throttle thumbnail evaluation during fast scrolling — but still allow
+                    // loading when scroll velocity is low (user browsing slowly)
                     if (_viewModel.IsScrolling && !isEvictionPass)
                     {
-                        // Only process during eviction passes or when scroll has stopped
-                        _isRenderingThumbnails = false;
-                        return;
+                        if (_scrollVelocity > 2.0) // Only skip during genuinely fast scroll
+                        {
+                            _isRenderingThumbnails = false;
+                            return;
+                        }
                     }
 
                     // SCROLL DRAG FIX: Do NOT call UpdateLayout() here.
@@ -1331,7 +1334,7 @@ namespace FlyShelf
                                                         }
                                                     }
                                                 }
-                                            }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                                            }, System.Windows.Threading.DispatcherPriority.Background);
                                         }
                                         else
                                         {
