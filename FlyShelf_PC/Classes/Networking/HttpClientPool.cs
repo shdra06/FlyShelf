@@ -10,19 +10,21 @@ namespace FlyShelf.Classes
     public static class HttpClientPool
     {
         /// <summary>Default client with 15s timeout — for most API calls.</summary>
-        public static HttpClient Default { get; } = new HttpClient() { Timeout = TimeSpan.FromSeconds(15) };
+        public static HttpClient Default { get; } = new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(2), PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1) }) { Timeout = TimeSpan.FromSeconds(15) };
 
         /// <summary>Short timeout client (5s) — for health checks, diagnostics, logging.</summary>
-        public static HttpClient Quick { get; } = new HttpClient() { Timeout = TimeSpan.FromSeconds(5) };
+        public static HttpClient Quick { get; } = new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(2), PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1) }) { Timeout = TimeSpan.FromSeconds(5) };
 
         /// <summary>Long timeout client (10min) — for file downloads.</summary>
-        public static HttpClient Download { get; } = new HttpClient(new HttpClientHandler
+        public static HttpClient Download { get; } = new HttpClient(new SocketsHttpHandler
         {
             AllowAutoRedirect = true,
-            MaxAutomaticRedirections = 10
+            MaxAutomaticRedirections = 10,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1)
         }) { Timeout = TimeSpan.FromMinutes(10) };
 
         /// <summary>Medium timeout client (30s) — for sync operations.</summary>
-        public static HttpClient Sync { get; } = new HttpClient() { Timeout = TimeSpan.FromSeconds(30) };
+        public static HttpClient Sync { get; } = new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(2), PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1) }) { Timeout = TimeSpan.FromSeconds(30) };
     }
 }

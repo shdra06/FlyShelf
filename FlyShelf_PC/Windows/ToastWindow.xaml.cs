@@ -335,7 +335,7 @@ namespace FlyShelf.Windows
                 sb.Completed += (s, e) => tcs.TrySetResult(true);
                 sb.Begin();
 
-                await tcs.Task;
+                await System.Threading.Tasks.Task.WhenAny(tcs.Task, System.Threading.Tasks.Task.Delay(500));
 
                 lock (_toastLock)
                 {

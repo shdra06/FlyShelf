@@ -39,6 +39,7 @@ namespace FlyShelf.Windows
                     _instance.WindowState = WindowState.Normal;
                 _instance._vm.Resume();
                 WindowHelper.ShowInForeground(_instance);
+                Classes.SmoothScrollFeature.Attach(_instance);
                 return;
             }
 
@@ -115,6 +116,11 @@ namespace FlyShelf.Windows
                 }
             }
             e.Handled = true;
+        }
+
+        private void Window_DragLeave(object sender, DragEventArgs e)
+        {
+            DropOverlay.Visibility = System.Windows.Visibility.Collapsed;
         }
 
         // ═══ Filter Tab Clicks ═══

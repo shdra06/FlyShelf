@@ -1180,7 +1180,7 @@ namespace FlyShelf
 
                             // Move byte reading and file writing off the UI thread
                             uint size = (uint)stream.Size;
-                            var reader = new global::Windows.Storage.Streams.DataReader(stream.GetInputStreamAt(0));
+                            using var reader = new global::Windows.Storage.Streams.DataReader(stream.GetInputStreamAt(0));
                             await reader.LoadAsync(size);
                             var buffer = new byte[size];
                             reader.ReadBytes(buffer);

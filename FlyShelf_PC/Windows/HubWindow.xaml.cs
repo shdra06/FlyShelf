@@ -26,6 +26,9 @@ namespace FlyShelf.Windows
         private Action<string, string>? _peerConnectedHandler;
         private Action<string>? _peerDisconnectedHandler;
         private Action<string, string>? _transportSwitchedHandler;
+        private Action<string>? _updateStatusChangedHandler;
+        private Action<int>? _updateDownloadProgressChangedHandler;
+        private Action<bool>? _updateCheckCompletedHandler;
 
         private static readonly RoutedCommand FocusSearchCommand = new RoutedCommand();
         private static readonly RoutedCommand ToggleSidebarCommand = new RoutedCommand();
@@ -156,21 +159,27 @@ namespace FlyShelf.Windows
 #endif
 
             // Wire up UpdateManager events
-            _updateManager.StatusChanged += (msg) => Dispatcher.Invoke(() =>
+            _updateStatusChangedHandler = (msg) => Dispatcher.Invoke(() =>
             {
                 UpdateStatusText.Text = msg;
                 UpdateProgressPanel.Visibility = Visibility.Visible;
             });
-            _updateManager.DownloadProgressChanged += (pct) => Dispatcher.Invoke(() =>
+            _updateManager.StatusChanged += _updateStatusChangedHandler;
+
+            _updateDownloadProgressChangedHandler = (pct) => Dispatcher.Invoke(() =>
             {
                 UpdatePctText.Text = $"{pct}%";
                 // Animate progress bar width
                 double parentWidth = UpdateProgressPanel.ActualWidth - 24; // minus padding
                 UpdateProgressBar.Width = Math.Max(0, parentWidth * pct / 100.0);
             });
-            _updateManager.UpdateCheckCompleted += (hasUpdate) => Dispatcher.Invoke(async () =>
+            _updateManager.DownloadProgressChanged += _updateDownloadProgressChangedHandler;
+
+            _updateCheckCompletedHandler = (hasUpdate) => Dispatcher.InvokeAsync(async () =>
             {
-                if (hasUpdate)
+                try
+                {
+                    if (hasUpdate)
                 {
                     LatestVersionText.Text = $"v{_updateManager.LatestVersion} available!";
                     ChangelogText.Text = _updateManager.Changelog;
@@ -220,7 +229,13 @@ namespace FlyShelf.Windows
                     UpdateBtn.Content = "Check Again";
                     UpdateBtn.IsEnabled = true;
                 }
+                }
+                catch (Exception ex)
+                {
+                    FlyShelf.Classes.Logger.LogAction("CRASH", $"UpdateCheck: {ex}");
+                }
             });
+            _updateManager.UpdateCheckCompleted += _updateCheckCompletedHandler;
 
             // No auto-update at startup ΓÇö manual only via the button
 
@@ -476,6 +491,16 @@ namespace FlyShelf.Windows
 
                 // Cancel any in-progress update download
                 _updateManager.CancelDownload();
+
+                if (_viewModel?.DroppedItems != null)
+                    _viewModel.DroppedItems.CollectionChanged -= DroppedItems_CollectionChanged;
+
+                if (_updateStatusChangedHandler != null)
+                    _updateManager.StatusChanged -= _updateStatusChangedHandler;
+                if (_updateDownloadProgressChangedHandler != null)
+                    _updateManager.DownloadProgressChanged -= _updateDownloadProgressChangedHandler;
+                if (_updateCheckCompletedHandler != null)
+                    _updateManager.UpdateCheckCompleted -= _updateCheckCompletedHandler;
 
                 // Actively optimize and release memory whenever the HubWindow is closed/hidden
                 var mainWin = Application.Current.MainWindow as MainWindow;

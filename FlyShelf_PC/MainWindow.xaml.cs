@@ -497,12 +497,6 @@ namespace FlyShelf
                             DismissMergeState();
                         }
 
-                        // PERF: Safety net reapply — the throttle inside ReapplyActiveFilters
-                        // will skip this if the synchronous call above already ran (< 50ms ago).
-                        // This prevents the double-evaluation that was freezing the UI.
-                        if (!_isApplyingFilter && (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox?.Text))))
-                            ReapplyActiveFilters();
-
                         // Hide Alt+C watermark once clipboard has enough items to fill the view
                         UpdateAltCWatermarkVisibility();
                     }, System.Windows.Threading.DispatcherPriority.Background);
@@ -1577,7 +1571,7 @@ namespace FlyShelf
             {
                 if (_foregroundHook != IntPtr.Zero)
                 {
-                    UnhookWinEvent(_foregroundHook);
+                    NativeMethods.UnhookWinEvent(_foregroundHook);
                     _foregroundHook = IntPtr.Zero;
                 }
 

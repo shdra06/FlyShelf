@@ -566,6 +566,35 @@ namespace FlyShelf.Classes
         private static readonly object _saveLock = new();
         private static System.Threading.Timer _saveDebouncerTimer;
 
+        public static void FlushSync()
+        {
+            var old = System.Threading.Interlocked.Exchange(ref _saveDebouncerTimer, null);
+            old?.Dispose();
+            
+            string path = GetConfigPath();
+            lock (_saveLock)
+            {
+                try
+                {
+                    var json = JsonSerializer.Serialize(Current, new JsonSerializerOptions { WriteIndented = true });
+                    if (!DiskSpaceHelper.HasSufficientDiskSpace(path, 1_000_000)) return;
+                    string tempPath = path + ".tmp";
+                    RunWithRetry(() => File.WriteAllText(tempPath, json));
+                    RunWithRetry(() => File.Move(tempPath, path, true));
+                    try
+                    {
+                        string bakPath = path + ".bak";
+                        File.Copy(path, bakPath, overwrite: true);
+                    }
+                    catch { }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("SETTINGS_SAVE", $"Failed to flush config: {ex.Message}");
+                }
+            }
+        }
+
         public static void Save()
         {
             try

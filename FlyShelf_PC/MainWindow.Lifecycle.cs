@@ -202,7 +202,10 @@ namespace FlyShelf
                             await System.Threading.Tasks.Task.Delay(80);
 
                             if (_cachedVdm == null)
-                                _cachedVdm = new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                            {
+                                var newVdm = new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                                System.Threading.Interlocked.CompareExchange(ref _cachedVdm, newVdm, null);
+                            }
                             var localVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)_cachedVdm;
                             
                             // Get thread/process ID of the new foreground window
@@ -744,6 +747,11 @@ namespace FlyShelf
             // PC-2/PC-3: Stop background timers that fire on hidden window
             _evictionBackgroundTimer?.Stop();
             _scrollLiveLoadTimer?.Stop();
+            _incognitoRefreshTimer?.Stop();
+            _transferRefreshTimer?.Stop();
+            _notesSyncStatusTimer?.Stop();
+            _altScrollTimer?.Stop();
+            _altThumbnailTimer?.Stop();
 
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
 

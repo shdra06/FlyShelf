@@ -149,8 +149,8 @@ namespace FlyShelf
                 // BUGFIX: Clear the fade-out animation on ShelfListView — OpenTodoPanel animates
                 // its opacity to 0 during the Todo entry transition. Without this reset,
                 // the list is Visible but fully transparent on re-summon (empty box ghost).
-                ShelfListView.BeginAnimation(OpacityProperty, null);
-                ShelfListView.Opacity = 1;
+                ShelfListView?.BeginAnimation(OpacityProperty, null);
+                if (ShelfListView != null) ShelfListView.Opacity = 1;
                 ShelfListView.Visibility = Visibility.Visible;
                 // Let the XAML DataTrigger on DroppedItems.Count control visibility
                 EmptyStatePanel.ClearValue(VisibilityProperty);

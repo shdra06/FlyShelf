@@ -61,6 +61,7 @@ namespace FlyShelf.Classes
         private readonly ConcurrentDictionary<string, NearbyDeviceInfo> _discovered = new();
         // AUDIT: Migrated to HttpClientPool.Quick (5s timeout) to prevent socket exhaustion
         private static System.Net.Http.HttpClient _latencyClient => HttpClientPool.Quick;
+        private static readonly SemaphoreSlim _probeGate = new(3, 3);
 
         public IReadOnlyCollection<NearbyDeviceInfo> DiscoveredDevices =>
             _discovered.Values.OrderByDescending(d => d.DiscoveredAt).ToList();
@@ -217,17 +218,18 @@ namespace FlyShelf.Classes
         {
             try
             {
-                _listener = new UdpClient();
-                _listener.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                _listener.Client.Bind(new IPEndPoint(IPAddress.Any, NEARBY_PORT));
-
-                // Join multicast group
-                try { _listener.JoinMulticastGroup(IPAddress.Parse(NEARBY_MULTICAST)); } catch { } // Best-effort: failure is acceptable
-
                 while (!ct.IsCancellationRequested)
                 {
                     try
                     {
+                        if (_listener == null)
+                        {
+                            _listener = new UdpClient();
+                            _listener.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                            _listener.Client.Bind(new IPEndPoint(IPAddress.Any, NEARBY_PORT));
+                            try { _listener.JoinMulticastGroup(IPAddress.Parse(NEARBY_MULTICAST)); } catch { }
+                        }
+
                         var result = await _listener.ReceiveAsync(ct);
                         string text = Encoding.UTF8.GetString(result.Buffer);
 
@@ -277,6 +279,8 @@ namespace FlyShelf.Classes
                     catch (Exception ex)
                     {
                         Logger.LogAction("NEARBY", $"Listen error: {ex.Message}");
+                        try { _listener?.Dispose(); } catch { }
+                        _listener = null;
                         await Task.Delay(1000, ct);
                     }
                 }
@@ -347,6 +351,7 @@ namespace FlyShelf.Classes
             // Measure latency (with auth header so only paired devices respond meaningfully)
             _ = Task.Run(async () =>
             {
+                if (!await _probeGate.WaitAsync(0)) return;
                 try
                 {
                     var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -359,6 +364,7 @@ namespace FlyShelf.Classes
                     info.LatencyMs = (int)sw.ElapsedMilliseconds;
                 }
                 catch { info.LatencyMs = -1; }
+                finally { _probeGate.Release(); }
             });
 
             Logger.LogAction("NEARBY", $"Discovered: {deviceName} @ {ip}:{httpPort}");

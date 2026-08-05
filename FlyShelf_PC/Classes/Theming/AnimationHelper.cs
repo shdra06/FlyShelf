@@ -140,7 +140,16 @@ namespace FlyShelf.Classes
             var sx = useCacheScale ? s_popOutScale : new DoubleAnimation(toScale, Dur(durationMs)) { EasingFunction = Motion.EaseIn };
             var sy = useCacheScale ? s_popOutScale : new DoubleAnimation(toScale, Dur(durationMs)) { EasingFunction = Motion.EaseIn };
             var fade = new DoubleAnimation(0, Dur(durationMs)) { EasingFunction = Motion.EaseIn };
-            if (onCompleted != null) fade.Completed += (_, _) => onCompleted();
+            if (onCompleted != null)
+            {
+                bool completedFired = false;
+                fade.Completed += (_, _) => { if (!completedFired) { completedFired = true; onCompleted(); } };
+                // Safety: if WPF cancels the animation clock, Completed never fires.
+                // Guarantee callback fires after duration + 100ms grace.
+                var safetyTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(durationMs + 100) };
+                safetyTimer.Tick += (_, _) => { safetyTimer.Stop(); if (!completedFired) { completedFired = true; onCompleted(); } };
+                safetyTimer.Start();
+            }
 
             scale.BeginAnimation(ScaleTransform.ScaleXProperty, sx);
             scale.BeginAnimation(ScaleTransform.ScaleYProperty, sy);

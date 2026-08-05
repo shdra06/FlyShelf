@@ -348,7 +348,7 @@ namespace FlyShelf.Windows
         /// Pure WPF input dialog — no System.Windows.Forms dependency.
         /// Uses theme-aware colors from Application resources.
         /// </summary>
-        private static string ShowInputDialog(string message, string title, string defaultValue)
+        private string ShowInputDialog(string message, string title, string defaultValue)
         {
             // Resolve theme brushes with fallbacks
             var app = Application.Current;
@@ -399,6 +399,7 @@ namespace FlyShelf.Windows
             sp.Children.Add(input);
             sp.Children.Add(btnPanel);
             dlg.Content = sp;
+            dlg.Owner = this;
             dlg.ShowDialog();
             return result;
         }

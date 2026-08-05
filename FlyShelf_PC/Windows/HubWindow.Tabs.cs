@@ -355,8 +355,10 @@ namespace FlyShelf.Windows
 
         private async void ConnectByCode_Click(object sender, RoutedEventArgs e)
         {
-            await SafeAsyncHandler.RunAsync(async () =>
+            try
             {
+                await SafeAsyncHandler.RunAsync(async () =>
+                {
                 string code = RemoteCodeInput?.Text?.Trim().ToUpper(CultureInfo.InvariantCulture) ?? "";
                 if (string.IsNullOrEmpty(code) || code.Length != 6)
                 {
@@ -401,7 +403,12 @@ namespace FlyShelf.Windows
                     Windows.ToastWindow.ShowToast($"Code {code} not found  check the other device has internet and re-generate the code");
                     Logger.LogAction("PAIR CODE", $"Code {code} lookup returned null  not found in Firebase");
                 }
-            });
+                });
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Classes.Logger.LogAction("CRASH", $"ConnectByCode_Click: {ex}");
+            }
         }
 
         // ═══ Color Copy Handlers ═══

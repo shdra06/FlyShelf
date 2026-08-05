@@ -131,10 +131,22 @@ namespace FlyShelf
                     $"Applied backdropType={backdropType} hwnd=0x{hwnd:X} " +
                     $"hrMargins=0x{hrMargins:X8} hrDark=0x{hrDark:X8} hrBackdrop=0x{hrBackdrop:X8} " +
                     $"WindowBg={this.Background} RootContentBg={RootContent?.Background}");
+
+                // Fallback: If DWM backdrop failed (RDP, Basic Display, Windows Server),
+                // set a solid dark background so the window doesn't render invisible.
+                if (hrBackdrop != 0)
+                {
+                    this.Background = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(32, 32, 32));
+                    Classes.Logger.LogAction("DWM_BACKDROP", "Fallback: DWM backdrop not supported, using solid dark background");
+                }
             }
             catch (Exception ex)
             {
                 Classes.Logger.LogAction("DWM_BACKDROP", $"EXCEPTION: {ex.Message}");
+                // Ensure window is visible even on crash
+                this.Background = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(32, 32, 32));
             }
         }
 
@@ -466,8 +478,11 @@ namespace FlyShelf
 
         #region ═══ Wallpaper Application (Static + Animated GIF) ═══
 
+        private int _wallpaperLoadGeneration;
+
         private async void ApplyWallpaper()
         {
+            int thisGen = ++_wallpaperLoadGeneration;
             // [FIX BTN-2]: Outer try/catch — async void must not throw unhandled exceptions.
             try
             {
@@ -557,6 +572,7 @@ namespace FlyShelf
                     });
 
                     // Show container layers immediately with unblurred preview to prevent flash
+                    if (_wallpaperLoadGeneration != thisGen) return; // Superseded by newer load
                     WallpaperBg.Source = bmp;
                     WallpaperBg.Visibility = Visibility.Visible;
 

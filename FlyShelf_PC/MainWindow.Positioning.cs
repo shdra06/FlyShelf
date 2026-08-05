@@ -1398,19 +1398,8 @@ namespace FlyShelf
                         }
                     }
 
-                    if (evictedCount >= 3)
-                    {
-                        // Fix 4: Never GC during scroll — Gen 2 scanning suspends managed
-                        // threads briefly, causing visible hitches. Use Optimized mode
-                        // (lets runtime decide if collection is productive) instead of Forced.
-                        System.Threading.Tasks.Task.Run(() =>
-                        {
-                            // Gen 0 only: recently-freed thumbnail buffers are short-lived
-                            // allocations still in Gen 0. Gen 2 scans the entire heap and is
-                            // ~10x more expensive — not worth it for reclaiming young objects.
-                            System.GC.Collect(0, System.GCCollectionMode.Optimized, false);
-                        });
-                    }
+                    // Eviction complete — let .NET GC naturally reclaim Gen 0 allocations
+                    // without forcing a collection that could cause micro-stutters during scroll.
 
 
                 }

@@ -410,35 +410,6 @@ public partial class App : Application
         // ═══ GLOBAL CRASH HANDLERS ═══
         // Register FIRST — before any init code that could throw.
         // Without these, RuntimeHost/SettingsManager failures show raw OS crash dialog.
-        DispatcherUnhandledException += (s, args) =>
-        {
-            if (_isHandlingCrash)
-            {
-                // Re-entrant crash — avoid infinite loop, exit immediately
-                try { Environment.Exit(1); } catch { } // Best-effort: failure is acceptable
-                return;
-            }
-            _isHandlingCrash = true;
-            args.Handled = true; // Prevents the default Windows crash dialog
-            try { TriggerSafeModeAndRestart($"[UI Thread Exception]\n{args.Exception}"); } catch { }
-        };
-
-        AppDomain.CurrentDomain.UnhandledException += (s, args) =>
-        {
-            try { TriggerSafeModeAndRestart($"[AppDomain Unhandled Exception]\n{args.ExceptionObject}"); } catch { }
-        };
-
-        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, args) =>
-        {
-            args.SetObserved();
-            // PL-14: Only write debug log when logging is enabled (avoids file I/O in Release when disabled)
-            if (FlyShelf.Classes.Logger.IsEnabled)
-            {
-                try { System.IO.File.AppendAllText(
-                    System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs", "flyshelf_debugger.log"),
-                    $"[{DateTime.Now}] ASYNC SWALLOWED: {args.Exception.Message}\n"); } catch { } // Best-effort: failure is acceptable
-            }
-        };
 
         // ------------------------------------------------------------------
         // Single File Deployment: Synthesize the physical scripts locally FIRST!
@@ -762,6 +733,7 @@ public partial class App : Application
                     if (_mainWinInstance != null) return;
                     _isCreatingMainWindow = true;
                     _mainWinInstance = new MainWindow();
+                    _isCreatingMainWindow = false;
                     MainWindow = _mainWinInstance;
 
                     // Flag the MainWindow to auto-summon clipboard if onboarding just completed
@@ -808,7 +780,6 @@ public partial class App : Application
                     // CRITICAL: Give the NotifyIcon (system tray) and TaskbarWindow (widget)
                     // enough time to register before hiding. The WPF-UI tray:NotifyIcon
                     // registers in the Loaded event — hiding immediately kills the registration.
-                    _isCreatingMainWindow = false;
                     // S2 FIX: Wait for Loaded event (tray icon registers here) instead of fragile 500ms delay
                     if (!_mainWinInstance.IsLoaded)
                     {
@@ -881,6 +852,7 @@ public partial class App : Application
         // complete before process termination, causing silent data loss.
         try { FlyShelf.Classes.ReminderManager.SaveNowSync(); } catch { } // Best-effort: failure is acceptable
 
+        try { FlyShelf.Classes.SettingsManager.FlushSync(); } catch { }
         // H-01: Flush all pending data to disk BEFORE network ops (which may hang)
         try { FlyShelf.Classes.NoteManager.SaveNowSync(); } catch { } // Best-effort: failure is acceptable
         try { FlyShelf.Classes.TodoManager.SaveNowSync(); } catch { } // Best-effort: failure is acceptable

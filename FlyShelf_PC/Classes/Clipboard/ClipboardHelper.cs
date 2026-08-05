@@ -42,7 +42,8 @@ namespace FlyShelf.Classes
                             // callers go through Dispatcher.Invoke which requires synchronous execution.
                             // [FIX M-20]: 5ms sleep on UI thread is acceptable — async Task.Delay is
                             // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
-                            System.Threading.Thread.Sleep(5);
+                            System.Threading.Thread.Yield();
+                            System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
                         }
                         else
                         {
@@ -93,7 +94,8 @@ namespace FlyShelf.Classes
                             // callers go through Dispatcher.Invoke which requires synchronous execution.
                             // [FIX M-20]: 5ms sleep on UI thread is acceptable — async Task.Delay is
                             // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
-                            System.Threading.Thread.Sleep(5);
+                            System.Threading.Thread.Yield();
+                            System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
                         }
                         else
                         {
@@ -132,7 +134,8 @@ namespace FlyShelf.Classes
                             // callers go through Dispatcher.Invoke which requires synchronous execution.
                             // [FIX M-20]: 5ms sleep on UI thread is acceptable — async Task.Delay is
                             // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
-                            System.Threading.Thread.Sleep(5);
+                            System.Threading.Thread.Yield();
+                            System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
                         }
                         else
                         {
@@ -177,7 +180,8 @@ namespace FlyShelf.Classes
                             // callers go through Dispatcher.Invoke which requires synchronous execution.
                             // [FIX M-20]: 5ms sleep on UI thread is acceptable — async Task.Delay is
                             // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
-                            System.Threading.Thread.Sleep(5);
+                            System.Threading.Thread.Yield();
+                            System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
                         }
                         else
                         {
@@ -222,7 +226,8 @@ namespace FlyShelf.Classes
                             // callers go through Dispatcher.Invoke which requires synchronous execution.
                             // [FIX M-20]: 5ms sleep on UI thread is acceptable — async Task.Delay is
                             // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
-                            System.Threading.Thread.Sleep(5);
+                            System.Threading.Thread.Yield();
+                            System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
                         }
                         else
                         {

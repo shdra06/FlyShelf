@@ -86,35 +86,39 @@ namespace FlyShelf
         {
             if (AltShelfListView?.ItemsSource == null || AltSearchTextBox == null) return;
 
-            _altSearchDebounce?.Stop();
-            _altSearchDebounce = new System.Windows.Threading.DispatcherTimer
+            if (_altSearchDebounce == null)
             {
-                Interval = TimeSpan.FromMilliseconds(150)
-            };
-            _altSearchDebounce.Tick += (_, __) =>
-            {
-                _altSearchDebounce.Stop();
-
-                string query = AltSearchTextBox.Text?.Trim() ?? "";
-                var view = System.Windows.Data.CollectionViewSource.GetDefaultView(AltShelfListView.ItemsSource);
-                if (view == null) return;
-
-                if (string.IsNullOrEmpty(query))
+                _altSearchDebounce = new System.Windows.Threading.DispatcherTimer
                 {
-                    view.Filter = null;
-                }
-                else
+                    Interval = TimeSpan.FromMilliseconds(150)
+                };
+                _altSearchDebounce.Tick += (_, __) =>
                 {
-                    view.Filter = obj =>
+                    _altSearchDebounce.Stop();
+
+                    string query = AltSearchTextBox.Text?.Trim() ?? "";
+                    var view = System.Windows.Data.CollectionViewSource.GetDefaultView(AltShelfListView.ItemsSource);
+                    if (view == null) return;
+
+                    if (string.IsNullOrEmpty(query))
                     {
-                        if (obj is ViewModels.ClipboardItem item)
+                        view.Filter = null;
+                    }
+                    else
+                    {
+                        view.Filter = obj =>
                         {
-                            return Classes.FuzzyMatcher.IsMatchAny(query, item.LowerFileName, item.LowerContent, item.FileName, item.RawContent);
-                        }
-                        return false;
-                    };
-                }
-            };
+                            if (obj is ViewModels.ClipboardItem item)
+                            {
+                                return Classes.FuzzyMatcher.IsMatchAny(query, item.LowerFileName, item.LowerContent, item.FileName, item.RawContent);
+                            }
+                            return false;
+                        };
+                    }
+                };
+            }
+            
+            _altSearchDebounce.Stop();
             _altSearchDebounce.Start();
         }
 

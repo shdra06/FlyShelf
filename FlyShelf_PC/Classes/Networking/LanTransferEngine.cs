@@ -456,6 +456,7 @@ namespace FlyShelf.Classes
                         catch (Exception ex) when (ex is not OperationCanceledException)
                         {
                             Logger.LogAction("TCP_ENGINE", $"Chunk {chunkIndex} send failed: {ex.Message}");
+                            try { session.CancelTransfer(); } catch { } // Cancel sibling chunk tasks
                             throw;
                         }
                         finally
@@ -856,13 +857,14 @@ namespace FlyShelf.Classes
                 }
 
                 await fs.FlushAsync(linkedCts.Token);
-                session.MarkChunkCompleted(chunkIndex);
-                Logger.LogAction("TCP_ENGINE", $"Chunk {chunkIndex}/{session.NumChunks} received: {LanTransferSession.FormatBytes(chunkLength)}");
             }
             finally
             {
                 ArrayPool<byte>.Shared.Return(buffer);
             }
+            
+            session.MarkChunkCompleted(chunkIndex);
+            Logger.LogAction("TCP_ENGINE", $"Chunk {chunkIndex}/{session.NumChunks} received: {LanTransferSession.FormatBytes(chunkEnd - chunkStart)}");
         }
 
         // ═══ Protocol Helpers ═══

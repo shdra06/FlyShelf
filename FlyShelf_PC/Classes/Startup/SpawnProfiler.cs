@@ -27,7 +27,8 @@ namespace FlyShelf.Classes
         private bool _isCapturing;
         private int _spawnId;
         private string? _logPath;
-        private System.Windows.Window? _targetWindow;
+        private WeakReference<System.Windows.Window>? _targetWindowRef;
+        private System.Windows.Controls.ScrollViewer? _cachedScrollViewer;
 
         private struct SpawnStep
         {
@@ -82,7 +83,7 @@ namespace FlyShelf.Classes
             _spawnId++;
             _steps.Clear();
             _frames.Clear();
-            _targetWindow = window;
+            _targetWindowRef = window != null ? new WeakReference<System.Windows.Window>(window) : null;
             _hwnd = IntPtr.Zero;
             try
             {
@@ -139,7 +140,7 @@ namespace FlyShelf.Classes
             double scrollOffset = 0;
             try
             {
-                if (_targetWindow is MainWindow mainWin)
+                if (_targetWindowRef != null && _targetWindowRef.TryGetTarget(out var targetWin) && targetWin is MainWindow mainWin)
                 {
                     opacity = mainWin.Opacity;
                     windowTop = mainWin.Top;
@@ -154,8 +155,9 @@ namespace FlyShelf.Classes
                     // Capture scroll position to detect content shifts
                     try
                     {
-                        var sv = FindChild<System.Windows.Controls.ScrollViewer>(mainWin.ShelfListView);
-                        if (sv != null) scrollOffset = sv.VerticalOffset;
+                        // Cache ScrollViewer ref — avoid expensive visual tree search on every 60fps tick
+                        _cachedScrollViewer ??= FindChild<System.Windows.Controls.ScrollViewer>(mainWin.ShelfListView);
+                        if (_cachedScrollViewer != null) scrollOffset = _cachedScrollViewer.VerticalOffset;
                     }
                     catch { } // Best-effort: failure is acceptable
                 }
@@ -208,6 +210,7 @@ namespace FlyShelf.Classes
             if (!_isCapturing) return;
             _isCapturing = false;
             Mark("END_CAPTURE");
+            _targetWindowRef = null;
 
             CompositionTarget.Rendering -= OnRendering;
             

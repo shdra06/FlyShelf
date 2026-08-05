@@ -69,6 +69,8 @@ namespace FlyShelf
             {
                 AiSettingsPanel.Visibility = Visibility.Collapsed;
                 AiSettingsPanel.Opacity = 0;
+                ShelfListView?.BeginAnimation(OpacityProperty, null);
+                if (ShelfListView != null) ShelfListView.Opacity = 1;
                 ShelfListView.Visibility = Visibility.Visible;
                 return;
             }
