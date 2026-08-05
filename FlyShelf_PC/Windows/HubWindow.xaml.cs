@@ -183,13 +183,25 @@ namespace FlyShelf.Windows
                     bool success = await _updateManager.DownloadAndApplyUpdateAsync();
                     if (success)
                     {
-                        UpdateBtn.Content = "Restarting...";
-                        UpdateStatusText.Text = "Update downloaded! Restarting now...";
+                        UpdateBtn.Content = "Ready to Restart";
+                        UpdateStatusText.Text = "Update downloaded! Ready to restart.";
                         UpdatePctText.Text = "100%";
 
-                        // Auto-apply after a brief moment so user sees the status
-                        await Task.Delay(1500);
-                        _updateManager.ApplyUpdateAndRestart();
+                        var result = System.Windows.MessageBox.Show(
+                            "Update downloaded successfully!\n\nRestart FlyShelf now to apply the update?",
+                            "FlyShelf Update Ready",
+                            System.Windows.MessageBoxButton.YesNo,
+                            System.Windows.MessageBoxImage.Question);
+                        if (result == System.Windows.MessageBoxResult.Yes)
+                        {
+                            UpdateBtn.Content = "Restarting...";
+                            UpdateStatusText.Text = "Restarting now...";
+                            _updateManager.ApplyUpdateAndRestart();
+                        }
+                        else
+                        {
+                            UpdateStatusText.Text = "Update ready — restart FlyShelf when convenient.";
+                        }
                     }
                     else
                     {

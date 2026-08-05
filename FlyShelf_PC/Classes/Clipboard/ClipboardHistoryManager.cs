@@ -65,18 +65,56 @@ namespace FlyShelf.Classes
         public static List<ViewModels.ClipboardItem> LoadHistory()
         {
             // M2 FIX: Read file content OUTSIDE the lock to avoid holding it during
-            // potentially slow file I/O. Only parsing and collection mutation inside the lock.
-            string? snapshotJson = null;
-            string? backupJson = null;
+            // potentially slow file I/O. Using streaming APIs for memory efficiency.
             string[]? journalLines = null;
+            var items = new List<ViewModels.ClipboardItem>();
+            bool readSnapshot = false;
+            bool usedBackup = false;
 
             try
             {
                 if (File.Exists(_historyPath))
                 {
-                    try { snapshotJson = RunWithRetry(() => File.ReadAllText(_historyPath)); }
-                    catch { /* Will fall through to empty list */ }
+                    try
+                    {
+                        items = RunWithRetry(() =>
+                        {
+                            using var stream = File.OpenRead(_historyPath);
+                            return JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(stream);
+                        }) ?? items;
+                        readSnapshot = true;
+                    }
+                    catch (JsonException jsonEx)
+                    {
+                        Logger.LogAction("HISTORY_LOAD_ERROR", $"Snapshot failed to deserialize: {jsonEx.Message}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("HISTORY_LOAD_ERROR", $"Failed to read snapshot: {ex.Message}");
+                    }
                 }
+
+                if (!readSnapshot)
+                {
+                    string backupPath = _historyPath + ".bak";
+                    if (File.Exists(backupPath))
+                    {
+                        try
+                        {
+                            items = RunWithRetry(() =>
+                            {
+                                using var stream = File.OpenRead(backupPath);
+                                return JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(stream);
+                            }) ?? items;
+                            usedBackup = true;
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogAction("HISTORY_LOAD_ERROR", $"Backup failed to deserialize: {ex.Message}");
+                        }
+                    }
+                }
+
                 if (File.Exists(_journalPath))
                 {
                     try { journalLines = RunWithRetry(() => File.ReadAllLines(_journalPath)); }
@@ -93,53 +131,7 @@ namespace FlyShelf.Classes
             {
                 try
                 {
-                    var items = new List<ViewModels.ClipboardItem>();
 
-                    // Step 1: Parse compacted snapshot
-                    string? jsonToParse = snapshotJson;
-                    if (jsonToParse != null)
-                    {
-                        try
-                        {
-                            items = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(jsonToParse) ?? items;
-                        }
-                        catch (JsonException jsonEx)
-                        {
-                            // H-18 FIX: Snapshot deserialization failed — try backup
-                            Logger.LogAction("HISTORY_LOAD_ERROR", $"Snapshot failed to deserialize: {jsonEx.Message}");
-                            string backupPath = _historyPath + ".bak";
-                            if (File.Exists(backupPath))
-                            {
-                                try { backupJson = RunWithRetry(() => File.ReadAllText(backupPath)); }
-                                catch { /* backup read failed too */ }
-                            }
-                            if (backupJson != null)
-                            {
-                                try
-                                {
-                                    items = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(backupJson) ?? items;
-                                    jsonToParse = backupJson; // mark that we used backup
-                                }
-                                catch (JsonException backupEx)
-                                {
-                                    Logger.LogAction("HISTORY_LOAD_ERROR", $"Backup also failed to deserialize: {backupEx.Message}");
-                                }
-                            }
-                        }
-                    }
-                    else if (backupJson != null)
-                    {
-                        // snapshotJson was null (file read failed), try backup directly
-                        try
-                        {
-                            items = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(backupJson) ?? items;
-                            jsonToParse = backupJson;
-                        }
-                        catch (JsonException jsonEx)
-                        {
-                            Logger.LogAction("HISTORY_LOAD_ERROR", $"Backup failed to deserialize: {jsonEx.Message}");
-                        }
-                    }
 
                     // Process loaded items: decrypt passwords and validate
                     if (items.Count > 0)
@@ -157,7 +149,7 @@ namespace FlyShelf.Classes
                                 Logger.LogAction("HISTORY_CLEANUP", $"Pruned dead/deleted snapshot item: {snapshotItem.FileName ?? snapshotItem.RawContent}");
                         }
                         items = validItems;
-                        if (backupJson != null && snapshotJson == null)
+                        if (usedBackup && !readSnapshot)
                         {
                             Logger.LogAction("HISTORY_RECOVERY", $"Successfully recovered {items.Count} valid items from backup database!");
                         }
@@ -392,12 +384,16 @@ namespace FlyShelf.Classes
 
                     // Write to temp file first, then atomic rename for safety
                     var tempPath = _historyPath + ".tmp";
-                    if (!DiskSpaceHelper.HasSufficientDiskSpace(_historyPath, json.Length * 2 + 1_000_000))
+                    if (!DiskSpaceHelper.HasSufficientDiskSpace(_historyPath, items.Count * 2000 + 1_000_000))
                     {
                         Logger.LogAction("CLIPBOARD", "Insufficient disk space to save history — skipping write");
                         return;
                     }
-                    RunWithRetry(() => File.WriteAllText(tempPath, json));
+                    RunWithRetry(() =>
+                    {
+                        using var stream = File.Create(tempPath);
+                        JsonSerializer.Serialize(stream, diskItems, options);
+                    });
 
                     // Create a backup copy before moving the temp file to historyPath
                     if (File.Exists(_historyPath))
@@ -460,8 +456,11 @@ namespace FlyShelf.Classes
                 {
                     try
                     {
-                        var json = RunWithRetry(() => File.ReadAllText(_historyPath));
-                        var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(json);
+                        var snapshot = RunWithRetry(() =>
+                        {
+                            using var stream = File.OpenRead(_historyPath);
+                            return JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(stream);
+                        });
                         if (snapshot != null)
                         {
                             foreach (var snapshotItem in snapshot)

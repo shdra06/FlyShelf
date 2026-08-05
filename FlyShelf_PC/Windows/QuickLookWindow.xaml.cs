@@ -51,6 +51,7 @@ namespace FlyShelf.Windows
         private double _ocrBitmapHeight = 0;
         private bool _autoTriggerOcr = false;
         private EventHandler<object> _zoomHandler;
+        private readonly System.Threading.CancellationTokenSource _cts = new System.Threading.CancellationTokenSource();
 
         // ═══════════════════════════════════════════════════════════
         // DOODLE STATE
@@ -846,6 +847,8 @@ namespace FlyShelf.Windows
 
         protected override void OnClosed(EventArgs e)
         {
+            _cts.Cancel();
+
             if (_isImageLoaded)
             {
                 FlyShelf.Classes.SettingsManager.Current.QuickLookWidth = this.Width;
@@ -856,14 +859,32 @@ namespace FlyShelf.Windows
             try { if (_zoomHandler != null && WebPreview?.CoreWebView2 != null) WebPreview.ZoomFactorChanged -= _zoomHandler; } catch { }
             try
             {
-                WebPreview.Dispose();
+                if (WebPreview != null)
+                {
+                    try { WebPreview.NavigationStarting -= null; } catch { }
+                    try { WebPreview.NavigationCompleted -= null; } catch { }
+                    WebPreview.Source = new Uri("about:blank");
+                    WebPreview.Dispose();
+                }
             }
-            catch { } // Best-effort: failure is acceptable
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("QUICKLOOK_CLOSE", $"Error disposing WebPreview: {ex.Message}");
+            }
             try
             {
-                MarkdownWebView.Dispose();
+                if (MarkdownWebView != null)
+                {
+                    try { MarkdownWebView.NavigationStarting -= null; } catch { }
+                    try { MarkdownWebView.NavigationCompleted -= null; } catch { }
+                    MarkdownWebView.Source = new Uri("about:blank");
+                    MarkdownWebView.Dispose();
+                }
             }
-            catch { } // Best-effort: failure is acceptable
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("QUICKLOOK_CLOSE", $"Error disposing MarkdownWebView: {ex.Message}");
+            }
             // Cleanup WebView2 user data folders
             try {
                 string pdfDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"FlyShelf_PdfQL_{Environment.ProcessId}");

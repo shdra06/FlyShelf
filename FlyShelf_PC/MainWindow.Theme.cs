@@ -187,32 +187,34 @@ namespace FlyShelf
         private void RestoreAcrylicBlur()
         {
             ClearWallpaperLayers();
-
-            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
             bool blurEnabled = Classes.SettingsManager.Current.EnableBlurBehind 
                                && Classes.NativeMethods.ShouldUseBlur();
-
             if (blurEnabled)
             {
-                // Disable any previous custom acrylic before re-applying
-                if (hwnd != IntPtr.Zero)
-                    Classes.NativeMethods.DisableCustomAcrylic(hwnd);
-
-                // Apply Acrylic backdrop via direct DWM API (backdropType 3 = Acrylic)
-                // Background MUST be fully Transparent (not null) for DWM backdrop to show
+                // v3.0.0 proven approach: Disable MicaWPF backdrop, set transparent background,
+                // then apply acrylic via legacy SetWindowCompositionAttribute API.
+                // The modern DWM SYSTEMBACKDROP_TYPE and MicaWPF BackdropType.Acrylic both fail
+                // for the MainWindow due to its special window styles (WS_EX_NOACTIVATE etc).
+                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
                 this.Background = Brushes.Transparent;
                 if (RootContent != null)
-                    RootContent.Background = Brushes.Transparent;
-                ApplyDwmBackdrop(3); // DWMSBT_TRANSIENTWINDOW = Acrylic
+                    RootContent.Background = new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0)); // Near-transparent for hit-testing
+
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    Classes.NativeMethods.EnableCustomAcrylic(hwnd, 0x22242424);
+                }
             }
             else
             {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
                     Classes.NativeMethods.DisableCustomAcrylic(hwnd);
                 }
 
-                ApplyDwmBackdrop(1); // DWMSBT_NONE
+                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
                 ApplyPopupBackground(); // solid dark + software blur fallback
             }
             ResetSelectionAccent();

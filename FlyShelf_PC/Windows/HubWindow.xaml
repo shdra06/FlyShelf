@@ -789,13 +789,9 @@
                                     <Grid>
                                         <Border CornerRadius="{StaticResource RadiusMD}" Opacity="0.05" Background="#3B82F6"/>
                                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                            <Border CornerRadius="10" Width="80" Height="80" Margin="0,12,0,6" HorizontalAlignment="Center"
-                                                    UseLayoutRounding="True" SnapsToDevicePixels="True"
-                                                    RenderOptions.BitmapScalingMode="HighQuality" RenderOptions.EdgeMode="Unspecified">
-                                                <Border.Background>
-                                                    <ImageBrush ImageSource="/Resources/ClusteredCards/fan_text.jpg" Stretch="UniformToFill"/>
-                                                </Border.Background>
-                                            </Border>
+                                            <Image Source="{StaticResource CategoryTextIcon}" Width="80" Height="80" 
+                                                   Margin="0,12,0,6" HorizontalAlignment="Center"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
                                             <TextBlock Text="Text" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" HorizontalAlignment="Center"/>
                                             <TextBlock x:Name="ClusteredTextCount" Text="0 items" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,3,0,12"/>
                                         </StackPanel>
@@ -808,13 +804,9 @@
                                     <Grid>
                                         <Border CornerRadius="{StaticResource RadiusMD}" Opacity="0.05" Background="#7C3AED"/>
                                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                            <Border CornerRadius="10" Width="80" Height="80" Margin="0,12,0,6" HorizontalAlignment="Center"
-                                                    UseLayoutRounding="True" SnapsToDevicePixels="True"
-                                                    RenderOptions.BitmapScalingMode="HighQuality" RenderOptions.EdgeMode="Unspecified">
-                                                <Border.Background>
-                                                    <ImageBrush ImageSource="/Resources/ClusteredCards/fan_images.jpg" Stretch="UniformToFill"/>
-                                                </Border.Background>
-                                            </Border>
+                                            <Image Source="{StaticResource CategoryImagesIcon}" Width="80" Height="80" 
+                                                   Margin="0,12,0,6" HorizontalAlignment="Center"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
                                             <TextBlock Text="Images" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" HorizontalAlignment="Center"/>
                                             <TextBlock x:Name="ClusteredImageCount" Text="0 items" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,3,0,12"/>
                                         </StackPanel>
@@ -827,13 +819,9 @@
                                     <Grid>
                                         <Border CornerRadius="{StaticResource RadiusMD}" Opacity="0.05" Background="#059669"/>
                                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                            <Border CornerRadius="10" Width="80" Height="80" Margin="0,12,0,6" HorizontalAlignment="Center"
-                                                    UseLayoutRounding="True" SnapsToDevicePixels="True"
-                                                    RenderOptions.BitmapScalingMode="HighQuality" RenderOptions.EdgeMode="Unspecified">
-                                                <Border.Background>
-                                                    <ImageBrush ImageSource="/Resources/ClusteredCards/fan_code.jpg" Stretch="UniformToFill"/>
-                                                </Border.Background>
-                                            </Border>
+                                            <Image Source="{StaticResource CategoryCodeIcon}" Width="80" Height="80" 
+                                                   Margin="0,12,0,6" HorizontalAlignment="Center"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
                                             <TextBlock Text="Code" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" HorizontalAlignment="Center"/>
                                             <TextBlock x:Name="ClusteredCodeCount" Text="0 items" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,3,0,12"/>
                                         </StackPanel>
@@ -846,13 +834,9 @@
                                     <Grid>
                                         <Border CornerRadius="{StaticResource RadiusMD}" Opacity="0.05" Background="#DC2626"/>
                                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                            <Border CornerRadius="10" Width="80" Height="80" Margin="0,12,0,6" HorizontalAlignment="Center"
-                                                    UseLayoutRounding="True" SnapsToDevicePixels="True"
-                                                    RenderOptions.BitmapScalingMode="HighQuality" RenderOptions.EdgeMode="Unspecified">
-                                                <Border.Background>
-                                                    <ImageBrush ImageSource="/Resources/ClusteredCards/fan_pdf.jpg" Stretch="UniformToFill"/>
-                                                </Border.Background>
-                                            </Border>
+                                            <Image Source="{StaticResource CategoryPdfsIcon}" Width="80" Height="80" 
+                                                   Margin="0,12,0,6" HorizontalAlignment="Center"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
                                             <TextBlock Text="PDFs" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" HorizontalAlignment="Center"/>
                                             <TextBlock x:Name="ClusteredPdfCount" Text="0 items" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,3,0,12"/>
                                         </StackPanel>
@@ -865,13 +849,9 @@
                                     <Grid>
                                         <Border CornerRadius="{StaticResource RadiusMD}" Opacity="0.05" Background="#2563EB"/>
                                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                            <Border CornerRadius="10" Width="80" Height="80" Margin="0,12,0,6" HorizontalAlignment="Center"
-                                                    UseLayoutRounding="True" SnapsToDevicePixels="True"
-                                                    RenderOptions.BitmapScalingMode="HighQuality" RenderOptions.EdgeMode="Unspecified">
-                                                <Border.Background>
-                                                    <ImageBrush ImageSource="/Resources/ClusteredCards/fan_docs.jpg" Stretch="UniformToFill"/>
-                                                </Border.Background>
-                                            </Border>
+                                            <Image Source="{StaticResource CategoryDocsIcon}" Width="80" Height="80" 
+                                                   Margin="0,12,0,6" HorizontalAlignment="Center"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
                                             <TextBlock Text="Docs" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" HorizontalAlignment="Center"/>
                                             <TextBlock x:Name="ClusteredDocCount" Text="0 items" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,3,0,12"/>
                                         </StackPanel>
@@ -884,13 +864,9 @@
                                     <Grid>
                                         <Border CornerRadius="{StaticResource RadiusMD}" Opacity="0.05" Background="#0284C7"/>
                                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                            <Border CornerRadius="10" Width="80" Height="80" Margin="0,12,0,6" HorizontalAlignment="Center"
-                                                    UseLayoutRounding="True" SnapsToDevicePixels="True"
-                                                    RenderOptions.BitmapScalingMode="HighQuality" RenderOptions.EdgeMode="Unspecified">
-                                                <Border.Background>
-                                                    <ImageBrush ImageSource="/Resources/ClusteredCards/fan_links.jpg" Stretch="UniformToFill"/>
-                                                </Border.Background>
-                                            </Border>
+                                            <Image Source="{StaticResource CategoryLinksIcon}" Width="80" Height="80" 
+                                                   Margin="0,12,0,6" HorizontalAlignment="Center"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
                                             <TextBlock Text="Links" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" HorizontalAlignment="Center"/>
                                             <TextBlock x:Name="ClusteredLinkCount" Text="0 items" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,3,0,12"/>
                                         </StackPanel>
@@ -903,13 +879,9 @@
                                     <Grid>
                                         <Border CornerRadius="{StaticResource RadiusMD}" Opacity="0.05" Background="#D946EF"/>
                                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                            <Border CornerRadius="10" Width="80" Height="80" Margin="0,12,0,6" HorizontalAlignment="Center"
-                                                    UseLayoutRounding="True" SnapsToDevicePixels="True"
-                                                    RenderOptions.BitmapScalingMode="HighQuality" RenderOptions.EdgeMode="Unspecified">
-                                                <Border.Background>
-                                                    <ImageBrush ImageSource="/Resources/ClusteredCards/fan_videos.jpg" Stretch="UniformToFill"/>
-                                                </Border.Background>
-                                            </Border>
+                                            <Image Source="{StaticResource CategoryVideosIcon}" Width="80" Height="80" 
+                                                   Margin="0,12,0,6" HorizontalAlignment="Center"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
                                             <TextBlock Text="Videos" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" HorizontalAlignment="Center"/>
                                             <TextBlock x:Name="ClusteredVideoCount" Text="0 items" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,3,0,12"/>
                                         </StackPanel>

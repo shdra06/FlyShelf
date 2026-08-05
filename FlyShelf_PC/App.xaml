@@ -21,6 +21,7 @@
                 <ResourceDictionary Source="pack://application:,,,/Styles/AltClipboardStyles.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/TypeRamp.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/FileTypeIcons.xaml"/>
+                <ResourceDictionary Source="pack://application:,,,/Styles/CategoryIcons.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <!-- Default app fallback icon -->

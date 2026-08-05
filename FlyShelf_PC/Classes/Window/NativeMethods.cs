@@ -816,102 +816,55 @@ public static partial class NativeMethods
 
     public static void EnableCustomAcrylic(IntPtr hwnd, uint tintColor)
     {
-        // ═══ Strategy: Try modern DWM API first (Win11 22H2+), then legacy SetWindowCompositionAttribute ═══
-        // The legacy ACCENT_ENABLE_ACRYLICBLURBEHIND API is broken/deprecated on newer Win11 builds.
-        // DWM attribute 38 (DWMWA_SYSTEMBACKDROP_TYPE) with value 3 (Acrylic) is the modern replacement.
-
-        bool modernApplied = false;
-
-        // Modern path: DWMWA_SYSTEMBACKDROP_TYPE = 3 (Acrylic) — requires Build 22621+
-        if (Environment.OSVersion.Version.Build >= 22621)
+        var accent = new AccentPolicy
         {
-            try
-            {
-                // DWM Acrylic requires the frame to be extended into client area
-                var margins = new MARGINS { cxLeftWidth = -1, cxRightWidth = -1, cyTopHeight = -1, cyBottomHeight = -1 };
-                DwmExtendFrameIntoClientArea(hwnd, ref margins);
+            AccentState = AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND,
+            GradientColor = tintColor // Format: AABBGGRR
+        };
 
-                int backdropType = 3; // DWM_SYSTEMBACKDROP_TYPE_ACRYLIC
-                int hr = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, ref backdropType, sizeof(int));
-                modernApplied = (hr == 0); // S_OK
-            }
-            catch { } // Best-effort: fall through to legacy
+        int size = Marshal.SizeOf(accent);
+        IntPtr buffer = Marshal.AllocHGlobal(size);
+        try
+        {
+            Marshal.StructureToPtr(accent, buffer, false);
+            var data = new WindowCompositionAttributeData
+            {
+                Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
+                Data = buffer,
+                SizeOfData = size
+            };
+            SetWindowCompositionAttribute(hwnd, ref data);
         }
-
-        // Legacy fallback: SetWindowCompositionAttribute with ACCENT_ENABLE_ACRYLICBLURBEHIND
-        // Still needed for Win11 21H2 (Build 22000-22620) and some edge cases
-        if (!modernApplied)
+        finally
         {
-            try
-            {
-                var accent = new AccentPolicy
-                {
-                    AccentState = AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND,
-                    GradientColor = tintColor // Format: AABBGGRR
-                };
-
-                int size = Marshal.SizeOf(accent);
-                IntPtr buffer = Marshal.AllocHGlobal(size);
-                try
-                {
-                    Marshal.StructureToPtr(accent, buffer, false);
-                    var data = new WindowCompositionAttributeData
-                    {
-                        Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
-                        Data = buffer,
-                        SizeOfData = size
-                    };
-                    SetWindowCompositionAttribute(hwnd, ref data);
-                }
-                finally
-                {
-                    Marshal.FreeHGlobal(buffer);
-                }
-            }
-            catch { } // Best-effort: failure is acceptable
+            Marshal.FreeHGlobal(buffer);
         }
     }
 
     public static void DisableCustomAcrylic(IntPtr hwnd)
     {
-        // Modern path: Reset DWMWA_SYSTEMBACKDROP_TYPE to None (1)
-        if (Environment.OSVersion.Version.Build >= 22621)
+        var accent = new AccentPolicy
         {
-            try
-            {
-                int backdropType = 1; // DWM_SYSTEMBACKDROP_TYPE_NONE
-                DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, ref backdropType, sizeof(int));
-            }
-            catch { } // Best-effort
-        }
+            AccentState = AccentState.ACCENT_DISABLED
+        };
 
-        // Legacy path: Always also clear the accent policy
+        int size = Marshal.SizeOf(accent);
+        IntPtr buffer = Marshal.AllocHGlobal(size);
         try
         {
-            var accent = new AccentPolicy
+            Marshal.StructureToPtr(accent, buffer, false);
+            var data = new WindowCompositionAttributeData
             {
-                AccentState = AccentState.ACCENT_DISABLED
+                Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
+                Data = buffer,
+                SizeOfData = size
             };
-
-            int size = Marshal.SizeOf(accent);
-            IntPtr buffer = Marshal.AllocHGlobal(size);
-            try
-            {
-                Marshal.StructureToPtr(accent, buffer, false);
-                var data = new WindowCompositionAttributeData
-                {
-                    Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
-                    Data = buffer,
-                    SizeOfData = size
-                };
-                SetWindowCompositionAttribute(hwnd, ref data);
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(buffer);
-            }
+            SetWindowCompositionAttribute(hwnd, ref data);
         }
-        catch { } // Best-effort
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
     }
 
     public static void ApplyWindowBackdropAndBackground(System.Windows.Window window, System.Windows.Controls.Grid? rootGrid = null)
@@ -995,31 +948,27 @@ public static partial class NativeMethods
                 micaWin.Background = tintBrush;
                 if (rootGrid != null) rootGrid.Background = null;
             }
-            else if (blurEnabled && window is MainWindow)
+            else if (blurEnabled && mode == "mica" && window is MainWindow)
             {
-                // MainWindow (clipboard popup) — use direct DWM API calls
-                // MicaWPF's SystemBackdropType doesn't work at runtime on already-visible windows
+                // MainWindow Mica mode — v3.0.0 proven approach
+                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Tabbed;
                 micaWin.Background = System.Windows.Media.Brushes.Transparent;
-                if (rootGrid != null) rootGrid.Background = System.Windows.Media.Brushes.Transparent;
+                if (rootGrid != null) rootGrid.Background = null;
+            }
+            else if (blurEnabled && mode == "glass" && window is MainWindow)
+            {
+                // MainWindow glass mode — v3.0.0 proven approach:
+                // Disable MicaWPF backdrop, set transparent background, 
+                // then apply acrylic via legacy SetWindowCompositionAttribute API.
+                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+                micaWin.Background = System.Windows.Media.Brushes.Transparent;
+                if (rootGrid != null) rootGrid.Background = null;
 
-                try
+                var hwndVal = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                if (hwndVal != IntPtr.Zero)
                 {
-                    var hwndVal = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-                    if (hwndVal != IntPtr.Zero)
-                    {
-                        // Extend frame into client area (required for DWM backdrop)
-                        var margins = new MARGINS { cxLeftWidth = -1, cxRightWidth = -1, cyTopHeight = -1, cyBottomHeight = -1 };
-                        DwmExtendFrameIntoClientArea(hwndVal, ref margins);
-
-                        int darkMode = 1;
-                        DwmSetWindowAttribute(hwndVal, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkMode, sizeof(int));
-
-                        // 2=Mica, 3=Acrylic based on display mode
-                        int backdropType = (mode == "glass") ? 3 : 2;
-                        DwmSetWindowAttribute(hwndVal, DWMWA_SYSTEMBACKDROP_TYPE, ref backdropType, sizeof(int));
-                    }
+                    EnableCustomAcrylic(hwndVal, 0x22242424);
                 }
-                catch { } // Best-effort
             }
             else
             {

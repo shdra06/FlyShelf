@@ -678,6 +678,7 @@ namespace FlyShelf.Classes
                     if (!DiskSpaceHelper.HasSufficientDiskSpace(_todosPath, json.Length * 2 + 1_000_000))
                     {
                         Logger.LogAction("TODOS", "Insufficient disk space to save todos — skipping write");
+                        try { System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Cannot save — disk is full. Free up space to prevent data loss.")); } catch { }
                         return;
                     }
                     File.WriteAllText(tmpPath, json);

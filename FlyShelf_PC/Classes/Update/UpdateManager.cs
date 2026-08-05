@@ -20,11 +20,7 @@ namespace FlyShelf.Classes
 
         // AUDIT Task 5: Use shared pool instance instead of per-class HttpClient (prevents socket exhaustion)
         private static HttpClient _client => HttpClientPool.Default;
-        private static readonly HttpClient _downloadClient = new HttpClient(new HttpClientHandler
-        {
-            AllowAutoRedirect = true,
-            MaxAutomaticRedirections = 10
-        }) { Timeout = TimeSpan.FromMinutes(10) };
+        private static volatile bool _isDownloading = false;
 
         public static string CurrentVersion => Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
 
@@ -120,6 +116,12 @@ namespace FlyShelf.Classes
                     request.Headers.Add("Accept", "application/vnd.github+json");
 
                     var response = await _client.SendAsync(request);
+                    if (response.StatusCode == System.Net.HttpStatusCode.Forbidden || response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                    {
+                        Logger.LogAction("UPDATE", "GitHub API rate limited.");
+                        StatusChanged?.Invoke("GitHub API rate limited — try again in a few minutes.");
+                        return false;
+                    }
                     if (response.IsSuccessStatusCode)
                     {
                         string json = await response.Content.ReadAsStringAsync();
@@ -144,9 +146,12 @@ namespace FlyShelf.Classes
                                 {
                                     DownloadUrl = asset.TryGetProperty("browser_download_url", out var dl) ? dl.GetString() ?? "" : "";
                                 }
-                                else if (name.Equals("FlyShelf.exe.sha256", StringComparison.OrdinalIgnoreCase) ||
-                                         name.Equals("sha256.txt", StringComparison.OrdinalIgnoreCase) ||
-                                         name.EndsWith(".sha256", StringComparison.OrdinalIgnoreCase))
+                                else if (name.Equals("FlyShelf.exe.sha256", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    hashAssetUrl = asset.TryGetProperty("browser_download_url", out var dl) ? dl.GetString() ?? "" : "";
+                                }
+                                else if (string.IsNullOrEmpty(hashAssetUrl) && (name.Equals("sha256.txt", StringComparison.OrdinalIgnoreCase) ||
+                                         name.EndsWith(".sha256", StringComparison.OrdinalIgnoreCase)))
                                 {
                                     hashAssetUrl = asset.TryGetProperty("browser_download_url", out var dl) ? dl.GetString() ?? "" : "";
                                 }
@@ -272,22 +277,39 @@ namespace FlyShelf.Classes
             return false;
 #else
 
-            if (string.IsNullOrEmpty(DownloadUrl))
+            if (_isDownloading) { StatusChanged?.Invoke("Download already in progress."); return false; }
+            _isDownloading = true;
+            try
             {
-                StatusChanged?.Invoke("No download URL available.");
-                return false;
-            }
+                if (string.IsNullOrEmpty(DownloadUrl))
+                {
+                    StatusChanged?.Invoke("No download URL available.");
+                    return false;
+                }
 
             string tempDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Update");
             Directory.CreateDirectory(tempDir);
             string tempExePath = Path.Combine(tempDir, "FlyShelf_new.exe");
 
+            // U4: Pre-flight disk space check
+            try
+            {
+                var driveInfo = new DriveInfo(Path.GetPathRoot(tempDir));
+                if (driveInfo.AvailableFreeSpace < 200 * 1024 * 1024L) // 200MB minimum
+                {
+                    StatusChanged?.Invoke("Not enough disk space for update download.");
+                    Logger.LogAction("UPDATE", $"Insufficient disk space: {driveInfo.AvailableFreeSpace / (1024*1024)}MB free");
+                    return false;
+                }
+            }
+            catch { } // Best-effort: proceed with download if check fails
             // PM-14: Use Interlocked.Exchange to atomically swap the CTS reference,
             // then dispose the old one. Prevents a race where another thread reads
             // a disposed CTS between the Dispose() and assignment.
-            var old = Interlocked.Exchange(ref _downloadCts, new CancellationTokenSource());
-            if (old != null) { Task.Delay(1000).ContinueWith(_ => { try { old.Dispose(); } catch { } }); }
-            var ct = _downloadCts.Token;
+            var newCts = new CancellationTokenSource();
+            var old = Interlocked.Exchange(ref _downloadCts, newCts);
+            if (old != null) { _ = Task.Delay(1000).ContinueWith(_ => { try { old.Dispose(); } catch { } }); }
+            var ct = newCts.Token;
 
             try
             {
@@ -301,7 +323,7 @@ namespace FlyShelf.Classes
                 try
                 {
                     var headRequest = new HttpRequestMessage(HttpMethod.Head, DownloadUrl);
-                    var headResponse = await _downloadClient.SendAsync(headRequest, ct);
+                    var headResponse = await HttpClientPool.Download.SendAsync(headRequest, ct);
                     if (headResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
                     {
                         StatusChanged?.Invoke("Release not published yet — check back soon.");
@@ -312,7 +334,7 @@ namespace FlyShelf.Classes
                 catch (OperationCanceledException) { throw; }
                 catch { /* HEAD not supported — proceed with GET */ }
 
-                var response = await _downloadClient.GetAsync(DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+                using var response = await HttpClientPool.Download.GetAsync(DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
                 response.EnsureSuccessStatusCode();
 
                 long totalBytes = response.Content.Headers.ContentLength ?? -1;
@@ -452,7 +474,13 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("UPDATE_ERROR", $"Download failed: {ex.Message}");
                 StatusChanged?.Invoke($"Download failed: {ex.Message}");
+                try { if (File.Exists(tempExePath)) File.Delete(tempExePath); } catch { } // Clean up partial download
                 return false;
+            }
+            }
+            finally
+            {
+                _isDownloading = false;
             }
 #endif
         }
@@ -497,9 +525,12 @@ namespace FlyShelf.Classes
                                 {
                                     foundUrl = asset.TryGetProperty("browser_download_url", out var dl) ? dl.GetString() ?? "" : "";
                                 }
-                                else if (name.Equals("FlyShelf.exe.sha256", StringComparison.OrdinalIgnoreCase) ||
-                                         name.Equals("sha256.txt", StringComparison.OrdinalIgnoreCase) ||
-                                         name.EndsWith(".sha256", StringComparison.OrdinalIgnoreCase))
+                                else if (name.Equals("FlyShelf.exe.sha256", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    hashAssetUrl = asset.TryGetProperty("browser_download_url", out var dl) ? dl.GetString() ?? "" : "";
+                                }
+                                else if (string.IsNullOrEmpty(hashAssetUrl) && (name.Equals("sha256.txt", StringComparison.OrdinalIgnoreCase) ||
+                                         name.EndsWith(".sha256", StringComparison.OrdinalIgnoreCase)))
                                 {
                                     hashAssetUrl = asset.TryGetProperty("browser_download_url", out var dl) ? dl.GetString() ?? "" : "";
                                 }
@@ -560,9 +591,12 @@ namespace FlyShelf.Classes
                                     {
                                         foundUrl = asset.TryGetProperty("browser_download_url", out var dl) ? dl.GetString() ?? "" : "";
                                     }
-                                    else if (name.Equals("FlyShelf.exe.sha256", StringComparison.OrdinalIgnoreCase) ||
-                                             name.Equals("sha256.txt", StringComparison.OrdinalIgnoreCase) ||
-                                             name.EndsWith(".sha256", StringComparison.OrdinalIgnoreCase))
+                                    else if (name.Equals("FlyShelf.exe.sha256", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        hashAssetUrl = asset.TryGetProperty("browser_download_url", out var dl) ? dl.GetString() ?? "" : "";
+                                    }
+                                    else if (string.IsNullOrEmpty(hashAssetUrl) && (name.Equals("sha256.txt", StringComparison.OrdinalIgnoreCase) ||
+                                             name.EndsWith(".sha256", StringComparison.OrdinalIgnoreCase)))
                                     {
                                         hashAssetUrl = asset.TryGetProperty("browser_download_url", out var dl) ? dl.GetString() ?? "" : "";
                                     }
@@ -732,6 +766,17 @@ namespace FlyShelf.Classes
             }
 
             if (!isUpdate) return false;
+
+            // U3 Security: Validate --target path to prevent arbitrary file overwrite
+            if (!string.IsNullOrEmpty(targetPath))
+            {
+                string targetFileName = Path.GetFileName(targetPath);
+                if (!targetFileName.Equals("FlyShelf.exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    Logger.LogAction("UPDATE_SECURITY", $"Rejected suspicious --target path: {targetPath}");
+                    return true; // Return true to signal 'handled' so app exits
+                }
+            }
 
             // We ARE the updater — run the update logic and exit
             try
@@ -909,7 +954,7 @@ namespace FlyShelf.Classes
 
                 double ageSeconds = (DateTimeOffset.UtcNow - timestamp).TotalSeconds;
 
-                if (ageSeconds < 60)
+                if (ageSeconds < 300)
                 {
                     // First launch after update — marker is fresh, proceed normally.
                     // MarkUpdateVerified() will be called once MainWindow.Loaded fires.

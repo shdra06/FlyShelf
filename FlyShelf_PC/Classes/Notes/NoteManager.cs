@@ -298,6 +298,7 @@ namespace FlyShelf.Classes
                 if (!DiskSpaceHelper.HasSufficientDiskSpace(path, 5_000_000)) // 5MB buffer
                 {
                     Logger.LogAction("NOTE_IMAGE", "Insufficient disk space for image save");
+                    try { System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Cannot save — disk is full. Free up space to prevent data loss.")); } catch { }
                     return null;
                 }
 
@@ -480,6 +481,7 @@ namespace FlyShelf.Classes
                 if (!DiskSpaceHelper.HasSufficientDiskSpace(_notesPath, json.Length * 2 + 1_000_000))
                 {
                     Logger.LogAction("NOTES", "Insufficient disk space to save notes — skipping write");
+                    try { System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Cannot save — disk is full. Free up space to prevent data loss.")); } catch { }
                     return;
                 }
                 File.WriteAllText(tmpPath, json);

@@ -74,6 +74,14 @@ namespace FlyShelf
         internal bool _isFirstLaunchAfterOnboarding = false; // Set by App.xaml.cs after onboarding completes
         private volatile bool _isStartupReady = false; // Set true after theme init completes — guards hotkey spam during startup
 
+        private SizeChangedEventHandler? _sizeChangedHandler;
+        private EventHandler? _activatedHandler;
+        private System.ComponentModel.PropertyChangedEventHandler? _viewModelPropertyChangedHandler;
+        private NotifyCollectionChangedEventHandler? _droppedItemsCollectionChangedHandler;
+        private EventHandler? _stateChangedHandler;
+        private System.Windows.Controls.Primitives.ScrollBar? _verticalScrollBar;
+        private MouseButtonEventHandler? _verticalScrollBarPreviewMouseLeftButtonDownHandler;
+
         private FlyShelf.Classes.NativeMethods.IVirtualDesktopManager? _vdm = null;
         private FlyShelf.Classes.NativeMethods.IVirtualDesktopManager? GetVirtualDesktopManager()
         {
@@ -299,7 +307,7 @@ namespace FlyShelf
 
 
             // TODO: Store handler and unsubscribe in OnClosed
-            this.SizeChanged += (s, e) =>
+            _sizeChangedHandler = (s, e) =>
             {
                 // CRITICAL: Don't reposition during spawn animation — causes visible bouncing
                 // because ActualHeight fluctuates as content loads/generates, and each change
@@ -351,9 +359,11 @@ namespace FlyShelf
                 }
             };
 
+            this.SizeChanged += _sizeChangedHandler;
+
             // Restore keyboard focus to ListView or Notes textbox after window is moved/repositioned
             // TODO: Store handler and unsubscribe in OnClosed
-            this.Activated += (s, e) =>
+            _activatedHandler = (s, e) =>
             {
                 // Skip re-focus during show animation or invisible pre-animation phase
                 // to prevent heavy layout/container generation causing first-spawn flash
@@ -380,8 +390,10 @@ namespace FlyShelf
                 }
             };
 
+            this.Activated += _activatedHandler;
+
             // TODO: Store handler and unsubscribe in OnClosed
-            _viewModel.PropertyChanged += (s, e) =>
+            _viewModelPropertyChangedHandler = (s, e) =>
             {
                 Dispatcher.InvokeAsync(() =>
                 {
@@ -422,6 +434,8 @@ namespace FlyShelf
                 });
             };
 
+            _viewModel.PropertyChanged += _viewModelPropertyChangedHandler;
+
             // Live-refresh wallpaper when user changes it in settings
             _settingsChangedHandler = (s, e) =>
             {
@@ -459,7 +473,7 @@ namespace FlyShelf
 
             // Auto-dismiss merge state when new items arrive on the shelf + Reapply active category/search filters to keep UI state robust
             // TODO: Store handler and unsubscribe in OnClosed
-            _viewModel.DroppedItems.CollectionChanged += (s, e) =>
+            _droppedItemsCollectionChangedHandler = (s, e) =>
             {
                 if (e.Action == NotifyCollectionChangedAction.Add ||
                     e.Action == NotifyCollectionChangedAction.Reset)
@@ -518,6 +532,7 @@ namespace FlyShelf
                     }, System.Windows.Threading.DispatcherPriority.Background);
                 }
             };
+            _viewModel.DroppedItems.CollectionChanged += _droppedItemsCollectionChangedHandler;
 
             // Calculate initial toolbar buttons visibility based on current mode
             UpdateToolbarButtonsVisibility();
@@ -660,7 +675,7 @@ namespace FlyShelf
             {
                 string raw = item.RawContent ?? item.FileName ?? "";
                 string pretty = FlyShelf.Classes.SmartContentDetector.PrettyPrintJson(raw);
-                try { Clipboard.SetText(pretty); } catch { }
+                try { Clipboard.SetText(pretty); } catch { try { Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Clipboard access failed — please try again.")); } catch { } }
                 FlyShelf.Windows.ToastWindow.ShowToast("Formatted JSON copied!");
             }
         }
@@ -683,7 +698,7 @@ namespace FlyShelf
             {
                 string expr = (item.RawContent ?? item.FileName ?? "").Trim();
                 string result = FlyShelf.Classes.SmartContentDetector.EvaluateMath(expr);
-                try { Clipboard.SetText(result); } catch { }
+                try { Clipboard.SetText(result); } catch { try { Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Clipboard access failed — please try again.")); } catch { } }
                 FlyShelf.Windows.ToastWindow.ShowToast($"Result: {result} (copied!)");
             }
         }
@@ -694,7 +709,7 @@ namespace FlyShelf
             {
                 string raw = (item.RawContent ?? item.FileName ?? "").Trim();
                 string decoded = FlyShelf.Classes.SmartContentDetector.DecodeBase64(raw);
-                try { Clipboard.SetText(decoded); } catch { }
+                try { Clipboard.SetText(decoded); } catch { try { Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Clipboard access failed — please try again.")); } catch { } }
                 FlyShelf.Windows.ToastWindow.ShowToast("Decoded Base64 copied!");
             }
         }
@@ -705,7 +720,7 @@ namespace FlyShelf
             {
                 string raw = (item.RawContent ?? item.FileName ?? "").Trim();
                 string dateStr = FlyShelf.Classes.SmartContentDetector.EpochToDateTime(raw);
-                try { Clipboard.SetText(dateStr); } catch { }
+                try { Clipboard.SetText(dateStr); } catch { try { Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Clipboard access failed — please try again.")); } catch { } }
                 FlyShelf.Windows.ToastWindow.ShowToast($"{dateStr} (copied!)");
             }
         }
@@ -760,7 +775,7 @@ namespace FlyShelf
                 aiWindow.Owner = this;
                 if (WindowHelper.ShowDialogInForeground(aiWindow, this) == true && aiWindow.IsApplied)
                 {
-                    try { Clipboard.SetText(aiWindow.ResultText); } catch { }
+                    try { Clipboard.SetText(aiWindow.ResultText); } catch { try { Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Clipboard access failed — please try again.")); } catch { } }
                     FlyShelf.Windows.ToastWindow.ShowToast("AI result copied to clipboard!");
                 }
             }
@@ -795,7 +810,7 @@ namespace FlyShelf
 
                         if (!string.IsNullOrWhiteSpace(result))
                         {
-                            try { Clipboard.SetText(result); } catch { }
+                            try { Clipboard.SetText(result); } catch { try { Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Clipboard access failed — please try again.")); } catch { } }
                             FlyShelf.Windows.ToastWindow.ShowToast("AI result copied to clipboard!");
                         }
                     }
@@ -894,7 +909,7 @@ namespace FlyShelf
 
             // Hook state changes to prevent DWM border leakage on minimize/maximize/restore/etc.
             // TODO: Store handler and unsubscribe in OnClosed
-            this.StateChanged += (s, ev) =>
+            _stateChangedHandler = (s, ev) =>
             {
                 try
                 {
@@ -907,6 +922,8 @@ namespace FlyShelf
                 }
                 catch { } // Best-effort: failure is acceptable
             };
+            this.StateChanged += _stateChangedHandler;
+
 
             // Launch the taskbar-embedded widget
             try
@@ -997,7 +1014,8 @@ namespace FlyShelf
                     if (verticalScrollBar == null) return;
 
                     // TODO: Store handler and unsubscribe in OnClosed
-                    verticalScrollBar.PreviewMouseLeftButtonDown += (s, args) =>
+                    _verticalScrollBar = verticalScrollBar;
+                    _verticalScrollBarPreviewMouseLeftButtonDownHandler = (s, args) =>
                     {
                         // Let thumb dragging work normally — only intercept track area clicks
                         var thumb = FindVisualChild<System.Windows.Controls.Primitives.Thumb>(verticalScrollBar);
@@ -1030,6 +1048,7 @@ namespace FlyShelf
 
                         args.Handled = true;
                     };
+                    _verticalScrollBar.PreviewMouseLeftButtonDown += _verticalScrollBarPreviewMouseLeftButtonDownHandler;
                 }
                 catch { } // Best-effort: failure is acceptable
             }, System.Windows.Threading.DispatcherPriority.Loaded);
@@ -1592,6 +1611,22 @@ namespace FlyShelf
                     Classes.IncognitoManager.IncognitoStateChanged -= _incognitoStateChangedHandler;
                 if (_coastPrefetchHandler != null)
                     Classes.SmoothScroll.CoastPrefetchNeeded -= _coastPrefetchHandler;
+
+                if (_sizeChangedHandler != null)
+                    this.SizeChanged -= _sizeChangedHandler;
+                if (_activatedHandler != null)
+                    this.Activated -= _activatedHandler;
+                if (_viewModelPropertyChangedHandler != null)
+                    _viewModel.PropertyChanged -= _viewModelPropertyChangedHandler;
+                if (_droppedItemsCollectionChangedHandler != null)
+                    _viewModel.DroppedItems.CollectionChanged -= _droppedItemsCollectionChangedHandler;
+                if (_stateChangedHandler != null)
+                    this.StateChanged -= _stateChangedHandler;
+                if (_verticalScrollBar != null && _verticalScrollBarPreviewMouseLeftButtonDownHandler != null)
+                {
+                    _verticalScrollBar.PreviewMouseLeftButtonDown -= _verticalScrollBarPreviewMouseLeftButtonDownHandler;
+                    _verticalScrollBar = null;
+                }
 
                 // Detach ScrollChanged handler
                 ShelfListView.RemoveHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(ShelfListView_ScrollChanged));

@@ -44,6 +44,10 @@ namespace FlyShelf.Classes
                             // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
                             System.Threading.Thread.Sleep(5);
                         }
+                        else
+                        {
+                            try { Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Clipboard access failed — please try again.")); } catch { }
+                        }
                     }
                 }
 
@@ -91,6 +95,10 @@ namespace FlyShelf.Classes
                             // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
                             System.Threading.Thread.Sleep(5);
                         }
+                        else
+                        {
+                            try { Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Clipboard access failed — please try again.")); } catch { }
+                        }
                     }
                 }
                 return success;
@@ -125,6 +133,10 @@ namespace FlyShelf.Classes
                             // [FIX M-20]: 5ms sleep on UI thread is acceptable — async Task.Delay is
                             // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
                             System.Threading.Thread.Sleep(5);
+                        }
+                        else
+                        {
+                            try { Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Clipboard access failed — please try again.")); } catch { }
                         }
                     }
                 }
@@ -167,6 +179,10 @@ namespace FlyShelf.Classes
                             // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
                             System.Threading.Thread.Sleep(5);
                         }
+                        else
+                        {
+                            try { Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Clipboard access failed — please try again.")); } catch { }
+                        }
                     }
                 }
 
@@ -207,6 +223,10 @@ namespace FlyShelf.Classes
                             // [FIX M-20]: 5ms sleep on UI thread is acceptable — async Task.Delay is
                             // not viable because ExecuteOnDispatcher uses synchronous Dispatcher.Invoke.
                             System.Threading.Thread.Sleep(5);
+                        }
+                        else
+                        {
+                            try { Application.Current?.Dispatcher?.InvokeAsync(() => Windows.ToastWindow.ShowToast("⚠ Clipboard access failed — please try again.")); } catch { }
                         }
                     }
                 }

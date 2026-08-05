@@ -1219,6 +1219,10 @@
                                                 <DataTrigger Binding="{Binding SmartActionType}" Value="OpenPDF">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
                                                 </DataTrigger>
+                                                <!-- V-03: Hide SmartAction when dedicated Run Script button handles it -->
+                                                <DataTrigger Binding="{Binding SmartActionType}" Value="CompileAndRun">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>

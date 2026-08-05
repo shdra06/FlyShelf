@@ -397,5 +397,54 @@ namespace FlyShelf.Classes
                 }
             });
         }
+
+        /// <summary>
+        /// Synchronous save for use during app shutdown (OnExit/OnSessionEnding)
+        /// where background tasks may not complete before process termination.
+        /// </summary>
+        public static void SaveNowSync()
+        {
+            if (!_isLoaded) return;
+            List<ReminderItem> snapshot;
+            lock (_lock)
+            {
+                snapshot = _reminders.ToList();
+            }
+
+            string json;
+            lock (_lock)
+            {
+                try
+                {
+                    json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+                    {
+                        WriteIndented = false,
+                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("REMINDERS", $"Failed to serialize reminders (sync): {ex.Message}");
+                    return;
+                }
+            }
+
+            try
+            {
+                if (!Directory.Exists(_appDataDir))
+                    Directory.CreateDirectory(_appDataDir);
+
+                try { if (File.Exists(_remindersPath)) File.Copy(_remindersPath, _remindersPath + ".bak", overwrite: true); } catch { }
+
+                string tmpPath = _remindersPath + ".tmp";
+                File.WriteAllText(tmpPath, json);
+                FileRetryHelper.RunWithRetry(() => File.Move(tmpPath, _remindersPath, true));
+                Logger.LogAction("REMINDERS", $"Saved {snapshot.Count} reminders (sync).");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("REMINDERS", $"Failed to write reminders (sync): {ex.Message}");
+            }
+        }
     }
 }

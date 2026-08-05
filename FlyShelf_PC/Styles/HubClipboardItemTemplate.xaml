@@ -50,7 +50,8 @@
                                             <!-- Universal Actions -->
                                             <ui:MenuItem Header="Copy Content" Icon="{ui:SymbolIcon Copy24}" Command="{Binding PlacementTarget.Tag.CopyRawContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
                                             <ui:MenuItem Header="Pin / Unpin" Icon="{ui:SymbolIcon Pin24}" Command="{Binding PlacementTarget.Tag.TogglePinCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
-                                            <ui:MenuItem Header="Show in Explorer" Icon="{ui:SymbolIcon FolderOpen24}" Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                            <!-- V-04: Gate on CanShowInExplorer so plain text items don't show this -->
+                                            <ui:MenuItem Header="Show in Explorer" Icon="{ui:SymbolIcon FolderOpen24}" Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding CanShowInExplorer, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             <Separator />
                                             
                                             <!-- Image Actions -->
@@ -79,7 +80,8 @@
                                             <ui:MenuItem Header="Compile C++ &amp; Run" Icon="{ui:SymbolIcon Code24}" Foreground="{DynamicResource MenuCodeActionColor}" Command="{Binding PlacementTarget.Tag.CompileNativeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsCPlusPlusPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             <ui:MenuItem Header="Run as Administrator" Icon="{ui:SymbolIcon Shield24}" Foreground="{DynamicResource DangerColor}" Command="{Binding PlacementTarget.Tag.RunAdminTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsTerminalPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             
-                                            <Separator />
+                                            <!-- V-05: Only show separator when color actions are visible -->
+                                            <Separator Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             
                                             <!-- Color Actions -->
                                             <ui:MenuItem Header="Copy as Hex" Icon="{ui:SymbolIcon Color24}" Foreground="{DynamicResource TypeColorColor}" Click="CopyColorHex_Click" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}"/>
@@ -807,6 +809,18 @@
                                                             <DataTrigger Binding="{Binding SmartActionType}" Value="OpenPDF">
                                                                 <Setter Property="Visibility" Value="Collapsed"/>
                                                             </DataTrigger>
+                                                            <!-- V-01: Hide SmartAction when dedicated Convert to PDF button handles it -->
+                                                            <DataTrigger Binding="{Binding SmartActionType}" Value="ConvertToPdf">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                            <!-- V-02: Hide SmartAction when dedicated Open in Browser button handles it -->
+                                                            <DataTrigger Binding="{Binding SmartActionType}" Value="OpenBrowser">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                            <!-- V-03: Hide SmartAction when dedicated Run Script button handles it -->
+                                                            <DataTrigger Binding="{Binding SmartActionType}" Value="CompileAndRun">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </ui:Button.Style>
@@ -1122,7 +1136,8 @@
                                                 </ui:Button.Style>
                                             </ui:Button>
 
-                                            <ui:Button Appearance="Transparent" Padding="5,4" Margin="0,0,3,0" ToolTip="Pin" PreviewMouseLeftButtonDown="PinSpecific_Click">
+                                            <!-- V-06: Consistent padding with sibling buttons -->
+                                            <ui:Button Appearance="Transparent" Padding="6,4" Margin="0,0,3,0" ToolTip="Pin" PreviewMouseLeftButtonDown="PinSpecific_Click">
                                                 <ui:Button.Icon>
                                                     <ui:SymbolIcon FontSize="{StaticResource TypeSubtitle}">
                                                         <ui:SymbolIcon.Style>
@@ -1140,7 +1155,8 @@
                                                 </ui:Button.Icon>
                                             </ui:Button>
 
-                                            <ui:Button Appearance="Transparent" Padding="5,4" ToolTip="Delete" PreviewMouseLeftButtonDown="DeleteSpecific_Click">
+                                            <!-- V-06: Consistent padding and margin with sibling buttons -->
+                                            <ui:Button Appearance="Transparent" Padding="6,4" Margin="0,0,3,0" ToolTip="Delete" PreviewMouseLeftButtonDown="DeleteSpecific_Click">
                                                 <ui:Button.Icon>
                                                     <ui:SymbolIcon Symbol="Delete24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource DangerColor}" />
                                                 </ui:Button.Icon>

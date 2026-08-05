@@ -37,7 +37,7 @@ namespace FlyShelf.ViewModels
         // ═══ Named Constants ═══
         private const int DisplayTextTruncationLimit = 150;
         private const int RawContentPreviewLimit = 300;
-        private const int LargeTextSpillThreshold = 10_000_000;
+        private const int LargeTextSpillThreshold = 100_000;
         private const int SpillPreviewLength = 200;
         private const int LongTextThreshold = 260;
         private const int MaxCollapsedLines = 4;

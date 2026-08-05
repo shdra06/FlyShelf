@@ -55,6 +55,7 @@ public partial class App : Application
     private const int ATTACH_PARENT_PROCESS = -1;
 
     private static System.Threading.Mutex _mutex;
+    private static System.Threading.EventWaitHandle _showEvent;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -239,10 +240,57 @@ public partial class App : Application
 
         if (!createdNew)
         {
-            // Same variant already running — silent exit (existing behavior)
+            // S3: Signal existing instance to bring itself to foreground
+            try
+            {
+                using var showEvent = System.Threading.EventWaitHandle.OpenExisting("FlyShelf_ShowEvent_" + ownMutex.Replace("FlyShelf_SingleInstance_", ""));
+                showEvent.Set();
+            }
+            catch { } // If signal fails, just exit silently
             Application.Current.Shutdown();
             return;
         }
+
+        // S3: Create a named event that second instances can signal to bring us to foreground
+        try
+        {
+            _showEvent = new System.Threading.EventWaitHandle(false, System.Threading.EventResetMode.AutoReset, "FlyShelf_ShowEvent_" + ownMutex.Replace("FlyShelf_SingleInstance_", ""));
+            // Start a background thread to listen for show signals
+            var showThread = new System.Threading.Thread(() =>
+            {
+                while (true)
+                {
+                    try
+                    {
+                        _showEvent.WaitOne();
+                        // Another instance signaled us — bring window to foreground
+                        Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        {
+                            try
+                            {
+                                if (_mainWinInstance != null)
+                                {
+                                    _mainWinInstance.Show();
+                                    if (_mainWinInstance.WindowState == WindowState.Minimized)
+                                        _mainWinInstance.WindowState = WindowState.Normal;
+                                    _mainWinInstance.Activate();
+                                    FlyShelf.Windows.ToastWindow.ShowToast("FlyShelf is already running ✦");
+                                }
+                            }
+                            catch { }
+                        });
+                    }
+                    catch (ObjectDisposedException) { break; }
+                    catch { break; }
+                }
+            })
+            {
+                IsBackground = true,
+                Name = "FlyShelf_ShowListener"
+            };
+            showThread.Start();
+        }
+        catch { } // Best-effort
 
         // ── Check if the OTHER variant is running ──
         bool rivalRunning = false;
@@ -270,16 +318,18 @@ public partial class App : Application
             Application.Current.Shutdown();
             return;
 #else
-            // EXE launched but Store is already running — EXE takes priority, warn and proceed
+            // EXE launched but Store is running — exit to prevent conflicts
             MessageBox.Show(
-                "FlyShelf (Microsoft Store version) is also running.\n\n" +
-                "The standalone EXE is the primary version. Please close the Store version " +
-                "from the system tray to avoid sync port conflicts.\n\n" +
-                "Tip: You can uninstall the Store version from Windows Settings → Apps.",
+                "FlyShelf (Microsoft Store version) is currently running.\n\n" +
+                "Please close the Store version from the system tray first, " +
+                "or uninstall it from Windows Settings → Apps.",
                 "FlyShelf — Dual Installation Detected",
                 MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            // EXE proceeds — it's the priority version.
+                MessageBoxImage.Warning);
+            try { _mutex.ReleaseMutex(); _mutex.Dispose(); } catch { }
+            _mutex = null;
+            Application.Current.Shutdown();
+            return;
 #endif
         }
 
@@ -370,12 +420,12 @@ public partial class App : Application
             }
             _isHandlingCrash = true;
             args.Handled = true; // Prevents the default Windows crash dialog
-            TriggerSafeModeAndRestart($"[UI Thread Exception]\n{args.Exception}");
+            try { TriggerSafeModeAndRestart($"[UI Thread Exception]\n{args.Exception}"); } catch { }
         };
 
         AppDomain.CurrentDomain.UnhandledException += (s, args) =>
         {
-            TriggerSafeModeAndRestart($"[AppDomain Unhandled Exception]\n{args.ExceptionObject}");
+            try { TriggerSafeModeAndRestart($"[AppDomain Unhandled Exception]\n{args.ExceptionObject}"); } catch { }
         };
 
         System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, args) =>
@@ -493,6 +543,16 @@ public partial class App : Application
 
             if (string.IsNullOrWhiteSpace(FlyShelf.Classes.SettingsManager.Current.DeviceName))
             {
+                // For returning users (upgrade/reinstall), auto-assign machine name
+                // instead of blocking startup with a modal popup
+                if (HasExistingUserData())
+                {
+                    FlyShelf.Classes.SettingsManager.Current.DeviceName = Environment.MachineName;
+                    FlyShelf.Classes.SettingsManager.Save();
+                    FlyShelf.Classes.Logger.LogAction("STARTUP", "Returning user detected — auto-assigned device name.");
+                }
+                else
+                {
                 Window namingWindow = new Window
                 {
                     Title = "FlyShelf Initialization",
@@ -648,12 +708,23 @@ public partial class App : Application
                 namingWindow.Loaded += (s, ev) => { input.Focus(); };
                 
                 namingWindow.ShowDialog();
+                } // end else (new user device naming)
             }
 
             // ═══ FIRST-TIME ONBOARDING WIZARD ═══
             // Show the welcome tutorial on first launch to teach Alt+C, widget, themes, etc.
+            // Smart detection: skip for returning users who have existing data from previous installs
             if (!FlyShelf.Classes.SettingsManager.Current.HasCompletedOnboarding)
             {
+                if (HasExistingUserData())
+                {
+                    // Returning user (upgrade/reinstall) — auto-complete onboarding silently
+                    FlyShelf.Classes.SettingsManager.Current.HasCompletedOnboarding = true;
+                    FlyShelf.Classes.SettingsManager.Save();
+                    FlyShelf.Classes.Logger.LogAction("ONBOARDING", "Skipped — existing user data detected.");
+                }
+                else
+                {
                 try
                 {
                     // Enable widget by default for new users
@@ -673,6 +744,7 @@ public partial class App : Application
                     FlyShelf.Classes.SettingsManager.Current.HasCompletedOnboarding = true;
                     FlyShelf.Classes.SettingsManager.Save();
                 }
+                } // end else (new user onboarding)
             }
 
             // ═══ SLEEP/RESUME RECOVERY ═══
@@ -737,7 +809,24 @@ public partial class App : Application
                     // enough time to register before hiding. The WPF-UI tray:NotifyIcon
                     // registers in the Loaded event — hiding immediately kills the registration.
                     _isCreatingMainWindow = false;
-                    await System.Threading.Tasks.Task.Delay(500);
+                    // S2 FIX: Wait for Loaded event (tray icon registers here) instead of fragile 500ms delay
+                    if (!_mainWinInstance.IsLoaded)
+                    {
+                        var tcs = new TaskCompletionSource<bool>();
+                        RoutedEventHandler loadedHandler = null;
+                        loadedHandler = (s, ev) =>
+                        {
+                            _mainWinInstance.Loaded -= loadedHandler;
+                            tcs.TrySetResult(true);
+                        };
+                        _mainWinInstance.Loaded += loadedHandler;
+                        // Double-check in case Loaded fired between our check and subscription
+                        if (_mainWinInstance.IsLoaded)
+                            tcs.TrySetResult(true);
+                        await tcs.Task;
+                    }
+                    // Small buffer for NotifyIcon registration to complete after Loaded fires
+                    await System.Threading.Tasks.Task.Delay(200);
                     _mainWinInstance.HideWindowInternal();
                 }
                 catch (Exception ex)
@@ -778,6 +867,7 @@ public partial class App : Application
         try { Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged; } catch { } // Best-effort: failure is acceptable
 
         // Release single-instance mutex so a new instance can start cleanly
+        try { _showEvent?.Dispose(); } catch { }
         try { _mutex?.ReleaseMutex(); _mutex?.Dispose(); } catch { } // Best-effort: failure is acceptable
 
         // Stop any active audio playback on application exit
@@ -787,11 +877,13 @@ public partial class App : Application
         
         // Stop reminder scheduler and flush pending saves
         try { FlyShelf.Classes.ReminderScheduler.Stop(); } catch { } // Best-effort: failure is acceptable
-        try { FlyShelf.Classes.ReminderManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
+        // S1 FIX: Use synchronous saves during shutdown — Task.Run() variants may not
+        // complete before process termination, causing silent data loss.
+        try { FlyShelf.Classes.ReminderManager.SaveNowSync(); } catch { } // Best-effort: failure is acceptable
 
         // H-01: Flush all pending data to disk BEFORE network ops (which may hang)
-        try { FlyShelf.Classes.NoteManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
-        try { FlyShelf.Classes.TodoManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
+        try { FlyShelf.Classes.NoteManager.SaveNowSync(); } catch { } // Best-effort: failure is acceptable
+        try { FlyShelf.Classes.TodoManager.SaveNowSync(); } catch { } // Best-effort: failure is acceptable
 
         try
         {
@@ -821,9 +913,10 @@ public partial class App : Application
     /// </summary>
     protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
     {
-        try { FlyShelf.Classes.ReminderManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
-        try { FlyShelf.Classes.NoteManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
-        try { FlyShelf.Classes.TodoManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
+        // S1 FIX: Use synchronous saves during session ending — same as OnExit
+        try { FlyShelf.Classes.ReminderManager.SaveNowSync(); } catch { } // Best-effort: failure is acceptable
+        try { FlyShelf.Classes.NoteManager.SaveNowSync(); } catch { } // Best-effort: failure is acceptable
+        try { FlyShelf.Classes.TodoManager.SaveNowSync(); } catch { } // Best-effort: failure is acceptable
         base.OnSessionEnding(e);
     }
 
@@ -1269,6 +1362,48 @@ public partial class App : Application
     }
 
     // ═══ Safe Mode UI + Crash Recovery moved to App.SafeMode.cs ═══
+
+    /// <summary>
+    /// Detects if the user has existing FlyShelf data from a previous installation.
+    /// Used to distinguish true first-time users (who need onboarding) from returning
+    /// users who are upgrading/reinstalling and shouldn't see the tutorial again.
+    /// </summary>
+    private static bool HasExistingUserData()
+    {
+        try
+        {
+            string appData = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf");
+
+            if (!System.IO.Directory.Exists(appData))
+                return false;
+
+            // Check for any data files that indicate prior usage
+            string[] dataFiles = new[]
+            {
+                System.IO.Path.Combine(appData, "clipboard_history.json"),
+                System.IO.Path.Combine(appData, "notes.json"),
+                System.IO.Path.Combine(appData, "todos.json"),
+                System.IO.Path.Combine(appData, "shortcuts.json"),
+                System.IO.Path.Combine(appData, "reminders.json"),
+                System.IO.Path.Combine(appData, "config.json.bak"),
+            };
+
+            foreach (var file in dataFiles)
+            {
+                if (System.IO.File.Exists(file))
+                {
+                    FlyShelf.Classes.Logger.LogAction("STARTUP", $"Existing user data detected: {System.IO.Path.GetFileName(file)}");
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            FlyShelf.Classes.Logger.LogAction("STARTUP", $"HasExistingUserData check failed: {ex.Message}");
+        }
+        return false;
+    }
 }
 
 
