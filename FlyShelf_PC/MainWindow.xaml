@@ -1353,6 +1353,24 @@
                                     </ui:Button>
                                 </Border>
 
+                                <!-- ═══ Ungroup (Group only — revert to individual items) ═══ -->
+                                <Border Margin="0,0,2,0" Padding="0">
+                                    <Border.Style>
+                                        <Style TargetType="Border" BasedOn="{StaticResource ActionPillStyle}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ItemType}" Value="Group">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource OrangeAccentColor}" ToolTip="Ungroup to individual items" AutomationProperties.Name="Ungroup items"
+                                               PreviewMouseLeftButtonDown="UngroupItems_Click">
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="GroupDismiss24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
+                                    </ui:Button>
+                                </Border>
+
                                 <!-- ═══ Sync via LAN (Group/Folder with zip ready) ═══ -->
                                 <Border Margin="0,0,2,0" Padding="0">
                                     <Border.Style>

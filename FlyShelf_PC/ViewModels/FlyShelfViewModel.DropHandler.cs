@@ -179,7 +179,7 @@ namespace FlyShelf.ViewModels
                     }
                 }
 
-                if (files.Length > 10)
+                if (files.Length > 20)
                 {
                     // Group files together! (No deduplication check)
                     var groupItem = new ClipboardItem(files);

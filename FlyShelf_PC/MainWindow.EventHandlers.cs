@@ -540,6 +540,64 @@ namespace FlyShelf
             }
         }
 
+        private void UngroupItems_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                e.Handled = true;
+                if (item.ItemType != ViewModels.ClipboardItemType.Group)
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("Not a grouped item");
+                    return;
+                }
+
+                try
+                {
+                    // Parse file paths from RawContent (newline-separated)
+                    var raw = item.RawContent;
+                    if (string.IsNullOrWhiteSpace(raw))
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast("No files to ungroup");
+                        return;
+                    }
+
+                    var filePaths = raw.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (filePaths.Length == 0)
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast("No files to ungroup");
+                        return;
+                    }
+
+                    // Remove the group item
+                    int insertIndex = _viewModel.DroppedItems.IndexOf(item);
+                    if (insertIndex < 0) insertIndex = 0;
+                    _viewModel.DroppedItems.Remove(item);
+
+                    // Insert individual items at the same position
+                    int added = 0;
+                    foreach (var filePath in filePaths)
+                    {
+                        if (!System.IO.File.Exists(filePath) && !System.IO.Directory.Exists(filePath))
+                            continue;
+
+                        // Use single-file constructor — handles type classification, icons, size automatically
+                        var individual = new ViewModels.ClipboardItem(filePath);
+
+                        _viewModel.DroppedItems.Insert(Math.Min(insertIndex + added, _viewModel.DroppedItems.Count), individual);
+                        added++;
+                    }
+
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Ungrouped into {added} items");
+                    Classes.Logger.LogAction("UNGROUP", $"Split group into {added} individual items from {filePaths.Length} paths");
+                }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("CRASH", $"UngroupItems: {ex}");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Failed to ungroup");
+                }
+            }
+        }
+
         private void SyncZipLan_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)

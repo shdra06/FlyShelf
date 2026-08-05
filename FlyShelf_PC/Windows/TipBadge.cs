@@ -189,7 +189,7 @@ namespace FlyShelf.Windows
         private new const double FontSize = 11.5;
         private const double ShadowBlur = 8;
         private const double ShadowOpacity = 0.3;
-        private const int AutoDismissMs = 4000;
+        private const int AutoDismissMs = 2000;
         private const int EntranceDurationMs = 120;
         private const int ExitDurationMs = 100;
         private const double EntranceSlideY = 6;
