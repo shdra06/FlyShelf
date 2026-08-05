@@ -1028,7 +1028,7 @@
                   VirtualizingStackPanel.IsVirtualizing="True"
                   VirtualizingStackPanel.VirtualizationMode="Recycling"
                   VirtualizingPanel.ScrollUnit="Pixel"
-                  VirtualizingPanel.CacheLength="1,1"
+                  VirtualizingPanel.CacheLength="0.5,0.5"
                   VirtualizingPanel.CacheLengthUnit="Page"
                   SelectionMode="Extended" MouseMove="ShelfListView_MouseMove" PreviewMouseLeftButtonDown="ShelfListView_PreviewMouseLeftButtonDown"
                   PreviewMouseLeftButtonUp="ShelfListView_PreviewMouseLeftButtonUp"
@@ -1565,7 +1565,7 @@
                                     </Style>
                                 </Border.Style>
                                 <Grid>
-                                    <Image Name="ItemIcon" Source="{Binding Icon}" Width="40" Height="40" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" CacheMode="BitmapCache">
+                                    <Image Name="ItemIcon" Source="{Binding Icon}" Width="40" Height="40" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="NearestNeighbor">
                                         <Image.Style>
                                             <Style TargetType="Image">
                                                 <Setter Property="Visibility" Value="Visible"/>
@@ -1577,7 +1577,7 @@
                                             </Style>
                                         </Image.Style>
                                     </Image>
-                                    <Image Name="GifItemIcon" gif:AnimationBehavior.SourceUri="{Binding GifFilePath}" gif:AnimationBehavior.RepeatBehavior="Forever" gif:AnimationBehavior.AutoStart="True" Width="40" Height="40" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" CacheMode="BitmapCache" Loaded="GifItemIcon_Loaded" Unloaded="GifItemIcon_Unloaded" Visibility="{Binding IsGifPreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                    <Image Name="GifItemIcon" gif:AnimationBehavior.SourceUri="{Binding GifFilePath, Mode=OneTime}" gif:AnimationBehavior.RepeatBehavior="Forever" gif:AnimationBehavior.AutoStart="True" Width="40" Height="40" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="NearestNeighbor" Loaded="GifItemIcon_Loaded" Unloaded="GifItemIcon_Unloaded" Visibility="{Binding IsGifPreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                 </Grid>
                             </Border>
 
@@ -1987,7 +1987,7 @@
                                                 </Style>
                                             </ui:SymbolIcon.Style>
                                         </ui:SymbolIcon>
-                                        <TextBlock Text="{Binding SourceAppName}" Foreground="{DynamicResource SubtleTextColor}" FontSize="{StaticResource TypeMicro}" Margin="0,0,2,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding SourceAppName, Mode=OneTime}" Foreground="{DynamicResource SubtleTextColor}" FontSize="{StaticResource TypeMicro}" Margin="0,0,2,0" VerticalAlignment="Center">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -2011,7 +2011,7 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                        <TextBlock Text="{Binding SourceDeviceName}" Foreground="{DynamicResource SubtleTextColor}" FontSize="{StaticResource TypeMicro}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding SourceDeviceName, Mode=OneTime}" Foreground="{DynamicResource SubtleTextColor}" FontSize="{StaticResource TypeMicro}" Margin="0,0,4,0" VerticalAlignment="Center" />
                                         <TextBlock Text="·" Foreground="{DynamicResource SeparatorDotColor}" FontSize="{StaticResource TypeMicro}" Margin="0,0,4,0" VerticalAlignment="Center" />
                                         <TextBlock FontSize="8" FontWeight="SemiBold" VerticalAlignment="Center">
                                             <TextBlock.Style>
@@ -2047,7 +2047,7 @@
                             <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Margin="0,4,0,4">
                                 <TextBlock Name="TitleText" 
                                            Text="{Binding DisplayText}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" FontFamily="Segoe UI Emoji, Segoe UI" FontWeight="Medium" FontSize="{StaticResource TypeSubtitle}" LineHeight="19" TextWrapping="Wrap" 
-                                           TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" CacheMode="BitmapCache" />
+                                           TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" />
 
                                 <!-- Markdown Tag — lightweight visual indicator, no inline rendering -->
                                 <Border CornerRadius="4" Padding="6,1,6,1" Margin="0,3,0,0" HorizontalAlignment="Left">
@@ -2097,7 +2097,7 @@
                                     </StackPanel.Style>
                                     <!-- App icon: only visible when extracted (current session), gracefully hidden after restart -->
                                     <Image Source="{Binding SourceAppIcon}" Width="14" Height="14" Stretch="Uniform" 
-                                           RenderOptions.BitmapScalingMode="HighQuality" CacheMode="BitmapCache" VerticalAlignment="Center" Margin="0,0,4,0">
+                                           RenderOptions.BitmapScalingMode="NearestNeighbor" VerticalAlignment="Center" Margin="0,0,4,0">
                                         <Image.Style>
                                             <Style TargetType="Image">
                                                 <Style.Triggers>
@@ -2108,7 +2108,7 @@
                                             </Style>
                                         </Image.Style>
                                     </Image>
-                                    <TextBlock Text="{Binding SourceAppName}" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                                    <TextBlock Text="{Binding SourceAppName, Mode=OneTime}" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
                                                VerticalAlignment="Center" FontWeight="Regular" Opacity="0.8"/>
                                 </StackPanel>
                                 
@@ -2779,7 +2779,7 @@
                                         </StackPanel>
                                         <!-- TIMESTAMP + PIN -->
                                         <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="4,0,10,0" HorizontalAlignment="Right">
-                                            <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:h:mm tt}'}" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource AltTimestampFg}" HorizontalAlignment="Right"/>
+                                            <TextBlock Text="{Binding DateCopied, StringFormat='{}{0:h:mm tt}', Mode=OneTime}" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource AltTimestampFg}" HorizontalAlignment="Right"/>
                                             <Ellipse Width="6" Height="6" HorizontalAlignment="Right" Margin="0,4,2,0"><Ellipse.Style><Style TargetType="Ellipse"><Setter Property="Visibility" Value="Collapsed"/><Setter Property="Fill" Value="{DynamicResource AltPinDot}"/><Style.Triggers><DataTrigger Binding="{Binding IsPinned}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Ellipse.Style></Ellipse>
                                         </StackPanel>
                                     </Grid>

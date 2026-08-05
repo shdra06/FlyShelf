@@ -1534,6 +1534,9 @@ namespace FlyShelf
         // [FIX ANIM-8]: Pause GIF animations when items are recycled off-screen by VirtualizingStackPanel
         private void GifItemIcon_Loaded(object sender, RoutedEventArgs e)
         {
+            // Defer GIF playback until scroll stops to avoid decoder stutter
+            if (_viewModel.IsScrolling) return;
+
             if (sender is System.Windows.Controls.Image img)
             {
                 try

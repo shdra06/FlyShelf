@@ -140,21 +140,64 @@ namespace FlyShelf.ViewModels
                 if (_extension != value)
                 {
                     _extension = value;
+                    _cachedSemanticIconGlyph = null;
+                    _cachedCardSubtitle = null;
+                    _cachedFormatIdentifier = null;
                     if (_suppressPropertyNotifications) return;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Extension)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowSemanticIcon)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SemanticIconGlyph)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasPreviewImage)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CardSubtitle)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormatIdentifier)));
                 }
             }
         }
         
         public string AssociatedContextTitle { get; set; } = string.Empty;
 
-        public string SourceDeviceName { get; set; } = "Local";
-        public string SourceDeviceType { get; set; } = "PC";
-        public string TransferMethod { get; set; } = "Local"; // Local, LAN, Cloudflare
+        private string _sourceDeviceName = "Local";
+        public string SourceDeviceName
+        {
+            get => _sourceDeviceName;
+            set
+            {
+                if (_sourceDeviceName != value)
+                {
+                    _sourceDeviceName = value;
+                    _cachedTransferBadge = null;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SourceDeviceName)));
+                }
+            }
+        }
+        private string _sourceDeviceType = "PC";
+        public string SourceDeviceType
+        {
+            get => _sourceDeviceType;
+            set
+            {
+                if (_sourceDeviceType != value)
+                {
+                    _sourceDeviceType = value;
+                    _cachedTransferBadge = null;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SourceDeviceType)));
+                }
+            }
+        }
+        private string _transferMethod = "Local";
+        public string TransferMethod
+        {
+            get => _transferMethod;
+            set
+            {
+                if (_transferMethod != value)
+                {
+                    _transferMethod = value;
+                    _cachedTransferBadge = null;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TransferMethod)));
+                }
+            }
+        }
 
         // ═══ Source App Tracking ═══
         public string SourceAppName { get; set; } = "";
@@ -165,26 +208,26 @@ namespace FlyShelf.ViewModels
         /// Computed display badge combining transfer method emoji + device name.
         /// Used in XAML for the transfer badge overlay.
         /// </summary>
-        public string TransferBadge
+        private string? _cachedTransferBadge;
+        public string TransferBadge => _cachedTransferBadge ??= ComputeTransferBadge();
+
+        private string ComputeTransferBadge()
         {
-            get
+            string emoji = TransferMethod switch
             {
-                string emoji = TransferMethod switch
-                {
-                    "LAN" => "",
-                    "Cloud" => "",
-                    "Cloudflare" => "",
-                    _ => ""
-                };
-                string deviceEmoji = SourceDeviceType switch
-                {
-                    "Mobile" => "",
-                    "PC" => "",
-                    _ => ""
-                };
-                if (SourceDeviceName == "Local") return $"{emoji} Local";
-                return $"{deviceEmoji} {SourceDeviceName} · {emoji} {TransferMethod}";
-            }
+                "LAN" => "",
+                "Cloud" => "",
+                "Cloudflare" => "",
+                _ => ""
+            };
+            string deviceEmoji = SourceDeviceType switch
+            {
+                "Mobile" => "",
+                "PC" => "",
+                _ => ""
+            };
+            if (SourceDeviceName == "Local") return $"{emoji} Local";
+            return $"{deviceEmoji} {SourceDeviceName} · {emoji} {TransferMethod}";
         }
         public bool HasTransferBadge => SourceDeviceName != "Local";
 
@@ -302,6 +345,10 @@ namespace FlyShelf.ViewModels
                 if (_itemType != value)
                 {
                     _itemType = value;
+                    _cachedIsLongText = null;
+                    _cachedSemanticIconGlyph = null;
+                    _cachedCardSubtitle = null;
+                    _cachedFormatIdentifier = null;
                     if (_suppressPropertyNotifications) return;
                     // [FIX M-30]: Use SafeNotify so one bad subscriber doesn't skip the rest
                     SafeNotify(nameof(ItemType));
@@ -424,6 +471,8 @@ namespace FlyShelf.ViewModels
                             }
                         });
                         _lowerContent = null; // invalidate cache
+                        _cachedIsLongText = null;
+                        _cachedCardSubtitle = null;
 
                         // [FIX C-1]: Raise PropertyChanged and return early so the fall-through
                         // below doesn't re-assign the huge string back into _rawContent.
@@ -443,6 +492,8 @@ namespace FlyShelf.ViewModels
                 {
                     _rawContent = newValue;
                     _lowerContent = null; // invalidate cache
+                    _cachedIsLongText = null;
+                    _cachedCardSubtitle = null;
                     _rawContentPreview = null; // invalidate preview cache
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContentPreview)));
@@ -482,6 +533,12 @@ namespace FlyShelf.ViewModels
 
         /// <summary>Cached lowercase RawContent — avoids per-search ToLowerInvariant allocations.</summary>
         private string? _lowerContent;
+
+        public void ClearLowerContentCache()
+        {
+            _lowerContent = null;
+        }
+
         [System.Text.Json.Serialization.JsonIgnore]
         public string LowerContent
         {
@@ -514,30 +571,31 @@ namespace FlyShelf.ViewModels
             }
         }
 
+        private bool? _cachedIsLongText;
         [JsonIgnore]
-        public bool IsLongText
+        public bool IsLongText => _cachedIsLongText ??= ComputeIsLongText();
+
+        private bool ComputeIsLongText()
         {
-            get
-            {
-                if (ItemType != ClipboardItemType.Text && ItemType != ClipboardItemType.Code && ItemType != ClipboardItemType.Url)
-                    return false;
-                if (string.IsNullOrEmpty(RawContent))
-                    return false;
-                
-                if (RawContent.Length > LongTextThreshold)
-                    return true;
-                
-                int lineCount = 0;
-                int index = 0;
-                while ((index = RawContent.IndexOf('\n', index)) != -1)
-                {
-                    lineCount++;
-                    index++;
-                    if (lineCount > MaxCollapsedLines)
-                        return true;
-                }
+            if (!string.IsNullOrEmpty(_rawContentBackingFile)) return true; // Spilled text is always long
+            if (ItemType != ClipboardItemType.Text && ItemType != ClipboardItemType.Code && ItemType != ClipboardItemType.Url)
                 return false;
+            if (string.IsNullOrEmpty(RawContent))
+                return false;
+            
+            if (RawContent.Length > LongTextThreshold)
+                return true;
+            
+            int lineCount = 0;
+            int index = 0;
+            while ((index = RawContent.IndexOf('\n', index)) != -1)
+            {
+                lineCount++;
+                index++;
+                if (lineCount > MaxCollapsedLines)
+                    return true;
             }
+            return false;
         }
 
         [JsonIgnore]
@@ -604,19 +662,19 @@ namespace FlyShelf.ViewModels
         public bool IsTerminalPreview => Extension == ".BAT" || Extension == ".CMD" || Extension == ".PS1";
         public bool IsCPlusPlusPreview => Extension == ".CPP" || Extension == ".C";
         public bool IsCsvPreview => Extension == ".CSV";
-        public string FormatIdentifier 
-        { 
-            get 
-            {
-                if (ItemType == ClipboardItemType.Image) return "Image/Bitmap";
-                if (ItemType == ClipboardItemType.Text && Extension == "MARKDOWN") return "Markdown";
-                if (ItemType == ClipboardItemType.Text) return "Raw Text";
-                if (ItemType == ClipboardItemType.Code) return "Code Snippet";
-                if (ItemType == ClipboardItemType.Folder) return "Folder";
-                if (ItemType == ClipboardItemType.Archive) return "Archive";
-                if (ItemType == ClipboardItemType.Group) return "Grouped Items";
-                return string.IsNullOrEmpty(Extension) ? "Unknown File" : Extension + " Object";
-            }
+        private string? _cachedFormatIdentifier;
+        public string FormatIdentifier => _cachedFormatIdentifier ??= ComputeFormatIdentifier();
+
+        private string ComputeFormatIdentifier() 
+        {
+            if (ItemType == ClipboardItemType.Image) return "Image/Bitmap";
+            if (ItemType == ClipboardItemType.Text && Extension == "MARKDOWN") return "Markdown";
+            if (ItemType == ClipboardItemType.Text) return "Raw Text";
+            if (ItemType == ClipboardItemType.Code) return "Code Snippet";
+            if (ItemType == ClipboardItemType.Folder) return "Folder";
+            if (ItemType == ClipboardItemType.Archive) return "Archive";
+            if (ItemType == ClipboardItemType.Group) return "Grouped Items";
+            return string.IsNullOrEmpty(Extension) ? "Unknown File" : Extension + " Object";
         }
         
         private bool _isPinned;
@@ -798,6 +856,7 @@ namespace FlyShelf.ViewModels
         {
             get
             {
+                if (!string.IsNullOrEmpty(_rawContentBackingFile)) return false; // too long to be a password
                 if (ItemType != ClipboardItemType.Text || IsPassword) return false;
                 if (string.IsNullOrEmpty(RawContent)) return false;
                 
@@ -859,50 +918,58 @@ namespace FlyShelf.ViewModels
         [System.Text.Json.Serialization.JsonIgnore]
         public bool ShowSemanticIcon => ItemType != ClipboardItemType.Text || !string.IsNullOrEmpty(FileName);
 
+        private string? _cachedSemanticIconGlyph;
         /// <summary>Icon glyph name based on item type + extension (replaces 12 DataTriggers).</summary>
         [System.Text.Json.Serialization.JsonIgnore]
-        public string SemanticIconGlyph
+        public string SemanticIconGlyph => _cachedSemanticIconGlyph ??= ComputeSemanticIconGlyph();
+
+        private string ComputeSemanticIconGlyph()
         {
-            get
+            return ItemType switch
             {
-                return ItemType switch
+                ClipboardItemType.Image => "Image24",
+                ClipboardItemType.File => (Extension?.ToLowerInvariant()) switch
                 {
-                    ClipboardItemType.Image => "Image24",
-                    ClipboardItemType.File => (Extension?.ToLowerInvariant()) switch
-                    {
-                        ".pdf" => "DocumentPdf24",
-                        ".doc" or ".docx" => "Document24",
-                        ".xls" or ".xlsx" => "Table24",
-                        ".ppt" or ".pptx" => "SlideLayout24",
-                        ".zip" or ".rar" or ".7z" or ".tar" or ".gz" => "FolderZip24",
-                        ".mp3" or ".wav" or ".flac" or ".aac" => "MusicNote224",
-                        ".mp4" or ".avi" or ".mkv" or ".mov" => "Video24",
-                        ".exe" or ".msi" => "AppGeneric24",
-                        _ => "Document24"
-                    },
-                    ClipboardItemType.Url => "Link24",
-                    _ => "ClipboardText24"
-                };
-            }
+                    ".pdf" => "DocumentPdf24",
+                    ".doc" or ".docx" => "Document24",
+                    ".xls" or ".xlsx" => "Table24",
+                    ".ppt" or ".pptx" => "SlideLayout24",
+                    ".zip" or ".rar" or ".7z" or ".tar" or ".gz" => "FolderZip24",
+                    ".mp3" or ".wav" or ".flac" or ".aac" => "MusicNote224",
+                    ".mp4" or ".avi" or ".mkv" or ".mov" => "Video24",
+                    ".exe" or ".msi" => "AppGeneric24",
+                    _ => "Document24"
+                },
+                ClipboardItemType.Url => "Link24",
+                _ => "ClipboardText24"
+            };
         }
 
         /// <summary>Whether this item has a preview image to show.</summary>
         [System.Text.Json.Serialization.JsonIgnore]
         public bool HasPreviewImage => ItemType == ClipboardItemType.Image || ItemType == ClipboardItemType.File;
 
+        private string? _cachedCardSubtitle;
         /// <summary>Summary display text for the card subtitle area.</summary>
         [System.Text.Json.Serialization.JsonIgnore]
-        public string CardSubtitle
+        public string CardSubtitle => _cachedCardSubtitle ??= ComputeCardSubtitle();
+
+        private string ComputeCardSubtitle()
         {
-            get
+            if (ItemType == ClipboardItemType.Image) return "Image";
+            if (ItemType == ClipboardItemType.Url) return "Link";
+            if (ItemType == ClipboardItemType.File) return Extension?.ToUpperInvariant()?.TrimStart('.') ?? "File";
+            
+            // Text: show character count
+            if (!string.IsNullOrEmpty(_rawContentBackingFile))
             {
-                if (ItemType == ClipboardItemType.Image) return "Image";
-                if (ItemType == ClipboardItemType.Url) return "Link";
-                if (ItemType == ClipboardItemType.File) return Extension?.ToUpperInvariant()?.TrimStart('.') ?? "File";
-                // Text: show character count
-                var len = RawContent?.Length ?? 0;
-                return len > 0 ? $"{len:N0} chars" : "Empty";
+                try {
+                    var fi = new System.IO.FileInfo(_rawContentBackingFile);
+                    return fi.Exists ? $"{fi.Length:N0} chars" : "Empty";
+                } catch { return "Spilled"; }
             }
+            var len = RawContent?.Length ?? 0;
+            return len > 0 ? $"{len:N0} chars" : "Empty";
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

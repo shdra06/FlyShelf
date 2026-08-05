@@ -668,10 +668,14 @@ namespace FlyShelf.ViewModels
             }
         }
 
+        private static BitmapSource? s_markdownIcon;
+
         internal void GenerateMarkdownIcon()
         {
+            if (s_markdownIcon != null) { Icon = s_markdownIcon; return; }
             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
+                if (s_markdownIcon != null) { Icon = s_markdownIcon; return; }
                 try
                 {
                     var visual = new System.Windows.Media.DrawingVisual();
@@ -713,6 +717,7 @@ namespace FlyShelf.ViewModels
                     var rtb = new RenderTargetBitmap(96, 96, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
                     rtb.Render(visual);
                     rtb.Freeze();
+                    s_markdownIcon = rtb;
                     Icon = rtb;
                 }
                 catch (Exception ex)
@@ -722,10 +727,14 @@ namespace FlyShelf.ViewModels
             });
         }
 
+        private static BitmapSource? s_passwordIcon;
+
         internal void GeneratePasswordIcon()
         {
+            if (s_passwordIcon != null) { Icon = s_passwordIcon; return; }
             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
+                if (s_passwordIcon != null) { Icon = s_passwordIcon; return; }
                 try
                 {
                     var visual = new System.Windows.Media.DrawingVisual();
@@ -769,6 +778,7 @@ namespace FlyShelf.ViewModels
                     var rtb = new RenderTargetBitmap(96, 96, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
                     rtb.Render(visual);
                     rtb.Freeze();
+                    s_passwordIcon = rtb;
                     Icon = rtb;
                 }
                 catch (Exception ex)
@@ -778,10 +788,14 @@ namespace FlyShelf.ViewModels
             });
         }
 
+        private static BitmapSource? s_folderIcon;
+
         internal void GenerateFolderIcon()
         {
+            if (s_folderIcon != null) { Icon = s_folderIcon; return; }
             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
+                if (s_folderIcon != null) { Icon = s_folderIcon; return; }
                 try
                 {
                     var visual = new System.Windows.Media.DrawingVisual();
@@ -820,6 +834,7 @@ namespace FlyShelf.ViewModels
                     var rtb = new RenderTargetBitmap(96, 96, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
                     rtb.Render(visual);
                     rtb.Freeze();
+                    s_folderIcon = rtb;
                     Icon = rtb;
                 }
                 catch (Exception ex)

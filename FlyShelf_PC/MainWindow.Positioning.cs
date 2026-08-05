@@ -1064,6 +1064,14 @@ namespace FlyShelf
                 {
                     if (!this.IsVisible) { _isRenderingThumbnails = false; return; }
 
+                    // Skip expensive thumbnail evaluation during fast scrolling
+                    if (_viewModel.IsScrolling && !isEvictionPass)
+                    {
+                        // Only process during eviction passes or when scroll has stopped
+                        _isRenderingThumbnails = false;
+                        return;
+                    }
+
                     // SCROLL DRAG FIX: Do NOT call UpdateLayout() here.
                     // It forces a synchronous full layout pass (including virtualizer
                     // container recycling) that blocks the SmoothScroll physics engine.
@@ -1323,7 +1331,7 @@ namespace FlyShelf
                                                         }
                                                     }
                                                 }
-                                            }, scrolling ? System.Windows.Threading.DispatcherPriority.ApplicationIdle : System.Windows.Threading.DispatcherPriority.Normal);
+                                            }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                                         }
                                         else
                                         {
