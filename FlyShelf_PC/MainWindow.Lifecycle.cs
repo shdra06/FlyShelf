@@ -643,6 +643,12 @@ namespace FlyShelf
                         AltArcticOverlay.Visibility = isLightTheme ? Visibility.Visible : Visibility.Collapsed;
                     }
                 }, System.Windows.Threading.DispatcherPriority.Render);
+
+                if (_pendingToggleQueued)
+                {
+                    _pendingToggleQueued = false;
+                    Dispatcher.InvokeAsync(() => ToggleMainClipboard(), System.Windows.Threading.DispatcherPriority.Input);
+                }
             };
             CompositionTarget.Rendering += onAnimRenderFrame;
             _showAnimRenderHandler = onAnimRenderFrame; // PC-6: Track for cleanup
@@ -779,10 +785,7 @@ namespace FlyShelf
                 // This ensures WPF has rendered and committed a 0% opacity frame to DWM first.
                 // HideWindowInternal has a guard: if _isCurrentlySummoned was set by a new show,
                 // it aborts to avoid clobbering the new show.
-                Dispatcher.InvokeAsync(() =>
-                {
-                    HideWindowInternal();
-                }, System.Windows.Threading.DispatcherPriority.Background);
+                HideWindowInternal();
             }
             catch { }
 

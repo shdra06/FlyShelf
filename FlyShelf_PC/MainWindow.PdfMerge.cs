@@ -252,6 +252,7 @@ namespace FlyShelf
 
         private async void UpdatePdfMergeToolbar()
         {
+            try {
             // PERF: Single-pass categorization — avoids 3 separate LINQ chains each calling File.Exists (3N → N I/O calls)
             // File.Exists moved off UI thread to avoid blocking clicks
             var itemsSnapshot = _viewModel.DroppedItems.ToList();
@@ -317,6 +318,7 @@ namespace FlyShelf
                 InstantMergePdfToolbarBtn.Visibility = Visibility.Collapsed;
                 UpdateToolbarButtonsVisibility();
             }
+            } catch (Exception ex) { Classes.Logger.LogAction("CRASH", $"UpdatePdfMergeToolbar: {ex}"); }
         }
 
         /// <summary>Hides the merge floating bar, restores emoji btn, and unchecks all PDFs.</summary>

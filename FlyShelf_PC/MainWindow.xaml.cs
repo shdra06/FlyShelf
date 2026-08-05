@@ -1682,6 +1682,8 @@ namespace FlyShelf
 
         public void HideWindowInternal()
         {
+            int capturedToken = _spawnToken;
+
             // Guard: If a new show happened between AnimateAndHide and this deferred call,
             // abort — we'd clobber the new show by moving the window offscreen.
             if (_isCurrentlySummoned)
@@ -1706,16 +1708,29 @@ namespace FlyShelf
             // When the window is re-shown, DWM must reallocate and re-rasterize the entire
             // surface (~45ms stall), causing visible jitter on the first animation frames.
             // SW_HIDE keeps the DWM surface warm at the last visible position.
-            try
+            Dispatcher.InvokeAsync(() => 
             {
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
-                    Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
-            }
-            catch { }
+                if (_spawnToken != capturedToken) return;
 
-            // Actively optimize and release memory whenever the window is hidden/unsummoned
-            if (!_hasOptimizedThisHide) OptimizeMemoryUsage();
+                // Safety: clear any stale DWM cloak from aborted previous animation
+                var safetyHwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (safetyHwnd != IntPtr.Zero)
+                {
+                    int uncloakVal = 0;
+                    Classes.NativeMethods.DwmSetWindowAttribute(safetyHwnd, Classes.NativeMethods.DWMWA_CLOAK, ref uncloakVal, sizeof(int));
+                }
+
+                try
+                {
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                        Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
+                }
+                catch { }
+
+                // Actively optimize and release memory whenever the window is hidden/unsummoned
+                if (!_hasOptimizedThisHide) OptimizeMemoryUsage();
+            }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
         /// <summary>

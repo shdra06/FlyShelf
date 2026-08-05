@@ -58,6 +58,16 @@ namespace FlyShelf
             const int WM_MOUSEACTIVATE = 0x0021;
             const int MA_NOACTIVATE = 3;
 
+            if (msg == 0x02B1) // WM_SESSIONCHANGE
+            {
+                if (wParam.ToInt32() == 8) // WTS_SESSION_UNLOCK
+                {
+                    // Re-register clipboard listener after session unlock
+                    Classes.NativeMethods.RemoveClipboardFormatListener(hwnd);
+                    Classes.NativeMethods.AddClipboardFormatListener(hwnd);
+                }
+            }
+
             if (msg == WM_MOUSEACTIVATE)
             {
                 // If Notes or Todo mode is active, allow normal activation so text boxes receive focus and keyboard input
@@ -132,7 +142,7 @@ namespace FlyShelf
                     // Defer spawn out of WndProc — Background priority ensures WndProc fully
                     // returns before toggle runs (Input priority fires inside the message loop,
                     // causing "Dispatcher processing has been suspended" crash).
-                    Dispatcher.InvokeAsync(() => ToggleMainClipboard(), System.Windows.Threading.DispatcherPriority.Background);
+                    Dispatcher.InvokeAsync(() => ToggleMainClipboard(), System.Windows.Threading.DispatcherPriority.Input);
                     handled = true;
                 }
                 else if (hotkeyId >= HOTKEY_QUICKPASTE_BASE + 1 && hotkeyId <= HOTKEY_QUICKPASTE_BASE + 10)
@@ -261,6 +271,21 @@ namespace FlyShelf
                 // Auto-refresh desktop wallpaper if it changed (uses unified refresh method)
                 Dispatcher.InvokeAsync(() => RefreshDesktopWallpaperIfChanged());
             }
+            else if (msg == 0x02B1) // WM_SESSIONCHANGE
+            {
+                // Re-register clipboard listener after session unlock (lock screen, RDP, UAC)
+                // Windows can silently drop clipboard format listeners during session switches.
+                if (wParam.ToInt32() == 8) // WTS_SESSION_UNLOCK
+                {
+                    try
+                    {
+                        Classes.NativeMethods.RemoveClipboardFormatListener(hwnd);
+                        Classes.NativeMethods.AddClipboardFormatListener(hwnd);
+                        Classes.Logger.LogAction("CLIPBOARD", "Re-registered clipboard listener after session unlock");
+                    }
+                    catch { } // Best-effort
+                }
+            }
             else if (msg == WM_CLIPBOARDUPDATE)
             {
                 // GUARD: Skip clipboard events triggered by our own writes
@@ -292,6 +317,7 @@ namespace FlyShelf
                     // are never silently dropped. After acquiring, re-reads the latest token
                     // to skip stale intermediate copies — only the most recent state is processed.
                     await _clipboardStaSemaphore.WaitAsync();
+                    bool threadCompleted = false;
                     try
                     {
                     // Re-read the latest token after acquiring the semaphore — if a newer
@@ -318,14 +344,16 @@ namespace FlyShelf
                     staThread.IsBackground = true;
                     staThread.Priority = System.Threading.ThreadPriority.AboveNormal;
                     staThread.Start();
-                    if (!staThread.Join(5000))
+                    threadCompleted = staThread.Join(5000);
+                    if (!threadCompleted)
                     {
                         Classes.Logger.LogAction("CLIPBOARD", "STA thread timed out after 5000ms.");
                     }
                     }
                     finally
                     {
-                        _clipboardStaSemaphore.Release();
+                        if (threadCompleted)
+                            _clipboardStaSemaphore.Release();
                     }
                 });
                 

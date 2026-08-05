@@ -104,11 +104,12 @@ namespace FlyShelf.ViewModels
                     catch { } // Best-effort: failure is acceptable
                 });
 
+                var existingSnapshot = DroppedItems.ToList();
                 var items = await System.Threading.Tasks.Task.Run(() => Classes.ClipboardHistoryManager.LoadHistory());
                 
                 // Build lookup of items already loaded (e.g. pinned items from LoadPinnedItems)
                 var existingKeys = new HashSet<string>();
-                foreach (var existing in DroppedItems)
+                foreach (var existing in existingSnapshot)
                 {
                     string key = GetDeduplicationKey(existing);
                     if (!string.IsNullOrEmpty(key)) existingKeys.Add(key);

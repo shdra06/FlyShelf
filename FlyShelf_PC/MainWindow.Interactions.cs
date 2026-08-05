@@ -33,6 +33,8 @@ namespace FlyShelf
         /// the OLE drag-drop message pump.
         /// </summary>
         internal static volatile bool _isDragging = false;
+        private bool _pendingToggleQueued = false;
+        private System.Threading.CancellationTokenSource? _dragCooldownCts;
 
         // ═══ Ctrl+Drag Path Mode State ═══
         // Both file data and path text are always prepared at drag start.
@@ -496,7 +498,8 @@ namespace FlyShelf
                                     if (fileOk && !hasImageExt)
                                     {
                                         // File exists but wrong extension — copy with .png extension
-                                        System.IO.File.Copy(firstItem.FilePath, properPath, true);
+                                        var srcPath = firstItem.FilePath;
+                                        await System.Threading.Tasks.Task.Run(() => System.IO.File.Copy(srcPath, properPath, true));
                                         firstItem.FilePath = properPath;
                                     }
                                     else if (!fileOk && firstItem.Icon is BitmapSource fallbackBmp)
@@ -777,11 +780,14 @@ namespace FlyShelf
                             // ═══ POST-DRAG COOLDOWN ═══
                             // Keep WM_CLIPBOARDUPDATE guard active for 500ms after drag completes
                             // to suppress self-capture from target app clipboard writes.
-                            _ = Dispatcher.InvokeAsync(async () =>
+                            _dragCooldownCts?.Cancel();
+                            _dragCooldownCts = new System.Threading.CancellationTokenSource();
+                            var dragToken = _dragCooldownCts.Token;
+                            _ = System.Threading.Tasks.Task.Delay(500, dragToken).ContinueWith(_ =>
                             {
-                                await System.Threading.Tasks.Task.Delay(500);
-                                _isDragging = false;
-                            });
+                                if (!dragToken.IsCancellationRequested)
+                                    _isDragging = false;
+                            }, System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
                             dragDropEffect?.Dispose();
 
                             // ═══ Deselect after drag-out ═══
@@ -1021,6 +1027,7 @@ namespace FlyShelf
                 if (DateTime.UtcNow < _showAnimationEndTime)
                 {
                     Classes.Logger.LogAction("VD_TOGGLE", "SHOW_PATH IGNORED: Show animation is still in progress.");
+                    _pendingToggleQueued = true;
                     return;
                 }
 

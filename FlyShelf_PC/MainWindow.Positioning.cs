@@ -289,6 +289,13 @@ namespace FlyShelf
 
         private void ShowNearPositionInternal(double targetX, double targetY, int mode, bool isPersistent, bool stealFocus)
         {
+            // Safety: clear any stale DWM cloak from aborted previous animation
+            var safetyHwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            if (safetyHwnd != IntPtr.Zero)
+            {
+                int uncloakVal = 0;
+                Classes.NativeMethods.DwmSetWindowAttribute(safetyHwnd, Classes.NativeMethods.DWMWA_CLOAK, ref uncloakVal, sizeof(int));
+            }
             // NOTE: DWM cloaking was previously used here to hide positioning artifacts,
             // but it caused the fade-in animation to be invisible for the first ~20-30%,
             // making the spawn feel laggy/jumpy. The anti-black-box sequence below
@@ -624,6 +631,13 @@ namespace FlyShelf
                     
                     Classes.NativeMethods.SetWindowPos(hwnd, -1 /*HWND_TOPMOST*/, x, y, 0, 0, flags);
                     
+                    if (!stealFocus)
+                    {
+                        // Force WPF HWND Z-order re-evaluation without taking keyboard focus
+                        this.Topmost = false;
+                        this.Topmost = true;
+                    }
+
                     // Sync WPF properties (will be a no-op if already updated by WM_WINDOWPOSCHANGED)
                     this.Left = Math.Round(rawX);
                     this.Top = Math.Round(computedTop);
@@ -1039,13 +1053,16 @@ namespace FlyShelf
             _viewModel.AllowHover = true;
         }
 
+        private bool _isRenderingThumbnails;
         private void RenderVisibleThumbnails(bool onlyFirstTen = false, bool isEvictionPass = false)
         {
+            if (_isRenderingThumbnails) return; // Reentrancy guard — prevent overlapping timer passes
+            _isRenderingThumbnails = true;
             Dispatcher.InvokeAsync(() =>
             {
                 try
                 {
-                    if (!this.IsVisible) return;
+                    if (!this.IsVisible) { _isRenderingThumbnails = false; return; }
 
                     // SCROLL DRAG FIX: Do NOT call UpdateLayout() here.
                     // It forces a synchronous full layout pass (including virtualizer
@@ -1400,6 +1417,10 @@ namespace FlyShelf
                 catch (Exception ex)
                 {
                     Classes.Logger.LogAction("SCROLL_LOAD_ERR", $"Error in RenderVisibleThumbnails: {ex.Message}");
+                }
+                finally
+                {
+                    _isRenderingThumbnails = false;
                 }
             }, System.Windows.Threading.DispatcherPriority.Normal);
         }
