@@ -13,6 +13,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using FlyShelf.Classes;
 using FlyShelf.Helpers;
+using System.Linq;
 
 namespace FlyShelf
 {
@@ -245,6 +246,10 @@ namespace FlyShelf
                 _searchDebounceTimer?.Stop();
                 SearchTextBox.Text = "";           // fires TextChanged, but the guard above blocks it
 
+                // Hide unified search results panel
+                if (UnifiedSearchPanel != null)
+                    UnifiedSearchPanel.Visibility = Visibility.Collapsed;
+
                 // Restore WS_EX_NOACTIVATE dynamically immediately
                 UpdateWindowActivationStyle();
 
@@ -457,6 +462,193 @@ namespace FlyShelf
             // PERF: Render thumbnails at ContextIdle — let layout complete first
             Dispatcher.InvokeAsync(() => RenderVisibleThumbnails(),
                 System.Windows.Threading.DispatcherPriority.ContextIdle);
+
+            // ═══ UNIFIED SEARCH: Notes + Todos + Smart Commands ═══
+            UpdateUnifiedSearchResults(queryClean);
+        }
+
+        private void UpdateUnifiedSearchResults(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
+            {
+                if (UnifiedSearchPanel != null)
+                    UnifiedSearchPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            bool hasAnyResult = false;
+
+            // ── Notes Search ──
+            try
+            {
+                var noteResults = Classes.NoteManager.Search(query);
+                if (noteResults != null && noteResults.Count > 0)
+                {
+                    var displayItems = noteResults.Take(5).Select(r => new
+                    {
+                        DateLabel = r.Day.DisplayDate,
+                        Content = !string.IsNullOrEmpty(r.Bullet?.Header)
+                            ? $"[{r.Bullet.Header}] {TruncateText(r.Bullet.Content, 80)}"
+                            : TruncateText(r.Bullet?.Content ?? r.Day.FreeformContent, 80),
+                        Day = r.Day,
+                        Bullet = r.Bullet
+                    }).ToList();
+
+                    SearchNotesResults.ItemsSource = displayItems;
+                    SearchNotesSection.Visibility = Visibility.Visible;
+                    hasAnyResult = true;
+                }
+                else
+                {
+                    SearchNotesSection.Visibility = Visibility.Collapsed;
+                }
+            }
+            catch { SearchNotesSection.Visibility = Visibility.Collapsed; }
+
+            // ── Todo Search ──
+            try
+            {
+                var todoResults = Classes.TodoManager.Search(query);
+                if (todoResults != null && todoResults.Count > 0)
+                {
+                    var displayItems = todoResults.Take(5).Select(r => new
+                    {
+                        Text = TruncateText(r.Item.Text, 80),
+                        IsDone = r.Item.IsDone,
+                        DateLabel = r.Day.Date.ToString("MMM d"),
+                        StatusIcon = r.Item.IsDone ? "✅" : "☐",
+                        Day = r.Day,
+                        Item = r.Item
+                    }).ToList();
+
+                    SearchTodosResults.ItemsSource = displayItems;
+                    SearchTodosSection.Visibility = Visibility.Visible;
+                    hasAnyResult = true;
+                }
+                else
+                {
+                    SearchTodosSection.Visibility = Visibility.Collapsed;
+                }
+            }
+            catch { SearchTodosSection.Visibility = Visibility.Collapsed; }
+
+            // ── Smart Commands ──
+            bool showSmartCommands = false;
+
+            // Check if clipboard has no results
+            var view = CollectionViewSource.GetDefaultView(_viewModel.DroppedItems) as ListCollectionView;
+            int clipboardResultCount = view?.Cast<object>().Count() ?? 0;
+
+            // Smart: Add to Todo (when no clipboard results and query is meaningful)
+            if (clipboardResultCount == 0 && query.Length >= 3)
+            {
+                SmartAddTodoText.Text = $"Add \"{query}\" to Todo list";
+                SmartAddTodoBtn.Visibility = Visibility.Visible;
+                showSmartCommands = true;
+            }
+            else
+            {
+                SmartAddTodoBtn.Visibility = Visibility.Collapsed;
+            }
+
+            // Smart: Timer shortcut (/N pattern)
+            var timerMatch = System.Text.RegularExpressions.Regex.Match(query.Trim(), @"^\/(\d+)$");
+            if (timerMatch.Success)
+            {
+                SmartTimerText.Text = $"Start {timerMatch.Groups[1].Value} minute timer";
+                SmartTimerSection.Visibility = Visibility.Visible;
+                showSmartCommands = true;
+            }
+            else
+            {
+                SmartTimerSection.Visibility = Visibility.Collapsed;
+            }
+
+            SearchSmartCommandsSection.Visibility = showSmartCommands ? Visibility.Visible : Visibility.Collapsed;
+
+            // Show/hide the unified panel
+            UnifiedSearchPanel.Visibility = (hasAnyResult || showSmartCommands)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
+        private static string TruncateText(string text, int maxLen)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            text = text.Replace('\n', ' ').Replace('\r', ' ');
+            return text.Length <= maxLen ? text : text.Substring(0, maxLen) + "…";
+        }
+
+        private void SearchAddTodo_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            string query = SearchTextBox.Text?.Trim();
+            if (string.IsNullOrWhiteSpace(query)) return;
+
+            try
+            {
+                // Find or create today's TodoDay
+                var days = Classes.TodoManager.Days;
+                var today = days?.FirstOrDefault(d => d.Date.Date == DateTime.Today);
+                if (today == null)
+                {
+                    today = new Classes.TodoDay { Date = DateTime.Today };
+                    days?.Insert(0, today);
+                }
+
+                var newItem = Classes.TodoManager.AddItem(today, query);
+                if (newItem != null)
+                {
+                    Windows.ToastWindow.ShowToast($"✅ Added to Todos: {query}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("CRASH", $"SearchAddTodo: {ex}");
+            }
+            CloseSearch();
+        }
+
+        private void SearchTimerAction_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            string query = SearchTextBox.Text?.Trim();
+            var match = System.Text.RegularExpressions.Regex.Match(query ?? "", @"^\/(\d+)$");
+            if (match.Success)
+            {
+                var timerWindow = new Windows.TimerWindow(query);
+                timerWindow.Show();
+            }
+            CloseSearch();
+        }
+
+        private void SearchNoteResult_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            CloseSearch();
+            // Open notes panel — user can navigate from there
+            if (!_isNotesActive)
+            {
+                NotesToggle_Click(null, null);
+            }
+        }
+
+        private void SearchTodoResult_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && fe.DataContext is { } ctx)
+            {
+                var dayProp = ctx.GetType().GetProperty("Day");
+                if (dayProp?.GetValue(ctx) is Classes.TodoDay day)
+                {
+                    CloseSearch();
+                    // Open todo panel and navigate to the day
+                    if (!_isTodoActive)
+                    {
+                        TodoToggle_Click(null, null);
+                    }
+                }
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════

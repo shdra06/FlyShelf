@@ -2452,6 +2452,154 @@
             </emoji:TextBlock>
         </StackPanel>
 
+        <!-- ═══ Unified Search Results Panel (Notes + Todos + Smart Commands) ═══ -->
+        <Border x:Name="UnifiedSearchPanel" Grid.Row="1" VerticalAlignment="Bottom" 
+                Visibility="Collapsed" MaxHeight="280" Margin="8,0,8,8"
+                Background="{DynamicResource ThemeOverlayBg}" CornerRadius="{StaticResource RadiusMD}"
+                BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                Panel.ZIndex="50">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="280" Padding="0">
+                <StackPanel Margin="10,8,10,8">
+
+                    <!-- ── 📝 Notes Section ── -->
+                    <StackPanel x:Name="SearchNotesSection" Visibility="Collapsed" Margin="0,0,0,6">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="📝" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock Text="Notes" FontWeight="SemiBold" FontSize="11" Opacity="0.6"
+                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <ItemsControl x:Name="SearchNotesResults">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,3" Padding="8,6" CornerRadius="6" Cursor="Hand"
+                                            Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
+                                            PreviewMouseLeftButtonDown="SearchNoteResult_Click">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <!-- Date badge -->
+                                            <Border Grid.Column="0" Background="#2A7C3AFF" CornerRadius="4" Padding="6,2" Margin="0,0,8,0"
+                                                    VerticalAlignment="Center" HorizontalAlignment="Left">
+                                                <TextBlock Text="{Binding DateLabel}" FontSize="10" FontWeight="SemiBold"
+                                                           Foreground="#B39DDB" HorizontalAlignment="Center"/>
+                                            </Border>
+                                            <!-- Content -->
+                                            <TextBlock Grid.Column="1" Text="{Binding Content}" FontSize="12"
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxHeight="18"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- ── ✅ Todos Section ── -->
+                    <StackPanel x:Name="SearchTodosSection" Visibility="Collapsed" Margin="0,0,0,6">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="✅" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock Text="Todos" FontWeight="SemiBold" FontSize="11" Opacity="0.6"
+                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <ItemsControl x:Name="SearchTodosResults">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,3" Padding="8,6" CornerRadius="6" Cursor="Hand"
+                                            Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
+                                            PreviewMouseLeftButtonDown="SearchTodoResult_Click">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding StatusIcon}" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="12"
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                            <Border Grid.Column="2" Background="#1A4CAF50" CornerRadius="4" Padding="6,2" Margin="8,0,0,0"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding DateLabel}" FontSize="9" FontWeight="Medium"
+                                                           Foreground="#81C784"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- ── ⚡ Smart Commands Section ── -->
+                    <StackPanel x:Name="SearchSmartCommandsSection" Visibility="Collapsed" Margin="0,2,0,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="⚡" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock Text="Quick Actions" FontWeight="SemiBold" FontSize="11" Opacity="0.6"
+                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- Add to Todo -->
+                        <Border x:Name="SmartAddTodoBtn" Visibility="Collapsed" Margin="0,0,0,3" Padding="10,8" CornerRadius="6" Cursor="Hand"
+                                Background="#1A4CAF50" PreviewMouseLeftButtonDown="SearchAddTodo_Click">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#334CAF50"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="➕" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock x:Name="SmartAddTodoText" FontSize="12" FontWeight="Medium"
+                                           Foreground="#81C784" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Timer shortcut -->
+                        <Border x:Name="SmartTimerSection" Visibility="Collapsed" Margin="0,0,0,3" Padding="10,8" CornerRadius="6" Cursor="Hand"
+                                Background="#1A42A5F5" PreviewMouseLeftButtonDown="SearchTimerAction_Click">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#3342A5F5"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⏱️" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock x:Name="SmartTimerText" FontSize="12" FontWeight="Medium"
+                                           Foreground="#64B5F6" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
         <!-- Alt+C Watermark Hint — visible until clipboard view is filled (controlled from code-behind) -->
         <Border x:Name="AltCWatermarkHint" Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Center" 
                 Margin="0,0,0,16" Opacity="0.35" IsHitTestVisible="False"
