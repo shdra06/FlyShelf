@@ -299,7 +299,8 @@ function SyncScreenInner() {
 
         const currentClips = clipsStateRef.current;
         // A-11 fix: hash-based fast path to skip filter+dedup if clips haven't changed
-        const clipHash = `${currentClips.length}:${currentClips[0]?.id || ''}:${currentClips[0]?.Timestamp || ''}`;
+        // Stronger hash: include first 5 items to detect mid-list changes
+        const clipHash = `${currentClips.length}:${currentClips.slice(0, 5).map(c => `${c.id || ''}:${c.Timestamp || ''}`).join(',')}`;
         if ((lastNativeSyncRef as any)._lastHash === clipHash) return;
         (lastNativeSyncRef as any)._lastHash = clipHash;
         const filtered = currentClips.filter(c => (c.IsPinned || (c.Timestamp || 0) >= localWipeTimestamp) && (!c.id || !localDeletedIds.has(c.id)) && (c.Raw || c.Title));
@@ -330,7 +331,8 @@ function SyncScreenInner() {
             };
           });
           if (mapped.length > 0) {
-            try { AdvanceOverlay.syncNativeDB(JSON.stringify(mapped)); } catch(e: any) { console.warn('Overlay syncNativeDB: error', e?.message || e); }
+            const safeMapped = mapped.map(c => ({ ...c, Raw: (c.Raw || '').substring(0, 50000) }));
+            try { AdvanceOverlay.syncNativeDB(JSON.stringify(safeMapped)); } catch(e: any) { console.warn('Overlay syncNativeDB: error', e?.message || e); }
           }
         }
         // Cap overlay tracker to prevent unbounded growth using sliding window slice

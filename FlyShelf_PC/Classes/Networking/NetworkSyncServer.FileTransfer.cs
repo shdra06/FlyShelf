@@ -59,7 +59,11 @@ namespace FlyShelf.Classes
             var pairingKey = req.Headers["X-Pairing-Key"];
             if (string.IsNullOrEmpty(pairingKey))
                 pairingKey = req.QueryString["key"];
-            if (string.IsNullOrEmpty(pairingKey) || !DevicePairingManager.IsDevicePaired(pairingKey))
+            
+            bool isPaired = !string.IsNullOrEmpty(pairingKey) && DevicePairingManager.IsDevicePaired(pairingKey);
+            bool isWebClient = req.Headers["Authorization"]?.Replace("Bearer ", "") == SettingsManager.Current.WebClientPinToken;
+
+            if (!isPaired && !isWebClient)
             {
                 Logger.LogAction("SECURITY", $"BLOCKED unauthenticated download request from {req.RemoteEndPoint}");
                 try { res.StatusCode = 403; res.Close(); } catch { } // Best-effort: failure is acceptable
@@ -122,12 +126,38 @@ namespace FlyShelf.Classes
                 res.AddHeader("Cache-Control", "no-store");
                 res.AddHeader("Accept-Ranges", "bytes");
 
-                res.StatusCode = 200;
-                res.ContentLength64 = fileSize;
+                // Support Range requests for download resume
+                long startByte = 0;
+                long endByte = fileSize - 1;
+                bool isPartial = false;
+                string rangeHeader = req.Headers["Range"];
+                if (!string.IsNullOrEmpty(rangeHeader) && rangeHeader.StartsWith("bytes="))
+                {
+                    var rangeParts = rangeHeader.Substring(6).Split('-');
+                    if (long.TryParse(rangeParts[0], out long rangeStart))
+                    {
+                        startByte = rangeStart;
+                        if (rangeParts.Length > 1 && long.TryParse(rangeParts[1], out long rangeEnd))
+                            endByte = Math.Min(rangeEnd, fileSize - 1);
+                        isPartial = true;
+                    }
+                }
+
+                if (isPartial)
+                {
+                    res.StatusCode = 206;
+                    res.AddHeader("Content-Range", $"bytes {startByte}-{endByte}/{fileSize}");
+                    res.ContentLength64 = endByte - startByte + 1;
+                }
+                else
+                {
+                    res.StatusCode = 200;
+                    res.ContentLength64 = fileSize;
+                }
                 res.SendChunked = false;
 
                 // Fast path: small files (≤5MB) — single read + write for minimal latency
-                if (fileSize <= 5 * 1024 * 1024)
+                if (!isPartial && fileSize <= 5 * 1024 * 1024)
                 {
                     byte[] fileBytes = await File.ReadAllBytesAsync(path);
                     await res.OutputStream.WriteAsync(fileBytes, 0, fileBytes.Length);
@@ -136,15 +166,18 @@ namespace FlyShelf.Classes
                 }
                 else
                 {
-                    // Large files: stream with 1MB buffer for maximum throughput
+                    // Large files or partial requests: stream with 1MB buffer for maximum throughput
                     using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1048576, FileOptions.SequentialScan | FileOptions.Asynchronous);
+                    fs.Position = startByte;
+                    long bytesRemaining = endByte - startByte + 1;
                     byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(1048576);
                     try
                     {
                         int bytesRead;
-                            while ((bytesRead = await fs.ReadAsync(buffer, 0, 1048576)) > 0)
+                        while (bytesRemaining > 0 && (bytesRead = await fs.ReadAsync(buffer, 0, (int)Math.Min(1048576, bytesRemaining))) > 0)
                         {
                             await res.OutputStream.WriteAsync(buffer, 0, bytesRead);
+                            bytesRemaining -= bytesRead;
                         }
                         await res.OutputStream.FlushAsync();
                     }

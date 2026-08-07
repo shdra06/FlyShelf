@@ -63,8 +63,8 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
   const pendingPayloadRef = useRef(pendingUploadPayload);
   useEffect(() => { pendingPayloadRef.current = pendingUploadPayload; }, [pendingUploadPayload]);
 
-  const CLOUD_CHUNK_SIZE = 5 * 1024 * 1024;
-  const LAN_CHUNK_SIZE = 8 * 1024 * 1024;
+  const CLOUD_CHUNK_SIZE = 2 * 1024 * 1024;
+  const LAN_CHUNK_SIZE = 2 * 1024 * 1024;
   const LAN_CHUNK_THRESHOLD = 50 * 1024 * 1024;
 
   // ─── Resolve URL with fallback chain ───

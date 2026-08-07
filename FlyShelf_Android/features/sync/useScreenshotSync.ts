@@ -322,15 +322,21 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
 
     // UNIFIED: Single 3s interval handles BOTH MediaLibrary and native polls
     // A-10: only set up screenshot polling when tab is focused
-    let unifiedPollInterval: ReturnType<typeof setInterval> | null = null;
+    let unifiedPollInterval: ReturnType<typeof setTimeout> | null = null;
     if (Platform.OS !== 'web' && isFocused) {
-      unifiedPollInterval = setInterval(async () => {
-        await handleForegroundMediaCheck();
-        // Also poll native ScreenshotObserver in the same tick
-        if (Platform.OS === 'android' && AdvanceOverlay) {
-          await pollAndSyncScreenshot();
-        }
-      }, 3000);
+      // Use recursive setTimeout to prevent overlapping async polls
+      const pollLoop = async () => {
+        try {
+          await handleForegroundMediaCheck();
+          // Also poll native ScreenshotObserver in the same tick
+          if (Platform.OS === 'android' && AdvanceOverlay) {
+            await pollAndSyncScreenshot();
+          }
+        } catch (e) { /* ignore */ }
+        // Schedule next poll AFTER this one completes
+        unifiedPollInterval = setTimeout(pollLoop, 3000) as any;
+      };
+      unifiedPollInterval = setTimeout(pollLoop, 3000) as any;
     }
 
     let mediaSub: any = null;
@@ -345,7 +351,7 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
     return () => {
       subscription.remove();
       if (mediaSub) mediaSub.remove();
-      if (unifiedPollInterval) clearInterval(unifiedPollInterval);
+      if (unifiedPollInterval) clearTimeout(unifiedPollInterval);
     };
   }, [deviceName, isGlobalSyncEnabled, isFocused, handleForegroundClipboardCheck, handleForegroundMediaCheck, pollAndSyncScreenshot]);
 

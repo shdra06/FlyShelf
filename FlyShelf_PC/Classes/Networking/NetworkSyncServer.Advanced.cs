@@ -65,6 +65,7 @@ namespace FlyShelf.Classes
 
         private async Task HandleChunkUpload(HttpListenerRequest req, HttpListenerResponse res)
         {
+            string chunkPath = null;
             try
             {
                 string sessionId = req.Headers["X-Upload-Session"] ?? "";
@@ -81,7 +82,7 @@ namespace FlyShelf.Classes
                 Directory.CreateDirectory(chunkDir);
                 _chunkSessions[sessionId] = chunkDir;
 
-                string chunkPath = Path.Combine(chunkDir, $"chunk_{chunkIndexStr.PadLeft(6, '0')}");
+                chunkPath = Path.Combine(chunkDir, $"chunk_{chunkIndexStr.PadLeft(6, '0')}");
                 using (var fs = new FileStream(chunkPath, FileMode.Create, FileAccess.Write, FileShare.None))
                 {
                     await req.InputStream.CopyToAsync(fs);
@@ -94,6 +95,8 @@ namespace FlyShelf.Classes
             }
             catch (Exception ex)
             {
+                // Clean up partial chunk to prevent corruption on finalize
+                try { if (chunkPath != null && File.Exists(chunkPath)) File.Delete(chunkPath); } catch { }
                 Logger.LogAction("CHUNK UPLOAD ERROR", ex.Message);
                 res.StatusCode = 500;
             }
@@ -201,6 +204,19 @@ namespace FlyShelf.Classes
                     await res.OutputStream.WriteAsync(errBytes, 0, errBytes.Length);
                     try { res.Close(); } catch { } // PC-3 fix: close response on early exit
                     return;
+                }
+
+                // Validate chunk sizes — detect truncated chunks from interrupted uploads
+                foreach (var chunkFile in chunkFiles)
+                {
+                    var fi = new FileInfo(chunkFile);
+                    if (fi.Length == 0)
+                    {
+                        Logger.LogAction("CHUNK_FINALIZE", $"Empty chunk detected: {chunkFile}");
+                        res.StatusCode = 409; // Conflict — incomplete upload
+                        res.Close();
+                        return;
+                    }
                 }
 
                 // PC-2 fix: enforce the free-tier size limit BEFORE assembly by summing

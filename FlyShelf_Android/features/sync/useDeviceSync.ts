@@ -516,10 +516,12 @@ export function useDeviceSync(params: {
         }
 
         // Cleanup stale fingerprints (LAN path) — prevent unbounded growth
+        // IMPORTANT: Never expire 'filedl::' keys — they prevent infinite re-download loops
         if (recentSyncFingerprintsRef.current.size > 200) {
           const entries = [...recentSyncFingerprintsRef.current.entries()];
           const cutoff = Date.now() - 60000; // 60s window
           for (const [key, ts] of entries) {
+            if (key.startsWith('filedl::')) continue; // Permanent — prevents re-download loop
             if (ts < cutoff) recentSyncFingerprintsRef.current.delete(key);
           }
         }
@@ -633,6 +635,8 @@ export function useDeviceSync(params: {
             }
             // 204 = timeout, no new events — loop again immediately
           } catch (innerErr: any) {
+            // Normal long-poll timeout — reconnect immediately without backoff
+            if ((innerErr as any)?.name === 'AbortError') { longPollBackoff = 0; continue; }
             if (!longPollActive) break;
             // Invalidate stale Cloudflare URL on long-poll failure
             if (url && url.includes('trycloudflare.com')) {

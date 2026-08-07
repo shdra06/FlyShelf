@@ -94,10 +94,19 @@ export function useDownloadQueue(params: {
             }
             // Scale timeout: minimum 60s, +1s per 256KB expected, capped at 600s
             const dlTimeoutMs = Math.max(60000, Math.min(600000, ((item as any).expectedSize || 0) / 256));
-            const dlResult = await Promise.race([
-              FileSystem.downloadAsync(currentFileUrl, item.destPath, { headers: dlHeaders }),
-              new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Download timeout (${Math.round(dlTimeoutMs/1000)}s)`)), dlTimeoutMs)),
-            ]);
+            // Use DownloadResumable for cancellable downloads
+            const resumable = FileSystem.createDownloadResumable(currentFileUrl, item.destPath, { headers: dlHeaders });
+            const timeoutId = setTimeout(async () => {
+              try { await resumable.cancelAsync(); } catch (e) { /* ignore */ }
+            }, dlTimeoutMs);
+            let dlResult;
+            try {
+              dlResult = await resumable.downloadAsync();
+              clearTimeout(timeoutId);
+            } catch (e) {
+              clearTimeout(timeoutId);
+              throw e;
+            }
 
             if (dlResult && dlResult.status === 200) {
               queueDlSuccess = true;

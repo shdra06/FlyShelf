@@ -182,7 +182,7 @@ export function useFirebaseSync(params: {
         });
         syncLog('FIREBASE', `Feed: ${allParsed.length} total, ${parsed.length} after self-filter`);
         const now = NetworkClock.now();
-        recentSyncFingerprintsRef.current.forEach((ts, fp) => { if (now - ts > 30_000) recentSyncFingerprintsRef.current.delete(fp); });
+        recentSyncFingerprintsRef.current.forEach((ts, fp) => { if (now - ts > 30_000 && !fp.startsWith('filedl::')) recentSyncFingerprintsRef.current.delete(fp); });
 
         // Push text/url items to floating ball overlay
         if (Platform.OS === 'android' && AdvanceOverlay) {
@@ -240,27 +240,8 @@ export function useFirebaseSync(params: {
           setRichMediaDownloadTrigger(t => t + 1);
         }
 
-        // Background: queue ALL file items for download
-        if (Platform.OS === 'android') {
-          const fileItems = parsed.filter(c =>
-            c.Raw?.startsWith('http') && ['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation'].includes(c.Type || '')
-          );
-          for (const fileItem of fileItems) {
-            const fileDedupKey = `filedl::${fileItem.Title || ''}::${fileItem.Timestamp || ''}`;
-            if (recentSyncFingerprintsRef.current.has(fileDedupKey)) continue;
-            recentSyncFingerprintsRef.current.set(fileDedupKey, NetworkClock.now());
-            try {
-              const subfolder = fileItem.Type === 'Pdf' ? 'PDFs' : fileItem.Type === 'Video' ? 'Videos' : 'Documents';
-              const safeName = (fileItem.Title || `file_${NetworkClock.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
-              const destPath = await getDownloadPath(subfolder, safeName);
-              enqueueDownload({
-                id: fileItem.id || '', title: fileItem.Title || safeName, type: fileItem.Type || 'File',
-                fileUrl: fileItem.Raw!, destPath, source: 'Firebase',
-                sourceDevice: fileItem.SourceDeviceName || 'Cloud',
-              });
-            } catch (e) { syncLog('FIREBASE', `File download queue error: ${(e as any)?.message || e}`); }
-          }
-        }
+        // Background: File downloads happen via LAN/Cloudflare poll only.
+        // Firebase is only for critical backend info, and should not trigger downloads.
       }
     }, (error) => {
       syncLog('FIREBASE', `onValue error: ${error?.message || error}`);
