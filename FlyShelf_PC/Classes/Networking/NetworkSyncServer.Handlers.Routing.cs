@@ -607,6 +607,7 @@ namespace FlyShelf.Classes
                     else if (path == "/api/notes" && req.HttpMethod == "POST") { await HandleNotesUpdate(req, res); }
                     else if (path == "/api/todos" && req.HttpMethod == "GET") { ServeTodosData(res); }
                     else if (path == "/api/todos" && req.HttpMethod == "POST") { await HandleTodosUpdate(req, res); }
+                    else if (path == "/api/shortcuts" && req.HttpMethod == "GET") { ServeShortcutsData(res); }
                     // ═══ Android REST Transfer Endpoints ═══
                     else if (path == "/api/transfer/offer" && req.HttpMethod == "POST") { await HandleTransferOffer(req, res); }
                     else if (path == "/api/transfer/upload" && req.HttpMethod == "POST") { await HandleTransferUpload(req, res); }

@@ -103,6 +103,7 @@ export function useDeviceSync(params: {
   // ─── Local PC Polling ───
   const pollLockRef = useRef(false); // Prevents concurrent pollFn from timer + long-poll
   const pollRetryCountRef = useRef(0); // Exponential backoff counter for failed polls
+  const shortcutSyncTimestampRef = useRef<number>(0); // Throttle: sync shortcuts every 60s
   useEffect(() => {
     const pollFn = async () => {
       if (pollLockRef.current) return; // Already running — skip this invocation
@@ -529,6 +530,27 @@ export function useDeviceSync(params: {
           const cutoff = Date.now() - 600000; // 10min window
           for (const [key, ts] of entries) {
             if (ts < cutoff) processedEventsRef.current.delete(key);
+          }
+        }
+
+        // ═══ Shortcut Sync — piggyback on successful PC connection ═══
+        if (Platform.OS === 'android' && AdvanceOverlay && targetUrl) {
+          const now = Date.now();
+          if (!shortcutSyncTimestampRef.current || (now - shortcutSyncTimestampRef.current) > 60000) {
+            shortcutSyncTimestampRef.current = now;
+            try {
+              const scHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
+              if (pairingKeyRef.current) scHeaders['X-Pairing-Key'] = pairingKeyRef.current;
+              const scTimeout = targetUrl.includes('trycloudflare.com') ? 5000 : 2000;
+              const scRes = await fetchWithTimeout(`${targetUrl}/api/shortcuts`, { headers: scHeaders }, scTimeout);
+              if (scRes.ok) {
+                const scData = await scRes.json();
+                if (Array.isArray(scData)) {
+                  try { AdvanceOverlay.syncShortcuts(JSON.stringify(scData)); } catch(e) {}
+                  syncLog('SHORTCUTS', `Synced ${scData.length} shortcuts to overlay`);
+                }
+              }
+            } catch (e) { /* Silent — shortcuts are non-critical */ }
           }
         }
       } catch (e) {

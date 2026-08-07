@@ -63,6 +63,11 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
     }
 
     @ReactMethod
+    fun syncShortcuts(jsonStr: String) {
+        OverlayService.shortcuts = jsonStr
+    }
+
+    @ReactMethod
     fun pushClipToNativeDB(rawText: String, source: String) {
         try {
             val arr = org.json.JSONArray(OverlayService.clipboardItems)

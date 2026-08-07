@@ -1272,5 +1272,39 @@ namespace FlyShelf.Classes
                 try { res.Close(); } catch { } // Best-effort: failure is acceptable
             }
         }
+
+        // ═══ SHORTCUTS SYNC ═══
+        private void ServeShortcutsData(HttpListenerResponse res)
+        {
+            try
+            {
+                // Lazy-load shortcuts if not yet loaded
+                if (!ShortcutManager.Shortcuts.Any())
+                {
+                    try { ShortcutManager.Load(); } catch { }
+                }
+
+                // Serialize only the fields mobile needs: Trigger, Label, Expansion
+                var payload = ShortcutManager.Shortcuts.Select(s => new
+                {
+                    s.Trigger,
+                    s.Label,
+                    s.Expansion
+                });
+                string json = System.Text.Json.JsonSerializer.Serialize(payload);
+                byte[] data = Encoding.UTF8.GetBytes(json);
+
+                res.ContentType = "application/json; charset=utf-8";
+                res.ContentLength64 = data.Length;
+                try { res.OutputStream.Write(data, 0, data.Length); } catch { }
+                res.Close();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("SHORTCUTS_SERVE", $"ServeShortcutsData failed: {ex.Message}");
+                try { res.StatusCode = 500; } catch { }
+                try { res.Close(); } catch { }
+            }
+        }
     }
 }

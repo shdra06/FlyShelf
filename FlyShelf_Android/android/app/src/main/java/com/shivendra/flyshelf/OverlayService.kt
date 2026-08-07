@@ -49,6 +49,7 @@ class OverlayService : Service() {
 
     companion object {
         var clipboardItems: String = "[]"
+        var shortcuts: String = "[]"   // JSON array of {Trigger, Label, Expansion}
         var ballSizeDp: Int = 48
         var autoHideDelayMs: Long = 3000L
         var lastCopiedText: String = ""
@@ -93,6 +94,27 @@ class OverlayService : Service() {
                         val text = clip.getItemAt(0).text?.toString() ?: ""
                         if (text.isNotEmpty() && text != lastCopiedText) {
                             lastCopiedText = text
+                            // ⚡ Auto-expand text shortcuts
+                            if (text.startsWith("/")) {
+                                try {
+                                    val scArr = org.json.JSONArray(shortcuts)
+                                    for (si in 0 until scArr.length()) {
+                                        val sc = scArr.getJSONObject(si)
+                                        if (sc.optString("Trigger").equals(text.trim(), ignoreCase = true)) {
+                                            val expansion = sc.optString("Expansion", "")
+                                            if (expansion.isNotEmpty()) {
+                                                lastCopiedText = expansion
+                                                cm.setPrimaryClip(ClipData.newPlainText("FlyShelf", expansion))
+                                                Handler(Looper.getMainLooper()).post {
+                                                    Toast.makeText(this@OverlayService, "\u26A1 ${sc.optString("Label", text)}", Toast.LENGTH_SHORT).show()
+                                                    pulseBall()
+                                                }
+                                                return@OnPrimaryClipChangedListener
+                                            }
+                                        }
+                                    }
+                                } catch(e: Exception) {}
+                            }
                             // Also inject into the overlay's clip list
                             try {
                                 val arr = org.json.JSONArray(clipboardItems)
@@ -255,149 +277,329 @@ class OverlayService : Service() {
         val divider1 = View(this)
         val div1Bg = GradientDrawable(); div1Bg.setColor(0x15FFFFFF); div1Bg.cornerRadius = 1f * density; divider1.background = div1Bg
         val divLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt())
-        divLp.topMargin = (10 * density).toInt(); divLp.bottomMargin = (10 * density).toInt()
+        divLp.topMargin = (10 * density).toInt(); divLp.bottomMargin = (8 * density).toInt()
         container.addView(divider1, divLp)
 
-        val recentLabel = TextView(this)
-        recentLabel.text = "RECENT CLIPS"
-        recentLabel.textSize = 10f
-        recentLabel.setTextColor(0x80FFFFFF.toInt())
-        recentLabel.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        recentLabel.letterSpacing = 0.12f
+        // ═══ TAB BAR ═══
+        val tabBar = LinearLayout(this)
+        tabBar.orientation = LinearLayout.HORIZONTAL
+        tabBar.gravity = Gravity.CENTER
+        val tabBarLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        tabBarLp.bottomMargin = (10 * density).toInt()
+
+        val tabBgActive = { GradientDrawable().apply { cornerRadius = 8f * density; setColor(0x30FFFFFF) } }
+        val tabBgInactive = { GradientDrawable().apply { cornerRadius = 8f * density; setColor(0x00000000) } }
+
+        val clipsTab = TextView(this)
+        clipsTab.text = "\uD83D\uDCCB Clips"
+        clipsTab.textSize = 11f
+        clipsTab.setTextColor(0xFFFFFFFF.toInt())
+        clipsTab.typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+        clipsTab.gravity = Gravity.CENTER
+        clipsTab.background = tabBgActive()
+        clipsTab.setPadding((14 * density).toInt(), (6 * density).toInt(), (14 * density).toInt(), (6 * density).toInt())
+
+        val shortcutsTab = TextView(this)
+        shortcutsTab.text = "\u26A1 Shortcuts"
+        shortcutsTab.textSize = 11f
+        shortcutsTab.setTextColor(0x99FFFFFF.toInt())
+        shortcutsTab.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        shortcutsTab.gravity = Gravity.CENTER
+        shortcutsTab.background = tabBgInactive()
+        shortcutsTab.setPadding((14 * density).toInt(), (6 * density).toInt(), (14 * density).toInt(), (6 * density).toInt())
+
+        val clipsTabLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        clipsTabLp.rightMargin = (4 * density).toInt()
+        val shortcutsTabLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        shortcutsTabLp.leftMargin = (4 * density).toInt()
+        tabBar.addView(clipsTab, clipsTabLp)
+        tabBar.addView(shortcutsTab, shortcutsTabLp)
+        container.addView(tabBar, tabBarLp)
+
+        // ═══ SECTION LABEL ═══
+        val sectionLabel = TextView(this)
+        sectionLabel.text = "RECENT CLIPS"
+        sectionLabel.textSize = 10f
+        sectionLabel.setTextColor(0x80FFFFFF.toInt())
+        sectionLabel.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        sectionLabel.letterSpacing = 0.12f
         val rlLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         rlLp.bottomMargin = (8 * density).toInt()
-        container.addView(recentLabel, rlLp)
+        container.addView(sectionLabel, rlLp)
 
+        // ═══ SCROLLABLE CONTENT AREA ═══
         val scrollView = ScrollView(this)
         scrollView.isVerticalScrollBarEnabled = false
         scrollView.overScrollMode = View.OVER_SCROLL_NEVER
-        val clipList = LinearLayout(this)
-        clipList.orientation = LinearLayout.VERTICAL
+        val contentList = LinearLayout(this)
+        contentList.orientation = LinearLayout.VERTICAL
 
-        try {
-            val arr = JSONArray(clipboardItems)
-            val count = Math.min(arr.length(), 12)
-            for (i in 0 until count) {
-                val obj = arr.getJSONObject(i)
-                val raw = obj.optString("Raw", obj.optString("Title", "Unknown"))
-                val clipTitle = obj.optString("Title", raw.take(55))
-                val lowerTitle = clipTitle.lowercase()
-                val isWordFile = lowerTitle.endsWith(".doc") || lowerTitle.endsWith(".docx")
-                val isPdfFile = lowerTitle.endsWith(".pdf")
+        // Helper: build clips list
+        fun buildClipsList(target: LinearLayout) {
+            target.removeAllViews()
+            try {
+                val arr = JSONArray(clipboardItems)
+                val count = Math.min(arr.length(), 12)
+                for (i in 0 until count) {
+                    val obj = arr.getJSONObject(i)
+                    val raw = obj.optString("Raw", obj.optString("Title", "Unknown"))
+                    val clipTitle = obj.optString("Title", raw.take(55))
+                    val lowerTitle = clipTitle.lowercase()
+                    val isWordFile = lowerTitle.endsWith(".doc") || lowerTitle.endsWith(".docx")
+                    val isPdfFile = lowerTitle.endsWith(".pdf")
 
-                val clipCard = LinearLayout(this)
-                clipCard.orientation = LinearLayout.HORIZONTAL
-                clipCard.gravity = Gravity.CENTER_VERTICAL
-                val cardBg = GradientDrawable()
-                cardBg.cornerRadius = 12f * density
-                cardBg.setColor(if (isWordFile) 0x203B82F6 else if (isPdfFile) 0x20EF4444 else 0x15FFFFFF)
-                clipCard.background = cardBg
-                clipCard.setPadding((12 * density).toInt(), (10 * density).toInt(), (12 * density).toInt(), (10 * density).toInt())
+                    val clipCard = LinearLayout(this)
+                    clipCard.orientation = LinearLayout.HORIZONTAL
+                    clipCard.gravity = Gravity.CENTER_VERTICAL
+                    val cardBg = GradientDrawable()
+                    cardBg.cornerRadius = 12f * density
+                    cardBg.setColor(if (isWordFile) 0x203B82F6 else if (isPdfFile) 0x20EF4444 else 0x15FFFFFF)
+                    clipCard.background = cardBg
+                    clipCard.setPadding((12 * density).toInt(), (10 * density).toInt(), (12 * density).toInt(), (10 * density).toInt())
 
-                val badge = TextView(this)
-                badge.text = "${i + 1}"
-                badge.textSize = 9f
-                badge.setTextColor(0xFFFFFFFF.toInt())
-                badge.gravity = Gravity.CENTER
-                badge.typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-                val badgeBg = GradientDrawable()
-                badgeBg.shape = GradientDrawable.OVAL
-                badgeBg.setColor(if (isWordFile) 0xFF3B82F6.toInt() else if (isPdfFile) 0xFFEF4444.toInt() else 0xFF6C63FF.toInt())
-                badge.background = badgeBg
-                val bSize = (20 * density).toInt()
-                val badgeLp = LinearLayout.LayoutParams(bSize, bSize)
-                badgeLp.rightMargin = (8 * density).toInt()
-                clipCard.addView(badge, badgeLp)
+                    val badge = TextView(this)
+                    badge.text = "${i + 1}"
+                    badge.textSize = 9f
+                    badge.setTextColor(0xFFFFFFFF.toInt())
+                    badge.gravity = Gravity.CENTER
+                    badge.typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                    val badgeBg = GradientDrawable()
+                    badgeBg.shape = GradientDrawable.OVAL
+                    badgeBg.setColor(if (isWordFile) 0xFF3B82F6.toInt() else if (isPdfFile) 0xFFEF4444.toInt() else 0xFF6C63FF.toInt())
+                    badge.background = badgeBg
+                    val bSize = (20 * density).toInt()
+                    val badgeLp = LinearLayout.LayoutParams(bSize, bSize)
+                    badgeLp.rightMargin = (8 * density).toInt()
+                    clipCard.addView(badge, badgeLp)
 
-                val clipText = TextView(this)
-                clipText.text = clipTitle.take(48)
-                clipText.textSize = 12f
-                clipText.setTextColor(0xDDFFFFFF.toInt())
-                clipText.maxLines = 2
-                clipText.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-                clipCard.addView(clipText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                    val clipText = TextView(this)
+                    clipText.text = clipTitle.take(48)
+                    clipText.textSize = 12f
+                    clipText.setTextColor(0xDDFFFFFF.toInt())
+                    clipText.maxLines = 2
+                    clipText.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+                    clipCard.addView(clipText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-                if (isWordFile || isPdfFile) {
-                    val typeTag = TextView(this)
-                    typeTag.text = if (isWordFile) "DOC" else "PDF"
-                    typeTag.textSize = 8f
-                    typeTag.setTextColor(0xFFFFFFFF.toInt())
-                    typeTag.gravity = Gravity.CENTER
-                    typeTag.typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-                    val tagBg = GradientDrawable()
-                    tagBg.cornerRadius = 6f * density
-                    tagBg.setColor(if (isWordFile) 0xFF3B82F6.toInt() else 0xFFEF4444.toInt())
-                    typeTag.background = tagBg
-                    typeTag.setPadding((6 * density).toInt(), (2 * density).toInt(), (6 * density).toInt(), (2 * density).toInt())
-                    val tagLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-                    tagLp.leftMargin = (6 * density).toInt()
-                    clipCard.addView(typeTag, tagLp)
-                }
+                    if (isWordFile || isPdfFile) {
+                        val typeTag = TextView(this)
+                        typeTag.text = if (isWordFile) "DOC" else "PDF"
+                        typeTag.textSize = 8f
+                        typeTag.setTextColor(0xFFFFFFFF.toInt())
+                        typeTag.gravity = Gravity.CENTER
+                        typeTag.typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                        val tagBg = GradientDrawable()
+                        tagBg.cornerRadius = 6f * density
+                        tagBg.setColor(if (isWordFile) 0xFF3B82F6.toInt() else 0xFFEF4444.toInt())
+                        typeTag.background = tagBg
+                        typeTag.setPadding((6 * density).toInt(), (2 * density).toInt(), (6 * density).toInt(), (2 * density).toInt())
+                        val tagLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                        tagLp.leftMargin = (6 * density).toInt()
+                        clipCard.addView(typeTag, tagLp)
+                    }
 
-                clipCard.setOnClickListener {
-                    it.animate().scaleX(0.96f).scaleY(0.96f).setDuration(60).withEndAction { it.animate().scaleX(1f).scaleY(1f).setDuration(100).start() }.start()
-                    if (isWordFile) {
+                    clipCard.setOnClickListener {
+                        it.animate().scaleX(0.96f).scaleY(0.96f).setDuration(60).withEndAction { it.animate().scaleX(1f).scaleY(1f).setDuration(100).start() }.start()
+                        if (isWordFile) {
+                            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("FlyShelf", raw))
+                            lastCopiedText = raw
+                            Toast.makeText(this, "Copied! Open main app for Convert to PDF option.", Toast.LENGTH_LONG).show()
+                        } else if (isPdfFile) {
+                            val downloadUrl = obj.optString("DownloadUrl", raw)
+                            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("FlyShelf", if (downloadUrl.startsWith("http")) downloadUrl else raw))
+                            lastCopiedText = if (downloadUrl.startsWith("http")) downloadUrl else raw
+                            Toast.makeText(this, "PDF URL copied! Paste in browser to download.", Toast.LENGTH_LONG).show()
+                        } else {
+                            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("FlyShelf", raw))
+                            lastCopiedText = raw
+                            Toast.makeText(this, "Copied! Long-press in any field to paste.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+
+                    clipCard.setOnLongClickListener { v ->
+                        try { v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) } catch(e: Exception) {}
                         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("FlyShelf", raw))
-                        lastCopiedText = raw
-                        Toast.makeText(this, "Copied! Open main app for Convert to PDF option.", Toast.LENGTH_LONG).show()
-                    } else if (isPdfFile) {
-                        val downloadUrl = obj.optString("DownloadUrl", raw)
-                        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("FlyShelf", if (downloadUrl.startsWith("http")) downloadUrl else raw))
-                        lastCopiedText = if (downloadUrl.startsWith("http")) downloadUrl else raw
-                        Toast.makeText(this, "PDF URL copied! Paste in browser to download.", Toast.LENGTH_LONG).show()
-                    } else {
-                        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("FlyShelf", raw))
-                        lastCopiedText = raw
-                        Toast.makeText(this, "Copied! Long-press in any field to paste.", Toast.LENGTH_SHORT).show()
+                        val clipData = ClipData.newPlainText("FlyShelf", raw)
+                        val shadowBuilder = View.DragShadowBuilder(v)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            v.startDragAndDrop(clipData, shadowBuilder, null, View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            v.startDrag(clipData, shadowBuilder, null, 0)
+                        }
+                        Toast.makeText(this, "Dragging \u2014 drop into any field", Toast.LENGTH_SHORT).show()
+                        hidePanel()
+                        true
                     }
-                }
 
-                clipCard.setOnLongClickListener { v ->
-                    try { v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) } catch(e: Exception) {}
-                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("FlyShelf", raw))
-                    val clipData = ClipData.newPlainText("FlyShelf", raw)
-                    val shadowBuilder = View.DragShadowBuilder(v)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                        v.startDragAndDrop(clipData, shadowBuilder, null, View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        v.startDrag(clipData, shadowBuilder, null, 0)
+                    val cardLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                    cardLp.bottomMargin = (5 * density).toInt()
+                    target.addView(clipCard, cardLp)
+                }
+                if (count == 0) {
+                    val emptyRow = LinearLayout(this)
+                    emptyRow.orientation = LinearLayout.VERTICAL
+                    emptyRow.gravity = Gravity.CENTER
+                    emptyRow.setPadding(0, (32 * density).toInt(), 0, (32 * density).toInt())
+                    val emptyIcon = TextView(this)
+                    emptyIcon.text = "\uD83D\uDCED"
+                    emptyIcon.textSize = 28f
+                    emptyIcon.gravity = Gravity.CENTER
+                    emptyRow.addView(emptyIcon)
+                    val emptyText = TextView(this)
+                    emptyText.text = "No clips synced yet"
+                    emptyText.textSize = 13f
+                    emptyText.setTextColor(0x60FFFFFF.toInt())
+                    emptyText.gravity = Gravity.CENTER
+                    emptyText.typeface = Typeface.create("sans-serif", Typeface.ITALIC)
+                    val etLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                    etLp.topMargin = (6 * density).toInt()
+                    emptyRow.addView(emptyText, etLp)
+                    target.addView(emptyRow)
+                }
+            } catch(e: Exception) {}
+        }
+
+        // Helper: build shortcuts list
+        fun buildShortcutsList(target: LinearLayout) {
+            target.removeAllViews()
+            try {
+                val arr = JSONArray(shortcuts)
+                val count = arr.length()
+                for (i in 0 until count) {
+                    val sc = arr.getJSONObject(i)
+                    val trigger = sc.optString("Trigger", "")
+                    val label = sc.optString("Label", "")
+                    val expansion = sc.optString("Expansion", "")
+
+                    val card = LinearLayout(this)
+                    card.orientation = LinearLayout.VERTICAL
+                    val scBg = GradientDrawable()
+                    scBg.cornerRadius = 12f * density
+                    scBg.setColor(0x18FFD600.toInt())
+                    scBg.setStroke((0.5f * density).toInt(), 0x25FFD600)
+                    card.background = scBg
+                    card.setPadding((12 * density).toInt(), (10 * density).toInt(), (12 * density).toInt(), (10 * density).toInt())
+
+                    // Top row: trigger badge + label
+                    val topRow = LinearLayout(this)
+                    topRow.orientation = LinearLayout.HORIZONTAL
+                    topRow.gravity = Gravity.CENTER_VERTICAL
+
+                    val triggerBadge = TextView(this)
+                    triggerBadge.text = trigger
+                    triggerBadge.textSize = 11f
+                    triggerBadge.setTextColor(0xFFFFD600.toInt())
+                    triggerBadge.typeface = Typeface.create("monospace", Typeface.BOLD)
+                    val tBg = GradientDrawable()
+                    tBg.cornerRadius = 6f * density
+                    tBg.setColor(0x30FFD600.toInt())
+                    triggerBadge.background = tBg
+                    triggerBadge.setPadding((8 * density).toInt(), (3 * density).toInt(), (8 * density).toInt(), (3 * density).toInt())
+                    val tbLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                    tbLp.rightMargin = (8 * density).toInt()
+                    topRow.addView(triggerBadge, tbLp)
+
+                    val labelText = TextView(this)
+                    labelText.text = label
+                    labelText.textSize = 12f
+                    labelText.setTextColor(0xDDFFFFFF.toInt())
+                    labelText.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                    labelText.maxLines = 1
+                    topRow.addView(labelText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                    card.addView(topRow)
+
+                    // Expansion preview
+                    val preview = TextView(this)
+                    preview.text = expansion.take(60)
+                    preview.textSize = 10.5f
+                    preview.setTextColor(0x80FFFFFF.toInt())
+                    preview.maxLines = 2
+                    preview.typeface = Typeface.create("sans-serif", Typeface.ITALIC)
+                    val pvLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                    pvLp.topMargin = (4 * density).toInt()
+                    card.addView(preview, pvLp)
+
+                    card.setOnClickListener { v ->
+                        v.animate().scaleX(0.96f).scaleY(0.96f).setDuration(60).withEndAction { v.animate().scaleX(1f).scaleY(1f).setDuration(100).start() }.start()
+                        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("FlyShelf", expansion))
+                        lastCopiedText = expansion
+                        Toast.makeText(this, "\u26A1 Copied: $label", Toast.LENGTH_SHORT).show()
                     }
-                    Toast.makeText(this, "Dragging \u2014 drop into any field", Toast.LENGTH_SHORT).show()
-                    hidePanel()
-                    true
-                }
 
-                val cardLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-                cardLp.bottomMargin = (5 * density).toInt()
-                clipList.addView(clipCard, cardLp)
-            }
-            if (count == 0) {
-                val emptyRow = LinearLayout(this)
-                emptyRow.orientation = LinearLayout.VERTICAL
-                emptyRow.gravity = Gravity.CENTER
-                emptyRow.setPadding(0, (32 * density).toInt(), 0, (32 * density).toInt())
-                val emptyIcon = TextView(this)
-                emptyIcon.text = "\uD83D\uDCED"
-                emptyIcon.textSize = 28f
-                emptyIcon.gravity = Gravity.CENTER
-                emptyRow.addView(emptyIcon)
-                val emptyText = TextView(this)
-                emptyText.text = "No clips synced yet"
-                emptyText.textSize = 13f
-                emptyText.setTextColor(0x60FFFFFF.toInt())
-                emptyText.gravity = Gravity.CENTER
-                emptyText.typeface = Typeface.create("sans-serif", Typeface.ITALIC)
-                val etLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-                etLp.topMargin = (6 * density).toInt()
-                emptyRow.addView(emptyText, etLp)
-                clipList.addView(emptyRow)
-            }
-        } catch(e: Exception) {}
+                    card.setOnLongClickListener { v ->
+                        try { v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) } catch(e: Exception) {}
+                        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("FlyShelf", expansion))
+                        val clipData = ClipData.newPlainText("FlyShelf", expansion)
+                        val shadowBuilder = View.DragShadowBuilder(v)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            v.startDragAndDrop(clipData, shadowBuilder, null, View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            v.startDrag(clipData, shadowBuilder, null, 0)
+                        }
+                        Toast.makeText(this, "Dragging \u2014 drop into any field", Toast.LENGTH_SHORT).show()
+                        hidePanel()
+                        true
+                    }
+
+                    val cardLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                    cardLp.bottomMargin = (5 * density).toInt()
+                    target.addView(card, cardLp)
+                }
+                if (count == 0) {
+                    val emptyRow = LinearLayout(this)
+                    emptyRow.orientation = LinearLayout.VERTICAL
+                    emptyRow.gravity = Gravity.CENTER
+                    emptyRow.setPadding(0, (32 * density).toInt(), 0, (32 * density).toInt())
+                    val emptyIcon = TextView(this)
+                    emptyIcon.text = "\u26A1"
+                    emptyIcon.textSize = 28f
+                    emptyIcon.gravity = Gravity.CENTER
+                    emptyRow.addView(emptyIcon)
+                    val emptyText = TextView(this)
+                    emptyText.text = "No shortcuts yet\nCreate them on PC"
+                    emptyText.textSize = 13f
+                    emptyText.setTextColor(0x60FFFFFF.toInt())
+                    emptyText.gravity = Gravity.CENTER
+                    emptyText.typeface = Typeface.create("sans-serif", Typeface.ITALIC)
+                    val etLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                    etLp.topMargin = (6 * density).toInt()
+                    emptyRow.addView(emptyText, etLp)
+                    target.addView(emptyRow)
+                }
+            } catch(e: Exception) {}
+        }
+
+        // Initial: show clips
+        buildClipsList(contentList)
+
+        // Tab click handlers
+        clipsTab.setOnClickListener {
+            clipsTab.background = tabBgActive()
+            clipsTab.setTextColor(0xFFFFFFFF.toInt())
+            clipsTab.typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            shortcutsTab.background = tabBgInactive()
+            shortcutsTab.setTextColor(0x99FFFFFF.toInt())
+            shortcutsTab.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            sectionLabel.text = "RECENT CLIPS"
+            buildClipsList(contentList)
+        }
+        shortcutsTab.setOnClickListener {
+            shortcutsTab.background = tabBgActive()
+            shortcutsTab.setTextColor(0xFFFFFFFF.toInt())
+            shortcutsTab.typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            clipsTab.background = tabBgInactive()
+            clipsTab.setTextColor(0x99FFFFFF.toInt())
+            clipsTab.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            sectionLabel.text = "TEXT SHORTCUTS"
+            buildShortcutsList(contentList)
+        }
 
         scrollView.addView(clipList)
         container.addView(scrollView, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
