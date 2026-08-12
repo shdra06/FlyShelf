@@ -1,0 +1,22 @@
+{
+  "rules": {
+    "stats": {
+      "deviceCount": {
+        ".read": true,
+        ".write": false
+      },
+      ".read": false,
+      ".write": false
+    },
+    "devices": {
+      ".read": false,
+      ".write": false
+    },
+    "rate_limits": {
+      ".read": false,
+      ".write": false
+    },
+    ".read": false,
+    ".write": false
+  }
+}

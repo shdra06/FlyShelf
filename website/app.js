@@ -881,42 +881,63 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ==========================================
-     9. DYNAMIC DOWNLOAD COUNTER (GITHUB API)
-     Starts at 0, pre-fetches data, then animates
-     from 0 → total when the element scrolls into view.
+     9. REAL-TIME DEVICE COUNTER (FIREBASE RTDB)
+     Reads /stats/deviceCount from Firebase, caches
+     in localStorage, animates 0 → total on scroll.
+     Falls back to GitHub API if Firebase unavailable.
      ========================================== */
   (function initDownloadCounter() {
     const heroCount = document.getElementById('hero-download-count');
     const statsCount = document.getElementById('stats-download-count');
     if (!heroCount && !statsCount) return;
 
+    const FIREBASE_COUNTER_URL = 'https://flyshelf-1c8d2-default-rtdb.asia-southeast1.firebasedatabase.app/stats/deviceCount.json';
+    const GITHUB_API_URL = 'https://api.github.com/repos/shdra06/FlyShelf/releases?per_page=100';
+    const CACHE_KEY = 'flyshelf_device_count';
+    const cachedCount = parseInt(localStorage.getItem(CACHE_KEY), 10) || 87;
+
     // Show 0 immediately so the visitor sees a number, not "..."
     if (heroCount) heroCount.textContent = '0+';
     if (statsCount) statsCount.textContent = '0+';
 
-    let fetchedTotal = null;   // will hold the number once the API responds
+    let fetchedTotal = null;
     let heroAnimated = false;
     let statsAnimated = false;
 
-    // --- Pre-fetch the download data in the background ---
-    fetch('https://api.github.com/repos/shdra06/FlyShelf/releases?per_page=100')
-      .then(res => { if (!res.ok) throw new Error('API error'); return res.json(); })
-      .then(releases => {
-        let total = 0;
-        releases.forEach(release => {
-          (release.assets || []).forEach(asset => {
-            if (asset.name.endsWith('.exe') || asset.name.endsWith('.apk') || asset.name.endsWith('.msix')) {
-              total += asset.download_count;
-            }
-          });
-        });
-        fetchedTotal = total || 71;  // baseline fallback
-        // If elements are already visible (above fold), trigger immediately
+    // --- Primary: Fetch device count from Firebase RTDB (public read) ---
+    fetch(FIREBASE_COUNTER_URL)
+      .then(res => { if (!res.ok) throw new Error('Firebase error'); return res.json(); })
+      .then(count => {
+        if (typeof count === 'number' && count > 0) {
+          fetchedTotal = count;
+          localStorage.setItem(CACHE_KEY, count);
+        } else {
+          throw new Error('Invalid counter value');
+        }
         tryAnimate();
       })
       .catch(() => {
-        fetchedTotal = 71; // offline fallback
-        tryAnimate();
+        // --- Fallback: GitHub Releases API ---
+        fetch(GITHUB_API_URL)
+          .then(res => { if (!res.ok) throw new Error('GitHub error'); return res.json(); })
+          .then(releases => {
+            let total = 0;
+            releases.forEach(release => {
+              (release.assets || []).forEach(asset => {
+                if (asset.name.endsWith('.exe') || asset.name.endsWith('.apk') || asset.name.endsWith('.msix')) {
+                  total += asset.download_count;
+                }
+              });
+            });
+            fetchedTotal = total || cachedCount;
+            if (fetchedTotal > 0) localStorage.setItem(CACHE_KEY, fetchedTotal);
+            tryAnimate();
+          })
+          .catch(() => {
+            // --- Final fallback: cached value from localStorage ---
+            fetchedTotal = cachedCount;
+            tryAnimate();
+          });
       });
 
     // --- Scroll-triggered animation via IntersectionObserver ---
@@ -934,7 +955,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (statsCount) counterObserver.observe(statsCount);
 
     function tryAnimate() {
-      if (fetchedTotal === null) return; // data not ready yet
+      if (fetchedTotal === null) return;
       if (heroCount && !heroAnimated && heroCount.dataset.counterVisible === 'true') {
         heroAnimated = true;
         animateCounter(heroCount, 0, fetchedTotal, 2200);
