@@ -154,7 +154,23 @@ module.exports = async function handler(req, res) {
       console.log(`[register] Updated existing device: ${deviceId.substring(0, 15)}...`);
       return res.status(200).json({ success: true, isNew: false });
     } else {
-      // New device
+      // New device — check registration cap before writing
+      // [AUDIT FIX v3.8.0]: Prevent unbounded device growth
+      const MAX_REGISTERED_DEVICES = 50000;
+      try {
+        const countRes = await flyshelfFetch(`${DB_URL}/stats/deviceCount.json`);
+        if (countRes.ok) {
+          const currentCount = await countRes.json();
+          if (typeof currentCount === 'number' && currentCount >= MAX_REGISTERED_DEVICES) {
+            console.log(`[register] Device cap reached: ${currentCount}/${MAX_REGISTERED_DEVICES}`);
+            return res.status(503).json({ success: false, error: 'Registration temporarily unavailable.' });
+          }
+        }
+      } catch (capErr) {
+        // Non-fatal — allow registration to proceed if cap check fails
+        console.warn('[register] Device cap check failed:', capErr.message);
+      }
+
       const newData = {
         platform,
         firstSeen: now,

@@ -223,6 +223,7 @@ module.exports = async (req, res) => {
     };
 
     // Log payment to Firebase RTDB — atomic conditional write
+    let emailSent = false;
     try {
       // First, get the current ETag for the payment path
       const etagRes = await firebaseFetch(`${dbUrl}/payments/${razorpay_payment_id}.json`, {
@@ -297,6 +298,9 @@ module.exports = async (req, res) => {
           await new Promise(r => setTimeout(r, 1000));
           emailResult = await sendPurchaseEmail(email, licenseKey, razorpay_payment_id);
         }
+        if (!emailResult?.error && !emailResult?.skipped) {
+          emailSent = true;
+        }
         console.log('[verifyPayment] Email result:', JSON.stringify(emailResult));
       } catch (emailErr) {
         console.warn('[verifyPayment] Email send failed:', emailErr.message);
@@ -309,7 +313,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({
       success: true,
       licenseKey,
-      emailSent: true
+      emailSent
     });
 
   } catch (err) {

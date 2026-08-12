@@ -103,6 +103,7 @@
       ".write": false
     },
     "payments": {
+      ".indexOn": ["email"],
       ".read": false,
       ".write": false
     },
@@ -114,3 +115,4 @@
     ".write": false
   }
 }
+

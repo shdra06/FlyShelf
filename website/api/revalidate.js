@@ -1,6 +1,10 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const { firebaseFetch } = require('./_firebaseAdmin');
+const { firebaseFetch, setSecurityHeaders } = require('./_firebaseAdmin');
+
+// Rate limit constants
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_MAX = 10;
 
 // ═══════════════════════════════════════════════════════════════════
 // Server-side license revalidation (security audit v2.1.0)
@@ -56,6 +60,7 @@ function setCorsHeaders(req, res) {
 
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
+  setSecurityHeaders(res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -75,6 +80,32 @@ module.exports = async (req, res) => {
       console.error('[revalidate] FIREBASE_RTDB_URL not configured');
       return res.status(500).json({ valid: false, error: 'Database not configured.' });
     }
+
+    // [AUDIT FIX v3.8.0]: Firebase-based rate limiting (was missing from this endpoint)
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+    const ipHash = crypto.createHash('sha256').update(clientIp).digest('hex').substring(0, 16);
+    try {
+      const rlRes = await firebaseFetch(`${DB_URL}/rate_limits/revalidate/${ipHash}.json`);
+      if (rlRes.ok) {
+        const rlData = await rlRes.json();
+        if (rlData) {
+          const recentAttempts = Object.values(rlData).filter(
+            ts => (Date.now() - new Date(ts).getTime()) < RATE_LIMIT_WINDOW_MS
+          );
+          if (recentAttempts.length >= RATE_LIMIT_MAX) {
+            console.log(`[revalidate] Rate limit exceeded for IP: ${clientIp.substring(0, 12)}...`);
+            return res.status(429).json({ valid: false, error: 'Too many attempts. Please try again in 15 minutes.' });
+          }
+        }
+      }
+    } catch (rlErr) {
+      console.error('[revalidate] Rate limit check failed — blocking:', rlErr.message);
+      return res.status(503).json({ valid: false, error: 'Service temporarily unavailable.' });
+    }
+    firebaseFetch(`${DB_URL}/rate_limits/revalidate/${ipHash}/${Date.now()}.json`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(new Date().toISOString())
+    }).catch(() => {});
 
     const { token, deviceId } = req.body || {};
 

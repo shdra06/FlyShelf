@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/_cleanup",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/privacy", "destination": "/privacy.html" }
   ],
