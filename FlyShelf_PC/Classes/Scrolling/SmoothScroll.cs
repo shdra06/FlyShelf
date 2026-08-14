@@ -28,14 +28,14 @@ namespace FlyShelf.Classes
         public static readonly ScrollProfile ClipboardProfile = new();
 
         // ═══ Natural Velocity Physics Constants (v3.0.0.7 / 3.0.0 Decompiled Specs) ═══
-        private const double ScrollFriction      = 0.94;   // Per-frame decay (smooth luxurious glide for mouse wheel sweeps)
-        private const double MaxVelocity         = 36.0;   // Maximum speed cap in pixels/frame (prevents virtualization storms)
-        private const double TouchpadMul         = 0.085;  // Touchpad micro-step scale multiplier
-        private const double MouseMul            = 0.055;  // Mouse wheel step scale multiplier
+        private const double ScrollFriction      = 0.945;  // Smooth luxurious glide for mouse wheel sweeps
+        private const double MaxVelocity         = 42.0;   // Maximum speed cap in pixels/frame
+        private const double TouchpadMul         = 0.092;  // Touchpad micro-step scale multiplier
+        private const double MouseMul            = 0.06;   // Mouse wheel step scale multiplier
         private const double MinImpulse          = 0.2;    // Minimum impulse threshold for micro-scrolls
-        private const double MinVelocity         = 0.15;   // Velocity below this → complete stop
-        private const double DeltaCapTouchpad    = 100.0;  // Clamps raw trackpad delta packets
-        private const double DeltaCapMouse       = 240.0;  // Clamps raw mouse delta packets
+        private const double MinVelocity         = 0.10;   // Velocity below this → complete stop
+        private const double DeltaCapTouchpad    = 120.0;  // Clamps raw trackpad delta packets
+        private const double DeltaCapMouse       = 260.0;  // Clamps raw mouse delta packets
         private const double TargetFrameMs       = 16.667; // 60 FPS baseline
 
         private static readonly Dictionary<ScrollViewer, ScrollState> _states = new();
@@ -286,10 +286,10 @@ namespace FlyShelf.Classes
             long now = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
 
             // ═══ TWO-FINGER TOUCH CATCH (WhatsApp Web / macOS behavior) ═══
-            // When moving fast (|Velocity| > 2.5) and the user places fingers down
-            // on the trackpad (sending a stationary/micro delta |delta| <= 18),
-            // instantly arrest momentum to let the user pause the scroll under their fingers.
-            if (isTouchpad && state.IsAnimating && Math.Abs(state.Velocity) > 2.5 && Math.Abs(delta) <= 18)
+            // Only triggers when the list is FREE-GLIDING (no input received for > 70ms)
+            // and a stationary or micro-touch is detected (|delta| <= 20).
+            // During active continuous scrolling (input gap <= 70ms), deltas flow naturally into motion.
+            if (isTouchpad && state.IsAnimating && (now - state.LastInputTime) > 70 && Math.Abs(state.Velocity) > 2.0 && Math.Abs(delta) <= 20)
             {
                 state.Velocity = 0.0;
                 state.PendingImpulse = 0.0;
@@ -383,7 +383,7 @@ namespace FlyShelf.Classes
                 double timeScale = Math.Clamp(elapsedMs / TargetFrameMs, 0.1, 1.75);
                 state.LastFrameTick = currentTimestamp;
 
-                // ═══ PROGRESSIVE ACCELERATION & JERK LIMITING ═══
+                // ═══ PROGRESSIVE ACCELERATION & RESPONSIVE BLENDING ═══
                 if (state.PendingImpulse != 0)
                 {
                     double pending = state.PendingImpulse;
@@ -405,9 +405,9 @@ namespace FlyShelf.Classes
                     else
                     {
                         double deltaV = targetVelocity - state.Velocity;
-                        double maxAccel = (state.IsTouchpad ? 6.0 : 8.0) * timeScale;
+                        double maxAccel = (state.IsTouchpad ? 12.0 : 14.0) * timeScale;
                         double clampedDeltaV = Math.Clamp(deltaV, -maxAccel, maxAccel);
-                        double blendFactor = state.IsTouchpad ? 0.45 : 0.55;
+                        double blendFactor = state.IsTouchpad ? 0.65 : 0.60;
                         state.Velocity += clampedDeltaV * blendFactor;
                     }
 
@@ -430,21 +430,20 @@ namespace FlyShelf.Classes
                 }
 
                 // ═══ UNIFIED CONTINUOUS FRICTION DECAY ═══
-                // Unified exponential decay physics across all frames — eliminating
-                // the equation-switching jerk between active input and coasting.
+                // Unified exponential decay physics across all frames — buttery smooth and free gliding.
                 double friction;
                 if (state.IsTouchpad)
                 {
                     double absV = Math.Abs(state.Velocity);
-                    double slowFriction = 0.91;  // Crisp, immediate finger tracking at slow speeds
-                    double fastFriction = 0.938; // Clean, elegant glide for fast swipes (~400-500ms duration)
+                    double slowFriction = 0.940; // Silky smooth response at slow speeds
+                    double fastFriction = 0.962; // Free, luxurious glide for fast swipes
                     double t = Math.Clamp((absV - 2.0) / 16.0, 0.0, 1.0);
                     t = t * t * (3.0 - 2.0 * t); // Smoothstep curve
                     friction = slowFriction + (fastFriction - slowFriction) * t;
                 }
                 else
                 {
-                    friction = 0.925; // Snappy, premium mouse wheel decay
+                    friction = ScrollFriction; // 0.945
                 }
 
                 // Apply velocity to offset with frame-time compensation
