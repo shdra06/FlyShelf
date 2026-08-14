@@ -109,15 +109,9 @@ namespace FlyShelf.Classes
             public long LastFrameTick;
             public long LastInputTime;
             public double PendingImpulse;  // Coalesced impulse — drained once per render frame
-            public double TrueOffset;      // Sub-pixel precise position (never sent to ScrollViewer)
+            public double TrueOffset;      // Sub-pixel precise position (tracked continuous offset)
             public double LastSetOffset;   // ScrollViewer offset after last write in the animation loop
-            // ═══ ANALYTICAL COAST PHASE (iOS-inspired) ═══
-            public bool InCoastPhase;
-            public long CoastStartTime;
-            public double CoastStartVelocity;
-            public double CoastStartOffset;
-            public long LastPrefetchTime;   // Last time we triggered prefetch during coast
-            public double CoastDecayPerMs;  // Per-ms decay rate computed from active friction at coast start
+            public long LastPrefetchTime;  // Last time we triggered prefetch during active scroll/deceleration
         }
 
         /// <summary>
@@ -160,6 +154,39 @@ namespace FlyShelf.Classes
         {
             window.PreviewMouseWheel -= OnWindowPreviewMouseWheel;
             window.PreviewMouseWheel += OnWindowPreviewMouseWheel;
+            window.PreviewMouseDown -= OnWindowPreviewMouseDown;
+            window.PreviewMouseDown += OnWindowPreviewMouseDown;
+            window.PreviewTouchDown -= OnWindowPreviewTouchDown;
+            window.PreviewTouchDown += OnWindowPreviewTouchDown;
+        }
+
+        private static void OnWindowPreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            ArrestAllScrolling();
+        }
+
+        private static void OnWindowPreviewTouchDown(object? sender, TouchEventArgs e)
+        {
+            ArrestAllScrolling();
+        }
+
+        private static void ArrestAllScrolling()
+        {
+            if (_states.Count > 0)
+            {
+                foreach (var kvp in _states)
+                {
+                    var sv = kvp.Key;
+                    var state = kvp.Value;
+                    if (state.IsAnimating)
+                    {
+                        state.Velocity = 0;
+                        state.PendingImpulse = 0;
+                        state.IsAnimating = false;
+                        DisableStaticCanvas(sv);
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -168,6 +195,8 @@ namespace FlyShelf.Classes
         public static void DetachFromWindow(Window window)
         {
             window.PreviewMouseWheel -= OnWindowPreviewMouseWheel;
+            window.PreviewMouseDown -= OnWindowPreviewMouseDown;
+            window.PreviewTouchDown -= OnWindowPreviewTouchDown;
             _ancestorCache.Clear();
 
             var toRemove = new List<ScrollViewer>();
@@ -255,6 +284,19 @@ namespace FlyShelf.Classes
             }
 
             long now = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+
+            // ═══ TWO-FINGER TOUCH CATCH (WhatsApp Web / macOS behavior) ═══
+            // When moving fast (|Velocity| > 2.5) and the user places fingers down
+            // on the trackpad (sending a stationary/micro delta |delta| <= 18),
+            // instantly arrest momentum to let the user pause the scroll under their fingers.
+            if (isTouchpad && state.IsAnimating && Math.Abs(state.Velocity) > 2.5 && Math.Abs(delta) <= 18)
+            {
+                state.Velocity = 0.0;
+                state.PendingImpulse = 0.0;
+                state.LastInputTime = now;
+                return;
+            }
+
             state.IsTouchpad = isTouchpad;
             state.LastInputTime = now;
 
@@ -263,8 +305,6 @@ namespace FlyShelf.Classes
 
             if (state.IsTouchpad)
             {
-                // Continuous, linear trackpad scroll mapping to mirror the mouse wheel's consistency 
-                // and respond natively to fine trackpad acceleration/deceleration.
                 double capped = Math.Sign(rawDelta) * Math.Min(Math.Abs(rawDelta), DeltaCapTouchpad);
                 impulse = capped * TouchpadMul;
             }
@@ -275,10 +315,6 @@ namespace FlyShelf.Classes
             }
 
             // ═══ COALESCE: Accumulate impulse for per-frame drain ═══
-            // Precision touchpads fire 200-500 Hz bursts between render frames.
-            // Applying each micro-impulse individually compounds velocity into
-            // visible "step jumps." Accumulating and draining once per render
-            // frame replicates the natural throttling a low-level input hook provides.
             state.PendingImpulse += impulse;
 
             if (!state.IsAnimating)
@@ -325,12 +361,9 @@ namespace FlyShelf.Classes
                 }
 
                 // ═══ SYNCHRONIZE WITH WPF LAYOUT SHIFTS ═══
-                // Only absorb large external layout shifts (user dragging scrollbar thumb,
-                // programmatic jumps, or item additions/deletions > 6.0px).
-                // Micro layout shifts (0.001 - 6.0px) from VirtualizingStackPanel measuring
-                // newly realized containers (especially during upward scrolling) must NOT
-                // be injected into TrueOffset — doing so creates a positive-feedback jitter
-                // loop that fights upward motion.
+                // Only absorb large external layout shifts (> 6.0px).
+                // Micro layout shifts from VirtualizingStackPanel measuring containers
+                // are synced into LastSetOffset without polluting TrueOffset.
                 double actualOffset = sv.VerticalOffset;
                 double wpfDelta = actualOffset - state.LastSetOffset;
                 if (Math.Abs(wpfDelta) > 6.0)
@@ -343,11 +376,14 @@ namespace FlyShelf.Classes
                     state.LastSetOffset = actualOffset;
                 }
 
+                // ═══ FRAME TIME COMPENSATION ═══
+                long currentTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+                double elapsedMs = (double)(currentTimestamp - state.LastFrameTick) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                if (elapsedMs <= 0) elapsedMs = 1.0;
+                double timeScale = Math.Clamp(elapsedMs / TargetFrameMs, 0.1, 1.75);
+                state.LastFrameTick = currentTimestamp;
+
                 // ═══ PROGRESSIVE ACCELERATION & JERK LIMITING ═══
-                // When scrolling starts or sudden massive impulses arrive:
-                // Instead of an instantaneous velocity jump on Frame 1 (which causes a visible
-                // "kick" and frame skips due to sudden heavy container generation), we apply
-                // an acceleration limiter (jerk cap) and progressive momentum build-up.
                 if (state.PendingImpulse != 0)
                 {
                     double pending = state.PendingImpulse;
@@ -356,43 +392,27 @@ namespace FlyShelf.Classes
                     double targetVelocity = state.Velocity - pending;
                     targetVelocity = Math.Clamp(targetVelocity, -MaxVelocity, MaxVelocity);
 
-                    // Detect if user is scrolling AGAINST current motion (direction reversal).
-                    double reversalThreshold = state.IsTouchpad ? 3.5 : 2.0;
+                    double reversalThreshold = state.IsTouchpad ? 3.0 : 2.0;
                     bool isReversal = Math.Abs(state.Velocity) > reversalThreshold &&
                                      Math.Sign(targetVelocity) != Math.Sign(state.Velocity);
 
                     if (isReversal)
                     {
-                        // Progressive brake toward zero when changing direction
                         state.Velocity *= 0.60;
-                        if (Math.Abs(state.Velocity) < 0.4)
+                        if (Math.Abs(state.Velocity) < 0.3)
                             state.Velocity = 0;
                     }
                     else
                     {
-                        // Smooth progressive acceleration ramp:
-                        // Cap the maximum velocity change per frame so sudden large flicks
-                        // accelerate smoothly over 3-4 frames (30-50ms) rather than jolting on frame 1.
                         double deltaV = targetVelocity - state.Velocity;
-                        double maxAccel = (state.IsTouchpad ? 5.5 : 7.0);
+                        double maxAccel = (state.IsTouchpad ? 6.0 : 8.0) * timeScale;
                         double clampedDeltaV = Math.Clamp(deltaV, -maxAccel, maxAccel);
-
-                        double blendFactor = state.IsTouchpad ? 0.40 : 0.50;
+                        double blendFactor = state.IsTouchpad ? 0.45 : 0.55;
                         state.Velocity += clampedDeltaV * blendFactor;
                     }
 
                     state.Velocity = Math.Clamp(state.Velocity, -MaxVelocity, MaxVelocity);
                 }
-
-                // Frame-time compensation: normalize velocity against 60 FPS baseline (16.667ms)
-                long currentTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
-                double elapsedMs = (double)(currentTimestamp - state.LastFrameTick) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-                if (elapsedMs <= 0) elapsedMs = 1.0;
-                double timeScale = elapsedMs / TargetFrameMs;
-                
-                // Clamp time scale to avoid huge runaway jumps on lag spikes
-                timeScale = Math.Clamp(timeScale, 0.1, 1.75);
-                state.LastFrameTick = currentTimestamp;
 
                 // Stop if at boundary
                 bool atBound = (state.TrueOffset <= 0 && state.Velocity < 0) ||
@@ -409,195 +429,58 @@ namespace FlyShelf.Classes
                     continue;
                 }
 
-                // ═══ iOS-INSPIRED ANALYTICAL COASTING ═══
-                // Instead of per-frame v *= friction (which accumulates rounding errors and
-                // stutters on frame timing variations), compute the EXACT position from the
-                // elapsed time since the user lifted their finger.
-                //
-                // Math: position(t) = pos0 + v0 * (d^t - 1) / ln(d)
-                //        velocity(t) = v0 * d^t
-                // where d = per-ms decay rate, t = elapsed ms since coast start.
-                //
-                // This produces a mathematically perfect smooth exponential curve that is
-                // completely immune to frame rate jitter — every frame lands on the exact
-                // point of the curve regardless of when it renders.
-
-                long nowMs = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
-                bool userStopped = (nowMs - state.LastInputTime) > 40;  // 40ms — touchpad drivers stop within 20-30ms of finger lift
-
-                // ─── ACTIVE INPUT PHASE (finger on touchpad) ───
-                if (!userStopped || state.PendingImpulse != 0)
+                // ═══ UNIFIED CONTINUOUS FRICTION DECAY ═══
+                // Unified exponential decay physics across all frames — eliminating
+                // the equation-switching jerk between active input and coasting.
+                double friction;
+                if (state.IsTouchpad)
                 {
-                    // Exit coast phase if we were in it (user resumed scrolling)
-                    state.InCoastPhase = false;
-
-                    // ═══ MICRO-SCROLL DIRECT TRACKING ═══
-                    // Only for truly sub-pixel movement (< 0.3 px/frame) where WPF's
-                    // device-pixel snapping makes the velocity system produce visible steps.
-                    // Everything above 0.3 flows through the smooth velocity+friction system.
-                    if (state.IsTouchpad && Math.Abs(state.Velocity) < 0.3 && state.PendingImpulse != 0)
-                    {
-                        // Apply the impulse directly as displacement (1:1 tracking)
-                        double directDisplacement = -state.PendingImpulse * (TargetFrameMs / 1.0);
-                        state.TrueOffset += directDisplacement;
-                        state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
-                        // ═══ SUB-PIXEL CONTINUOUS RENDERING ═══
-                        // Write TrueOffset directly — no Math.Round. WPF's ScrollContentPresenter
-                        // uses a GPU TranslateTransform for sub-pixel positioning, producing
-                        // visually smooth motion at any refresh rate (60/120/144/240Hz).
-                        // Pixel-snapping (Math.Round + >= 0.5 guard) was HALVING the perceived
-                        // frame rate on high-refresh displays by rounding away sub-pixel deltas.
-                        if (Math.Abs(state.TrueOffset - sv.VerticalOffset) >= 0.1)
-                            sv.ScrollToVerticalOffset(state.TrueOffset);
-                        state.LastSetOffset = state.TrueOffset;
-                        // Let velocity build naturally from micro-scrolls
-                        state.Velocity = 0;
-                        anyAnimating = true;
-                    }
-                    else
-                    {
-                        // Apply velocity with frame-time compensation
-                        double displacement = state.Velocity * timeScale;
-                        state.TrueOffset += displacement;
-                        state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
-
-                        // ═══ SUB-PIXEL CONTINUOUS RENDERING ═══
-                        // Write TrueOffset directly without Math.Round. On 144Hz+ displays,
-                        // pixel-snapping was swallowing every 2nd-3rd frame's movement because
-                        // displacement per frame (~0.4-0.8px) rounds to zero change.
-                        // WPF's GPU compositor renders sub-pixel positions smoothly via
-                        // ScrollContentPresenter's internal TranslateTransform.
-                        if (Math.Abs(state.TrueOffset - sv.VerticalOffset) >= 0.1)
-                            sv.ScrollToVerticalOffset(state.TrueOffset);
-                        state.LastSetOffset = state.TrueOffset;
-
-                        // Velocity-adaptive friction during active input.
-                        // Wider transition band (2-20 px/frame) eliminates mid-speed resonance
-                        // where the old narrow band (3-12) caused friction oscillation jitter.
-                        double friction;
-                        if (state.IsTouchpad)
-                        {
-                            double absV = Math.Abs(state.Velocity);
-                            double slowFriction = 0.97;  // Glassy smooth glide for slow/medium scrolling
-                            double fastFriction = 0.93;  // Fluid momentum for fast swipes
-                            double t = Math.Clamp((absV - 2.0) / 18.0, 0.0, 1.0);
-                            t = t * t * (3.0 - 2.0 * t); // Smoothstep
-                            friction = slowFriction + (fastFriction - slowFriction) * t;
-                        }
-                        else
-                        {
-                            friction = ScrollFriction;
-                        }
-
-                        state.Velocity *= Math.Pow(friction, timeScale);
-                        anyAnimating = true;
-                    }
+                    double absV = Math.Abs(state.Velocity);
+                    double slowFriction = 0.91;  // Crisp, immediate finger tracking at slow speeds
+                    double fastFriction = 0.938; // Clean, elegant glide for fast swipes (~400-500ms duration)
+                    double t = Math.Clamp((absV - 2.0) / 16.0, 0.0, 1.0);
+                    t = t * t * (3.0 - 2.0 * t); // Smoothstep curve
+                    friction = slowFriction + (fastFriction - slowFriction) * t;
                 }
-                // ─── ANALYTICAL COAST PHASE (finger lifted) ───
                 else
                 {
-                    // Enter coast phase: record the exact start state
-                    if (!state.InCoastPhase)
-                    {
-                        // MICRO-COAST BYPASS: If velocity is too small to produce a visible
-                        // smooth animation (< 0.8 px/frame → total coast ~2px), stop immediately.
-                        // This prevents step-wise micro-animations — micro-scrolls just stop
-                        // cleanly where the finger left off.
-                        if (state.IsTouchpad && Math.Abs(state.Velocity) < 0.15)
-                        {
-                            state.Velocity = 0.0;
-                            state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
-                            sv.ScrollToVerticalOffset(state.TrueOffset);
-                            state.LastSetOffset = state.TrueOffset;
-                            state.IsAnimating = false;
-                            _completedBuffer.Add(sv);
-                            continue;
-                        }
-                        state.InCoastPhase = true;
-                        state.CoastStartTime = nowMs;
-                        state.CoastStartVelocity = state.Velocity;
-                        state.CoastStartOffset = state.TrueOffset;
+                    friction = 0.925; // Snappy, premium mouse wheel decay
+                }
 
-                        // ═══ SEAMLESS TRANSITION ═══
-                        // Compute the coast decay rate from the SAME velocity-adaptive friction
-                        // that was running during active input. This ensures zero deceleration
-                        // jump at the transition — the coast curve is a mathematically exact
-                        // continuation of the active friction curve.
-                        if (state.IsTouchpad)
-                        {
-                            double absV = Math.Abs(state.Velocity);
-                            double slowFriction = 0.97;
-                            double fastFriction = 0.93;
-                            // Wider transition band (2-20 px/frame) — must match active phase
-                            double t = Math.Clamp((absV - 2.0) / 18.0, 0.0, 1.0);
-                            t = t * t * (3.0 - 2.0 * t);
-                            double frictionPerFrame = slowFriction + (fastFriction - slowFriction) * t;
-                            // Convert per-frame friction to per-ms: f_ms = f_frame^(1/16.667)
-                            state.CoastDecayPerMs = Math.Pow(frictionPerFrame, 1.0 / TargetFrameMs);
-                        }
-                        else
-                        {
-                            state.CoastDecayPerMs = 0.9958;
-                        }
-                    }
+                // Apply velocity to offset with frame-time compensation
+                double displacement = state.Velocity * timeScale;
+                state.TrueOffset += displacement;
+                state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
 
-                    double decayPerMs = state.CoastDecayPerMs;
-                    double lnDecay = Math.Log(decayPerMs);
+                // Write sub-pixel offset directly to GPU compositor
+                if (Math.Abs(state.TrueOffset - sv.VerticalOffset) >= 0.05)
+                    sv.ScrollToVerticalOffset(state.TrueOffset);
+                state.LastSetOffset = state.TrueOffset;
 
-                    // Convert initial velocity from px/frame to px/ms
-                    double v0_ms = state.CoastStartVelocity / TargetFrameMs;
+                // Decay velocity continuously
+                state.Velocity *= Math.Pow(friction, timeScale);
 
-                    double coastElapsedMs = nowMs - state.CoastStartTime;
-
-                    // Analytical position and velocity — exact, no accumulation errors
-                    double decayPow = Math.Pow(decayPerMs, coastElapsedMs);
-                    double analyticalOffset = state.CoastStartOffset + v0_ms * (decayPow - 1.0) / lnDecay;
-                    double analyticalVelocity_ms = v0_ms * decayPow;
-
-                    // Convert velocity back to px/frame for state consistency
-                    state.Velocity = analyticalVelocity_ms * TargetFrameMs;
-
-                    // Clamp to scrollable bounds
-                    analyticalOffset = Math.Clamp(analyticalOffset, 0, sv.ScrollableHeight);
-                    state.TrueOffset = analyticalOffset;
-
-                    // ═══ SUB-PIXEL COAST RENDERING ═══
-                    // Write analytical offset directly — no rounding. The analytical formula
-                    // computes mathematically exact positions on a smooth exponential curve.
-                    // Rounding those positions to integers introduces quantization noise that
-                    // creates visible "stepping" on 120Hz/144Hz/240Hz displays.
-                    if (Math.Abs(state.TrueOffset - sv.VerticalOffset) >= 0.1)
-                        sv.ScrollToVerticalOffset(state.TrueOffset);
+                // Stop condition: velocity below imperceptible threshold
+                if (Math.Abs(state.Velocity) < 0.10)
+                {
+                    state.Velocity = 0.0;
+                    state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
+                    sv.ScrollToVerticalOffset(state.TrueOffset);
                     state.LastSetOffset = state.TrueOffset;
-
-                    // Stop condition: velocity is completely imperceptible (< 0.10 px/frame = 6px/sec).
-                    // We do NOT snap with Math.Round on the final frame — doing so causes a visible
-                    // 0.5px step/jolt on the last frame. Stopping exactly on the continuous curve
-                    // produces an imperceptible, silky fade-to-stop.
-                    if (Math.Abs(state.Velocity) < 0.10)
+                    state.IsAnimating = false;
+                    DisableStaticCanvas(sv);
+                    _completedBuffer.Add(sv);
+                }
+                else
+                {
+                    // Trigger image prefetch every 150ms while scrolling at speed
+                    long nowMs = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+                    if (nowMs - state.LastPrefetchTime > 150 && Math.Abs(state.Velocity) > 1.0)
                     {
-                        state.Velocity = 0.0;
-                        state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
-                        sv.ScrollToVerticalOffset(state.TrueOffset);
-                        state.LastSetOffset = state.TrueOffset;
-                        state.IsAnimating = false;
-                        state.InCoastPhase = false;
-                        DisableStaticCanvas(sv);
-                        _completedBuffer.Add(sv);
+                        state.LastPrefetchTime = nowMs;
+                        try { CoastPrefetchNeeded?.Invoke(); } catch { }
                     }
-                    else
-                    {
-                        // ═══ COAST-PHASE PREFETCH ═══
-                        // During deceleration, trigger image prefetching every 200ms.
-                        // This loads images in the expanded ±800px prefetch zone while
-                        // the list is coasting, so they appear "instantly" when entering viewport.
-                        if (nowMs - state.LastPrefetchTime > 200)
-                        {
-                            state.LastPrefetchTime = nowMs;
-                            try { CoastPrefetchNeeded?.Invoke(); } catch { }
-                        }
-                        anyAnimating = true;
-                    }
+                    anyAnimating = true;
                 }
             }
 
