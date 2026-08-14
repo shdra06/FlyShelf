@@ -325,21 +325,21 @@ namespace FlyShelf.Classes
                 }
 
                 // ═══ SYNCHRONIZE WITH WPF LAYOUT SHIFTS ═══
-                // WPF's VirtualizingPanel causes micro layout shifts when realizing items.
-                // Upward scrolling is especially affected because items above the viewport
-                // get realized, pushing the scroll offset by a few pixels.
-                //
-                // Strategy: ALWAYS absorb layout shifts into TrueOffset. Previously,
-                // small shifts (< 5px) were only resynced without adjusting TrueOffset,
-                // which caused the next frame's displacement to fight the shift — producing
-                // visible micro-stutters during upward scrolling.
+                // Only absorb large external layout shifts (user dragging scrollbar thumb,
+                // programmatic jumps, or item additions/deletions > 6.0px).
+                // Micro layout shifts (0.001 - 6.0px) from VirtualizingStackPanel measuring
+                // newly realized containers (especially during upward scrolling) must NOT
+                // be injected into TrueOffset — doing so creates a positive-feedback jitter
+                // loop that fights upward motion.
                 double actualOffset = sv.VerticalOffset;
                 double wpfDelta = actualOffset - state.LastSetOffset;
-                if (Math.Abs(wpfDelta) > 0.001)
+                if (Math.Abs(wpfDelta) > 6.0)
                 {
-                    // Absorb ALL layout shifts (both small virtualization jitter and large
-                    // async-load jumps) so TrueOffset always tracks the real position.
                     state.TrueOffset += wpfDelta;
+                    state.LastSetOffset = actualOffset;
+                }
+                else if (Math.Abs(wpfDelta) > 0.001)
+                {
                     state.LastSetOffset = actualOffset;
                 }
 
@@ -401,7 +401,7 @@ namespace FlyShelf.Classes
                 if (atBound)
                 {
                     state.Velocity = 0.0;
-                    state.TrueOffset = Math.Clamp(Math.Round(state.TrueOffset), 0, sv.ScrollableHeight);
+                    state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
                     sv.ScrollToVerticalOffset(state.TrueOffset);
                     state.LastSetOffset = state.TrueOffset;
                     state.IsAnimating = false;
@@ -503,10 +503,9 @@ namespace FlyShelf.Classes
                         // smooth animation (< 0.8 px/frame → total coast ~2px), stop immediately.
                         // This prevents step-wise micro-animations — micro-scrolls just stop
                         // cleanly where the finger left off.
-                        if (state.IsTouchpad && Math.Abs(state.Velocity) < 0.25)
+                        if (state.IsTouchpad && Math.Abs(state.Velocity) < 0.15)
                         {
                             state.Velocity = 0.0;
-                            state.TrueOffset = Math.Round(state.TrueOffset);
                             state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
                             sv.ScrollToVerticalOffset(state.TrueOffset);
                             state.LastSetOffset = state.TrueOffset;
@@ -571,22 +570,19 @@ namespace FlyShelf.Classes
                         sv.ScrollToVerticalOffset(state.TrueOffset);
                     state.LastSetOffset = state.TrueOffset;
 
-                    // Stop condition: velocity is truly imperceptible (< 0.2 px/frame = 12px/sec).
-                    // The old 0.50 threshold (30px/sec) was still visible — the content visibly
-                    // "snapped" to a stop mid-motion. 0.20 produces a silky fade-to-stop.
-                    // ClearType is restored HERE (not mid-coast) to avoid a
-                    // mid-deceleration text re-render shift.
-                    if (Math.Abs(state.Velocity) < 0.20)
+                    // Stop condition: velocity is completely imperceptible (< 0.10 px/frame = 6px/sec).
+                    // We do NOT snap with Math.Round on the final frame — doing so causes a visible
+                    // 0.5px step/jolt on the last frame. Stopping exactly on the continuous curve
+                    // produces an imperceptible, silky fade-to-stop.
+                    if (Math.Abs(state.Velocity) < 0.10)
                     {
                         state.Velocity = 0.0;
                         state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
-                        // Snap to nearest pixel for a clean, stable final position
-                        double finalSnapped = Math.Round(state.TrueOffset);
-                        sv.ScrollToVerticalOffset(finalSnapped);
-                        state.LastSetOffset = finalSnapped;
+                        sv.ScrollToVerticalOffset(state.TrueOffset);
+                        state.LastSetOffset = state.TrueOffset;
                         state.IsAnimating = false;
                         state.InCoastPhase = false;
-                        DisableStaticCanvas(sv); // Restore ClearType only at full stop
+                        DisableStaticCanvas(sv);
                         _completedBuffer.Add(sv);
                     }
                     else
