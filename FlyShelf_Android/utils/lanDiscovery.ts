@@ -176,12 +176,19 @@ const scanIpList = async (subnet: string, ids: number[]): Promise<DiscoveryResul
 
 /**
  * Register a callback that fires on WiFi connect/disconnect.
+ * H-6 FIX: Only fires when connectivity state actually changes (not on signal fluctuations).
  * Returns an unsubscribe function.
  */
 export const onNetworkChange = (callback: (isConnected: boolean, type: string) => void): (() => void) => {
+  let lastConnected: boolean | null = null;
+  let lastType: string | null = null;
   const unsubscribe = NetInfo.addEventListener(state => {
     const isConnected = state.isConnected ?? false;
     const type = state.type ?? 'unknown';
+    // H-6: Skip if state hasn't meaningfully changed
+    if (isConnected === lastConnected && type === lastType) return;
+    lastConnected = isConnected;
+    lastType = type;
     callback(isConnected, type);
   });
   return unsubscribe;

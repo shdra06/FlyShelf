@@ -155,6 +155,8 @@ export async function getFirebaseIdToken(): Promise<string> {
       await ensureFirebaseAuth();
       // After ensureFirebaseAuth, auth.currentUser might be set if SDK succeeded
       if (auth.currentUser) {
+        // C-6 FIX: SDK recovered — clear stale REST fallback token
+        _restIdToken = null;
         return await auth.currentUser.getIdToken(true);
       }
       // If still null, check if we have a REST token
@@ -182,6 +184,9 @@ export default app;
  * Fallback: Sign in anonymously via Firebase REST API.
  * Bypasses JS SDK internal request handling which can fail on some Android environments.
  */
+let _restRefreshCount = 0;
+const MAX_REST_REFRESHES = 5; // C-6: Cap REST token auto-refresh to prevent infinite chains
+
 async function signInAnonymouslyRest(): Promise<void> {
   const apiKey = firebaseConfig.apiKey;
   const url = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`;
@@ -200,17 +205,23 @@ async function signInAnonymouslyRest(): Promise<void> {
     
     if (data.idToken) {
       _restIdToken = data.idToken;
+      _restRefreshCount++;
       console.log('[FirebaseAuth] REST sign-in successful, token cached');
       
       // AC-11: Auto-refresh token after 50 minutes instead of just clearing it
       // Firebase tokens last 1 hour — proactively re-authenticate before expiry
-      setTimeout(() => {
-        console.log('[FirebaseAuth] REST token expiring — refreshing...');
-        signInAnonymouslyRest().catch(e => {
-          console.warn('[FirebaseAuth] REST token refresh failed:', e);
-          _restIdToken = null;
-        });
-      }, 50 * 60 * 1000);
+      // C-6 FIX: Cap max refreshes to prevent infinite refresh chain
+      if (_restRefreshCount < MAX_REST_REFRESHES) {
+        setTimeout(() => {
+          console.log('[FirebaseAuth] REST token expiring — refreshing...');
+          signInAnonymouslyRest().catch(e => {
+            console.warn('[FirebaseAuth] REST token refresh failed:', e);
+            _restIdToken = null;
+          });
+        }, 50 * 60 * 1000);
+      } else {
+        console.log('[FirebaseAuth] REST token refresh limit reached — will re-auth on next request');
+      }
     }
   } catch (error) {
     throw error;

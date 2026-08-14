@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react'; // L-2: Removed unused React default import
 import { useLatest } from '../../hooks/useLatest';
 import { Platform, NativeModules, ToastAndroid, AppState } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
@@ -18,6 +18,82 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { AdvanceOverlay } = NativeModules;
 
 // Audit Task 1: normalizeTextForFingerprint now imported from utils/textNormalize.ts
+
+// H-9 FIX: Extracted shared file download URL resolution helper to eliminate duplication
+async function resolveFileDownloadUrl(params: {
+  dlPath: string;
+  targetUrl: string;
+  lastWorkingPcUrlRef: React.MutableRefObject<string | null>;
+  pcLocalIp: string;
+  pairingKeyRef: React.MutableRefObject<string>;
+  cachedPcUrlRef: React.MutableRefObject<string | null>;
+}): Promise<{ fileUrl: string; dlSource: string }> {
+  const { dlPath, targetUrl, lastWorkingPcUrlRef, pcLocalIp, pairingKeyRef, cachedPcUrlRef } = params;
+  const pathPart = dlPath.includes('?path=') ? dlPath.substring(dlPath.indexOf('?path=')) : '';
+  let fileUrl = '';
+  let dlSource = 'Cloud';
+
+  if (pathPart) {
+    // Try LAN first (fast)
+    let lanBase = '';
+    const lanCandidates = [
+      ...(targetUrl && !targetUrl.includes('trycloudflare.com') ? [targetUrl] : []),
+      ...(lastWorkingPcUrlRef.current && !lastWorkingPcUrlRef.current.includes('trycloudflare.com') ? [lastWorkingPcUrlRef.current] : []),
+      ...(pcLocalIp ? pcLocalIp.split(',').map(s => s.trim()).filter(Boolean).map(ip => ip.startsWith('http') ? ip.replace(/\/$/, '') : `http://${ip.includes(':') ? ip : ip + ':8999'}`) : []),
+    ].filter((v, i, a) => a.indexOf(v) === i);
+
+    for (const candidate of lanCandidates) {
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 3000);
+        const h = await fetch(`${candidate}/api/health`, {
+          headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' },
+          signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        if (h.ok) { lanBase = candidate; break; }
+      } catch (e) { syncLog('FILE-DL', `LAN probe failed for ${candidate}: ${(e as any)?.message || e}`); }
+    }
+    if (lanBase) {
+      fileUrl = `${lanBase}/download${pathPart}`;
+      dlSource = 'LAN';
+    } else {
+      // Cloudflare fallback via Firebase
+      try {
+        const pk = pairingKeyRef.current;
+        if (pk) {
+          const devSnap = await get(ref(database, `active_devices/${pk}`));
+          if (devSnap.exists()) {
+            const devs = devSnap.val();
+            for (const dk of Object.keys(devs)) {
+              const d = await decryptDevice(devs[dk]);
+              if (d.GlobalUrl?.includes('trycloudflare.com') && d.DeviceType === 'PC') {
+                fileUrl = `${d.GlobalUrl.replace(/\/$/, '')}/download${pathPart}`;
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) { syncLog('FILE-DL', `Firebase device lookup failed: ${(e as any)?.message || e}`); }
+      if (!fileUrl && targetUrl?.includes('trycloudflare.com')) {
+        fileUrl = `${targetUrl}/download${pathPart}`;
+      }
+    }
+    // Last resort: cached/resolved PC URL
+    if (!fileUrl && !lanBase) {
+      try {
+        const cachedUrl = cachedPcUrlRef.current || lastWorkingPcUrlRef.current;
+        if (cachedUrl) {
+          fileUrl = `${cachedUrl.replace(/\/$/, '')}/download${pathPart}`;
+          dlSource = cachedUrl.includes('trycloudflare.com') ? 'Cloud' : 'LAN';
+        }
+      } catch {}
+    }
+  } else if (dlPath.startsWith('http')) {
+    fileUrl = dlPath;
+  }
+  return { fileUrl, dlSource };
+}
 
 export function useDeviceSync(params: {
   isGlobalSyncEnabled: boolean;
@@ -516,20 +592,25 @@ export function useDeviceSync(params: {
         }
 
         // Cleanup stale fingerprints (LAN path) — prevent unbounded growth
-        // IMPORTANT: Never expire 'filedl::' keys — they prevent infinite re-download loops
+        // C-2 FIX: filedl:: keys now expire after 24h instead of being permanent
         if (recentSyncFingerprintsRef.current.size > 200) {
           const entries = [...recentSyncFingerprintsRef.current.entries()];
-          const cutoff = Date.now() - 60000; // 60s window
+          const cutoff = Date.now() - 60000; // 60s window for non-filedl keys
+          const fileDlCutoff = Date.now() - 24 * 60 * 60 * 1000; // 24h for filedl keys
           for (const [key, ts] of entries) {
-            if (key.startsWith('filedl::')) continue; // Permanent — prevents re-download loop
+            if (key.startsWith('filedl::')) {
+              if (ts < fileDlCutoff) recentSyncFingerprintsRef.current.delete(key);
+              continue;
+            }
             if (ts < cutoff) recentSyncFingerprintsRef.current.delete(key);
           }
         }
 
         // Cleanup stale processed events — prevent unbounded growth
-        if (processedEventsRef.current.size > 500) {
+        // L-5 FIX: Tighter cleanup with 5min window (was 10min)
+        if (processedEventsRef.current.size > 300) {
           const entries = [...processedEventsRef.current.entries()];
-          const cutoff = Date.now() - 600000; // 10min window
+          const cutoff = Date.now() - 300000; // 5min window
           for (const [key, ts] of entries) {
             if (ts < cutoff) processedEventsRef.current.delete(key);
           }
@@ -609,6 +690,12 @@ export function useDeviceSync(params: {
       if (!longPollActive) return; // Bail if already torn down
       syncLog('LONG-POLL', 'Starting long-poll loop');
       while (longPollActive) {
+        // H-3 FIX: Disable long-poll when regular poll is in slow mode (PC unreachable)
+        if (pollRetryCountRef.current >= 10) {
+          syncLog('LONG-POLL', 'Regular poll in slow mode — suspending long-poll for 60s');
+          await new Promise(r => setTimeout(r, 60000));
+          continue;
+        }
         try {
           // Always resolve fresh URL (don't rely on potentially stale ref)
           const url = cachedPcUrlRef.current || (await getCachedPcUrl());

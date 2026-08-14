@@ -72,9 +72,7 @@ namespace FlyShelf.Windows
                                 DeviceType = "PC",
                                 IsOnline = true,
                                 ConnectionType = "Local",
-                                LastSeen = $"LAN active  {peer.ActiveUrl}",
-                                LocalIp = peer.LanUrl,
-                                GlobalUrl = peer.CloudflareUrl
+                                LastSeen = "LAN active",
                             });
                         }
                         else if (peer.IsAlive && peer.Transport == "Cloudflare")
@@ -87,8 +85,6 @@ namespace FlyShelf.Windows
                                 IsOnline = true,
                                 ConnectionType = "Cloud",
                                 LastSeen = "Cloudflare tunnel active",
-                                LocalIp = peer.LanUrl,
-                                GlobalUrl = peer.CloudflareUrl
                             });
                         }
                         else
@@ -101,8 +97,6 @@ namespace FlyShelf.Windows
                                 IsOnline = false,
                                 ConnectionType = "Cloud",
                                 LastSeen = $"Last seen: {peer.LastSeen:HH:mm:ss}",
-                                LocalIp = peer.LanUrl,
-                                GlobalUrl = peer.CloudflareUrl
                             });
                         }
                     }
@@ -148,8 +142,6 @@ namespace FlyShelf.Windows
                                 DeviceType = d.Type,
                                 IsOnline = d.IsOnline,
                                 ConnectionType = "Local",
-                                LocalIp = d.LocalIp,
-                                GlobalUrl = d.GlobalUrl
                             });
                         }
                         else if (d.IsOnline)
@@ -161,8 +153,6 @@ namespace FlyShelf.Windows
                                 DeviceType = d.Type,
                                 IsOnline = d.IsOnline,
                                 ConnectionType = "Cloud",
-                                LocalIp = d.LocalIp,
-                                GlobalUrl = d.GlobalUrl
                             });
                         }
                     }
@@ -193,29 +183,28 @@ namespace FlyShelf.Windows
         {
             if (sender is FrameworkElement fe && fe.DataContext is DeviceDisplayItem device)
             {
-                string info = $"Device: {device.DeviceName}\n" +
-                              $"Type: {device.DeviceType}\n" +
-                              $"Status: {(device.IsOnline ? "Online" : "Offline")}\n";
+                var cm = new System.Windows.Controls.ContextMenu();
 
-                if (!string.IsNullOrEmpty(device.LocalIp))
-                    info += $"\nLocal URL: {device.LocalIp}";
-                if (!string.IsNullOrEmpty(device.GlobalUrl))
-                    info += $"\nCloudflare URL: {device.GlobalUrl}";
-
-                if (string.IsNullOrEmpty(device.LocalIp) && string.IsNullOrEmpty(device.GlobalUrl))
-                    info += "\nNo connection URLs available.";
-
-                // Copy to clipboard on right-click for convenience
-                string copyUrl = !string.IsNullOrEmpty(device.GlobalUrl) ? device.GlobalUrl : device.LocalIp;
-                if (!string.IsNullOrEmpty(copyUrl))
+                // Device Info — shows connection type and status only (no URLs)
+                var infoItem = new System.Windows.Controls.MenuItem();
+                var infoHeader = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+                infoHeader.Children.Add(new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Info24, FontSize = 14, Margin = new Thickness(0, 0, 8, 0) });
+                infoHeader.Children.Add(new TextBlock { Text = "Device Info" });
+                infoItem.Header = infoHeader;
+                infoItem.Click += (_, _) =>
                 {
-                    if (Classes.ClipboardHelper.SafeSetText(copyUrl))
-                    {
-                        info +="\n\n URL copied to clipboard!";
-                    }
-                }
+                    string transport = device.ConnectionType == "Cloud" ? "Secure Cloud Tunnel" : "Local Network";
+                    string info = $"Device: {device.DeviceName}\n" +
+                                  $"Type: {device.DeviceType}\n" +
+                                  $"Status: {(device.IsOnline ? "Online" : "Offline")}\n" +
+                                  $"Transport: {transport}";
+                    Windows.ToastWindow.ShowToast(info, 4000);
+                };
+                cm.Items.Add(infoItem);
 
-                Windows.ToastWindow.ShowToast(info, 5000);
+                cm.PlacementTarget = fe;
+                cm.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+                cm.IsOpen = true;
                 e.Handled = true;
             }
         }

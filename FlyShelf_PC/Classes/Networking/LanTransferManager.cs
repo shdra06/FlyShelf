@@ -727,80 +727,45 @@ namespace FlyShelf.Classes
                 if (!bypassThrottle && (DateTime.UtcNow - _lastCheckpointWrite).TotalMilliseconds < MIN_CHECKPOINT_INTERVAL_MS)
                     return;
                 _lastCheckpointWrite = DateTime.UtcNow;
-            }
 
-            try
-            {
-                // Include active + paused sessions
-                var checkpoints = _activeSessions.Values
-                    .Where(s => s.BytesTransferred > 0 && (s.IsActive || s.IsPaused))
-                    .Select(SessionToCheckpoint)
-                    .ToList();
-
-                // H-10 fix: Fire-and-forget InvokeAsync — no blocking Wait() that could deadlock on shutdown
-                var app = System.Windows.Application.Current;
-                if (app != null)
+                try
                 {
-                    try
+                    // Include active + paused sessions
+                    var checkpoints = _activeSessions.Values
+                        .Where(s => s.BytesTransferred > 0 && (s.IsActive || s.IsPaused))
+                        .Select(SessionToCheckpoint)
+                        .ToList();
+
+                    // SHUTDOWN FIX: When the dispatcher is unavailable (app closing), we still
+                    // need to persist failed sessions. _activeSessions is a ConcurrentDictionary
+                    // and is safe to read from any thread. Failed sessions that were moved to the
+                    // UI-bound CompletedTransfers can't be accessed here, but _activeSessions
+                    // retains sessions that failed during the current transfer cycle.
+                    // This is the best-effort fallback — captures most failed session data.
+                    var failedFromActive = _activeSessions.Values
+                        .Where(s => s.IsFailed && s.BytesTransferred > 0)
+                        .Select(SessionToCheckpoint)
+                        .ToList();
+                    checkpoints.AddRange(failedFromActive);
+
+                    if (!DiskSpaceHelper.HasSufficientDiskSpace(_checkpointFile, 1_000_000))
                     {
-                        app.Dispatcher.InvokeAsync(() =>
-                        {
-                            try
-                            {
-                                var snapshot = CompletedTransfers
-                                    .Where(s => s.IsFailed && s.BytesTransferred > 0)
-                                    .ToList();
-                                // Persist on the dispatcher thread directly since we can't block
-                                var cps = checkpoints.ToList();
-                                cps.AddRange(snapshot.Select(SessionToCheckpoint));
-                                if (!DiskSpaceHelper.HasSufficientDiskSpace(_checkpointFile, 1_000_000))
-                                {
-                                    Logger.LogAction("TRANSFER", "Insufficient disk space for checkpoint persist");
-                                    return;
-                                }
-                                string json2 = JsonSerializer.Serialize(cps, new JsonSerializerOptions { WriteIndented = true });
-                                string dir2 = Path.GetDirectoryName(_checkpointFile)!;
-                                Directory.CreateDirectory(dir2);
-                                string tmp2 = _checkpointFile + ".tmp";
-                                File.WriteAllText(tmp2, json2, Encoding.UTF8);
-                                File.Move(tmp2, _checkpointFile, true);
-                            }
-                            catch (Exception ex2) { Logger.LogAction("TRANSFER", $"Checkpoint persist (dispatcher) failed: {ex2.Message}"); }
-                        });
-                        return; // Dispatcher will handle full persistence
+                        Logger.LogAction("TRANSFER", "Insufficient disk space for checkpoint persist");
+                        return;
                     }
-                    catch { /* App shutting down — fall through to non-dispatcher path */ }
+                    string json = JsonSerializer.Serialize(checkpoints, new JsonSerializerOptions { WriteIndented = true });
+                    string dir = Path.GetDirectoryName(_checkpointFile)!;
+                    Directory.CreateDirectory(dir);
+
+                    // Atomic write
+                    string tmp = _checkpointFile + ".tmp";
+                    File.WriteAllText(tmp, json, Encoding.UTF8);
+                    File.Move(tmp, _checkpointFile, true);
                 }
-
-                // SHUTDOWN FIX: When the dispatcher is unavailable (app closing), we still
-                // need to persist failed sessions. _activeSessions is a ConcurrentDictionary
-                // and is safe to read from any thread. Failed sessions that were moved to the
-                // UI-bound CompletedTransfers can't be accessed here, but _activeSessions
-                // retains sessions that failed during the current transfer cycle.
-                // This is the best-effort fallback — captures most failed session data.
-                var failedFromActive = _activeSessions.Values
-                    .Where(s => s.IsFailed && s.BytesTransferred > 0)
-                    .Select(SessionToCheckpoint)
-                    .ToList();
-                checkpoints.AddRange(failedFromActive);
-
-                if (!DiskSpaceHelper.HasSufficientDiskSpace(_checkpointFile, 1_000_000))
+                catch (Exception ex)
                 {
-                    Logger.LogAction("TRANSFER", "Insufficient disk space for checkpoint persist");
-                    return;
+                    Logger.LogAction("TRANSFER", $"Checkpoint persist error: {ex.Message}");
                 }
-                string json = JsonSerializer.Serialize(checkpoints, new JsonSerializerOptions { WriteIndented = true });
-                string dir = Path.GetDirectoryName(_checkpointFile)!;
-                Directory.CreateDirectory(dir);
-
-                // Atomic write
-                string tmp = _checkpointFile + ".tmp";
-                File.WriteAllText(tmp, json, Encoding.UTF8);
-                File.Move(tmp, _checkpointFile, true);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("TRANSFER", $"Checkpoint persist error: {ex.Message}");
             }
         }
 

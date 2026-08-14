@@ -286,21 +286,50 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   }, []);
 
-  /** Update live connection status for a device (not persisted — runtime only) */
-  const updateDeviceStatus = useCallback((deviceId: string, status: { isOnline?: boolean; connectionType?: ConnectionType; latencyMs?: number; lastSeen?: number; localUrl?: string; globalUrl?: string }) => {
+  /** H-8 FIX: Debounced device status updates to prevent 30+ re-renders/min.
+   *  Batches ephemeral status changes (latencyMs, lastSeen) and only commits
+   *  to state on significant changes (online/offline) or every 10s.
+   */
+  const pendingStatusRef = useRef<Map<string, { isOnline?: boolean; connectionType?: ConnectionType; latencyMs?: number; lastSeen?: number; localUrl?: string; globalUrl?: string }>>(new Map());
+  const statusFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushDeviceStatus = useCallback(() => {
+    const pending = pendingStatusRef.current;
+    if (pending.size === 0) return;
     setPairedDevicesState(prev => {
-      const idx = prev.findIndex(d => d.deviceId === deviceId);
-      if (idx === -1) return prev;
-      const device = prev[idx];
-      // Only update if something actually changed
-      const changed = Object.entries(status).some(([k, v]) => (device as any)[k] !== v);
-      if (!changed) return prev;
-      const updated = [...prev];
-      updated[idx] = { ...device, ...status };
-      // Don't persist live status to AsyncStorage — it's ephemeral
-      return updated;
+      let changed = false;
+      const updated = prev.map(device => {
+        const status = pending.get(device.deviceId);
+        if (!status) return device;
+        const hasChange = Object.entries(status).some(([k, v]) => (device as any)[k] !== v);
+        if (!hasChange) return device;
+        changed = true;
+        return { ...device, ...status };
+      });
+      return changed ? updated : prev;
     });
+    pendingStatusRef.current = new Map();
   }, []);
+
+  const updateDeviceStatus = useCallback((deviceId: string, status: { isOnline?: boolean; connectionType?: ConnectionType; latencyMs?: number; lastSeen?: number; localUrl?: string; globalUrl?: string }) => {
+    const existing = pendingStatusRef.current.get(deviceId) || {};
+    pendingStatusRef.current.set(deviceId, { ...existing, ...status });
+
+    // Immediately flush on significant state changes (online ↔ offline)
+    if (status.isOnline !== undefined) {
+      if (statusFlushTimerRef.current) clearTimeout(statusFlushTimerRef.current);
+      statusFlushTimerRef.current = null;
+      flushDeviceStatus();
+      return;
+    }
+    // Batch minor updates (latency, lastSeen) — flush every 10s
+    if (!statusFlushTimerRef.current) {
+      statusFlushTimerRef.current = setTimeout(() => {
+        statusFlushTimerRef.current = null;
+        flushDeviceStatus();
+      }, 10000);
+    }
+  }, [flushDeviceStatus]);
 
   const regeneratePairingKey = useCallback(async (): Promise<string> => {
     const newKey = generatePairingKey();

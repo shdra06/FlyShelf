@@ -30,6 +30,19 @@ namespace FlyShelf.Classes
             var bytesB = Encoding.UTF8.GetBytes(b);
             return CryptographicOperations.FixedTimeEquals(bytesA, bytesB);
         }
+
+        /// <summary>
+        /// Detects whether a request arrived via the Cloudflare tunnel (public URL)
+        /// rather than directly on the LAN. Used to enforce tunnel-specific restrictions.
+        /// </summary>
+        private static bool IsCloudflareRequest(HttpListenerRequest req)
+        {
+            string host = req.Headers["Host"] ?? "";
+            if (host.Contains("trycloudflare.com", StringComparison.OrdinalIgnoreCase)) return true;
+            // Cloudflare injects CF-Connecting-IP for tunneled requests
+            if (!string.IsNullOrEmpty(req.Headers["CF-Connecting-IP"])) return true;
+            return false;
+        }
         // ═══ RATE LIMITING: Per-IP request counter ═══
         // TRUSTED (paired P2P devices): Very high limit — never throttle real sync.
         // UNTRUSTED (web client / external): Strict limit — prevent DoS via public URL.
@@ -124,10 +137,9 @@ namespace FlyShelf.Classes
                     res.AddHeader("Access-Control-Allow-Origin", corsOrigin);
                 res.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
                 res.AddHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Content-Range, X-Original-Date, X-FlyShelf-Client, X-Pairing-Key, X-File-Name, X-File-Type, X-Item-Type, X-Source-Device, X-Source-DeviceId, X-Batch-Name, X-Upload-Session, X-Chunk-Index, X-Total-Chunks, X-Device-Id, X-Transfer-Id");
-                res.AddHeader("Access-Control-Expose-Headers", "X-Global-Url");
                 // Enable Keep-Alive to allow socket reuse (crucial for zero-handshake P2P sync and chunked uploads)
                 res.KeepAlive = true;
-                if (!string.IsNullOrEmpty(GlobalUrl)) res.AddHeader("X-Global-Url", GlobalUrl);
+                // SECURITY: X-Global-Url header REMOVED — was leaking the Cloudflare tunnel URL in every response
 
                 // ═══ RATE LIMITING ═══
                 // Determine trust level: paired devices and native mobile app are trusted.
@@ -153,6 +165,38 @@ namespace FlyShelf.Classes
                     res.StatusCode = 200;
                     res.Close();
                     return;
+                }
+
+                // ═══ CLOUDFLARE TUNNEL SECURITY GATE ═══
+                // Public URL is for SENDING data to this device only.
+                // Web client, logs, dashboard, and data-read endpoints are LAN-only.
+                // Over tunnel: only paired devices allowed (no PIN-only access).
+                bool isFromTunnel = IsCloudflareRequest(req);
+                if (isFromTunnel)
+                {
+                    // Block web client over tunnel — LAN only
+                    if (path == "/" || path == "/index.html")
+                    {
+                        res.StatusCode = 403;
+                        byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Web client is LAN-only\"}");
+                        res.ContentType = "application/json";
+                        try { res.OutputStream.Write(err, 0, err.Length); } catch { }
+                        res.Close();
+                        return;
+                    }
+
+                    // Block logs, dashboard, and debug endpoints over tunnel
+                    if (path == "/logs" || path.StartsWith("/api/logs", StringComparison.Ordinal)
+                        || path == "/api/network/dashboard" || path == "/api/speedtest"
+                        || path == "/api/shortcuts")
+                    {
+                        res.StatusCode = 403;
+                        byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Not available over public URL\"}");
+                        res.ContentType = "application/json";
+                        try { res.OutputStream.Write(err, 0, err.Length); } catch { }
+                        res.Close();
+                        return;
+                    }
                 }
 
                 if (path == "/" || path == "/index.html")
@@ -356,10 +400,10 @@ namespace FlyShelf.Classes
                             .Select(a => a.Address.ToString())
                             .ToList();
 
+                        // SECURITY: Do NOT expose globalUrl — peers get it from Firebase (encrypted)
                         var info = new { 
                             status = "ok", 
                             localUrl = DisplayUrl, 
-                            globalUrl = GlobalUrl ?? "", 
                             deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
                             deviceType = "PC",
                             deviceId = SettingsManager.Current.DeviceId ?? "",
@@ -394,6 +438,7 @@ namespace FlyShelf.Classes
                     var codeInfo = DevicePairingManager.VerifyLocalPairingCode(code);
                     if (codeInfo != null)
                     {
+                        // SECURITY: Do NOT expose globalUrl in pairing response
                         var result = new
                         {
                             match = true,
@@ -402,7 +447,6 @@ namespace FlyShelf.Classes
                             deviceName = codeInfo.deviceName,
                             deviceType = codeInfo.deviceType,
                             localUrl = codeInfo.localUrl,
-                            globalUrl = codeInfo.globalUrl,
                             pin = codeInfo.pin,
                             httpPort = Instance?.CurrentPort ?? 8080,
                             transferPort = LanTransferEngine.TRANSFER_PORT
@@ -444,14 +488,14 @@ namespace FlyShelf.Classes
                         if (success)
                         {
                             // Return our info so Android can store it
+                            // SECURITY: Do NOT expose globalUrl — Android gets it from Firebase (encrypted)
                             var result = new
                             {
                                 success = true,
                                 deviceId = SettingsManager.Current.DeviceId ?? "",
                                 deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
                                 pairingKey = DevicePairingManager.EnsurePairingKey(),
-                                localUrl = CloudDiscoveryManager.CachedLocalUrl ?? "",
-                                globalUrl = CloudDiscoveryManager.CachedGlobalUrl ?? ""
+                                localUrl = CloudDiscoveryManager.CachedLocalUrl ?? ""
                             };
                             string json = JsonSerializer.Serialize(result);
                             byte[] data = Encoding.UTF8.GetBytes(json);
@@ -486,6 +530,16 @@ namespace FlyShelf.Classes
                     string pairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"];
                     bool isPairedDevice = DevicePairingManager.IsDevicePaired(pairingKey);
 
+                    // SECURITY: Over Cloudflare tunnel, ONLY paired devices allowed (no PIN-only web client)
+                    if (isFromTunnel && !isPairedDevice)
+                    {
+                        byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"403 Forbidden - Paired devices only over public URL\"}");
+                        res.StatusCode = 403; res.ContentType = "application/json";
+                        try { res.OutputStream.Write(err, 0, err.Length); } catch { }
+                        res.Close();
+                        return;
+                    }
+
                     if (!isPairedDevice && (string.IsNullOrEmpty(providedPin) || !ConstantTimeEquals(providedPin, SettingsManager.Current.WebClientPinToken)))
                     {
                         byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"401 Unauthorized - Invalid PIN\"}");
@@ -513,6 +567,7 @@ namespace FlyShelf.Classes
                                 }
                             }
 
+                            // SECURITY: Do NOT expose transport URLs — return connection type only
                             var healthData = new
                             {
                                 status = "online",
@@ -521,9 +576,12 @@ namespace FlyShelf.Classes
                                 deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
                                 deviceType = "PC",
                                 uptime = (int)(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds,
-                                transport = new { lan = CloudDiscoveryManager.CachedLocalUrl ?? "", cloudflare = CloudDiscoveryManager.CachedGlobalUrl ?? "" },
+                                transport = new { 
+                                    lanActive = !string.IsNullOrEmpty(CloudDiscoveryManager.CachedLocalUrl), 
+                                    cloudflareActive = !string.IsNullOrEmpty(CloudDiscoveryManager.CachedGlobalUrl) 
+                                },
                                 peers = PeerManager.Instance?.AliveCount ?? 0,
-                                transferPort = LanTransferEngine.TRANSFER_PORT, // Dedicated TCP port for zero-copy file transfers
+                                transferPort = LanTransferEngine.TRANSFER_PORT,
                                 timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                             };
                             string json = JsonSerializer.Serialize(healthData);

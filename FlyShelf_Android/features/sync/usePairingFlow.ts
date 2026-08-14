@@ -27,11 +27,18 @@ const { AdvanceOverlay } = NativeModules;
  *   5. Connection polling for incoming pair requests
  */
 
+// C-1 FIX: Local createTimeoutSignal that returns both signal and cleanup function
+// to prevent timer/AbortController memory leaks during pairing
 function createTimeoutSignal(ms: number): AbortSignal {
   const controller = new AbortController();
   const timerId = setTimeout(() => controller.abort(), ms);
   (controller.signal as any)._clearTimeout = () => clearTimeout(timerId);
   return controller.signal;
+}
+
+/** C-1 FIX: Helper to clear a timeout signal created by createTimeoutSignal */
+function clearSignalTimeout(signal: AbortSignal): void {
+  try { (signal as any)?._clearTimeout?.(); } catch {}
 }
 
 interface UsePairingFlowParams {
@@ -278,18 +285,24 @@ export function usePairingFlow(params: UsePairingFlowParams) {
       };
       const _pubToken = await getFirebaseIdToken();
       const writeUrl = `${firebaseDatabaseUrl}/pairing_codes/${code}.json${_pubToken ? `?auth=${_pubToken}` : ''}`;
+      // C-1 FIX: Track signal for cleanup
+      const writeSignal = createTimeoutSignal(10000);
       const writeRes = await fetch(writeUrl, {
         method: 'PUT',
-        signal: createTimeoutSignal(10000),
+        signal: writeSignal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+      clearSignalTimeout(writeSignal);
       if (!writeRes.ok) {
         const errBody = await writeRes.text().catch(() => '');
         Alert.alert('Pairing Error', `Could not publish your code to the cloud (HTTP ${writeRes.status}).`);
         return;
       }
-      const verifyRes = await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_pubToken ? `?auth=${_pubToken}` : ''}`, { signal: createTimeoutSignal(8000) });
+      // C-1 FIX: Track signal for cleanup
+      const verifySignal = createTimeoutSignal(8000);
+      const verifyRes = await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_pubToken ? `?auth=${_pubToken}` : ''}`, { signal: verifySignal });
+      clearSignalTimeout(verifySignal);
       const verifyData = await verifyRes.json();
       if (!verifyData || !verifyData.pairingKey) {
         Alert.alert('Pairing Error', 'Code was written but could not be verified. Please try again.');
@@ -305,10 +318,13 @@ export function usePairingFlow(params: UsePairingFlowParams) {
       const pollForConnection = setInterval(async () => {
         try {
           const _pollToken = await getFirebaseIdToken();
+          // C-1 FIX: Track signal for cleanup
+          const pollSignal = createTimeoutSignal(10000);
           const codeRes = await fetch(
             `${firebaseDatabaseUrl}/pairing_codes/${code}.json${_pollToken ? `?auth=${_pollToken}` : ''}`,
-            { signal: createTimeoutSignal(10000) }
+            { signal: pollSignal }
           );
+          clearSignalTimeout(pollSignal);
           const codeData = await codeRes.json();
           if (!codeData || !codeData.response) return;
           const resp = codeData.response;
@@ -350,7 +366,10 @@ export function usePairingFlow(params: UsePairingFlowParams) {
           setMyPairingCode(null);
           try {
             const _delToken = await getFirebaseIdToken();
-            await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_delToken ? `?auth=${_delToken}` : ''}`, { method: 'DELETE', signal: createTimeoutSignal(10000) });
+            // C-1 FIX: Track signal for cleanup
+            const delSignal = createTimeoutSignal(10000);
+            await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_delToken ? `?auth=${_delToken}` : ''}`, { method: 'DELETE', signal: delSignal });
+            clearSignalTimeout(delSignal);
           } catch {}
         } catch (e) {
           syncLog('PAIR', `Connection poll error: ${(e as any)?.message || e}`);
@@ -365,7 +384,10 @@ export function usePairingFlow(params: UsePairingFlowParams) {
         connectionTimeoutRef.current = null;
         try {
           const _expToken = await getFirebaseIdToken();
-          await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_expToken ? `?auth=${_expToken}` : ''}`, { method: 'DELETE', signal: createTimeoutSignal(10000) });
+          // C-1 FIX: Track signal for cleanup
+          const expSignal = createTimeoutSignal(10000);
+          await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_expToken ? `?auth=${_expToken}` : ''}`, { method: 'DELETE', signal: expSignal });
+          clearSignalTimeout(expSignal);
         } catch {}
         setMyPairingCode(null);
       }, 5 * 60 * 1000);

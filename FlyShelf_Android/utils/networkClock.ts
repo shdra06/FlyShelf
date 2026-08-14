@@ -5,6 +5,8 @@ import { syncLog } from './debugLog';
 
 let clockOffsetMs = 0;
 let isClockSynced = false;
+let _syncRetryCount = 0; // M-2: Bounded retry counter
+const MAX_SYNC_RETRIES = 5; // M-2: Cap retries to prevent infinite chain
 
 export const NetworkClock = {
   /** Get current clock offset relative to the local device system clock */
@@ -83,8 +85,15 @@ export const NetworkClock = {
       }
     }
     
-    syncLog('CLOCK', 'All HEAD sync servers failed — falling back to system clock. Retrying in 30s...');
-    setTimeout(() => { NetworkClock.sync().catch(() => {}); }, 30000);
+    // M-2 FIX: Bounded retry instead of infinite chain
+    _syncRetryCount++;
+    if (_syncRetryCount <= MAX_SYNC_RETRIES) {
+      const retryDelay = Math.min(30000 * _syncRetryCount, 120000); // 30s, 60s, 90s, 120s, 120s
+      syncLog('CLOCK', `All HEAD sync servers failed — retry ${_syncRetryCount}/${MAX_SYNC_RETRIES} in ${retryDelay / 1000}s`);
+      setTimeout(() => { NetworkClock.sync().catch(() => {}); }, retryDelay);
+    } else {
+      syncLog('CLOCK', `All HEAD sync servers failed — max retries (${MAX_SYNC_RETRIES}) exhausted. Use resync() to try again.`);
+    }
     return clockOffsetMs;
   },
 
@@ -96,6 +105,7 @@ export const NetworkClock = {
   async resync(): Promise<number> {
     isClockSynced = false;
     clockOffsetMs = 0;
+    _syncRetryCount = 0; // M-2: Reset retry counter on manual resync
     return this.sync();
   }
 };

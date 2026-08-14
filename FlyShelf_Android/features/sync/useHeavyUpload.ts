@@ -104,7 +104,7 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
         const uploadUrl = `${currentUrl}/api/sync_file?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`;
         await FileSystem.uploadAsync(uploadUrl, hydratedPath, {
           httpMethod: 'POST',
-          uploadType: 0 as any,
+          uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, // L-4: Use enum instead of 'as any'
           headers: {
             'X-Original-Date': NetworkClock.now().toString(),
             'X-FlyShelf-Client': 'MobileCompanion',

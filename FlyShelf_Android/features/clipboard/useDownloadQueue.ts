@@ -36,7 +36,8 @@ export function useDownloadQueue(params: {
 
   const downloadQueueRef = useRef<DownloadQueueItem[]>([]);
   const isDownloadingRef = useRef<boolean>(false);
-  const processedDownloadsRef = useRef<Set<string>>(new Set());
+  // H-4 FIX: Use Map with timestamps instead of Set for reliable chronological eviction
+  const processedDownloadsRef = useRef<Map<string, number>>(new Map());
 
   const processDownloadQueue = useCallback(async () => {
     if (isDownloadingRef.current) return; // Already processing
@@ -110,6 +111,9 @@ export function useDownloadQueue(params: {
 
             if (dlResult && dlResult.status === 200) {
               queueDlSuccess = true;
+              // L-6: Log content type for debugging mismatches
+              const contentType = dlResult.headers?.['Content-Type'] || dlResult.headers?.['content-type'] || 'unknown';
+              syncLog('DL-QUEUE', `Content-Type: ${contentType} for ${item.title}`);
             } else {
               throw new Error(`HTTP ${dlResult?.status}`);
             }
@@ -124,7 +128,7 @@ export function useDownloadQueue(params: {
         setClips(prev => prev.filter(c => c.id !== progressId));
 
         if (queueDlSuccess) {
-          processedDownloadsRef.current.add(dedupKey);
+          processedDownloadsRef.current.set(dedupKey, Date.now()); // H-4: Store with timestamp
           syncLog('DL-QUEUE', `✅ ${item.title} saved via ${item.source}`);
           setDownloadedItems(prev => { const n = new Set(prev); n.add(item.id || item.title); return n; });
           // Update clip with CachedUri
@@ -159,10 +163,14 @@ export function useDownloadQueue(params: {
       }
     }
     isDownloadingRef.current = false;
-    // Cap processed set using sliding slice eviction to prevent unbounded memory growth while keeping history
+    // H-4 FIX: Timestamp-based eviction — remove oldest entries first
     if (processedDownloadsRef.current.size > 500) {
-      const items = Array.from(processedDownloadsRef.current);
-      processedDownloadsRef.current = new Set(items.slice(-200));
+      const entries = Array.from(processedDownloadsRef.current.entries());
+      entries.sort((a, b) => a[1] - b[1]); // Sort by timestamp ascending
+      const toRemove = entries.slice(0, entries.length - 200); // Keep 200 newest
+      for (const [key] of toRemove) {
+        processedDownloadsRef.current.delete(key);
+      }
     }
   }, []);
 
@@ -226,7 +234,7 @@ export function useDownloadQueue(params: {
   const enqueueDownload = useCallback((item: DownloadQueueItem) => {
     // Dedup: don't re-enqueue already-processed or already-queued items
     const dedupKey = `${item.title}::${item.timestamp || item.fileUrl}`;
-    if (processedDownloadsRef.current.has(dedupKey)) return;
+    if (processedDownloadsRef.current.has(dedupKey)) return; // H-4: Map.has() works the same
     if (downloadQueueRef.current.some(q => `${q.title}::${q.timestamp || q.fileUrl}` === dedupKey)) return;
     downloadQueueRef.current.push(item);
     processDownloadQueue();

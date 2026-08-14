@@ -74,8 +74,11 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
   } = params;
 
   const [lastScannedImageId, setLastScannedImageId] = useState<string | null>(null);
-  const lastSyncedScreenshotRef = useRef<string>('');
-  const lastProcessedScreenshotRef = useRef<string>('');
+  const lastSyncedScreenshotRef = useRef<string | null>(null);
+  const lastProcessedScreenshotRef = useRef<string | null>(null);
+  // M-1 FIX: Rate limiting for screenshot uploads
+  const lastScreenshotUploadTimeRef = useRef<number>(0);
+  const MIN_SCREENSHOT_UPLOAD_INTERVAL_MS = 2000; // 2s minimum between uploads
   const mediaPermGrantedRef = useRef<boolean>(false);
 
   // A-2 fix: stabilise activeDevices via ref to prevent resolvePcUrl/main-effect churn
@@ -94,6 +97,12 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
       if (hasText) {
         const text = await Clipboard.getStringAsync();
         if (text && text.startsWith('flyshelf://')) return;
+        // M-7 FIX: Skip sensitive clipboard content (OTPs, short numeric codes)
+        const trimmed = text?.trim() || '';
+        if (trimmed && /^\d{4,8}$/.test(trimmed)) {
+          syncLog('CLIPBOARD', 'Skipped OTP-like clipboard content');
+          return;
+        }
         const normText = normalizeTextForFingerprint(text);
         const normLastCopied = normalizeTextForFingerprint(lastCopiedRef.current || '');
         if (normText && normText !== normLastCopied) {
@@ -142,7 +151,19 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
           lastSyncedScreenshotRef.current = screenshotPath;
           return;
         }
+        // M-1 FIX: Rate limit screenshot uploads
+        const now = Date.now();
+        if (now - lastScreenshotUploadTimeRef.current < MIN_SCREENSHOT_UPLOAD_INTERVAL_MS) {
+          syncLog('SCREENSHOT', `Rate limited: ${fileName} (too soon after last upload)`);
+          return;
+        }
+        lastScreenshotUploadTimeRef.current = now;
         sentContentFingerprintsRef.current.add(`screenshot::${fileName}`);
+        // M-9 FIX: Cap sentContentFingerprints to prevent unbounded growth
+        if (sentContentFingerprintsRef.current.size > 500) {
+          const entries = Array.from(sentContentFingerprintsRef.current);
+          sentContentFingerprintsRef.current = new Set(entries.slice(-200));
+        }
         lastSyncedScreenshotRef.current = screenshotPath;
         syncLog('SCREENSHOT', `Native detected: ${fileName}`);
 
@@ -207,6 +228,11 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
           }
           setLastScannedImageId(latest.id);
           sentContentFingerprintsRef.current.add(fp);
+          // M-9 FIX: Cap sentContentFingerprints to prevent unbounded growth
+          if (sentContentFingerprintsRef.current.size > 500) {
+            const entries = Array.from(sentContentFingerprintsRef.current);
+            sentContentFingerprintsRef.current = new Set(entries.slice(-200));
+          }
           setIsSending(true);
           syncLog('MEDIA', `Screenshot detected: ${latest.filename}`);
           try {

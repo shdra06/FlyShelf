@@ -82,11 +82,18 @@ export function useFirebaseSync(params: {
   // Reconnect backoff counter for Firebase onValue errors
   const fbReconnectAttemptsRef = useRef(0);
 
-  // AC-3: Stable stringified key for pairedDevices dependency — avoids re-creating JSON.stringify on every render
-  const pairedDeviceKeysStable = useMemo(
-    () => JSON.stringify((pairedDevices || []).map((d: any) => d.deviceId || d.DeviceId).sort()),
-    [pairedDevices]
-  );
+  // AC-3: Stable stringified key for pairedDevices dependency
+  // M-8 FIX: Use ref-based comparison to avoid JSON.stringify on every render cycle
+  const pairedDeviceIdsRef = useRef<string>('');
+  const pairedDeviceKeysStable = useMemo(() => {
+    const sorted = JSON.stringify((pairedDevices || []).map((d: any) => d.deviceId || d.DeviceId).sort());
+    pairedDeviceIdsRef.current = sorted;
+    return sorted;
+  }, [pairedDevices]);
+
+  // M-11 FIX: Keep a ref to pairedDevices so markPcReachable/markPcUnreachable always see current value
+  const pairedDevicesRef = useRef(pairedDevices);
+  pairedDevicesRef.current = pairedDevices;
 
   // Called by LAN/Cloudflare poller on every successful /api/sync response
   const markPcReachable = () => {
@@ -101,8 +108,8 @@ export function useFirebaseSync(params: {
       clearTimeout(firebaseFallbackTimerRef.current);
       firebaseFallbackTimerRef.current = null;
     }
-    // Update paired device status to online
-    pairedDevices.filter(d => d.deviceType === 'PC').forEach(d => {
+    // M-11 FIX: Use ref to always see current pairedDevices list
+    pairedDevicesRef.current.filter(d => d.deviceType === 'PC').forEach(d => {
       updateDeviceStatus(d.deviceId, { isOnline: true, lastSeen: NetworkClock.now() });
     });
   };
@@ -111,8 +118,8 @@ export function useFirebaseSync(params: {
   const markPcUnreachable = () => {
     // M-6: Expire lastWorkingPcUrlRef when PC is unreachable
     lastWorkingPcUrlRef.current = null;
-    // Update paired device status to offline
-    pairedDevices.filter(d => d.deviceType === 'PC').forEach(d => {
+    // M-11 FIX: Use ref to always see current pairedDevices list
+    pairedDevicesRef.current.filter(d => d.deviceType === 'PC').forEach(d => {
       updateDeviceStatus(d.deviceId, { isOnline: false });
     });
     if (firebaseFallbackTimerRef.current) return; // Already counting down
@@ -137,7 +144,25 @@ export function useFirebaseSync(params: {
       fbReconnectAttemptsRef.current = 0; // Reset backoff on successful data
       if (snapshot.exists()) {
         const data = snapshot.val();
-        const allRaw: ClipItem[] = Object.keys(data).map(k => ({ id: k, ...data[k] } as ClipItem)).reverse();
+        // M-6 FIX: Validate Firebase data shape before processing
+        const allRaw: ClipItem[] = Object.keys(data).map(k => {
+          const item = data[k];
+          // M-6: Skip malformed entries (must be objects with at minimum a Title or Raw)
+          if (!item || typeof item !== 'object') return null;
+          // M-6: Reject oversized payloads (>1MB per item) to prevent OOM
+          const rawStr = JSON.stringify(item);
+          if (rawStr.length > 1_000_000) {
+            syncLog('FIREBASE', `Skipped oversized entry ${k}: ${rawStr.length} bytes`);
+            return null;
+          }
+          // M-6: Sanitize URLs
+          if (item.DownloadUrl && typeof item.DownloadUrl === 'string') {
+            if (!item.DownloadUrl.startsWith('http://') && !item.DownloadUrl.startsWith('https://') && !item.DownloadUrl.includes('?path=')) {
+              item.DownloadUrl = '';
+            }
+          }
+          return { id: k, ...item } as ClipItem;
+        }).filter(Boolean).reverse() as ClipItem[];
         // AES-256-GCM decryption: decrypt Encrypted items from other devices
         const allParsed: ClipItem[] = [];
         for (const item of allRaw) {
@@ -313,8 +338,8 @@ export function useFirebaseSync(params: {
         let rawDevices: any[] = [];
         const data = snapshot.val();
         const now = NetworkClock.now();
-        // AM-6: Use 12-minute window (720000ms) to prevent devices flickering offline between 10-min heartbeats
-        const filtered = Object.keys(data).map(k => ({ ...data[k], _key: k })).filter(d => d.IsOnline && d.Timestamp && (now - d.Timestamp) < 720_000);
+        const DEVICE_ONLINE_WINDOW_MS = 720_000; // L-3: 12-minute window to prevent devices flickering offline between 10-min heartbeats
+        const filtered = Object.keys(data).map(k => ({ ...data[k], _key: k })).filter(d => d.IsOnline && d.Timestamp && (now - d.Timestamp) < DEVICE_ONLINE_WINDOW_MS);
         rawDevices = await decryptDeviceList(filtered);
         // Probe LAN reachability for each PC device
         for (let i = 0; i < rawDevices.length; i++) {

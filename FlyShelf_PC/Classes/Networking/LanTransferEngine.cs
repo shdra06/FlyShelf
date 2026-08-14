@@ -251,13 +251,14 @@ namespace FlyShelf.Classes
                         // Hash verification
                         if (!string.IsNullOrEmpty(session.XxHash64))
                         {
+                            // FIX: Use ArrayPool to avoid LOH pressure on 1MB buffer
+                            byte[] hashBuf = ArrayPool<byte>.Shared.Rent(1024 * 1024);
                             try
                             {
                                 using var hashStream = new FileStream(session.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024);
                                 var hasher = new System.IO.Hashing.XxHash64();
-                                byte[] hashBuf = new byte[1024 * 1024];
                                 int hashRead;
-                                while ((hashRead = await hashStream.ReadAsync(hashBuf, ct)) > 0)
+                                while ((hashRead = await hashStream.ReadAsync(hashBuf.AsMemory(0, 1024 * 1024), ct)) > 0)
                                     hasher.Append(hashBuf.AsSpan(0, hashRead));
                                 string computed = Convert.ToHexString(hasher.GetCurrentHash()).ToLowerInvariant();
                                 if (!string.Equals(computed, session.XxHash64, StringComparison.OrdinalIgnoreCase))
@@ -274,6 +275,10 @@ namespace FlyShelf.Classes
                             catch (Exception ex)
                             {
                                 Logger.LogAction("TCP_ENGINE", $"Hash verification skipped: {ex.Message}");
+                            }
+                            finally
+                            {
+                                ArrayPool<byte>.Shared.Return(hashBuf);
                             }
                         }
 
@@ -647,6 +652,13 @@ namespace FlyShelf.Classes
                 long lastCheckpoint = resumeFrom;
                 long lastSpeedSample = Environment.TickCount64;
 
+                // FIX: Incremental hash — compute XXHash64 as bytes arrive instead of re-reading entire file
+                System.IO.Hashing.XxHash64? incrementalHasher = null;
+                if (!string.IsNullOrEmpty(session.XxHash64) && resumeFrom == 0)
+                {
+                    incrementalHasher = new System.IO.Hashing.XxHash64();
+                }
+
                 while (totalReceived < fileSize)
                 {
                     linkedCts.Token.ThrowIfCancellationRequested();
@@ -681,6 +693,9 @@ namespace FlyShelf.Classes
                     totalReceived += bytesRead;
                     session.BytesTransferred = totalReceived;
 
+                    // Feed bytes to incremental hasher (zero extra I/O)
+                    incrementalHasher?.Append(buffer.AsSpan(0, bytesRead));
+
                     // Speed sample
                     long nowMs = Environment.TickCount64;
                     if (nowMs - lastSpeedSample >= SPEED_SAMPLE_INTERVAL_MS)
@@ -712,34 +727,51 @@ namespace FlyShelf.Classes
                 // Final flush
                 await fs.FlushAsync(linkedCts.Token);
 
-                // Verify file integrity if hash was provided
-                if (!string.IsNullOrEmpty(session.XxHash64))
+                // Verify file integrity using incremental hash (no re-read needed)
+                if (incrementalHasher != null && !string.IsNullOrEmpty(session.XxHash64))
                 {
+                    string computed = Convert.ToHexString(incrementalHasher.GetCurrentHash()).ToLowerInvariant();
+                    if (!string.Equals(computed, session.XxHash64, StringComparison.OrdinalIgnoreCase))
+                    {
+                        session.MarkFailed($"Integrity check failed: expected {session.XxHash64}, got {computed}");
+                        Logger.LogAction("TCP_ENGINE", $"Hash mismatch for {session.FileName} — deleting corrupted file");
+                        try { File.Delete(session.FilePath); } catch (Exception delEx) { Logger.LogAction("TCP_ENGINE", $"Failed to delete corrupted file: {delEx.Message}"); }
+                        LanTransferManager.Instance?.PersistCheckpointsIncludingFailed(session);
+                        return;
+                    }
+                    Logger.LogAction("TCP_ENGINE", $"Hash verified (incremental) for {session.FileName}");
+                }
+                else if (!string.IsNullOrEmpty(session.XxHash64) && resumeFrom > 0)
+                {
+                    // Resumed transfer — can't use incremental hash, must re-read
+                    // Use ArrayPool to avoid LOH pressure
+                    byte[] hashBuf = ArrayPool<byte>.Shared.Rent(1024 * 1024);
                     try
                     {
                         using var hashStream = new FileStream(session.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024);
                         var hasher = new System.IO.Hashing.XxHash64();
-                        byte[] hashBuf = new byte[1024 * 1024];
                         int hashRead;
-                        while ((hashRead = await hashStream.ReadAsync(hashBuf, linkedCts.Token)) > 0)
+                        while ((hashRead = await hashStream.ReadAsync(hashBuf.AsMemory(0, 1024 * 1024), linkedCts.Token)) > 0)
                             hasher.Append(hashBuf.AsSpan(0, hashRead));
                         string computed = Convert.ToHexString(hasher.GetCurrentHash()).ToLowerInvariant();
                         if (!string.Equals(computed, session.XxHash64, StringComparison.OrdinalIgnoreCase))
                         {
                             session.MarkFailed($"Integrity check failed: expected {session.XxHash64}, got {computed}");
                             Logger.LogAction("TCP_ENGINE", $"Hash mismatch for {session.FileName} — deleting corrupted file");
-                            // Delete the corrupted file to prevent it from being injected into clipboard
                             try { File.Delete(session.FilePath); } catch (Exception delEx) { Logger.LogAction("TCP_ENGINE", $"Failed to delete corrupted file: {delEx.Message}"); }
-                            // Persist the failure so checkpoint doesn't try to resume from corrupt data
                             LanTransferManager.Instance?.PersistCheckpointsIncludingFailed(session);
                             return;
                         }
-                        Logger.LogAction("TCP_ENGINE", $"Hash verified for {session.FileName}");
+                        Logger.LogAction("TCP_ENGINE", $"Hash verified (re-read, resumed) for {session.FileName}");
                     }
                     catch (OperationCanceledException) { return; }
                     catch (Exception ex)
                     {
                         Logger.LogAction("TCP_ENGINE", $"Hash verification skipped: {ex.Message}");
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(hashBuf);
                     }
                 }
 

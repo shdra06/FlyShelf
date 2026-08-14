@@ -197,6 +197,21 @@ namespace FlyShelf.Windows
             {
                 SettingsManager.Current.ManualWallpaperPath = dialog.FileName;
                 SettingsManager.Current.ClipboardWallpaperPath = dialog.FileName;
+
+                // FIX: Auto-switch to FlyShelf (desktop) mode when user picks a wallpaper.
+                // Mica and Acrylic modes explicitly clear ClipboardWallpaperPath, so a custom
+                // wallpaper would never display unless the mode is "desktop" or "theme".
+                string currentMode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                if (currentMode == "mica" || currentMode == "glass")
+                {
+                    // Clean up Glass theme if switching away from glass
+                    if (currentMode == "glass")
+                        ThemeManager.Instance.RemoveGlassTheme();
+
+                    SettingsManager.Current.ThemeDisplayMode = "desktop";
+                    HighlightActiveDisplayMode();
+                }
+
                 SettingsManager.Save();
                 ApplyTheme();
                 RespawnClipboardPreview();
@@ -267,6 +282,7 @@ namespace FlyShelf.Windows
                         Transport = peer?.Transport ?? "offline",
                         IsLanActive = !string.IsNullOrEmpty(peer?.LanUrl) && (peer?.IsAlive ?? false),
                         IsCloudActive = !string.IsNullOrEmpty(peer?.CloudflareUrl) && (peer?.IsAlive ?? false),
+                        // SECURITY: URL fields intentionally not populated — no URL exposure in UI
                         StatusText = peer?.IsAlive == true
                             ? $"Connected via {peer.Transport}  Last seen {peer.LastSeen:HH:mm:ss}"
                             : "Offline"
@@ -329,11 +345,16 @@ namespace FlyShelf.Windows
 
         private void RemovePairedDevice_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is System.Windows.Controls.Button btn && btn.Tag is string deviceId)
+            string? deviceId = null;
+            if (sender is FrameworkElement fe)
+                deviceId = fe.Tag as string;
+
+            if (!string.IsNullOrWhiteSpace(deviceId))
             {
                 DevicePairingManager.RemoveDevice(deviceId);
                 RefreshPairedDevicesList();
-                Windows.ToastWindow.ShowToast("Device removed ✕");
+                RefreshDevices_Click(null, null);
+                Windows.ToastWindow.ShowToast("Device removed");
             }
         }
 
@@ -914,9 +935,29 @@ namespace FlyShelf.Windows
                 else
                 {
                     ThemeManager.Instance.ApplyColorTheme(themeName);
+
+                    // FIX: Color themes with bundled wallpapers only display in "desktop" mode.
+                    // Auto-switch from mica/glass to desktop so the user sees the theme wallpaper.
+                    string currentMode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                    if (currentMode == "mica" || currentMode == "glass")
+                    {
+                        if (currentMode == "glass")
+                            ThemeManager.Instance.RemoveGlassTheme();
+
+                        SettingsManager.Current.ThemeDisplayMode = "desktop";
+                        HighlightActiveDisplayMode();
+                    }
+
                     SettingsManager.Save();
                     HighlightActiveColorTheme();
                     ToastWindow.ShowToast($"Color theme: {themeName}");
+
+                    // Refresh wallpaper preview after a short delay for the theme to apply its wallpaper
+                    Dispatcher.InvokeAsync(async () =>
+                    {
+                        await System.Threading.Tasks.Task.Delay(300);
+                        RefreshWallpaperPreview();
+                    });
                 }
 
                 // Respawn clipboard so the user sees the color change immediately

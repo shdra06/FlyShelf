@@ -182,28 +182,14 @@ namespace FlyShelf.Classes
                             if (root.TryGetProperty("deviceType", out var dtProp))
                                 peer.DeviceType = dtProp.GetString() ?? "";
 
-                            // Extract LAN URL from peer's health response (smart discovery)
-                            // If we connected via Cloudflare but peer reports a LAN URL, save it for future LAN fallback
+                            // Transport status from health — now returns booleans (lanActive/cloudflareActive)
+                            // URL cross-discovery removed for security — peers get URLs from Firebase (encrypted)
                             if (root.TryGetProperty("transport", out var tr))
                             {
-                                if (tr.TryGetProperty("lan", out var lanProp))
-                                {
-                                    string peerLan = lanProp.GetString() ?? "";
-                                    if (!string.IsNullOrEmpty(peerLan) && peerLan.StartsWith("http", StringComparison.Ordinal) && peerLan != peer.LanUrl)
-                                    {
-                                        peer.LanUrl = peerLan;
-                                        Logger.LogAction("PEER", $"Discovered {peer.DeviceName} LAN URL from health: {peerLan}");
-                                    }
-                                }
-                                if (tr.TryGetProperty("cloudflare", out var cfProp))
-                                {
-                                    string peerCf = cfProp.GetString() ?? "";
-                                    if (!string.IsNullOrEmpty(peerCf) && peerCf.Contains("trycloudflare", StringComparison.Ordinal) && peerCf != peer.CloudflareUrl)
-                                    {
-                                        peer.CloudflareUrl = peerCf;
-                                        Logger.LogAction("PEER", $"Discovered {peer.DeviceName} CF URL from health: {peerCf}");
-                                    }
-                                }
+                                // Log transport capabilities for diagnostics
+                                bool peerLanActive = tr.TryGetProperty("lanActive", out var la) && la.ValueKind == System.Text.Json.JsonValueKind.True;
+                                bool peerCfActive = tr.TryGetProperty("cloudflareActive", out var ca) && ca.ValueKind == System.Text.Json.JsonValueKind.True;
+                                Logger.LogAction("PEER", $"{peer.DeviceName} transport: LAN={peerLanActive}, CF={peerCfActive}");
                             }
 
                             // Log version mismatch warning

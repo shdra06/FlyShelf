@@ -601,7 +601,7 @@ class OverlayService : Service() {
             buildShortcutsList(contentList)
         }
 
-        scrollView.addView(clipList)
+        scrollView.addView(contentList)
         container.addView(scrollView, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         outerFrame.addView(container, FrameLayout.LayoutParams(panelWidth, panelHeight))
 

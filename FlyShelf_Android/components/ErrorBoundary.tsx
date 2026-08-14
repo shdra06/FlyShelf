@@ -187,11 +187,27 @@ ${prevCrash}
     );
   };
 
-  handleRestart = () => {
+  handleRestart = async () => {
+    // M-12 FIX: Clear potentially corrupt caches before restart to prevent crash loops
+    try {
+      await AsyncStorage.removeItem('last_crash_error');
+      // Clear sync caches that may contain corrupt data
+      const dangerousKeys = ['@flyshelf_clips', '@flyshelf_pending_notes_sync'];
+      await AsyncStorage.multiRemove(dangerousKeys).catch(() => {});
+      // Wipe file caches to remove corrupt downloads
+      const targets = [SYNC_CACHE_BASE, IMAGE_CACHE_BASE, CONVERTED_BASE];
+      for (const path of targets) {
+        try {
+          const info = await FileSystem.getInfoAsync(path);
+          if (info.exists) await FileSystem.deleteAsync(path, { idempotent: true });
+        } catch {}
+      }
+    } catch {}
     this.setState({
       hasError: false,
       error: null,
       errorInfo: null,
+      previousCrashReport: null,
     });
   };
 

@@ -105,6 +105,8 @@ namespace FlyShelf.Windows
             {
                 PopulateThemeCombo();
                 HighlightActiveColorTheme();
+                HighlightActiveDisplayMode();
+                RefreshWallpaperPreview();
             }
             if (tag == "Settings")
             {

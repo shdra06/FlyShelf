@@ -114,9 +114,21 @@ namespace FlyShelf.Windows
             DevicePairingManager.OnDevicePaired += _devicePairedHandler;
 
             // Real-time peer status updates ΓÇö refresh UI when peers connect/disconnect
-            _peerConnectedHandler = (deviceId, transport) => Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
-            _peerDisconnectedHandler = (deviceId) => Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
-            _transportSwitchedHandler = (deviceId, newTransport) => Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
+            _peerConnectedHandler = (deviceId, transport) => Dispatcher.InvokeAsync(() =>
+            {
+                RefreshPairedDevicesList();
+                RefreshDevices_Click(null, null);
+            });
+            _peerDisconnectedHandler = (deviceId) => Dispatcher.InvokeAsync(() =>
+            {
+                RefreshPairedDevicesList();
+                RefreshDevices_Click(null, null);
+            });
+            _transportSwitchedHandler = (deviceId, newTransport) => Dispatcher.InvokeAsync(() =>
+            {
+                RefreshPairedDevicesList();
+                RefreshDevices_Click(null, null);
+            });
 
             if (PeerManager.Instance != null)
             {
@@ -443,12 +455,15 @@ namespace FlyShelf.Windows
 
         private void CopyUrl_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is System.Windows.Controls.Button btn && btn.Tag is string url && !string.IsNullOrWhiteSpace(url))
+            string? url = null;
+            if (sender is FrameworkElement fe)
+                url = fe.Tag as string;
+
+            if (!string.IsNullOrWhiteSpace(url))
             {
                 if (ClipboardHelper.SafeSetText(url))
                 {
-                    btn.Content = "Copied!";
-                    System.Threading.Tasks.Task.Delay(1500).ContinueWith(_ => Dispatcher.Invoke(() => btn.Content = "Copy"));
+                    ToastWindow.ShowToast("URL copied!");
                 }
             }
         }

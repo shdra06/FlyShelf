@@ -63,7 +63,17 @@ if (Platform.OS !== 'web') {
          return BackgroundFetch.BackgroundFetchResult.NoData;
        }
 
-       const pk = await getSecureItem('pairingKey');
+       // M-10 FIX: Wrap secure storage access in try-catch — native modules may
+       // not be fully initialized in background context. Fallback to AsyncStorage.
+       let pk: string | null = null;
+       try {
+         pk = await getSecureItem('pairingKey');
+       } catch (secureErr) {
+         // Fallback: try plain AsyncStorage if SecureStore fails in background
+         try {
+           pk = await AsyncStorage.getItem('pairingKey');
+         } catch {}
+       }
        if (!pk) return BackgroundFetch.BackgroundFetchResult.NoData;
 
        // Optimization: Only notify if the latest item is newer than the last time we checked

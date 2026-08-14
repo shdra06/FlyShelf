@@ -98,10 +98,28 @@ class SyncCoordinatorImpl {
       op.reject(err);
     } finally {
       this.activeOpId = null;
-      this.isProcessing = false;
-      // Process next in queue
+      // C-3 FIX: Process next BEFORE clearing isProcessing to prevent
+      // re-entrant execution from a concurrent enqueue() call.
       if (this.queue.length > 0) {
-        this.processNext();
+        // isProcessing stays true → no re-entry from enqueue()
+        const next = this.queue.shift()!;
+        this.activeOpId = next.id;
+        try {
+          await next.execute();
+          next.resolve();
+        } catch (nextErr) {
+          next.reject(nextErr);
+        }
+        // Continue draining
+        this.activeOpId = null;
+        if (this.queue.length > 0) {
+          // Use queueMicrotask to avoid deep recursion stack
+          queueMicrotask(() => this.processNext());
+        } else {
+          this.isProcessing = false;
+        }
+      } else {
+        this.isProcessing = false;
       }
     }
   }

@@ -113,8 +113,29 @@ export const decryptDeviceList = async (devices: ActiveDeviceInfo[]): Promise<Ac
   return decryptedList;
 };
 
-/** Fetch with configurable timeout and abort safety */
+/** Fetch with configurable timeout and abort safety.
+ *  C-4 FIX: Strips X-Pairing-Key from plain HTTP requests to non-private IPs
+ *  to prevent credential leakage on public WiFi networks.
+ */
 export const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs = 2500) => {
+  // C-4: Security check — strip pairing key from non-TLS requests to non-private IPs
+  const isHttps = url.startsWith('https://');
+  if (!isHttps && options.headers) {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname;
+      if (!isPrivateIp(host)) {
+        // Strip pairing key from headers to prevent cleartext credential leakage
+        const hdrs = options.headers as Record<string, string>;
+        if (hdrs['X-Pairing-Key']) {
+          console.warn(`[SECURITY] C-4: Stripped X-Pairing-Key from non-TLS request to public IP ${host}`);
+          const { 'X-Pairing-Key': _, ...safeHeaders } = hdrs;
+          options = { ...options, headers: safeHeaders };
+        }
+      }
+    } catch {}
+  }
+
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   // Merge caller's signal with the timeout signal so external aborts are honoured
@@ -168,7 +189,7 @@ export const connectionColors: Record<string, string> = {
 
 /**
  * Normalize a raw IP/URL into a clean http:// URL with port.
- * Default port set to 3000 to match FlyShelf PC default.
+ * Default port set to 8999 to match FlyShelf PC default.
  */
 export const normalizeUrl = (raw: string, defaultPort = 8999): string => {
   let url = raw.trim();
@@ -309,13 +330,45 @@ let _lastDiscoveredPcIp: string | null = null;
  * Parallel Subnet Scanner — Discovery without Firebase.
  * Scans the current /24 subnet on common FlyShelf ports.
  * Optimized: caches last discovered IP for fast re-probe.
+ * H-1 FIX: Uses concurrency limiter to cap concurrent probes at 25
  */
+
+// H-1: Simple semaphore for concurrent request limiting
+async function withConcurrencyLimit<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let running = 0;
+    let idx = 0;
+    let settled = false;
+    
+    const next = () => {
+      while (running < limit && idx < tasks.length && !settled) {
+        const taskIdx = idx++;
+        running++;
+        tasks[taskIdx]()
+          .then(result => {
+            if (!settled) { settled = true; resolve(result); }
+          })
+          .catch(() => {
+            running--;
+            if (!settled) next();
+          });
+      }
+      if (running === 0 && idx >= tasks.length && !settled) {
+        settled = true;
+        reject(new AggregateError([], 'All tasks failed'));
+      }
+    };
+    next();
+  });
+}
+
 export const scanSubnetForPc = async (myIp: string): Promise<string[]> => {
   const subnet = getSubnet(myIp);
   if (!subnet) return [];
   
   const ports = [8999, 8080, 3000]; // 8999 is the FlyShelf PC default
   const PROBE_TIMEOUT = 150; // LAN latency is <5ms, 150ms is generous
+  const MAX_CONCURRENT = 25; // H-1: Limit concurrent probes
   
   // Fast path: probe last known IP first
   if (_lastDiscoveredPcIp && _lastDiscoveredPcIp.startsWith(subnet)) {
@@ -337,11 +390,11 @@ export const scanSubnetForPc = async (myIp: string): Promise<string[]> => {
     ...Array.from({ length: 11 }, (_, i) => i + 200),       // .200-.210
   ];
   
-  // Phase 1: Probe priority IPs
+  // Phase 1: Probe priority IPs with concurrency limit
   try {
-    const found = await Promise.any(priorityIds.flatMap(nodeId => {
+    const tasks = priorityIds.flatMap(nodeId => {
       const targetIp = `${subnet}${nodeId}`;
-      return ports.map(async port => {
+      return ports.map(port => async () => {
         const url = `http://${targetIp}:${port}`;
         const res = await fetchWithTimeout(`${url}/api/health`, { method: 'GET' }, PROBE_TIMEOUT);
         if (res.ok) {
@@ -350,7 +403,8 @@ export const scanSubnetForPc = async (myIp: string): Promise<string[]> => {
         }
         throw new Error();
       });
-    }));
+    });
+    const found = await withConcurrencyLimit(tasks, MAX_CONCURRENT);
     return [found];
   } catch {
     // No PC in priority range — continue to full sweep
@@ -358,31 +412,29 @@ export const scanSubnetForPc = async (myIp: string): Promise<string[]> => {
   
   // Phase 2: Full subnet sweep (skip already-probed IPs)
   const prioritySet = new Set(priorityIds);
-  const CHUNK_SIZE = 50;
   const discovered: string[] = [];
   
-  for (let i = 1; i <= 254; i += CHUNK_SIZE) {
-    const chunk = Array.from({ length: Math.min(CHUNK_SIZE, 255 - i) }, (_, j) => i + j)
-      .filter(id => !prioritySet.has(id));
-    if (chunk.length === 0) continue;
-    try {
-      const found = await Promise.any(chunk.flatMap(nodeId => {
-        const targetIp = `${subnet}${nodeId}`;
-        return ports.map(async port => {
-          const url = `http://${targetIp}:${port}`;
-          const res = await fetchWithTimeout(`${url}/api/health`, { method: 'GET' }, PROBE_TIMEOUT);
-          if (res.ok) {
-            _lastDiscoveredPcIp = targetIp;
-            return url;
-          }
-          throw new Error();
-        });
-      }));
-      discovered.push(found);
-      break;
-    } catch {
-      // No PC in this chunk, continue to next
-    }
+  // H-1: Create all tasks but run with concurrency limit
+  const sweepTasks = Array.from({ length: 254 }, (_, i) => i + 1)
+    .filter(id => !prioritySet.has(id))
+    .flatMap(nodeId => {
+      const targetIp = `${subnet}${nodeId}`;
+      return ports.map(port => async () => {
+        const url = `http://${targetIp}:${port}`;
+        const res = await fetchWithTimeout(`${url}/api/health`, { method: 'GET' }, PROBE_TIMEOUT);
+        if (res.ok) {
+          _lastDiscoveredPcIp = targetIp;
+          return url;
+        }
+        throw new Error();
+      });
+    });
+  
+  try {
+    const found = await withConcurrencyLimit(sweepTasks, MAX_CONCURRENT);
+    discovered.push(found);
+  } catch {
+    // No PC found in full sweep
   }
   
   return discovered;
@@ -453,12 +505,14 @@ export const resolveUrlWithFallbacks = async (
   return null;
 };
 
-/** Fetch JSON with body-size guard — rejects responses > maxBodyBytes (default 10MB) */
+/** Fetch JSON with body-size guard — rejects responses > maxBodyBytes (default 10MB)
+ *  H-7 FIX: Uses response.json() directly instead of text() + JSON.parse()
+ *  to avoid holding both raw text and parsed object in memory simultaneously.
+ */
 export async function safeFetchJson<T = any>(url: string, options?: RequestInit & { timeout?: number }, maxBodyBytes: number = 10 * 1024 * 1024): Promise<T> {
   const response = await fetchWithTimeout(url, options, options?.timeout);
   const contentLength = parseInt(response.headers.get('Content-Length') || '0', 10);
   if (contentLength > maxBodyBytes) throw new Error(`Response too large: ${contentLength} bytes (max ${maxBodyBytes})`);
-  const text = await response.text();
-  if (text.length > maxBodyBytes) throw new Error(`Response body too large: ${text.length} chars`);
-  return JSON.parse(text) as T;
+  // H-7: Use response.json() directly — avoids holding both raw text string AND parsed object in memory
+  return await response.json() as T;
 }

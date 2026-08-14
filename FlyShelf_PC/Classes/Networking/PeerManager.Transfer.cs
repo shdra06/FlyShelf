@@ -316,8 +316,11 @@ namespace FlyShelf.Classes
 
                         byte[] startBytes = Encoding.UTF8.GetBytes(startEnvelope);
 
-                        // FIX R1: 5-minute timeout prevents permanent SendSemaphore hold if peer stalls mid-transfer
-                        using var wsFileCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                        // FIX: Scale timeout by file size — 100GB at 1Gbps takes ~15min.
+                        // Formula: max(5 min, 1 min per GB) — prevents premature kill on large files.
+                        long wsFileSizeForTimeout = new FileInfo(filePath).Length;
+                        int timeoutMinutes = Math.Max(5, (int)(wsFileSizeForTimeout / (1024L * 1024 * 1024)) + 1);
+                        using var wsFileCts = new CancellationTokenSource(TimeSpan.FromMinutes(timeoutMinutes));
                         await peer.SendSemaphore.WaitAsync(wsFileCts.Token);
                         try
                         {
@@ -520,25 +523,26 @@ namespace FlyShelf.Classes
 
             Logger.LogAction("PEER", $"⚡ CF chunked (streamed): {fileName} ({fileSize / 1024}KB) → {totalChunks} chunks × {CHUNK_SIZE / 1024}KB, {MAX_PARALLEL_CHUNKS} parallel");
 
-            // Upload chunks in parallel batches with unified cancellation source
+            // Upload chunks with bounded parallelism — no upfront task explosion
             using var batchCts = new CancellationTokenSource();
-            var semaphore = new SemaphoreSlim(MAX_PARALLEL_CHUNKS);
-            var tasks = new List<Task<bool>>();
-
-            for (int i = 0; i < totalChunks; i++)
+            int successCount = 0;
+            var options = new ParallelOptions
             {
-                int chunkIndex = i;
-                long offset = (long)chunkIndex * CHUNK_SIZE;
-                int length = (int)Math.Min(CHUNK_SIZE, fileSize - offset);
+                MaxDegreeOfParallelism = MAX_PARALLEL_CHUNKS,
+                CancellationToken = batchCts.Token
+            };
 
-                tasks.Add(Task.Run(async () =>
+            try
+            {
+                await Parallel.ForEachAsync(Enumerable.Range(0, totalChunks), options, async (chunkIndex, ct) =>
                 {
-                    if (batchCts.IsCancellationRequested) return false;
-                    await semaphore.WaitAsync();
+                    if (batchCts.IsCancellationRequested) return;
+
+                    long offset = (long)chunkIndex * CHUNK_SIZE;
+                    int length = (int)Math.Min(CHUNK_SIZE, fileSize - offset);
+
                     try
                     {
-                        if (batchCts.IsCancellationRequested) return false;
-
                         // FIX R9: 1 retry per chunk — prevents re-uploading entire file for a single blip
                         for (int attempt = 0; attempt < 2; attempt++)
                         {
@@ -559,7 +563,7 @@ namespace FlyShelf.Classes
                                     int readBytes = 0;
                                     while (readBytes < length)
                                     {
-                                        int r = await fs.ReadAsync(chunkData, readBytes, length - readBytes, batchCts.Token);
+                                        int r = await fs.ReadAsync(chunkData, readBytes, length - readBytes, ct);
                                         if (r == 0) break;
                                         readBytes += r;
                                     }
@@ -568,11 +572,15 @@ namespace FlyShelf.Classes
                                 req.Content = new ByteArrayContent(chunkData, 0, length);
                                 req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
-                                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(batchCts.Token);
+                                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                                 linkedCts.CancelAfter(TimeSpan.FromSeconds(60));
 
                                 using var resp = await _sharedClient.SendAsync(req, linkedCts.Token);
-                                if (resp.IsSuccessStatusCode) return true;
+                                if (resp.IsSuccessStatusCode)
+                                {
+                                    Interlocked.Increment(ref successCount);
+                                    return;
+                                }
 
                                 Logger.LogAction("PEER_CHUNK", $"Chunk {chunkIndex} attempt {attempt + 1} HTTP {(int)resp.StatusCode}");
                                 }
@@ -581,7 +589,7 @@ namespace FlyShelf.Classes
                             catch (Exception ex) when (attempt == 0 && !batchCts.IsCancellationRequested)
                             {
                                 Logger.LogAction("PEER_CHUNK", $"Chunk {chunkIndex} attempt 1 failed: {ex.Message} — retrying...");
-                                await Task.Delay(500, batchCts.Token);
+                                await Task.Delay(500, ct);
                                 continue;
                             }
                         }
@@ -589,20 +597,18 @@ namespace FlyShelf.Classes
                         // Both attempts failed
                         Logger.LogAction("PEER_CHUNK_ERROR", $"Chunk {chunkIndex} failed after 2 attempts — aborting batch");
                         try { batchCts.Cancel(); } catch { } // Best-effort: failure is acceptable
-                        return false;
                     }
                     catch (Exception ex)
                     {
                         Logger.LogAction("PEER_CHUNK_ERROR", $"Chunk {chunkIndex} upload failed: {ex.Message}");
                         try { batchCts.Cancel(); } catch { } // Best-effort: failure is acceptable
-                        return false;
                     }
-                    finally { semaphore.Release(); }
-                }));
+                });
             }
-
-            var results = await Task.WhenAll(tasks);
-            int successCount = results.Count(r => r);
+            catch (OperationCanceledException)
+            {
+                // Expected when batchCts is cancelled
+            }
 
             if (successCount != totalChunks)
             {
