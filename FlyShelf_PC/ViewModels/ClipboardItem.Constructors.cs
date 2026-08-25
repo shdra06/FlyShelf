@@ -59,23 +59,21 @@ namespace FlyShelf.ViewModels
         public void EvaluateSmartActions()
         {
             HasSmartAction = false;
+            string normExt = (Extension ?? "").TrimStart('.').ToUpperInvariant();
             
-            if (ItemType == ClipboardItemType.Pdf)
+            if (ItemType == ClipboardItemType.Pdf || normExt == "PDF")
             {
                 SmartActionName = "Open PDF";
                 SmartActionIcon = "Eye24";
                 SmartActionType = "OpenPDF";
                 HasSmartAction = true;
             }
-            else if (ItemType == ClipboardItemType.Document)
+            else if (ItemType == ClipboardItemType.Document || normExt is "DOCX" or "DOC" or "TXT" or "MD" or "MARKDOWN" or "RTF" or "ODT" or "LOG" or "CSV")
             {
-                if (Extension == ".DOCX" || Extension == ".DOC" || Extension == ".TXT" || Extension == ".MD")
-                {
-                    SmartActionName = "Convert to PDF";
-                    SmartActionIcon = "DocumentPdf24";
-                    SmartActionType = "ConvertToPdf";
-                    HasSmartAction = true;
-                }
+                SmartActionName = "Convert to PDF";
+                SmartActionIcon = "DocumentPdf24";
+                SmartActionType = "ConvertToPdf";
+                HasSmartAction = true;
             }
             else if (ItemType == ClipboardItemType.Url || (!string.IsNullOrEmpty(RawContent) && RawContent.StartsWith("http", StringComparison.OrdinalIgnoreCase)))
             {
@@ -242,27 +240,66 @@ namespace FlyShelf.ViewModels
             
             // Fast in-memory classification based on extension
             string ext = Extension.ToLowerInvariant();
-            if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp" || ext == ".webp")
+            if (ext is ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".webp" or ".svg" or ".ico" or ".tiff" or ".tif" or ".heic" or ".heif")
             {
                 ItemType = ClipboardItemType.Image;
+                Extension = ext == ".svg" ? "SVG" : (ext == ".gif" ? "GIF" : "IMAGE");
             }
             else if (ext == ".pdf")
             {
                 ItemType = ClipboardItemType.Pdf;
+                Extension = "PDF";
             }
-            else if (ext == ".doc" || ext == ".docx" || ext == ".txt" || ext == ".md")
+            else if (ext is ".apk" or ".aab" or ".xapk" or ".apks")
+            {
+                ItemType = ClipboardItemType.File;
+                Extension = "APK";
+                var defaultIcon = Classes.ShellIconManager.GetIcon(path, "apk");
+                if (defaultIcon != null)
+                {
+                    Icon = defaultIcon;
+                }
+                else
+                {
+                    GenerateApkIcon();
+                }
+            }
+            else if (ext is ".md" or ".markdown")
             {
                 ItemType = ClipboardItemType.Document;
-                if (ext == ".md" || ext == ".txt")
+                Extension = "MARKDOWN";
+                GenerateMarkdownIcon();
+
+                try
                 {
-                    if (ext == ".md") GenerateMarkdownIcon();
-                    
+                    var fi = new System.IO.FileInfo(path);
+                    if (fi.Exists && fi.Length < 1024 * 1024) // 1MB limit for in-memory preview content
+                    {
+                        var readPath = path;
+                        _ = System.Threading.Tasks.Task.Run(() =>
+                        {
+                            try
+                            {
+                                var content = System.IO.File.ReadAllText(readPath);
+                                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => RawContent = content);
+                            }
+                            catch (Exception ex) { Logger.LogAction("ITEM_INIT", $"Non-critical error: {ex.Message}"); }
+                        });
+                    }
+                }
+                catch (Exception ex) { Logger.LogAction("ITEM_INIT", $"Non-critical error: {ex.Message}"); }
+            }
+            else if (ext is ".doc" or ".docx" or ".txt" or ".rtf" or ".odt")
+            {
+                ItemType = ClipboardItemType.Document;
+                Extension = ext.ToUpperInvariant().TrimStart('.');
+                if (ext == ".txt")
+                {
                     try
                     {
                         var fi = new System.IO.FileInfo(path);
-                        if (fi.Exists && fi.Length < 1024 * 1024) // 1MB limit for in-memory preview content
+                        if (fi.Exists && fi.Length < 1024 * 1024)
                         {
-                            // Defer file reading off UI thread to prevent blocking during paste/drop
                             var readPath = path;
                             _ = System.Threading.Tasks.Task.Run(() =>
                             {
@@ -271,32 +308,47 @@ namespace FlyShelf.ViewModels
                                     var content = System.IO.File.ReadAllText(readPath);
                                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => RawContent = content);
                                 }
-                                catch (Exception ex) { Logger.LogAction("ITEM_INIT", $"Non-critical error: {ex.Message}"); }
+                                catch { }
                             });
                         }
                     }
-                    catch (Exception ex) { Logger.LogAction("ITEM_INIT", $"Non-critical error: {ex.Message}"); }
+                    catch { }
                 }
             }
-            else if (ext == ".cpp" || ext == ".c" || ext == ".bat" || ext == ".cmd" || ext == ".ps1" || ext == ".js" || ext == ".py" || ext == ".cs")
+            else if (ext is ".xls" or ".xlsx" or ".csv" or ".ods")
             {
-                ItemType = ClipboardItemType.Code;
+                ItemType = ClipboardItemType.Document;
+                Extension = ext.ToUpperInvariant().TrimStart('.');
             }
-            else if (ext == ".ppt" || ext == ".pptx")
+            else if (ext is ".ppt" or ".pptx" or ".key" or ".odp")
             {
                 ItemType = ClipboardItemType.Presentation;
+                Extension = ext.ToUpperInvariant().TrimStart('.');
             }
-            else if (ext == ".zip" || ext == ".rar" || ext == ".7z" || ext == ".tar" || ext == ".gz" || ext == ".apk")
+            else if (ext is ".zip" or ".rar" or ".7z" or ".tar" or ".gz" or ".bz2" or ".xz" or ".iso" or ".tgz")
             {
                 ItemType = ClipboardItemType.Archive;
+                Extension = ext.ToUpperInvariant().TrimStart('.');
             }
-            else if (ext == ".mp4" || ext == ".mkv" || ext == ".avi" || ext == ".mov")
+            else if (ext is ".cpp" or ".c" or ".h" or ".hpp" or ".bat" or ".cmd" or ".ps1" or ".js" or ".jsx" or ".ts" or ".tsx" or ".py" or ".cs" or ".java" or ".kt" or ".rs" or ".go" or ".php" or ".rb" or ".swift" or ".dart" or ".sh" or ".bash" or ".zsh" or ".sql" or ".html" or ".htm" or ".css" or ".scss" or ".json" or ".xml" or ".yaml" or ".yml" or ".toml")
+            {
+                ItemType = ClipboardItemType.Code;
+                Extension = ext.ToUpperInvariant().TrimStart('.');
+            }
+            else if (ext is ".mp4" or ".mkv" or ".avi" or ".mov" or ".webm" or ".flv" or ".wmv" or ".m4v")
             {
                 ItemType = ClipboardItemType.Video;
+                Extension = "VIDEO";
             }
-            else if (ext == ".mp3" || ext == ".wav" || ext == ".flac" || ext == ".ogg")
+            else if (ext is ".mp3" or ".wav" or ".flac" or ".ogg" or ".aac" or ".m4a" or ".wma" or ".opus")
             {
                 ItemType = ClipboardItemType.Audio;
+                Extension = "AUDIO";
+            }
+            else if (ext is ".exe" or ".msi" or ".deb" or ".rpm" or ".dmg" or ".pkg")
+            {
+                ItemType = ClipboardItemType.File;
+                Extension = ext.ToUpperInvariant().TrimStart('.');
             }
             else if (path != null && (path.EndsWith('\\') || path.EndsWith('/') || Directory.Exists(path)))
             {
@@ -307,12 +359,41 @@ namespace FlyShelf.ViewModels
             else
             {
                 ItemType = ClipboardItemType.File;
+                Extension = ext.ToUpperInvariant().TrimStart('.');
+            }
+
+            // Immediately set the OS default registered application icon for this file type
+            if (Icon == null && ItemType != ClipboardItemType.Image && ItemType != ClipboardItemType.Folder && !string.IsNullOrEmpty(ext))
+            {
+                var shellIcon = Classes.ShellIconManager.GetIcon(path, ext);
+                if (shellIcon != null)
+                {
+                    Icon = shellIcon;
+                }
             }
 
             // Unblock notifications — item is about to be inserted into the visual tree
             _suppressPropertyNotifications = false;
 
-            FormattedSize = "Loading...";
+            EvaluateSmartActions();
+
+            // Immediately set human-readable file size if accessible on disk
+            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            {
+                try
+                {
+                    var fi = new System.IO.FileInfo(path);
+                    FormattedSize = Classes.FormatHelper.FormatBytes(fi.Length);
+                }
+                catch
+                {
+                    FormattedSize = "Loading...";
+                }
+            }
+            else
+            {
+                FormattedSize = string.Empty;
+            }
 
             // Defer all blocking filesystem checks and I/O to background thread
             string capturedPath = FilePath;
@@ -382,9 +463,30 @@ namespace FlyShelf.ViewModels
                             }
                             catch { } // Best-effort: failure is acceptable
 
-                        // Trigger QR code and OCR parsing in the background
+                        // Trigger thumbnail loading, QR code, and OCR parsing in the background
                         if (preliminaryType == ClipboardItemType.Image)
                         {
+                            var thumb = Classes.ImageThumbnailManager.LoadThumbnail(capturedPath, 300);
+                            if (thumb != null)
+                            {
+                                Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                {
+                                    Icon = thumb;
+                                    IsLoadedHighQuality = true;
+                                });
+                            }
+                            else
+                            {
+                                var shellFallback = Classes.ShellIconManager.GetIcon(capturedPath, capturedExt);
+                                if (shellFallback != null)
+                                {
+                                    Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                    {
+                                        Icon = shellFallback;
+                                    });
+                                }
+                            }
+
                             ScanForQRCodeAsync(capturedPath);
                             ScanForOcrTextAsync(capturedPath);
                         }
@@ -543,55 +645,9 @@ namespace FlyShelf.ViewModels
         // [FIX M-58]: Delegated to shared FormatHelper
         private static string FormatBytes(long bytes) => Classes.FormatHelper.FormatBytes(bytes);
 
-        // NOTE (M-14): SHGetFileInfo is safe here — callers invoke this on the UI Dispatcher thread
-        // via GenerateStackedGroupIcon's InvokeAsync, so no background-thread concern.
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, BitmapSource?> _shellIconCache = new();
-        private static BitmapSource GetShellIconForStacking(string filePath)
+        private static BitmapSource? GetShellIconForStacking(string filePath)
         {
-            string ext = System.IO.Path.GetExtension(filePath)?.ToLowerInvariant() ?? "";
-            if (!string.IsNullOrEmpty(ext) && _shellIconCache.TryGetValue(ext, out var cached))
-                return cached;
-
-            try
-            {
-                const uint SHGFI_ICON = 0x100;
-                const uint SHGFI_LARGEICON = 0x0;
-                const uint SHGFI_USEFILEATTRIBUTES = 0x10;
-                const uint FILE_ATTRIBUTE_NORMAL = 0x80;
-
-                var shinfo = new NativeMethods.SHFILEINFO();
-                IntPtr res = NativeMethods.SHGetFileInfo(filePath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
-
-                if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
-                {
-                    try
-                    {
-                        var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
-                            shinfo.hIcon,
-                            Int32Rect.Empty,
-                            BitmapSizeOptions.FromEmptyOptions());
-                        bitmapSource.Freeze();
-                        if (!string.IsNullOrEmpty(ext))
-                        {
-                            if (_shellIconCache.Count > 500) _shellIconCache.Clear();
-                            _shellIconCache.TryAdd(ext, bitmapSource);
-                        }
-                        return bitmapSource;
-                    }
-                    finally
-                    {
-                        NativeMethods.DestroyIcon(shinfo.hIcon);
-                    }
-                }
-            }
-            catch { } // Best-effort: failure is acceptable
-            // Cache null result to avoid retrying for extensions that have no icon
-            if (!string.IsNullOrEmpty(ext))
-            {
-                if (_shellIconCache.Count > 500) _shellIconCache.Clear();
-                _shellIconCache.TryAdd(ext, null);
-            }
-            return null;
+            return Classes.ShellIconManager.GetIcon(filePath);
         }
 
         private void GenerateStackedGroupIcon(string[] files)
@@ -723,6 +779,79 @@ namespace FlyShelf.ViewModels
                 catch (Exception ex)
                 {
                     Classes.Logger.LogAction("MD ICON ERR", ex.Message);
+                }
+            });
+        }
+
+        private static BitmapSource? s_apkIcon;
+
+        internal void GenerateApkIcon()
+        {
+            if (s_apkIcon != null) { Icon = s_apkIcon; return; }
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+            {
+                if (s_apkIcon != null) { Icon = s_apkIcon; return; }
+                try
+                {
+                    var visual = new System.Windows.Media.DrawingVisual();
+                    using (var dc = visual.RenderOpen())
+                    {
+                        // 1. Draw soft drop shadow behind the card
+                        dc.DrawRoundedRectangle(_iconShadowDark, null, new Rect(14, 14, 68, 68), 12, 12);
+                        dc.DrawRoundedRectangle(_iconShadowLight, null, new Rect(16, 16, 68, 68), 12, 12);
+
+                        // 2. Draw card background (Fluent Dark Grey with Android Green Accent Border)
+                        var borderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3D, 0xDC, 0x84)); // Android Green #3DDC84
+                        borderBrush.Freeze();
+                        dc.DrawRoundedRectangle(_iconDarkBg, CreateFrozenPen(borderBrush, 1.5), new Rect(12, 12, 68, 68), 12, 12);
+
+                        // 3. Draw Android Bot Head & Text
+                        var greenBrush = borderBrush;
+
+                        // Head dome: semi-circle at top
+                        var headGeometry = new System.Windows.Media.PathGeometry();
+                        var headFigure = new System.Windows.Media.PathFigure { StartPoint = new Point(34, 40) };
+                        headFigure.Segments.Add(new System.Windows.Media.ArcSegment(new Point(58, 40), new Size(12, 12), 0, false, System.Windows.Media.SweepDirection.Clockwise, true));
+                        headFigure.Segments.Add(new System.Windows.Media.LineSegment(new Point(34, 40), true));
+                        headGeometry.Figures.Add(headFigure);
+                        headGeometry.Freeze();
+                        dc.DrawGeometry(greenBrush, null, headGeometry);
+
+                        // Eyes: two small white dots
+                        dc.DrawEllipse(System.Windows.Media.Brushes.White, null, new Point(40, 34), 1.6, 1.6);
+                        dc.DrawEllipse(System.Windows.Media.Brushes.White, null, new Point(52, 34), 1.6, 1.6);
+
+                        // Antennas: two angled lines
+                        var antennaPen = new System.Windows.Media.Pen(greenBrush, 2.0);
+                        antennaPen.StartLineCap = System.Windows.Media.PenLineCap.Round;
+                        antennaPen.EndLineCap = System.Windows.Media.PenLineCap.Round;
+                        antennaPen.Freeze();
+                        dc.DrawLine(antennaPen, new Point(38, 29), new Point(34, 24));
+                        dc.DrawLine(antennaPen, new Point(54, 29), new Point(58, 24));
+
+                        // "APK" Text badge at the bottom
+                        var typeface = new System.Windows.Media.Typeface(new System.Windows.Media.FontFamily("Segoe UI, Arial"), System.Windows.FontStyles.Normal, System.Windows.FontWeights.Bold, System.Windows.FontStretches.Normal);
+                        var formattedApk = new System.Windows.Media.FormattedText(
+                            "APK",
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            System.Windows.FlowDirection.LeftToRight,
+                            typeface,
+                            18,
+                            greenBrush,
+                            1.0);
+                        
+                        dc.DrawText(formattedApk, new Point(30, 47));
+                    }
+
+                    var rtb = new RenderTargetBitmap(96, 96, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                    rtb.Render(visual);
+                    rtb.Freeze();
+                    s_apkIcon = rtb;
+                    Icon = rtb;
+                }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("APK ICON ERR", ex.Message);
                 }
             });
         }

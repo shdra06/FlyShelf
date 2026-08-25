@@ -8,8 +8,8 @@ using System.Linq;
 namespace FlyShelf.Classes
 {
     /// <summary>
-    /// Lightweight fuzzy text matcher using word-level tokenization and trigram similarity.
-    /// Zero dependencies, pure C#, sub-millisecond per comparison.
+    /// Ultra-fast, zero-allocation fuzzy text matcher using word-level tokenization and packed-integer trigram similarity.
+    /// Zero heap allocations on hot search paths.
     /// 
     /// Matching strategy (in order of priority):
     ///   1. Exact substring match (fastest)
@@ -19,11 +19,15 @@ namespace FlyShelf.Classes
     public static class FuzzyMatcher
     {
         // Trigram similarity threshold — lower = more permissive.
-        // 0.25 catches 1-2 char typos in short words; 0.3 is stricter.
         private const double FuzzyThreshold = 0.25;
 
         // Minimum query length for fuzzy matching (skip for very short queries)
         private const int MinFuzzyLength = 3;
+
+        private const int MaxSearchableContentLength = 4096;
+
+        private static readonly char[] _wordSeparators = 
+            { ' ', '\t', '\n', '\r', ',', '.', ';', ':', '!', '?', '(', ')', '[', ']', '{', '}', '"', '\'', '/', '\\', '-', '_' };
 
         /// <summary>
         /// Returns true if <paramref name="text"/> matches <paramref name="query"/>
@@ -35,22 +39,20 @@ namespace FlyShelf.Classes
             if (string.IsNullOrWhiteSpace(query) || string.IsNullOrWhiteSpace(text))
                 return false;
 
-            string q = query.Trim().Normalize(System.Text.NormalizationForm.FormC);
-            string t = text.Normalize(System.Text.NormalizationForm.FormC);
+            string q = query.Trim();
 
             // 1. Exact substring (case-insensitive) — fastest path
-            if (t.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
+            if (text.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
                 return true;
 
             // 2. Word-level: ALL query words must appear somewhere in text
             string[] queryWords = SplitWords(q);
             if (queryWords.Length > 1)
             {
-                string tLower = t.ToLowerInvariant();
                 bool allFound = true;
                 for (int i = 0; i < queryWords.Length; i++)
                 {
-                    if (tLower.IndexOf(queryWords[i], StringComparison.OrdinalIgnoreCase) < 0)
+                    if (text.IndexOf(queryWords[i], StringComparison.OrdinalIgnoreCase) < 0)
                     {
                         allFound = false;
                         break;
@@ -62,11 +64,12 @@ namespace FlyShelf.Classes
             // 3. Fuzzy trigram matching — check if any word in text is close to any query word
             if (q.Length >= MinFuzzyLength)
             {
-                string[] textWords = SplitWords(t);
+                string textToSplit = text.Length > MaxSearchableContentLength ? text.Substring(0, MaxSearchableContentLength) : text;
+                string[] textWords = SplitWords(textToSplit);
                 for (int qi = 0; qi < queryWords.Length; qi++)
                 {
                     string qw = queryWords[qi];
-                    if (qw.Length < MinFuzzyLength) continue; // too short for fuzzy
+                    if (qw.Length < MinFuzzyLength) continue;
 
                     bool wordMatched = false;
                     for (int ti = 0; ti < textWords.Length; ti++)
@@ -74,11 +77,10 @@ namespace FlyShelf.Classes
                         string tw = textWords[ti];
                         if (tw.Length < MinFuzzyLength) continue;
 
-                        // Quick length filter — skip wildly different lengths
                         int lenDiff = Math.Abs(qw.Length - tw.Length);
                         if (lenDiff > Math.Max(qw.Length, tw.Length) / 2) continue;
 
-                        if (TrigramSimilarity(qw, tw) >= FuzzyThreshold)
+                        if (ComputeTrigramSimilarity(qw, tw) >= FuzzyThreshold)
                         {
                             wordMatched = true;
                             break;
@@ -88,8 +90,7 @@ namespace FlyShelf.Classes
                     // For multi-word queries, ALL words must match (exact or fuzzy)
                     if (!wordMatched && queryWords.Length > 1)
                     {
-                        // Check if this word had an exact substring match
-                        if (t.IndexOf(qw, StringComparison.OrdinalIgnoreCase) < 0)
+                        if (text.IndexOf(qw, StringComparison.OrdinalIgnoreCase) < 0)
                             return false;
                     }
                     else if (wordMatched && queryWords.Length == 1)
@@ -98,7 +99,6 @@ namespace FlyShelf.Classes
                     }
                 }
 
-                // If we reach here with multi-word query and didn't return false, all matched
                 if (queryWords.Length > 1)
                     return true;
             }
@@ -107,49 +107,83 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>Uses pre-computed lowercase text to avoid allocating ToLowerInvariant per call.</summary>
-        internal static bool IsMatchWithLower(string query, string text, string precomputedLower)
+        internal static bool IsMatchWithLower(string query, string rawText, string precomputedLower)
         {
-            if (string.IsNullOrEmpty(query) || string.IsNullOrEmpty(text)) return false;
-            string q = query.Trim().Normalize(System.Text.NormalizationForm.FormC);
+            if (string.IsNullOrEmpty(query)) return true;
+            if (string.IsNullOrEmpty(rawText) && string.IsNullOrEmpty(precomputedLower)) return false;
+
+            string target = string.IsNullOrEmpty(precomputedLower) ? rawText : precomputedLower;
+            string q = query.Trim();
             if (q.Length == 0) return true;
+
             // Fast path: exact substring match
-            if (precomputedLower.Contains(q.ToLowerInvariant(), StringComparison.OrdinalIgnoreCase)) return true;
-            // Fuzzy path
+            if (target.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+
+            // Fuzzy path: check query words
             string[] queryWords = SplitWords(q);
             if (queryWords.Length == 0) return true;
+
             // Check all words present
             bool allPresent = true;
-            foreach (var w in queryWords)
+            for (int i = 0; i < queryWords.Length; i++)
             {
-                if (!precomputedLower.Contains(w, StringComparison.OrdinalIgnoreCase)) { allPresent = false; break; }
+                if (target.IndexOf(queryWords[i], StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    allPresent = false;
+                    break;
+                }
             }
             if (allPresent) return true;
-            // Trigram fuzzy fallback
-            string[] textWords = SplitWords(text);
-            foreach (var qw in queryWords)
+
+            // Trigram fuzzy fallback (only if query is sufficient length)
+            if (q.Length < MinFuzzyLength) return false;
+
+            string textToSplit = target.Length > MaxSearchableContentLength ? target.Substring(0, MaxSearchableContentLength) : target;
+            string[] textWords = SplitWords(textToSplit);
+
+            for (int qi = 0; qi < queryWords.Length; qi++)
             {
-                bool found = false;
-                foreach (var tw in textWords)
+                string qw = queryWords[qi];
+                if (qw.Length < MinFuzzyLength)
                 {
-                    if (TrigramSimilarity(qw, tw) > 0.3) { found = true; break; }
+                    if (target.IndexOf(qw, StringComparison.OrdinalIgnoreCase) < 0) return false;
+                    continue;
                 }
-                if (!found) return false;
+
+                bool found = false;
+                for (int ti = 0; ti < textWords.Length; ti++)
+                {
+                    string tw = textWords[ti];
+                    if (tw.Length < MinFuzzyLength) continue;
+
+                    int lenDiff = Math.Abs(qw.Length - tw.Length);
+                    if (lenDiff > Math.Max(qw.Length, tw.Length) / 2) continue;
+
+                    if (ComputeTrigramSimilarity(qw, tw) >= 0.3)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found && target.IndexOf(qw, StringComparison.OrdinalIgnoreCase) < 0)
+                    return false;
             }
+
             return true;
         }
 
         /// <summary>
         /// Returns a relevance score (0.0 to 1.0) indicating how well <paramref name="text"/>
         /// matches <paramref name="query"/>. Higher = better match.
-        /// Used for sorting search results by relevance.
         /// </summary>
         public static double Score(string query, string text)
         {
             if (string.IsNullOrWhiteSpace(query) || string.IsNullOrWhiteSpace(text))
                 return 0.0;
 
-            string q = query.Trim().Normalize(System.Text.NormalizationForm.FormC);
-            string t = text.Normalize(System.Text.NormalizationForm.FormC);
+            string q = query.Trim();
+            string t = text;
 
             // 1.0 — Exact full match
             if (t.Equals(q, StringComparison.OrdinalIgnoreCase))
@@ -160,95 +194,120 @@ namespace FlyShelf.Classes
                 return 0.9;
 
             // 0.8 — Exact substring match
-            if (t.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
-                return 0.8;
+            int subIdx = t.IndexOf(q, StringComparison.OrdinalIgnoreCase);
+            if (subIdx >= 0)
+            {
+                double ratio = (double)q.Length / Math.Min(t.Length, 200);
+                return 0.8 + Math.Min(ratio * 0.15, 0.15);
+            }
 
-            // 0.6 — All query words found in text (any order)
+            // Word-level scoring
             string[] queryWords = SplitWords(q);
             if (queryWords.Length > 1)
             {
-                string tLower = t.ToLowerInvariant();
                 int wordsFound = 0;
                 for (int i = 0; i < queryWords.Length; i++)
                 {
-                    if (tLower.IndexOf(queryWords[i], StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (t.IndexOf(queryWords[i], StringComparison.OrdinalIgnoreCase) >= 0)
                         wordsFound++;
                 }
                 if (wordsFound == queryWords.Length)
-                    return 0.6 + (0.1 * Math.Min(wordsFound, 3) / 3.0); // up to 0.7
+                    return 0.6 + (0.1 * Math.Min(wordsFound, 3) / 3.0);
 
-                // Partial word match — some words found
                 if (wordsFound > 0)
                     return 0.3 + (0.2 * wordsFound / queryWords.Length);
             }
 
-            // 0.2-0.5 — Fuzzy trigram match
+            // Fuzzy trigram match
             if (q.Length >= MinFuzzyLength)
             {
-                string[] textWords = SplitWords(t);
+                string textToSplit = t.Length > MaxSearchableContentLength ? t.Substring(0, MaxSearchableContentLength) : t;
+                string[] textWords = SplitWords(textToSplit);
                 double bestSim = 0;
+
                 for (int qi = 0; qi < queryWords.Length; qi++)
                 {
                     string qw = queryWords[qi];
                     if (qw.Length < MinFuzzyLength) continue;
+
                     for (int ti = 0; ti < textWords.Length; ti++)
                     {
                         string tw = textWords[ti];
                         if (tw.Length < MinFuzzyLength) continue;
+
                         int lenDiff = Math.Abs(qw.Length - tw.Length);
                         if (lenDiff > Math.Max(qw.Length, tw.Length) / 2) continue;
 
-                        double sim = TrigramSimilarity(qw, tw);
+                        double sim = ComputeTrigramSimilarity(qw, tw);
                         if (sim > bestSim) bestSim = sim;
                     }
                 }
                 if (bestSim >= FuzzyThreshold)
-                    return 0.2 + (bestSim * 0.3); // 0.2 to 0.5
+                    return 0.2 + (bestSim * 0.3);
             }
 
             return 0.0;
         }
 
-        internal static double ScoreWithLower(string query, string text, string precomputedLower)
+        internal static double ScoreWithLower(string query, string rawText, string precomputedLower)
         {
-            if (string.IsNullOrEmpty(query) || string.IsNullOrEmpty(text)) return 0;
-            string q = query.Trim().Normalize(System.Text.NormalizationForm.FormC);
+            if (string.IsNullOrEmpty(query)) return 1.0;
+            string target = string.IsNullOrEmpty(precomputedLower) ? (rawText ?? "") : precomputedLower;
+            if (target.Length == 0) return 0.0;
+
+            string q = query.Trim();
             if (q.Length == 0) return 1.0;
-            double score = 0;
-            string qLower = q.ToLowerInvariant();
+
             // Exact match bonus
-            int idx = precomputedLower.IndexOf(qLower, StringComparison.OrdinalIgnoreCase);
+            int idx = target.IndexOf(q, StringComparison.OrdinalIgnoreCase);
             if (idx >= 0)
             {
-                score = 1.0;
-                if (idx == 0) score += 0.5;
-                double ratio = (double)q.Length / text.Length;
-                score += ratio * 0.3;
-                return score;
+                double score = 0.8;
+                if (idx == 0) score = target.Length == q.Length ? 1.0 : 0.9;
+                double ratio = (double)q.Length / Math.Min(target.Length, 200);
+                return score + (ratio * 0.1);
             }
+
             // Word match scoring
             string[] queryWords = SplitWords(q);
             if (queryWords.Length == 0) return 1.0;
+
+            string textToSplit = target.Length > MaxSearchableContentLength ? target.Substring(0, MaxSearchableContentLength) : target;
+            string[] textWords = SplitWords(textToSplit);
+
             int matchCount = 0;
             double simSum = 0;
-            string[] textWords = SplitWords(text);
-            foreach (var qw in queryWords)
+
+            for (int qi = 0; qi < queryWords.Length; qi++)
             {
+                string qw = queryWords[qi];
                 double bestSim = 0;
-                foreach (var tw in textWords)
+
+                for (int ti = 0; ti < textWords.Length; ti++)
                 {
-                    double sim = TrigramSimilarity(qw, tw);
+                    string tw = textWords[ti];
+                    double sim = ComputeTrigramSimilarity(qw, tw);
                     if (sim > bestSim) bestSim = sim;
                 }
-                if (bestSim > 0.3) { matchCount++; simSum += bestSim; }
+
+                if (bestSim > 0.3)
+                {
+                    matchCount++;
+                    simSum += bestSim;
+                }
+                else if (target.IndexOf(qw, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    matchCount++;
+                    simSum += 0.5;
+                }
             }
-            if (matchCount > 0) score = (simSum / queryWords.Length) * 0.8;
-            return score;
+
+            if (matchCount > 0)
+                return (simSum / queryWords.Length) * 0.8;
+
+            return 0.0;
         }
 
-        /// <summary>
-        /// Checks if any of the given texts match the query. Convenience overload.
-        /// </summary>
         public static bool IsMatchAny(string query, params string?[] texts)
         {
             for (int i = 0; i < texts.Length; i++)
@@ -264,9 +323,6 @@ namespace FlyShelf.Classes
             return IsMatchWithLower(query, rawFileName, lowerFileName) || IsMatchWithLower(query, rawContent, lowerContent);
         }
 
-        /// <summary>
-        /// Returns the best score across multiple text fields.
-        /// </summary>
         public static double ScoreBest(string query, params string?[] texts)
         {
             double best = 0;
@@ -290,61 +346,128 @@ namespace FlyShelf.Classes
         }
 
         // ═══════════════════════════════════════════════════════════
-        // INTERNALS
+        // ZERO-ALLOCATION PACKED-INTEGER TRIGRAM ENGINE
         // ═══════════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Splits text into lowercase words. Reuses no allocations beyond the array.
-        /// </summary>
         private static string[] SplitWords(string input)
         {
-            return input.ToLowerInvariant()
-                .Split(_wordSeparators, StringSplitOptions.RemoveEmptyEntries);
+            if (string.IsNullOrEmpty(input)) return Array.Empty<string>();
+            return input.Split(_wordSeparators, StringSplitOptions.RemoveEmptyEntries);
         }
 
-        private static readonly char[] _wordSeparators = 
-            { ' ', '\t', '\n', '\r', ',', '.', ';', ':', '!', '?', '(', ')', '[', ']', '{', '}', '"', '\'', '/', '\\', '-', '_' };
-
         /// <summary>
-        /// Computes Jaccard similarity between the trigram sets of two strings.
-        /// Returns 0.0 (no overlap) to 1.0 (identical trigrams).
+        /// Computes Jaccard similarity between character trigrams of strings a and b.
+        /// Zero heap allocations — packs trigrams into stack-allocated integer spans.
         /// </summary>
-        private static double TrigramSimilarity(string a, string b)
+        public static double ComputeTrigramSimilarity(string a, string b)
         {
-            var triA = GetTrigrams(a);
-            var triB = GetTrigrams(b);
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return 0.0;
+            if (a.Equals(b, StringComparison.OrdinalIgnoreCase)) return 1.0;
 
-            if (triA.Count == 0 || triB.Count == 0)
-                return 0.0;
+            int lenA = a.Length;
+            int lenB = b.Length;
+            if (lenA < 2 || lenB < 2) return 0.0;
 
+            // Maximum trigrams for a word is (length + 4) - 2 = length + 2
+            int maxTriA = lenA + 2;
+            int maxTriB = lenB + 2;
+
+            Span<int> triA = stackalloc int[Math.Min(maxTriA, 64)];
+            Span<int> triB = stackalloc int[Math.Min(maxTriB, 64)];
+
+            int countA = ExtractPackedTrigrams(a, triA);
+            int countB = ExtractPackedTrigrams(b, triB);
+
+            if (countA == 0 || countB == 0) return 0.0;
+
+            // Sort trigrams for linear O(N+M) set intersection
+            triA.Slice(0, countA).Sort();
+            triB.Slice(0, countB).Sort();
+
+            // Deduplicate in-place
+            countA = DeduplicateSorted(triA.Slice(0, countA));
+            countB = DeduplicateSorted(triB.Slice(0, countB));
+
+            // Linear intersection
+            int i = 0, j = 0;
             int intersection = 0;
-            // Iterate the smaller set for efficiency
-            var smaller = triA.Count <= triB.Count ? triA : triB;
-            var larger = triA.Count <= triB.Count ? triB : triA;
-
-            foreach (var tri in smaller)
+            while (i < countA && j < countB)
             {
-                if (larger.Contains(tri))
+                int valA = triA[i];
+                int valB = triB[j];
+                if (valA == valB)
+                {
                     intersection++;
+                    i++;
+                    j++;
+                }
+                else if (valA < valB)
+                {
+                    i++;
+                }
+                else
+                {
+                    j++;
+                }
             }
 
-            int union = triA.Count + triB.Count - intersection;
+            int union = countA + countB - intersection;
             return union == 0 ? 0.0 : (double)intersection / union;
         }
 
         /// <summary>
-        /// Generates character trigrams for a string with boundary padding.
-        /// "hello" → {"  h", " he", "hel", "ell", "llo", "lo ", "o  "}
+        /// Extracts boundary-padded character trigrams into a destination span as packed 24-bit integers.
+        /// Boundary padding: "  " + input + "  "
+        /// Trigram (c1, c2, c3) packed as: (c1 & 0xFF) << 16 | (c2 & 0xFF) << 8 | (c3 & 0xFF)
         /// </summary>
-        private static HashSet<string> GetTrigrams(string input)
+        private static int ExtractPackedTrigrams(string word, Span<int> dest)
         {
-            string padded = "  " + input.ToLowerInvariant() + "  ";
-            var result = new HashSet<string>(padded.Length - 2);
-            for (int i = 0; i <= padded.Length - 3; i++)
+            int len = word.Length;
+            if (len == 0) return 0;
+
+            int paddedLen = len + 4;
+            int totalTrigrams = paddedLen - 2; // = len + 2
+            int limit = Math.Min(totalTrigrams, dest.Length);
+
+            for (int i = 0; i < limit; i++)
             {
-                result.Add(padded.Substring(i, 3));
+                char c1 = GetPaddedChar(word, i);
+                char c2 = GetPaddedChar(word, i + 1);
+                char c3 = GetPaddedChar(word, i + 2);
+
+                int packed = ((int)char.ToLowerInvariant(c1) << 16) |
+                             ((int)char.ToLowerInvariant(c2) << 8) |
+                             ((int)char.ToLowerInvariant(c3));
+                dest[i] = packed;
             }
-            return result;
+
+            return limit;
+        }
+
+        private static char GetPaddedChar(string word, int index)
+        {
+            // Index 0, 1: space padding
+            if (index < 2) return ' ';
+            int wordIdx = index - 2;
+            if (wordIdx < word.Length) return word[wordIdx];
+            // Beyond end: space padding
+            return ' ';
+        }
+
+        private static int DeduplicateSorted(Span<int> sorted)
+        {
+            if (sorted.Length <= 1) return sorted.Length;
+            int write = 1;
+            for (int read = 1; read < sorted.Length; read++)
+            {
+                if (sorted[read] != sorted[write - 1])
+                {
+                    sorted[write] = sorted[read];
+                    write++;
+                }
+            }
+            return write;
         }
     }
 }
+

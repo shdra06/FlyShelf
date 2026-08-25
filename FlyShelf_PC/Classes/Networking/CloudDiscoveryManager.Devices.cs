@@ -91,11 +91,11 @@ namespace FlyShelf.Classes
                 // Use PUT to register or update our specific Device node (scoped to pairing key)
                 string pairingKey = DevicePairingManager.EnsurePairingKey();
                 if (string.IsNullOrEmpty(pairingKey)) { Logger.LogAction("FIREBASE SYNC", "Skipped device registration — no pairing key"); return; }
-                // Only register room membership once per session — it never changes
+                // Register room membership concurrently — don't delay the tunnel URL push
                 if (!_roomMembershipRegistered)
                 {
-                    await RegisterRoomMembershipAsync(pairingKey);
                     _roomMembershipRegistered = true;
+                    _ = RegisterRoomMembershipAsync(pairingKey);
                 }
                 string tunnelNodeUrl = (await AuthUrl($"active_devices/{pairingKey}/{SettingsManager.Current.DeviceId}.json"));
                 // H4: Skip Firebase writes during backoff period

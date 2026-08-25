@@ -1054,6 +1054,9 @@ namespace FlyShelf
         }
 
         private bool _isRenderingThumbnails;
+        private readonly HashSet<int> _alwaysLoadedImageIndices = new();
+        private readonly HashSet<ClipboardItem> _activeLoadedImages = new();
+
         private void RenderVisibleThumbnails(bool onlyFirstTen = false, bool isEvictionPass = false)
         {
             if (_isRenderingThumbnails) return; // Reentrancy guard — prevent overlapping timer passes
@@ -1075,18 +1078,9 @@ namespace FlyShelf
                         }
                     }
 
-                    // SCROLL DRAG FIX: Do NOT call UpdateLayout() here.
-                    // It forces a synchronous full layout pass (including virtualizer
-                    // container recycling) that blocks the SmoothScroll physics engine.
-                    // WPF already runs layout before rendering, so TransformToAncestor
-                    // visibility checks work without it.
-
                     // Guard: Ensure containers are fully generated before evaluating visibility or eviction
                     if (ShelfListView.ItemContainerGenerator.Status != System.Windows.Controls.Primitives.GeneratorStatus.ContainersGenerated)
                     {
-                        // Containers not ready yet (e.g. right after spawn) — schedule a retry
-                        // instead of silently giving up. Without this, thumbnails never load if
-                        // the initial 300ms post-spawn timer fires before containers are materialized.
                         if (_scrollHighQualityTimer != null && !_scrollHighQualityTimer.IsEnabled)
                         {
                             _scrollHighQualityTimer.Interval = TimeSpan.FromMilliseconds(100);
@@ -1110,9 +1104,6 @@ namespace FlyShelf
                         };
                         _evictionBackgroundTimer.Start();
                     }
-                    // PERF FIX: Restart eviction timer if it was stopped by AnimateAndHide.
-                    // Previously the timer was only started during creation (above), so after
-                    // hide→show cycles it stayed stopped, leaking off-screen bitmaps.
                     else if (!_evictionBackgroundTimer.IsEnabled)
                     {
                         _evictionBackgroundTimer.Start();
@@ -1126,41 +1117,16 @@ namespace FlyShelf
                     if (viewportHeight <= 0 || viewportWidth <= 0) return;
 
                     // ═══ SCROLL-SPEED-AWARE PREFETCH GATING ═══
-                    // During fast scrolling, skip thumbnail loading entirely to preserve
-                    // scroll smoothness. Lower threshold (12 px/frame) backs off sooner
-                    // during touchpad flicks, avoiding TransformToAncestor layout passes
-                    // that interrupt the CompositionTarget.Rendering cadence.
                     var scrollSv = GetShelfScrollViewer();
                     double scrollVelocity = scrollSv != null ? Classes.SmoothScroll.GetCurrentVelocity(scrollSv) : 0;
                     bool isFastScrolling = scrollVelocity > 30.0; // > 30 px/frame = truly fast scroll (flicks)
 
-                    // Prefetch overdraw: expand viewport by 1200px above and below.
-                    // Larger zone ensures images preload well before entering viewport.
-                    // During fast scroll, shrink to 400px (just enough for immediate needs).
                     double prefetchOverdraw = isFastScrolling ? 200 : 1200;
                     Rect viewportRect = new Rect(0, -prefetchOverdraw, viewportWidth, viewportHeight + prefetchOverdraw * 2);
                     int count = ShelfListView.Items.Count;
 
-                    // ═══ FULL-COLLECTION SCAN ═══
-                    // Iterate ALL items but only do expensive work (TransformToAncestor)
-                    // for items that have a realized container (~20-30 items). ContainerFromIndex
-                    // is O(1), so the loop is cheap. The scroll throttling (300ms after track-click
-                    // jumps) already prevents this from running during scroll animations.
-                    //
-                    // Previous approach (viewport-bounded scan using scroll offset / EstimatedItemHeight)
-                    // was fundamentally broken for heterogeneous item heights (50px text + 165px images)
-                    // because pixel offsets can't reliably map to item indices.
-                    int scanStart = 0;
-                    int scanEnd = count - 1;
-
-                    int evictedCount = 0;
-                    // Fix 5: Reset anchor for cheap visibility accumulation
-                    _anchorValid = false;
-
                     // ═══ PASS 1: Always-loaded first 6 images (cheap, covers top of list) ═══
-                    // These are always kept loaded for instant visibility on summon.
-                    // They are NEVER evicted, even when scrolled far off-screen.
-                    var _alwaysLoadedImageIndices = new HashSet<int>();
+                    _alwaysLoadedImageIndices.Clear();
                     {
                         int imgCount = 0;
                         int topScanLimit = Math.Min(count, 50); // Scan first 50 items to find first 6 images
@@ -1188,6 +1154,7 @@ namespace FlyShelf
                                                 item.Icon = bmp;
                                                 item.IsLoadedHighQuality = true;
                                                 item.IsLoadingHighQuality = false;
+                                                _activeLoadedImages.Add(item);
                                             }, System.Windows.Threading.DispatcherPriority.Normal);
                                         else
                                             Dispatcher.InvokeAsync(() => item.IsLoadingHighQuality = false);
@@ -1203,28 +1170,76 @@ namespace FlyShelf
                         }
                     }
 
-                    // ═══ PASS 2: Loading + eviction scan ═══
-                    // PERF: For loading passes, only scan a bounded window around the viewport
-                    // instead of iterating all 5000+ items. The eviction pass (1-second timer)
-                    // still scans the full list to find off-screen items to free.
-                    int loadScanStart, loadScanEnd;
-                    if (!isEvictionPass && count > 100)
+                    // ═══ EVICTION PASS: Scan ONLY tracked active loaded images (O(active) instead of O(5000)) ═══
+                    if (isEvictionPass)
                     {
-                        // Use 120px as estimated item height (mix of ~50px text + ~165px image cards).
-                        // The old 60px caused the scan window to be half the size it needed to be,
-                        // skipping image items that were actually near the viewport.
+                        if (_hubWindowInstance == null || !_hubWindowInstance.IsVisible)
+                        {
+                            var now = DateTime.UtcNow;
+                            var loadedSnapshot = _activeLoadedImages.ToList();
+                            foreach (var item in loadedSnapshot)
+                            {
+                                if (item.IsPinned) { item.LeftViewportTime = null; continue; }
+
+                                int idx = ShelfListView.Items.IndexOf(item);
+                                if (idx >= 0 && _alwaysLoadedImageIndices.Contains(idx))
+                                {
+                                    item.LeftViewportTime = null;
+                                    continue;
+                                }
+
+                                var container = idx >= 0 ? ShelfListView.ItemContainerGenerator.ContainerFromIndex(idx) as FrameworkElement : null;
+                                bool isVisible = false;
+                                if (container != null && container.IsLoaded)
+                                {
+                                    try
+                                    {
+                                        GeneralTransform transform = container.TransformToAncestor(sv);
+                                        Point containerPt = transform.Transform(new Point(0, 0));
+                                        Rect bounds = new Rect(0, containerPt.Y, container.ActualWidth, container.ActualHeight);
+                                        isVisible = viewportRect.IntersectsWith(bounds);
+                                    }
+                                    catch { }
+                                }
+
+                                if (isVisible)
+                                {
+                                    item.LeftViewportTime = null;
+                                }
+                                else
+                                {
+                                    if (item.LeftViewportTime == null)
+                                    {
+                                        item.LeftViewportTime = now;
+                                    }
+                                    else if ((now - item.LeftViewportTime.Value).TotalMilliseconds >= 2000)
+                                    {
+                                        item.Icon = null;
+                                        item.IsLoadedHighQuality = false;
+                                        item.IsLoadingHighQuality = false;
+                                        item.LeftViewportTime = null;
+                                        _activeLoadedImages.Remove(item);
+                                    }
+                                }
+                            }
+                        }
+                        return;
+                    }
+
+                    // ═══ PASS 2: Viewport-Bounded Loading Scan ═══
+                    int loadScanStart, loadScanEnd;
+                    if (count > 100)
+                    {
                         double estimatedItemHeight = 120.0;
                         int estimatedViewportIndex = (int)(sv.VerticalOffset / estimatedItemHeight);
-                        // +2400 overdraw (±1200px) for aggressive prefetch — ensures images load
-                        // well before they scroll into view, eliminating the "appears blank then loads" flash.
                         int viewportItems = (int)((viewportHeight + 2400) / estimatedItemHeight);
                         loadScanStart = Math.Max(0, estimatedViewportIndex - viewportItems);
                         loadScanEnd = Math.Min(count - 1, estimatedViewportIndex + viewportItems * 2);
                     }
                     else
                     {
-                        loadScanStart = scanStart;
-                        loadScanEnd = scanEnd;
+                        loadScanStart = 0;
+                        loadScanEnd = count - 1;
                     }
 
                     for (int i = loadScanStart; i <= loadScanEnd; i++)
@@ -1232,57 +1247,32 @@ namespace FlyShelf
                         var item = ShelfListView.Items[i] as ClipboardItem;
                         if (item == null) continue;
 
-                        // Only process image and QR code items
                         if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode) continue;
+
+                        if (item.IsLoadedHighQuality && item.Icon != null)
+                            continue;
 
                         var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
                         bool isVisible = false;
 
-                        if (item.IsLoadedHighQuality && !isEvictionPass && item.Icon != null)
+                        if (container != null && container.IsLoaded)
                         {
-                            // Optimization: if it's already loaded (with a valid bitmap) and we are not
-                            // doing an eviction pass, skip the expensive TransformToAncestor query.
-                            // The Icon != null guard catches broken states where IsLoadedHighQuality
-                            // was set but the bitmap failed to load — these need to be retried.
-                            continue;
-                        }
-                        else if (container != null && container.IsLoaded)
-                        {
-                            // STABILITY FIX: Use direct TransformToAncestor per image container
-                            // instead of accumulating heights. The old approach skipped non-image
-                            // items' heights, causing _anchorY to drift by hundreds of pixels
-                            // and misclassifying visible images as off-screen.
-                            // Cost: one visual tree walk per image container (~5-15 in viewport).
                             try
                             {
                                 GeneralTransform transform = container.TransformToAncestor(sv);
                                 Point containerPt = transform.Transform(new Point(0, 0));
-                                double containerH = container.ActualHeight;
-                                Rect bounds = new Rect(0, containerPt.Y, container.ActualWidth, containerH);
+                                Rect bounds = new Rect(0, containerPt.Y, container.ActualWidth, container.ActualHeight);
                                 isVisible = viewportRect.IntersectsWith(bounds);
                             }
-                            catch
-                            {
-                                // Soft fail if transform fails (e.g. not fully in visual tree yet)
-                            }
+                            catch { }
                         }
-                        // container == null means WPF virtualizer hasn't realized this item
-                        // (it's offscreen). Skip it — no need for fallback estimation.
 
                         if (isVisible)
                         {
-                            // On-Screen / Visible / Prefetch Zone: Reset eviction timer
                             item.LeftViewportTime = null;
 
-                            // Concurrent load cap: max simultaneous thumbnail decodes to prevent RAM spike.
-                            // Filtered views (e.g. "Images") have fewer total items, so allow more concurrency.
                             if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality && !onlyFirstTen && !isFastScrolling)
                             {
-                                // Safety cap: max 8 concurrent thumbnail decodes to bound memory pressure.
-                                // STABILITY FIX: Only count items that still have realized containers
-                                // (near viewport). After a large scroll jump, items that scrolled away
-                                // may still have IsLoadingHighQuality=true, but shouldn't block new loads
-                                // for items actually visible in the viewport.
                                 int currentlyLoading = 0;
                                 int capCheckStart = Math.Max(0, i - 30);
                                 int capCheckEnd = Math.Min(count - 1, i + 30);
@@ -1308,19 +1298,14 @@ namespace FlyShelf
                                         var bmp = ViewModels.FlyShelfViewModel.LoadImageThumbnail(filePath, 300);
                                         if (bmp != null)
                                         {
-                                            // Fix 4: Use ApplicationIdle priority during scroll to coalesce
-                                            // multiple icon assignments into a single layout pass. Background
-                                            // priority was still preempting scroll frames with individual
-                                            // PropertyChanged → binding update → layout passes.
                                             bool scrolling = _viewModel.IsScrolling;
                                             Dispatcher.InvokeAsync(() =>
                                             {
-                                                // Always apply a successfully loaded bitmap.
                                                 item.Icon = bmp;
                                                 item.IsLoadedHighQuality = true;
                                                 item.IsLoadingHighQuality = false;
+                                                _activeLoadedImages.Add(item);
 
-                                                // Only animate fade-in when NOT scrolling (avoids animation clock overhead)
                                                 if (!scrolling)
                                                 {
                                                     var element = ShelfListView.ItemContainerGenerator.ContainerFromIndex(currentIndex) as FrameworkElement;
@@ -1329,7 +1314,6 @@ namespace FlyShelf
                                                         var img = FindVisualChild<Image>(element, "ItemIcon");
                                                         if (img != null)
                                                         {
-                                                            // [FIX ANIM-10]: Use cached frozen animation
                                                             img.BeginAnimation(UIElement.OpacityProperty, s_iconFadeIn);
                                                         }
                                                     }
@@ -1353,58 +1337,6 @@ namespace FlyShelf
                                         });
                                     }
                                 });
-                            }
-                        }
-                        else if (isEvictionPass)
-                        {
-                            // Skip eviction entirely when HubWindow is visible — both windows share
-                            // the same ClipboardItem objects, and evicting icons here would blank out
-                            // thumbnails that the Hub is actively displaying.
-                            if (_hubWindowInstance != null && _hubWindowInstance.IsVisible)
-                                continue;
-
-                            // Off-Screen / Scrolled Out: Skip eviction if pinned
-                            if (item.IsPinned)
-                            {
-                                item.LeftViewportTime = null;
-                                continue;
-                            }
-
-                            // Never evict the first 6 images — they stay loaded permanently
-                            if (_alwaysLoadedImageIndices.Contains(i))
-                            {
-                                item.LeftViewportTime = null;
-                                continue;
-                            }
-
-                            if (item.Icon != null || item.IsLoadedHighQuality || item.IsLoadingHighQuality)
-                            {
-                                // Grace period: only evict after the item has been off-screen for at
-                                // least 2 seconds. This prevents the race where:
-                                //   1. Item scrolls near viewport → load task starts
-                                //   2. Eviction pass fires 500ms later → incorrectly evicts the bitmap
-                                //      before the visibility check confirms it's actually on-screen
-                                // The 2s grace also prevents flicker when the user scrolls back quickly.
-                                var now2 = DateTime.UtcNow;
-                                if (item.LeftViewportTime == null)
-                                {
-                                    // First time we see it off-screen — mark the time, don't evict yet
-                                    item.LeftViewportTime = now2;
-                                }
-                                else if ((now2 - item.LeftViewportTime.Value).TotalMilliseconds >= 2000)
-                                {
-                                    // Been off-screen for ≥2s — safe to free
-                                    item.Icon = null;
-                                    item.IsLoadedHighQuality = false;
-                                    item.IsLoadingHighQuality = false;
-                                    item.LeftViewportTime = null;
-                                    evictedCount++;
-                                }
-                                // else: not yet 2s — keep the bitmap
-                            }
-                            else
-                            {
-                                item.LeftViewportTime = null;
                             }
                         }
                     }

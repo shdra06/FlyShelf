@@ -29,7 +29,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, ToastAndroid } from 'react-native';
 
 import { useSettings } from '../../context/SettingsContext';
-import { fetchWithTimeout, resolveBestPcUrl } from '../../utils/networkHelpers';
+import { fetchWithTimeout, resolveBestPcUrl, resolveLivePcUrl } from '../../utils/networkHelpers';
 import { NoteDay, NoteBullet } from '../../utils/noteTypes';
 
 // ─── Constants (mirrored from notes.tsx) ───────────────────────
@@ -127,16 +127,10 @@ export function useNotesSync() {
   // SYNC: Poll for remote notes (GET /api/notes)
   // ═══════════════════════════════════════════════════════════
   const fetchRemoteNotes = useCallback(async () => {
-    // Resolve PC URL from global context (discovered by main tab)
-    // Uses refs to avoid stale closure — pairedDevicesRef/pcLocalIpRef stay current
-    let pcUrl = resolveBestPcUrl(pairedDevicesRef.current, pcLocalIpRef.current);
-    // Fallback: if resolveBestPcUrl returns null but we have a manual IP, use it directly
-    // The main tab's clipboard sync may already be working over this IP
-    if (!pcUrl && pcLocalIpRef.current) {
-      const ip = pcLocalIpRef.current.trim();
-      if (ip) {
-        pcUrl = ip.startsWith('http') ? ip.replace(/\/$/, '') : `http://${ip.includes(':') ? ip : ip + ':8999'}`;
-      }
+    // Resolve live PC URL using full LAN / Cloudflare fallback chain
+    let pcUrl = await resolveLivePcUrl(pairedDevicesRef.current, pcLocalIpRef.current);
+    if (!pcUrl) {
+      pcUrl = resolveBestPcUrl(pairedDevicesRef.current, pcLocalIpRef.current);
     }
     if (pcUrl) pcUrlRef.current = pcUrl;
 
@@ -155,7 +149,6 @@ export function useNotesSync() {
     }
 
     try {
-      setSyncStatus('syncing');
       // Snapshot modified dates before fetch to avoid race condition
       const dirtySnapshot = new Set(modifiedDatesRef.current);
       const res = await fetchWithTimeout(`${pcUrlRef.current}/api/notes`, {
@@ -167,22 +160,20 @@ export function useNotesSync() {
       }, 5000);
 
       if (!res.ok) {
-        setSyncStatus('offline');
         syncFailCountRef.current++;
         notesPollFailCountRef.current++;
-        if (syncFailCountRef.current === 2) {
-          showToast('Notes sync offline — PC may be unreachable');
+        if (syncFailCountRef.current >= 3) {
+          setSyncStatus('offline');
         }
         return;
       }
 
       const remoteDays: NoteDay[] = await res.json();
       if (!Array.isArray(remoteDays)) {
-        setSyncStatus('offline');
         syncFailCountRef.current++;
         notesPollFailCountRef.current++;
-        if (syncFailCountRef.current === 2) {
-          showToast('Notes sync offline — PC may be unreachable');
+        if (syncFailCountRef.current >= 3) {
+          setSyncStatus('offline');
         }
         return;
       }
@@ -272,11 +263,10 @@ export function useNotesSync() {
         }
       } catch { /* ignore queue flush errors */ }
     } catch {
-      setSyncStatus('offline');
       syncFailCountRef.current++;
       notesPollFailCountRef.current++;
-      if (syncFailCountRef.current === 2) {
-        showToast('Notes sync offline — PC may be unreachable');
+      if (syncFailCountRef.current >= 3) {
+        setSyncStatus('offline');
       }
     }
   }, [pairingKey]);

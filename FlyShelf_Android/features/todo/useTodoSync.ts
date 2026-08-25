@@ -17,7 +17,7 @@ import { Platform, ToastAndroid } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { getSecureItem } from '../../utils/secureStorage';
-import { fetchWithTimeout } from '../../utils/networkHelpers';
+import { fetchWithTimeout, resolveLivePcUrl } from '../../utils/networkHelpers';
 import { TodoDay } from '../../utils/noteTypes';
 
 // -- Shared constants (kept identical to todo.tsx) ----------------------------
@@ -67,6 +67,8 @@ export function useTodoSync({
   // Resolve PC URL
   const resolvePcUrl = useCallback(async () => {
     try {
+      const live = await resolveLivePcUrl();
+      if (live) { pcUrlRef.current = live; return; }
       const globalUrl = await getSecureItem('pairedGlobalUrl');
       if (globalUrl) { pcUrlRef.current = globalUrl; return; }
       const localIp = await AsyncStorage.getItem('@pcLocalIp');
@@ -91,6 +93,7 @@ export function useTodoSync({
     if (payload.length === 0) return;
 
     try {
+      onStatusChange('syncing');
       const res = await fetchWithTimeout(
         `${pcUrlRef.current}/api/todos`,
         {
@@ -107,9 +110,12 @@ export function useTodoSync({
       if (res.ok) {
         // Only clear the keys we successfully synced
         for (const k of keysToSync) changedDayKeysRef.current.delete(k);
+        onStatusChange('connected');
+        syncFailCountRef.current = 0;
       } else {
         // Re-add failed keys for retry
         for (const k of keysToSync) changedDayKeysRef.current.add(k);
+        onStatusChange('offline');
       }
     } catch {
       // Re-add failed keys
@@ -122,7 +128,7 @@ export function useTodoSync({
         await AsyncStorage.setItem('@flyshelf_pending_todo_sync', JSON.stringify(pending));
       } catch {}
     }
-  }, [pairingKey, deviceName, daysRef, changedDayKeysRef, mountedRef]);
+  }, [pairingKey, deviceName, daysRef, changedDayKeysRef, mountedRef, onStatusChange]);
 
   // Debounced push (public)
   const schedulePush = useCallback((dayKey: string) => {
@@ -135,13 +141,12 @@ export function useTodoSync({
   const pollTodos = useCallback(async () => {
     // Re-resolve PC URL every 5th poll to pick up IP changes
     pollCountRef.current++;
-    if (pollCountRef.current % 5 === 0) {
+    if (pollCountRef.current % 5 === 0 || !pcUrlRef.current) {
       await resolvePcUrl();
     }
 
     if (!pcUrlRef.current || !pairingKey) { onStatusChange('offline'); return; }
     try {
-      onStatusChange('syncing');
       const resp = await fetchWithTimeout(
         `${pcUrlRef.current}/api/todos`,
         {
@@ -181,19 +186,17 @@ export function useTodoSync({
           }
         } catch {}
       } else {
-        onStatusChange('offline');
         syncFailCountRef.current++;
         todoPollFailCountRef.current++;
-        if (syncFailCountRef.current === 2) {
-          if (Platform.OS === 'android') ToastAndroid.show('Todo sync offline — PC may be unreachable', ToastAndroid.SHORT);
+        if (syncFailCountRef.current >= 3) {
+          onStatusChange('offline');
         }
       }
     } catch {
-      onStatusChange('offline');
       syncFailCountRef.current++;
       todoPollFailCountRef.current++;
-      if (syncFailCountRef.current === 2) {
-        if (Platform.OS === 'android') ToastAndroid.show('Todo sync offline — PC may be unreachable', ToastAndroid.SHORT);
+      if (syncFailCountRef.current >= 3) {
+        onStatusChange('offline');
       }
     }
   }, [pairingKey, deviceName, mergeDays, saveLocal, resolvePcUrl, daysRef, onDaysMerged, onStatusChange]);

@@ -12,7 +12,7 @@ const LAN_CACHE_KEY = '@flyshelf_lan_cache';
 const MAX_CACHED_IPS = 5;
 const CACHED_PROBE_TIMEOUT = 300;  // 300ms for known IPs (generous for LAN)
 const SCAN_PROBE_TIMEOUT = 200;     // 200ms for subnet scan
-const PORTS = [8999, 8080, 3000];   // 8999 is the actual FlyShelf PC default
+const PORTS = [8999, 8080, 8081, 8998];   // 8999 is FlyShelf PC primary, 8080 is secondary
 
 interface CachedPcEntry {
   ip: string;

@@ -427,17 +427,13 @@ namespace FlyShelf.ViewModels
                                 d.ItemType == ClipboardItemType.Video || d.ItemType == ClipboardItemType.Audio ||
                                 d.ItemType == ClipboardItemType.Presentation;
 
-                            if (isGeneralFile && !string.IsNullOrEmpty(d.FilePath))
+                            if (isGeneralFile)
                             {
-                                var capturedD = d;
-                                _ = System.Threading.Tasks.Task.Run(() => {
-                                    try
-                                    {
-                                        var icon = GetIcon(capturedD.FilePath);
-                                        if (icon != null) Application.Current?.Dispatcher?.InvokeAsync(() => capturedD.Icon = icon);
-                                    }
-                                    catch { } // Best-effort: failure is acceptable
-                                });
+                                var icon = Classes.ShellIconManager.GetIcon(d.FilePath, d.Extension);
+                                if (icon != null)
+                                    d.Icon = icon;
+                                else if (d.IsApk)
+                                    d.GenerateApkIcon();
                             }
                             else if (d.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(d.FilePath))
                             {
@@ -783,49 +779,204 @@ namespace FlyShelf.ViewModels
         }
 
         /// <summary>
-        /// Checks if newItem is a duplicate of existing.
-        /// Checks RawContent for text-based items, FilePath (case-insensitive) for file-based items,
-        /// or FileName for non-screenshot identical file names.
+        /// Extracts and canonicalizes a file path from a string (handling file:// URIs, quotes, slashes, etc.).
+        /// </summary>
+        public static string? ExtractNormalizedPath(string? input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return null;
+            string text = input.Trim();
+
+            // Handle file:// and file:/// URI schemes
+            if (text.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    text = new Uri(text).LocalPath;
+                    if (text.Length >= 3 && text[0] == '/' && char.IsLetter(text[1]) && text[2] == ':')
+                        text = text.Substring(1);
+                }
+                catch { }
+            }
+            // Strip surrounding quotes
+            else if (text.Length >= 2 && ((text[0] == '"' && text[^1] == '"') || (text[0] == '\'' && text[^1] == '\'')))
+            {
+                text = text.Substring(1, text.Length - 2).Trim();
+            }
+
+            if (text.Contains('\n') || text.Length > 1000) return null;
+            text = text.Replace('/', '\\').TrimEnd();
+
+            // Check if string is a Windows drive rooted path
+            if (text.Length >= 3 && char.IsLetter(text[0]) && text[1] == ':' && text[2] == '\\')
+            {
+                try { return Path.GetFullPath(text).TrimEnd('\\'); }
+                catch { return text.TrimEnd('\\'); }
+            }
+
+            // Check if it exists on disk directly
+            try
+            {
+                if (File.Exists(text) || Directory.Exists(text))
+                    return Path.GetFullPath(text).TrimEnd('\\');
+            }
+            catch { }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Universal, bulletproof deduplication checking across all file and content types.
+        /// Handles canonical paths, cross-type filename matching, raw text, and visual images.
         /// </summary>
         private bool IsDuplicate(ClipboardItem newItem, ClipboardItem existing)
         {
             if (newItem == null || existing == null) return false;
+            if (ReferenceEquals(newItem, existing)) return true;
 
-            // 1. Text-based items (Text, Code, Url) — same text from different apps
-            //    should be a duplicate regardless of ItemType classification.
-            //    e.g., copying "hello" from VS Code (Code) and Notepad (Text) are the same.
-            bool isNewTextual = newItem.ItemType == ClipboardItemType.Text || newItem.ItemType == ClipboardItemType.Code || newItem.ItemType == ClipboardItemType.Url;
-            bool isExistingTextual = existing.ItemType == ClipboardItemType.Text || existing.ItemType == ClipboardItemType.Code || existing.ItemType == ClipboardItemType.Url;
-            
-            if (isNewTextual && isExistingTextual)
+            // ── 1. CANONICAL FILE PATH MATCH (Direct FilePath or Path inside RawContent) ──
+            string? path1 = !string.IsNullOrEmpty(newItem.FilePath) ? ExtractNormalizedPath(newItem.FilePath) : ExtractNormalizedPath(newItem.RawContent);
+            string? path2 = !string.IsNullOrEmpty(existing.FilePath) ? ExtractNormalizedPath(existing.FilePath) : ExtractNormalizedPath(existing.RawContent);
+
+            if (!string.IsNullOrEmpty(path1) && !string.IsNullOrEmpty(path2))
             {
-                // Exact content match across all textual types
-                return !string.IsNullOrEmpty(newItem.RawContent) && !string.IsNullOrEmpty(existing.RawContent) && 
-                       newItem.RawContent.Trim().Replace("\r\n", "\n") == existing.RawContent.Trim().Replace("\r\n", "\n");
+                if (string.Equals(path1, path2, StringComparison.OrdinalIgnoreCase))
+                    return true;
             }
 
-            // 2. File-based items (File, Document, Pdf, Archive, Video, Audio, Presentation, Folder, Image)
-            // If they have FilePath, check if they are equal
-            if (!string.IsNullOrEmpty(newItem.FilePath) && !string.IsNullOrEmpty(existing.FilePath))
+            // ── 2. FILENAME MATCH FOR FILE-BASED / DOCUMENT ITEMS ──
+            if (!string.IsNullOrEmpty(newItem.FileName) && !string.IsNullOrEmpty(existing.FileName))
             {
-                return string.Equals(newItem.FilePath, existing.FilePath, StringComparison.OrdinalIgnoreCase);
+                if (string.Equals(newItem.FileName.Trim(), existing.FileName.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    bool isFile1 = !string.IsNullOrEmpty(newItem.FilePath) || newItem.ItemType == ClipboardItemType.File || newItem.ItemType == ClipboardItemType.Document || newItem.ItemType == ClipboardItemType.Pdf || newItem.ItemType == ClipboardItemType.Archive || newItem.ItemType == ClipboardItemType.Video || newItem.ItemType == ClipboardItemType.Audio || newItem.ItemType == ClipboardItemType.Presentation || newItem.IsMarkdownPreview;
+                    bool isFile2 = !string.IsNullOrEmpty(existing.FilePath) || existing.ItemType == ClipboardItemType.File || existing.ItemType == ClipboardItemType.Document || existing.ItemType == ClipboardItemType.Pdf || existing.ItemType == ClipboardItemType.Archive || existing.ItemType == ClipboardItemType.Video || existing.ItemType == ClipboardItemType.Audio || existing.ItemType == ClipboardItemType.Presentation || existing.IsMarkdownPreview;
+
+                    if (isFile1 && isFile2)
+                    {
+                        // Same filename across file categories (e.g. Document vs File vs Markdown)
+                        if (string.IsNullOrEmpty(newItem.FilePath) || string.IsNullOrEmpty(existing.FilePath))
+                            return true;
+                        if (string.Equals(newItem.FilePath, existing.FilePath, StringComparison.OrdinalIgnoreCase))
+                            return true;
+                    }
+                }
             }
 
-            // 3. Fallback to FileName if file paths are not available (e.g. for some custom items)
-            if (!string.IsNullOrEmpty(newItem.FileName) && !string.IsNullOrEmpty(existing.FileName) && newItem.ItemType == existing.ItemType)
+            // ── 3. RAW CONTENT MATCH (across all text, code, markdown, url, documents) ──
+            if (!string.IsNullOrEmpty(newItem.RawContent) && !string.IsNullOrEmpty(existing.RawContent))
             {
-                return string.Equals(newItem.FileName, existing.FileName, StringComparison.OrdinalIgnoreCase);
+                string c1 = newItem.RawContent.Trim().Replace("\r\n", "\n");
+                string c2 = existing.RawContent.Trim().Replace("\r\n", "\n");
+                if (IsNearDuplicateText(c1, c2))
+                {
+                    return true;
+                }
+            }
+            else if (!string.IsNullOrEmpty(newItem.FileName) && !string.IsNullOrEmpty(existing.FileName) &&
+                     newItem.ItemType == ClipboardItemType.Text && existing.ItemType == ClipboardItemType.Text)
+            {
+                string f1 = newItem.FileName.Trim();
+                string f2 = existing.FileName.Trim();
+                if (IsNearDuplicateText(f1, f2))
+                {
+                    return true;
+                }
             }
 
-            // 4. Cross-type RawContent fallback — catch duplicates where the same text
-            //    was classified differently due to source app context (e.g., one as Text, other as generic)
-            if (!string.IsNullOrEmpty(newItem.RawContent) && !string.IsNullOrEmpty(existing.RawContent)
-                && string.IsNullOrEmpty(newItem.FilePath) && string.IsNullOrEmpty(existing.FilePath))
+            // ── 4. IMAGE VISUAL & DIMENSION MATCH ──
+            if ((newItem.ItemType == ClipboardItemType.Image || newItem.ItemType == ClipboardItemType.QRCode) &&
+                (existing.ItemType == ClipboardItemType.Image || existing.ItemType == ClipboardItemType.QRCode))
             {
-                return newItem.RawContent == existing.RawContent;
+                if (IsImageDuplicate(newItem, existing))
+                    return true;
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Ultra-fast, zero-allocation similarity check for near-identical text (typo fixes, sequential edits, minor revisions).
+        /// Returns true if two text snippets are identical or have >= 88% structural similarity.
+        /// </summary>
+        public static bool IsNearDuplicateText(string s1, string s2)
+        {
+            if (string.Equals(s1, s2, StringComparison.Ordinal)) return true;
+            if (string.Equals(s1, s2, StringComparison.OrdinalIgnoreCase)) return true;
+
+            int len1 = s1.Length;
+            int len2 = s2.Length;
+            int maxLen = Math.Max(len1, len2);
+            int minLen = Math.Min(len1, len2);
+
+            if (maxLen < 6) return false;
+
+            // Disparity too large to be an immediate typo fix or minor revision
+            if (Math.Abs(len1 - len2) > Math.Max(15, (int)(maxLen * 0.25))) return false;
+
+            // Phase 1: Fast Common Prefix + Common Suffix (0 heap allocation, O(N))
+            int prefix = 0;
+            while (prefix < minLen && s1[prefix] == s2[prefix])
+                prefix++;
+
+            int suffix = 0;
+            while (suffix < (minLen - prefix) && s1[len1 - 1 - suffix] == s2[len2 - 1 - suffix])
+                suffix++;
+
+            int commonCover = prefix + suffix;
+
+            // If common prefix + suffix covers >= 88% of the longer string, it's an immediate typo fix / edit
+            if (commonCover >= (int)(maxLen * 0.88))
+                return true;
+
+            // Phase 2: Bounded Levenshtein for short/medium strings (<= 400 chars)
+            if (maxLen <= 400)
+            {
+                int maxAllowedEdits = Math.Max(2, (int)(maxLen * 0.12));
+                int distance = BoundedLevenshtein(s1, s2, maxAllowedEdits);
+                if (distance <= maxAllowedEdits)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Highly optimized, stack-allocated 2-row bounded Levenshtein distance.
+        /// Early-exits as soon as the minimum edit cost exceeds maxDistance.
+        /// </summary>
+        private static int BoundedLevenshtein(string s, string t, int maxDistance)
+        {
+            int n = s.Length;
+            int m = t.Length;
+
+            if (Math.Abs(n - m) > maxDistance) return maxDistance + 1;
+            if (n == 0) return m;
+            if (m == 0) return n;
+
+            Span<int> prev = stackalloc int[m + 1];
+            Span<int> curr = stackalloc int[m + 1];
+
+            for (int j = 0; j <= m; j++) prev[j] = j;
+
+            for (int i = 0; i < n; i++)
+            {
+                curr[0] = i + 1;
+                int minInRow = curr[0];
+
+                for (int j = 0; j < m; j++)
+                {
+                    int cost = (s[i] == t[j]) ? 0 : 1;
+                    int val = Math.Min(curr[j] + 1, Math.Min(prev[j + 1] + 1, prev[j] + cost));
+                    curr[j + 1] = val;
+                    if (val < minInRow) minInRow = val;
+                }
+
+                if (minInRow > maxDistance) return maxDistance + 1;
+
+                curr.CopyTo(prev);
+            }
+
+            return prev[m];
         }
 
         /// <summary>
@@ -833,10 +984,8 @@ namespace FlyShelf.ViewModels
         /// </summary>
         private bool IsImageDuplicate(ClipboardItem item1, ClipboardItem item2)
         {
-            // Compare by dimensions/hash if file paths are empty
             if (!string.IsNullOrEmpty(item1.FormattedSize) && item1.FormattedSize == item2.FormattedSize)
             {
-                // If both have file paths, check size too
                 if (!string.IsNullOrEmpty(item1.FilePath) && !string.IsNullOrEmpty(item2.FilePath) && 
                     File.Exists(item1.FilePath) && File.Exists(item2.FilePath))
                 {
@@ -850,7 +999,6 @@ namespace FlyShelf.ViewModels
                 }
                 else
                 {
-                    // At least one is missing a file path, but dimensions match
                     return true;
                 }
             }
@@ -859,32 +1007,78 @@ namespace FlyShelf.ViewModels
         }
 
         /// <summary>
-        /// Scans the first 20 entries of DroppedItems for a duplicate of newItem.
-        /// If found, removes the duplicate item from DroppedItems and backing database/files.
-        /// Uses 20 entries to match the WndProc incoming-copy dedup window.
+        /// Scans DroppedItems (first 10 entries) for duplicates or near-duplicate revisions of newItem.
+        /// If found, removes the old duplicate item from DroppedItems and backing storage.
         /// </summary>
         public void DeduplicateItem(ClipboardItem newItem)
         {
             if (newItem == null) return;
 
-            ClipboardItem? duplicateToRemoval = null;
-            int checkCount = Math.Min(100, DroppedItems.Count);
+            var duplicatesToRemove = new List<ClipboardItem>();
+            int checkCount = Math.Min(10, DroppedItems.Count);
             for (int i = 0; i < checkCount; i++)
             {
+                if (i >= DroppedItems.Count) break;
                 var existing = DroppedItems[i];
-                if (existing == null) continue;
+                if (existing == null || ReferenceEquals(existing, newItem) || existing.IsPinned) continue;
 
                 if (IsDuplicate(newItem, existing))
                 {
-                    duplicateToRemoval = existing;
-                    break;
+                    duplicatesToRemove.Add(existing);
                 }
             }
 
-            if (duplicateToRemoval != null)
+            if (duplicatesToRemove.Count > 0)
             {
-                Classes.Logger.LogAction("DEDUP", $"Found duplicate in first 20 entries: Type={duplicateToRemoval.ItemType}, Path={duplicateToRemoval.FilePath}, Name={duplicateToRemoval.FileName}. Removing old duplicate.");
-                RemoveItem(duplicateToRemoval);
+                foreach (var duplicate in duplicatesToRemove)
+                {
+                    Classes.Logger.LogAction("DEDUP", $"Found duplicate/revision: Type={duplicate.ItemType}, Path={duplicate.FilePath}, Name={duplicate.FileName}. Removing old duplicate.");
+                }
+                BulkRemoveItems(duplicatesToRemove);
+            }
+        }
+
+        /// <summary>
+        /// One-pass shelf-wide cleanup that prunes any existing duplicate items.
+        /// </summary>
+        public void RemoveAllExistingDuplicates()
+        {
+            var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seenContents = new HashSet<string>(StringComparer.Ordinal);
+            var toRemove = new List<ClipboardItem>();
+
+            for (int i = 0; i < DroppedItems.Count; i++)
+            {
+                var item = DroppedItems[i];
+                if (item == null) continue;
+
+                string? normPath = !string.IsNullOrEmpty(item.FilePath) 
+                    ? ExtractNormalizedPath(item.FilePath) 
+                    : ExtractNormalizedPath(item.RawContent);
+
+                if (!string.IsNullOrEmpty(normPath))
+                {
+                    if (!seenPaths.Add(normPath))
+                    {
+                        toRemove.Add(item);
+                        continue;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(item.RawContent) && item.RawContent.Length < 100000)
+                {
+                    string normContent = item.RawContent.Trim().Replace("\r\n", "\n");
+                    if (!seenContents.Add(normContent))
+                    {
+                        toRemove.Add(item);
+                        continue;
+                    }
+                }
+            }
+
+            foreach (var dup in toRemove)
+            {
+                RemoveItem(dup);
             }
         }
 

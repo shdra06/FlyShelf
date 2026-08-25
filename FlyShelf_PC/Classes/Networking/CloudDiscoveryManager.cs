@@ -562,5 +562,35 @@ namespace FlyShelf.Classes
             }
             return "";
         }
+
+        /// <summary>
+        /// Sends a lightweight high-priority silent wake signal to the paired device ecosystem.
+        /// Android devices listening or checking for wake signals will immediately trigger background fetch for the floating ball.
+        /// </summary>
+        public static async Task SendSilentWakePing(string pairingKey, string itemType)
+        {
+            if (string.IsNullOrEmpty(pairingKey)) return;
+            try
+            {
+                string url = await AuthUrl($"active_devices/{pairingKey}/wakeSignal.json");
+                var payload = new
+                {
+                    type = itemType,
+                    sender = SettingsManager.Current.DeviceName ?? "PC",
+                    ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+                string json = JsonSerializer.Serialize(payload);
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                using var resp = await _client.PutAsync(url, content);
+                if (resp.IsSuccessStatusCode)
+                {
+                    Logger.LogAction("WAKE", $"Sent silent wake signal for '{itemType}' to active_devices/{pairingKey}/wakeSignal");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("WAKE_ERR", $"SendSilentWakePing failed: {ex.Message}");
+            }
+        }
     }
 }

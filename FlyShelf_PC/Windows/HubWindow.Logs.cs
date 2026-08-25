@@ -281,7 +281,7 @@ namespace FlyShelf.Windows
         {
             try
             {
-                _viewModel.HandleDrop(e.Data, true);
+                _viewModel.HandleDrop(e.Data, forceClipboardSync: false);
                 e.Handled = true;
             }
             catch { } // Best-effort: failure is acceptable

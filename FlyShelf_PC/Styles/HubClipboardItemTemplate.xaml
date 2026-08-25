@@ -53,12 +53,13 @@
                                             <!-- V-04: Gate on CanShowInExplorer so plain text items don't show this -->
                                             <ui:MenuItem Header="Show in Explorer" Icon="{ui:SymbolIcon FolderOpen24}" Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding CanShowInExplorer, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             <Separator />
-                                            
-                                            <!-- Image Actions -->
-                                            <ui:MenuItem Header="Extract Text from Image (OCR)" Icon="{ui:SymbolIcon TextDescription24}" Foreground="{DynamicResource MenuOcrColor}" Command="{Binding PlacementTarget.Tag.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Extract Table Data" Icon="{ui:SymbolIcon Table24}" Foreground="{DynamicResource MenuOcrColor}" Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Convert Image to PDF" Icon="{ui:SymbolIcon Document24}" Foreground="{DynamicResource MenuConvertColor}" Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Scan QR Code" Icon="{ui:SymbolIcon QrCode24}" Foreground="{DynamicResource MenuOcrColor}" Command="{Binding PlacementTarget.Tag.ManualScanQRCodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            <!-- Image Tools Submenu -->
+                                            <ui:MenuItem Header="Image Tools" Icon="{ui:SymbolIcon Image24}" Foreground="#60A5FA" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <ui:MenuItem Header="Extract Text (OCR)" Icon="{ui:SymbolIcon TextDescription24}" Foreground="{DynamicResource MenuOcrColor}" Command="{Binding PlacementTarget.Tag.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                <ui:MenuItem Header="Extract Table Data" Icon="{ui:SymbolIcon Table24}" Foreground="{DynamicResource MenuOcrColor}" Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                <ui:MenuItem Header="Convert Image to PDF" Icon="{ui:SymbolIcon Document24}" Foreground="{DynamicResource MenuConvertColor}" Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                <ui:MenuItem Header="Scan QR Code" Icon="{ui:SymbolIcon QrCode24}" Foreground="{DynamicResource MenuOcrColor}" Command="{Binding PlacementTarget.Tag.ManualScanQRCodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                            </ui:MenuItem>
                                             
                                             <!-- QR Code Actions -->
                                             <ui:MenuItem Header="Extract QR Text &amp; Copy" Icon="{ui:SymbolIcon QrCode24}" Foreground="{DynamicResource TypeTextColor}" Command="{Binding PlacementTarget.Tag.CopyRawContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsQRCodePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
@@ -66,19 +67,23 @@
                                             <!-- URL Actions -->
                                             <ui:MenuItem Header="Open URL in Browser" Icon="{ui:SymbolIcon Earth24}" Foreground="{DynamicResource MenuUrlActionColor}" Command="{Binding PlacementTarget.Tag.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsUrlPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             
-                                            <!-- PDF Actions -->
-                                            <ui:MenuItem Header="Open PDF" Icon="{ui:SymbolIcon Open24}" Command="{Binding PlacementTarget.Tag.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsPdfPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Convert PDF to Word" Icon="{ui:SymbolIcon Document24}" Foreground="{DynamicResource TypeDocColor}" Command="{Binding PlacementTarget.Tag.ConvertPdfToWordCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsPdfPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Merge Selected PDFs" Icon="{ui:SymbolIcon DocumentCopy24}" Foreground="{DynamicResource DangerColor}" Command="{Binding PlacementTarget.Tag.MergeSelectedPdfsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Visibility="{Binding IsPdfPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            <!-- PDF Tools Submenu -->
+                                            <ui:MenuItem Header="PDF Tools" Icon="{ui:SymbolIcon DocumentPdf24}" Foreground="#F87171" Visibility="{Binding IsPdfPreview, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <ui:MenuItem Header="Open PDF" Icon="{ui:SymbolIcon Open24}" Command="{Binding PlacementTarget.Tag.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                <ui:MenuItem Header="Convert PDF to Word" Icon="{ui:SymbolIcon Document24}" Foreground="{DynamicResource TypeDocColor}" Command="{Binding PlacementTarget.Tag.ConvertPdfToWordCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                <ui:MenuItem Header="Merge Selected PDFs" Icon="{ui:SymbolIcon DocumentCopy24}" Foreground="{DynamicResource DangerColor}" Command="{Binding PlacementTarget.Tag.MergeSelectedPdfsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            </ui:MenuItem>
                                             
                                             <!-- Document Actions -->
                                             <ui:MenuItem Header="Convert to PDF" Icon="{ui:SymbolIcon Document24}" Foreground="{DynamicResource TypeDocColor}" Command="{Binding PlacementTarget.Tag.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsDocPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             
-                                            <!-- Code Actions -->
-                                            <ui:MenuItem Header="Run in Terminal" Icon="{ui:SymbolIcon Play24}" Foreground="{DynamicResource MenuCodeActionColor}" Command="{Binding PlacementTarget.Tag.LaunchTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsCodePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Open in VS Code" Icon="{ui:SymbolIcon Code24}" Foreground="{DynamicResource DeviceLaptopColor}" Command="{Binding PlacementTarget.Tag.LaunchSandboxCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsCodePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Compile C++ &amp; Run" Icon="{ui:SymbolIcon Code24}" Foreground="{DynamicResource MenuCodeActionColor}" Command="{Binding PlacementTarget.Tag.CompileNativeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsCPlusPlusPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Run as Administrator" Icon="{ui:SymbolIcon Shield24}" Foreground="{DynamicResource DangerColor}" Command="{Binding PlacementTarget.Tag.RunAdminTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsTerminalPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            <!-- Code Tools Submenu -->
+                                            <ui:MenuItem Header="Code Tools" Icon="{ui:SymbolIcon Code24}" Foreground="#34D399" Visibility="{Binding IsCodePreview, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <ui:MenuItem Header="Run in Terminal" Icon="{ui:SymbolIcon Play24}" Foreground="{DynamicResource MenuCodeActionColor}" Command="{Binding PlacementTarget.Tag.LaunchTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                <ui:MenuItem Header="Open in VS Code" Icon="{ui:SymbolIcon Code24}" Foreground="{DynamicResource DeviceLaptopColor}" Command="{Binding PlacementTarget.Tag.LaunchSandboxCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                <ui:MenuItem Header="Compile C++ &amp; Run" Icon="{ui:SymbolIcon Code24}" Foreground="{DynamicResource MenuCodeActionColor}" Command="{Binding PlacementTarget.Tag.CompileNativeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsCPlusPlusPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                                <ui:MenuItem Header="Run as Administrator" Icon="{ui:SymbolIcon Shield24}" Foreground="{DynamicResource DangerColor}" Command="{Binding PlacementTarget.Tag.RunAdminTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsTerminalPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            </ui:MenuItem>
                                             
                                             <!-- V-05: Only show separator when color actions are visible -->
                                             <Separator Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}"/>
@@ -88,11 +93,8 @@
                                             <ui:MenuItem Header="Copy as RGB" Icon="{ui:SymbolIcon Color24}" Foreground="{DynamicResource TypeImageColor}" Click="CopyColorRgb_Click" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             <ui:MenuItem Header="Copy as HSL" Icon="{ui:SymbolIcon Color24}" Foreground="{DynamicResource TypeColorColor}" Click="CopyColorHsl_Click" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             
-                                            
-                                            <!-- Group / Archive / Folder Actions -->
-                                            <ui:MenuItem Header="Send to Device" Icon="{ui:SymbolIcon Send24}" Foreground="{DynamicResource TypeDefaultColor}" Click="ContextMenu_SendToDevice_Click" Visibility="{Binding IsGroupPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Send to Device" Icon="{ui:SymbolIcon Send24}" Foreground="{DynamicResource TypeDefaultColor}" Click="ContextMenu_SendToDevice_Click" Visibility="{Binding IsArchivePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Send to Device" Icon="{ui:SymbolIcon Send24}" Foreground="{DynamicResource TypeDefaultColor}" Click="ContextMenu_SendToDevice_Click" Visibility="{Binding IsFolderPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            <!-- Unified Send to Device Action (Deduplicated) -->
+                                            <ui:MenuItem Header="Send to Device" Icon="{ui:SymbolIcon Send24}" Foreground="#10B981" Click="ContextMenu_SendToDevice_Click"/>
                                             
                                             <ui:MenuItem Header="Extract Archive" Icon="{ui:SymbolIcon FolderZip24}" Foreground="{DynamicResource MenuConvertColor}" Click="ExtractArchive_Click" Visibility="{Binding IsArchivePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
@@ -842,7 +844,7 @@
                                             </ui:Button>
 
                                             <!-- Run Script -->
-                                            <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource SyncIncomingColor}" ToolTip="Run Script" PreviewMouseLeftButtonDown="RunTerminalSpecific_Click">
+                                            <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource SyncIncomingColor}" ToolTip="Compile &amp; Run Code" PreviewMouseLeftButtonDown="RunTerminalSpecific_Click">
                                                 <ui:Button.Icon><ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="{StaticResource TypeSubtitle}"/></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
@@ -1052,6 +1054,9 @@
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                         <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding CanConvertDocToPdf}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
                                                             <DataTrigger Binding="{Binding IsDocPreview}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                             </DataTrigger>
@@ -1119,6 +1124,9 @@
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                         <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding CanQuickLook}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
                                                             <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                             </DataTrigger>

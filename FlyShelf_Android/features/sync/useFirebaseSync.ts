@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import { Platform, NativeModules } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { database } from '../../firebaseConfig';
 import { syncLog } from '../../utils/debugLog';
 import { ref, get, onValue, query, limitToLast, orderByChild, update } from 'firebase/database';
@@ -35,6 +36,7 @@ export function useFirebaseSync(params: {
   pcLocalIp: string;
   scrollToTop: () => void;
   isFloatingBallEnabled: boolean;
+  autoSyncTop5?: boolean;
 }): {
   markPcReachable: () => void;
   markPcUnreachable: () => void;
@@ -48,6 +50,7 @@ export function useFirebaseSync(params: {
     pairingKeyRef,
     deviceName,
     pairingTimestampRef,
+    autoSyncTop5,
     processedEventsRef,
     recentSyncFingerprintsRef,
     localScreenshotsRef,
@@ -94,6 +97,7 @@ export function useFirebaseSync(params: {
   // M-11 FIX: Keep a ref to pairedDevices so markPcReachable/markPcUnreachable always see current value
   const pairedDevicesRef = useRef(pairedDevices);
   pairedDevicesRef.current = pairedDevices;
+  const activeDevicesRef = useRef<any[]>([]);
 
   // Called by LAN/Cloudflare poller on every successful /api/sync response
   const markPcReachable = () => {
@@ -108,38 +112,42 @@ export function useFirebaseSync(params: {
       clearTimeout(firebaseFallbackTimerRef.current);
       firebaseFallbackTimerRef.current = null;
     }
-    // M-11 FIX: Use ref to always see current pairedDevices list
     pairedDevicesRef.current.filter(d => d.deviceType === 'PC').forEach(d => {
       updateDeviceStatus(d.deviceId, { isOnline: true, lastSeen: NetworkClock.now() });
     });
   };
 
-  // Called by LAN/Cloudflare poller when poll fails — starts the 30s countdown
+  // Called by LAN/Cloudflare poller when direct poll fails
   const markPcUnreachable = () => {
-    // M-6: Expire lastWorkingPcUrlRef when PC is unreachable
     lastWorkingPcUrlRef.current = null;
-    // M-11 FIX: Use ref to always see current pairedDevices list
-    pairedDevicesRef.current.filter(d => d.deviceType === 'PC').forEach(d => {
-      updateDeviceStatus(d.deviceId, { isOnline: false });
-    });
-    if (firebaseFallbackTimerRef.current) return; // Already counting down
-    if (firebaseUnsubFeedRef.current) return; // Already connected to Firebase
-    if (!isGlobalSyncEnabled) return;
     const pk = pairingKeyRef.current;
     if (!isValidPairingKey(pk)) return;
+
+    // If PC is registered in Firebase active_devices, keep it online via Cloud
+    const activePcOnline = (activeDevicesRef.current || []).some((d: any) => d.DeviceType === 'PC' && d.IsOnline);
+    pairedDevicesRef.current.filter(d => d.deviceType === 'PC').forEach(d => {
+      updateDeviceStatus(d.deviceId, {
+        isOnline: activePcOnline,
+        connectionType: activePcOnline ? 'Cloud' : undefined
+      });
+    });
+
+    if (firebaseFallbackTimerRef.current) return;
+    if (firebaseUnsubFeedRef.current) return;
+    if (!isGlobalSyncEnabled) return;
+
+    // Connect Firebase clipboard listener immediately (< 500ms) instead of 30s delay!
     firebaseFallbackTimerRef.current = setTimeout(() => {
       firebaseFallbackTimerRef.current = null;
-      // Only activate if PC is STILL unreachable after 30s
-      if (NetworkClock.now() - lastSuccessfulPollRef.current < 25_000) return;
-      syncLog('FIREBASE', '🔥 PC unreachable for 30s — activating Firebase fallback listener');
+      syncLog('FIREBASE', '⚡ Activating instant Firebase clipboard fallback');
       connectFirebaseClipboardListener(pk);
-    }, 30_000);
+    }, 500);
   };
 
   // Connects the Firebase clipboard listener (only called when PC is unreachable)
   const connectFirebaseClipboardListener = (pk: string) => {
-    if (firebaseUnsubFeedRef.current) return; // Already connected
-    const clipsRef = query(ref(database, `clipboard/${pk}`), orderByChild('Timestamp'), limitToLast(10));
+    const syncLimit = autoSyncTop5 !== false ? 5 : 1;
+    const clipsRef = query(ref(database, `clipboard/${pk}`), orderByChild('Timestamp'), limitToLast(syncLimit));
     firebaseUnsubFeedRef.current = onValue(clipsRef, async (snapshot) => {
       fbReconnectAttemptsRef.current = 0; // Reset backoff on successful data
       if (snapshot.exists()) {
@@ -162,7 +170,10 @@ export function useFirebaseSync(params: {
             }
           }
           return { id: k, ...item } as ClipItem;
-        }).filter(Boolean).reverse() as ClipItem[];
+        }).filter(Boolean) as ClipItem[];
+
+        // Strict timestamp descending sequence (top newest items first)
+        allRaw.sort((a, b) => (b.Timestamp || 0) - (a.Timestamp || 0));
         // AES-256-GCM decryption: decrypt Encrypted items from other devices
         const allParsed: ClipItem[] = [];
         for (const item of allRaw) {
@@ -325,7 +336,7 @@ export function useFirebaseSync(params: {
     // v5 PC auto-deletes its URL from Firebase after 5 seconds.
     // The listener caches URLs locally so they survive deletion.
     const peerDevicesRef = ref(database, `active_devices/${pk}`);
-    const unsubscribeDevices = onValue(peerDevicesRef, async (snapshot) => {
+    const processDevicesSnapshot = async (snapshot: any) => {
       // AC-6: Skip processing during startup purge to avoid reacting to our own deletions
       if (isPurgingRef.current) return;
       try {
@@ -338,105 +349,141 @@ export function useFirebaseSync(params: {
         let rawDevices: any[] = [];
         const data = snapshot.val();
         const now = NetworkClock.now();
-        const DEVICE_ONLINE_WINDOW_MS = 720_000; // L-3: 12-minute window to prevent devices flickering offline between 10-min heartbeats
-        const filtered = Object.keys(data).map(k => ({ ...data[k], _key: k })).filter(d => d.IsOnline && d.Timestamp && (now - d.Timestamp) < DEVICE_ONLINE_WINDOW_MS);
+        const filtered = Object.keys(data).map(k => ({ ...data[k], _key: k })).filter(d => d.IsOnline !== false);
         rawDevices = await decryptDeviceList(filtered);
-        // Probe LAN reachability for each PC device
+
+        // ── Phase 1: Immediately extract & cache Cloudflare/LAN URLs for instant connectivity ──
+        for (let i = 0; i < rawDevices.length; i++) {
+          const dev = rawDevices[i];
+          if (dev.DeviceType === 'PC') {
+            // Immediate Cloudflare Tunnel URL processing
+            if (dev.GlobalUrl && dev.GlobalUrl.includes('trycloudflare.com')) {
+              const cleanGlobal = dev.GlobalUrl.trim().replace(/\/$/, '');
+              setSecureItem('lastCloudflareUrl', cleanGlobal).catch(() => {});
+              setSecureItem('pairedGlobalUrl', cleanGlobal).catch(() => {});
+              AsyncStorage.setItem('lastCloudflareUrl', cleanGlobal).catch(() => {});
+              AsyncStorage.setItem('pairedGlobalUrl', cleanGlobal).catch(() => {});
+              cachedPcUrlRef.current = cleanGlobal;
+              cachedPcUrlTimestampRef.current = NetworkClock.now();
+              syncLog('FIREBASE', `⚡ Instant PC Cloudflare URL cached: ${cleanGlobal}`);
+            }
+            // Immediate LAN IP caching
+            if (dev.LocalIp) {
+              const parts = dev.LocalIp.split(',');
+              const normalizedParts = parts.map((part: string) => {
+                const trimmed = part.trim();
+                if (!trimmed) return '';
+                return trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
+              }).filter(Boolean);
+              if (normalizedParts.length > 0) {
+                setSecureItem('pairedLocalUrl', normalizedParts.join(',')).catch(() => {});
+              }
+            }
+          }
+        }
+
+        // ── Phase 2: Asynchronously probe LAN reachability in parallel ──
         for (let i = 0; i < rawDevices.length; i++) {
           const dev = rawDevices[i];
           if (dev.DeviceType === 'PC' && dev.LocalIp && !dev._lanVerified) {
-            // Issue #6: Skip LAN probing if PC already reachable — saves ~1.5s per callback
             if (pcAlreadyReachable && lastWorkingPcUrlRef.current && !lastWorkingPcUrlRef.current.includes('trycloudflare.com')) {
               rawDevices[i] = { ...dev, _lanVerified: true, _lanUrl: lastWorkingPcUrlRef.current };
               continue;
             }
-            const parts = dev.LocalIp.split(',');
+            const parts = (dev.LocalIp as string).split(',').map((s: string) => s.trim()).filter(Boolean);
+            const candidateUrls: string[] = [];
             for (const part of parts) {
-              const trimmed = part.trim();
-              if (!trimmed) continue;
-              try {
-                const lanUrl = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
-                const res = await fetch(`${lanUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk }, signal: createTimeoutSignal(1500) });
-                if (res.ok) {
-                  rawDevices[i] = { ...dev, _lanVerified: true, _lanUrl: lanUrl };
-                  break;
-                }
-              } catch (e) { syncLog('LAN-PROBE', `Health check failed for ${trimmed}: ${(e as any)?.message || e}`); }
-            }
-          }
-          // Prefer TLS URL over plain HTTP — encrypts pairing key in transit
-          if (dev.DeviceType === 'PC' && dev.TlsUrl && dev.TlsUrl.startsWith('https://') && rawDevices[i]._lanVerified) {
-            try {
-              const tlsUrl = dev.TlsUrl.replace(/\/$/, '');
-              const tlsRes = await fetch(`${tlsUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk }, signal: createTimeoutSignal(2000) });
-              if (tlsRes.ok) {
-                rawDevices[i] = { ...rawDevices[i], _lanVerified: true, _lanUrl: tlsUrl };
-                setSecureItem('pairedTlsUrl', tlsUrl).catch(() => {});
-                syncLog('LAN-PROBE', `✅ TLS URL preferred: ${tlsUrl.substring(0, 50)}`);
+              const clean = part.startsWith('http') ? part.replace(/\/$/, '') : `http://${part}`;
+              if (!clean.replace(/^https?:\/\//, '').includes(':')) {
+                candidateUrls.push(`${clean}:8999`);
+                candidateUrls.push(`${clean}:8080`);
+              } else {
+                candidateUrls.push(clean);
               }
-            } catch (e) { syncLog('LAN-PROBE', `TLS probe failed for ${dev.TlsUrl}: ${(e as any)?.message || e}`); }
-          }
-          // Cache TLS URL if available (even if probe skipped — save for getCachedPcUrl)
-          if (dev.DeviceType === 'PC' && dev.TlsUrl && dev.TlsUrl.startsWith('https://')) {
-            setSecureItem('pairedTlsUrl', dev.TlsUrl.replace(/\/$/, '')).catch(() => {});
-          }
-          // Cache Cloudflare URL locally — survives the 5-second Firebase auto-delete
-          if (dev.DeviceType === 'PC' && dev.GlobalUrl && dev.GlobalUrl.includes('trycloudflare.com')) {
-            setSecureItem('lastCloudflareUrl', dev.GlobalUrl).catch(() => {});
-            setSecureItem('pairedGlobalUrl', dev.GlobalUrl).catch(() => {});
-            // Also update the in-memory PC URL cache immediately
-            cachedPcUrlRef.current = dev.GlobalUrl;
-            cachedPcUrlTimestampRef.current = NetworkClock.now();
-            syncLog('PEER SSE', `⚡ PC URL cached: ${dev.GlobalUrl.substring(0, 50)}`);
-          }
-          // Cache LAN URL if available
-          if (dev.DeviceType === 'PC' && dev.LocalIp) {
-            const parts = dev.LocalIp.split(',');
-            const normalizedParts = parts.map((part: string) => {
-              const trimmed = part.trim();
-              if (!trimmed) return '';
-              return trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
-            }).filter(Boolean);
-            if (normalizedParts.length > 0) {
-              setSecureItem('pairedLocalUrl', normalizedParts.join(',')).catch(() => {});
+            }
+            if (candidateUrls.length > 0) {
+              try {
+                const verifiedUrl = await Promise.any(candidateUrls.map(async (lanUrl) => {
+                  const res = await fetch(`${lanUrl}/api/health`, {
+                    method: 'GET',
+                    headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk },
+                    signal: createTimeoutSignal(1000)
+                  });
+                  if (res.ok) return lanUrl;
+                  throw new Error('fail');
+                }));
+                if (verifiedUrl) {
+                  rawDevices[i] = { ...dev, _lanVerified: true, _lanUrl: verifiedUrl };
+                  cachedPcUrlRef.current = verifiedUrl;
+                  cachedPcUrlTimestampRef.current = NetworkClock.now();
+                  AsyncStorage.setItem('@flyshelf_last_lan_url', verifiedUrl).catch(() => {});
+                }
+              } catch (e) { /* LAN probes fail when on mobile data/different network */ }
             }
           }
         }
-        // Fallback: probe manual IP from Settings
+        // Fallback: probe manual IP from Settings in parallel
         const hasPc = rawDevices.some(d => d.DeviceType === 'PC');
         if (!hasPc && pcLocalIp) {
-          const parts = pcLocalIp.split(',');
+          const parts = pcLocalIp.split(',').map(s => s.trim()).filter(Boolean);
+          const probeUrls: string[] = [];
           for (const part of parts) {
-            const trimmed = part.trim();
-            if (!trimmed) continue;
+            const clean = part.startsWith('http') ? part.replace(/\/$/, '') : `http://${part}`;
+            if (!clean.replace(/^https?:\/\//, '').includes(':')) {
+              probeUrls.push(`${clean}:8999`);
+              probeUrls.push(`${clean}:8080`);
+            } else {
+              probeUrls.push(clean);
+            }
+          }
+          if (probeUrls.length > 0) {
             try {
-              const probeUrl = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed.split(':')[0] + ':8999'}`;
-              const res = await fetch(`${probeUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk }, signal: createTimeoutSignal(2000) });
-              if (res.ok) {
-                rawDevices.push({ DeviceName: 'PC (LAN)', DeviceType: 'PC', IsOnline: true, Url: probeUrl, LocalIp: probeUrl, _key: 'local_direct', _lanVerified: true, _lanUrl: probeUrl, Timestamp: NetworkClock.now() });
-                break;
+              const verifiedManual = await Promise.any(probeUrls.map(async (probeUrl) => {
+                const res = await fetch(`${probeUrl}/api/health`, {
+                  method: 'GET',
+                  headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk },
+                  signal: createTimeoutSignal(1500)
+                });
+                if (res.ok) return probeUrl;
+                throw new Error('fail');
+              }));
+              if (verifiedManual) {
+                rawDevices.push({ DeviceName: 'PC (LAN)', DeviceType: 'PC', IsOnline: true, Url: verifiedManual, LocalIp: verifiedManual, _key: 'local_direct', _lanVerified: true, _lanUrl: verifiedManual, Timestamp: NetworkClock.now() });
               }
             } catch (e) { /* LAN probe — expected to fail for unreachable IPs */ }
           }
         } else if (hasPc && pcLocalIp) {
-          const parts = pcLocalIp.split(',');
+          const parts = pcLocalIp.split(',').map(s => s.trim()).filter(Boolean);
+          const manualUrls: string[] = [];
           for (const part of parts) {
-            const trimmed = part.trim();
-            if (!trimmed) continue;
-            const manualUrl = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
-            const existingLan = rawDevices.some(d => d._lanUrl === manualUrl);
-            if (!existingLan) {
-              try {
-                const res = await fetch(`${manualUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk }, signal: createTimeoutSignal(1500) });
-                if (res.ok) {
-                  const pcIdx = rawDevices.findIndex(d => d.DeviceType === 'PC');
-                  if (pcIdx >= 0) rawDevices[pcIdx] = { ...rawDevices[pcIdx], _lanVerified: true, _lanUrl: manualUrl, LocalIp: manualUrl };
-                  break;
-                }
-              } catch (e) { syncLog('LAN-PROBE', `Manual IP health check failed for ${manualUrl}: ${(e as any)?.message || e}`); }
+            const clean = part.startsWith('http') ? part.replace(/\/$/, '') : `http://${part}`;
+            if (!clean.replace(/^https?:\/\//, '').includes(':')) {
+              manualUrls.push(`${clean}:8999`);
+              manualUrls.push(`${clean}:8080`);
+            } else {
+              manualUrls.push(clean);
             }
           }
+          const nonExisting = manualUrls.filter(m => !rawDevices.some(d => d._lanUrl === m));
+          if (nonExisting.length > 0) {
+            try {
+              const verified = await Promise.any(nonExisting.map(async (manualUrl) => {
+                const res = await fetch(`${manualUrl}/api/health`, {
+                  method: 'GET',
+                  headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk },
+                  signal: createTimeoutSignal(1200)
+                });
+                if (res.ok) return manualUrl;
+                throw new Error('fail');
+              }));
+              if (verified) {
+                const pcIdx = rawDevices.findIndex(d => d.DeviceType === 'PC');
+                if (pcIdx >= 0) rawDevices[pcIdx] = { ...rawDevices[pcIdx], _lanVerified: true, _lanUrl: verified, LocalIp: verified };
+              }
+            } catch (e) {}
+          }
         }
+        activeDevicesRef.current = rawDevices;
         setActiveDevices(rawDevices);
         // Build typed ActiveDevice list for DeviceHub
         const typedList: ActiveDevice[] = rawDevices.map((d: any) => ({
@@ -478,7 +525,13 @@ export function useFirebaseSync(params: {
           connectFirebaseClipboardListener(pk);
         }
       } catch (e) { syncLog('FIREBASE', `Active devices listener error: ${e}`); }
-    });
+    };
+
+    // 1. Instant REST snapshot on mount (0ms wait, zero persistent connection overhead)
+    get(peerDevicesRef).then(processDevicesSnapshot).catch(() => {});
+
+    // 2. Real-time active devices listener
+    const unsubscribeDevices = onValue(peerDevicesRef, processDevicesSnapshot);
 
     return () => {
       unsubscribeDevices();

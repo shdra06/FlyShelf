@@ -76,6 +76,24 @@ namespace FlyShelf.Classes
         
         /// <summary>Fires whenever a device is successfully paired. UI can subscribe to auto-refresh.</summary>
         public static event Action<string> OnDevicePaired;
+
+        /// <summary>
+        /// Records recent activity/heartbeat from a device so UI displays live online status.
+        /// </summary>
+        public static void RecordDeviceActivity(string deviceId, string deviceName = "", string transport = "Cloud")
+        {
+            if (string.IsNullOrWhiteSpace(deviceId)) return;
+            lock (_lock)
+            {
+                var match = _pairedDevices.FirstOrDefault(d => 
+                    string.Equals(d.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase) ||
+                    (!string.IsNullOrEmpty(deviceName) && string.Equals(d.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase)));
+                if (match != null)
+                {
+                    match.LastSeen = DateTime.Now;
+                }
+            }
+        }
         // AUDIT Task 5: Use shared pool instance instead of per-class HttpClient (prevents socket exhaustion)
         private static HttpClient _httpClient => HttpClientPool.Default;
         private static string FIREBASE_BASE => FirebaseAuthManager.FirebaseDatabaseUrl;

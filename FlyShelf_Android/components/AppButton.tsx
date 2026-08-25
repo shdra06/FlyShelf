@@ -58,8 +58,12 @@ export default function AppButton({
   const pressed = useSharedValue(0);
 
   const handlePress = () => {
-    if (haptic) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onPress();
+    if (haptic) {
+      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); } catch {}
+    }
+    if (typeof onPress === 'function') {
+      try { onPress(); } catch (e) { console.warn('AppButton onPress error:', e); }
+    }
   };
 
   const gesture = Gesture.Tap()

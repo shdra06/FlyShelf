@@ -396,6 +396,52 @@ namespace FlyShelf.Classes
                     try { await _httpClient.DeleteAsync((await AuthUrl($"pairing_handshake/{pairingKey}/{prop.Name}.json"))); } catch (Exception ex) { Logger.LogAction("PAIR", $"Firebase pairing cleanup failed: {ex.Message}"); }
                 }
 
+                // Check active_devices as secondary source for instant pairing detection
+                try
+                {
+                    string adUrl = (await AuthUrl($"active_devices/{pairingKey}.json"));
+                    using var adResponse = await _httpClient.GetAsync(adUrl);
+                    if (adResponse.IsSuccessStatusCode)
+                    {
+                        string adJson = await adResponse.Content.ReadAsStringAsync();
+                        if (!string.IsNullOrWhiteSpace(adJson) && adJson != "null")
+                        {
+                            using var adDoc = JsonDocument.Parse(adJson);
+                            foreach (var prop in adDoc.RootElement.EnumerateObject())
+                            {
+                                if (prop.Name == myDeviceId) continue;
+                                string adDevId = prop.Value.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name;
+                                string adDevName = prop.Value.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? "" : "";
+                                string adDevType = prop.Value.TryGetProperty("DeviceType", out var dt) ? dt.GetString() ?? "Mobile" : "Mobile";
+                                bool isOnline = prop.Value.TryGetProperty("IsOnline", out var on) && on.GetBoolean();
+
+                                if (string.IsNullOrWhiteSpace(adDevId) || string.IsNullOrWhiteSpace(adDevName) || adDevId == myDeviceId) continue;
+
+                                bool alreadyPaired;
+                                lock (_lock)
+                                {
+                                    alreadyPaired = _pairedDevices.Any(d => d.DeviceId == adDevId);
+                                }
+
+                                if (!alreadyPaired && isOnline)
+                                {
+                                    TryPairDevice(pairingKey, adDevId, adDevName, adDevType, "active_devices");
+                                    Logger.LogAction("PAIR ACTIVE_DEV", $"✅ Auto-registered device from active_devices: {adDevName} ({adDevType})");
+                                    anyNew = true;
+                                    _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                                    {
+                                        FlyShelf.Windows.ToastWindow.ShowToast($"📱 {adDevName} joined your sync group!");
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("PAIR ACTIVE_DEV", $"Active devices scan: {ex.Message}");
+                }
+
                 if (anyNew)
                 {
                     Save();

@@ -76,7 +76,7 @@ const { AdvanceOverlay } = NativeModules;
 function SyncScreenInner() {
   const { colors, shadows } = useAppTheme();
   const styles = useMemo(() => createSyncStyles(colors, shadows), [colors, shadows]);
-  const { pcLocalIp, deviceName, setDeviceName, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, addPairedDevice, pairedDevices, updatePairedDeviceLicensing, updateDeviceStatus, pairingKey: contextPairingKey, regeneratePairingKey, getSyncPrefsForDevice } = useSettings();
+  const { pcLocalIp, deviceName, setDeviceName, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, addPairedDevice, pairedDevices, updatePairedDeviceLicensing, updateDeviceStatus, pairingKey: contextPairingKey, regeneratePairingKey, getSyncPrefsForDevice, autoSyncTop5 } = useSettings();
 
   const isPairedPcPro = pairedDevices.some(d => d.deviceType === 'PC' && d.isPro);
 
@@ -160,10 +160,10 @@ function SyncScreenInner() {
   const clipPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clipsInitializedRef = useRef<boolean>(false);
 
-  // Debounced persist: save clips to AsyncStorage 800ms after last change
+  // Debounced persist: save clips to AsyncStorage & EncryptedStorage 800ms after last change
   const persistClips = useCallback((clipsToSave: ClipItem[]) => {
     if (clipPersistTimerRef.current) clearTimeout(clipPersistTimerRef.current);
-    clipPersistTimerRef.current = setTimeout(() => {
+    clipPersistTimerRef.current = setTimeout(async () => {
       try {
         // Keep last 50 items max, exclude transient download progress items
         const persistable = clipsToSave.filter(c => !(c as any)._isTransient && c.Type !== '_DownloadProgress');
@@ -176,7 +176,11 @@ function SyncScreenInner() {
           PreviewUrl: (c as any).PreviewUrl || undefined,
           IsPinned: c.IsPinned || undefined,
         }));
-        EncryptedStorage.setItem(CLIPS_STORAGE_KEY, JSON.stringify(toSave)).catch(() => {});
+        const jsonStr = JSON.stringify(toSave);
+        await Promise.all([
+          EncryptedStorage.setItem(CLIPS_STORAGE_KEY, jsonStr).catch(() => {}),
+          AsyncStorage.setItem(CLIPS_STORAGE_KEY, jsonStr).catch(() => {}),
+        ]);
       } catch (e) { syncLog('PERSIST', `Clip persist failed: ${(e as any)?.message || e}`); }
     }, 800);
   }, []);
@@ -206,7 +210,8 @@ function SyncScreenInner() {
     let mounted = true; // A-13: Guard against state updates after unmount
     (async () => {
       try {
-        const stored = await EncryptedStorage.getItem(CLIPS_STORAGE_KEY);
+        const stored = await EncryptedStorage.getItem(CLIPS_STORAGE_KEY).catch(() => null)
+          || await AsyncStorage.getItem(CLIPS_STORAGE_KEY).catch(() => null);
         if (stored && mounted) {
           const parsed: ClipItem[] = JSON.parse(stored);
           // Validate CachedUri: check if the local file still exists
@@ -516,6 +521,7 @@ function SyncScreenInner() {
     pcLocalIp,
     scrollToTop,
     isFloatingBallEnabled,
+    autoSyncTop5,
   });
 
   // ─── Background image download sweep (extracted to feature hook) ───────────
@@ -535,16 +541,47 @@ function SyncScreenInner() {
   useEffect(() => {
     if (!deviceName) return;
     const myDeviceId = `Mobile_${deviceName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
-    const pk = pairingKeyRef.current;
+    const pk = pairingKeyRef.current || contextPairingKey;
     if (!pk) return;
     const registerSelf = async () => {
-      try { await set(ref(database, `active_devices/${pk}/${myDeviceId}`), { DeviceId: myDeviceId, DeviceName: deviceName, DeviceType: 'Mobile', IsOnline: true, LocalIp: '', Timestamp: NetworkClock.now() }); } catch(e) { syncLog('HEARTBEAT', `Device registration failed: ${(e as any)?.message || e}`); }
+      try {
+        await ensureFirebaseAuth();
+        const uid = auth?.currentUser?.uid;
+        if (uid) {
+          await set(ref(database, `members/${pk}/${uid}`), true).catch(() => {});
+        }
+        await set(ref(database, `active_devices/${pk}/${myDeviceId}`), {
+          DeviceId: myDeviceId,
+          DeviceName: deviceName,
+          DeviceType: 'Mobile',
+          IsOnline: true,
+          LocalIp: '',
+          Timestamp: NetworkClock.now()
+        });
+        syncLog('HEARTBEAT', `✅ Device presence registered in Firebase: ${deviceName}`);
+      } catch(e) {
+        syncLog('HEARTBEAT', `Device registration failed: ${(e as any)?.message || e}`);
+      }
     };
     registerSelf();
-    // Reduced from 30s to 600s — Firebase writes are expensive at scale (10-minute heartbeat)
-    const heartbeat = setInterval(registerSelf, 600_000);
-    return () => { clearInterval(heartbeat); if (!isFloatingBallEnabled) set(ref(database, `active_devices/${pk}/${myDeviceId}/IsOnline`), false).catch(() => {}); };
-  }, [deviceName, isFloatingBallEnabled]);
+    // Regular 5-minute heartbeat interval
+    const heartbeat = setInterval(registerSelf, 300_000);
+
+    // Instant presence heartbeat on AppState foreground transition
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        registerSelf();
+      }
+    });
+
+    return () => {
+      appStateSub.remove();
+      clearInterval(heartbeat);
+      if (!isFloatingBallEnabled) {
+        set(ref(database, `active_devices/${pk}/${myDeviceId}/IsOnline`), false).catch(() => {});
+      }
+    };
+  }, [deviceName, isFloatingBallEnabled, contextPairingKey]);
 
 
   // ─── Periodic dedup cleanup (every 60s) ───
@@ -878,7 +915,7 @@ function SyncScreenInner() {
         const response = await fetchWithTimeout(`${targetUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body: jsonBody }, sendTimeout);
         localSuccess = response.ok;
         if (localSuccess && Platform.OS === 'android') ToastAndroid.show('✓ Text sent', ToastAndroid.SHORT);
-      } catch(e) { syncLog('SYNC', `Text transmit to PC failed: ${(e as any)?.message || e}`); cachedPcUrlRef.current = null; if (Platform.OS === 'android') ToastAndroid.show('✗ Text send failed — queued for cloud', ToastAndroid.SHORT); }
+      } catch(e) { syncLog('SYNC', `Text transmit to PC failed: ${(e as any)?.message || e}`); if (Platform.OS === 'android') ToastAndroid.show('✗ Direct send failed — sending via cloud', ToastAndroid.SHORT); }
       // Always add sent text to local clips so it appears in the feed
       const sentItem: ClipItem = {
         id: `local_${NetworkClock.now()}`,
@@ -1223,6 +1260,110 @@ function SyncScreenInner() {
     exitMultiSelect();
   };
 
+  // ─── Active Sync Single Item ───
+  const activeSyncSingleItem = async (item: ClipItem) => {
+    try {
+      if (Platform.OS === 'android') ToastAndroid.show(`⚡ Syncing "${item.Title || item.Type}"...`, ToastAndroid.SHORT);
+      const isTextOrUrl = item.Type === 'Text' || item.Type === 'Url';
+      const pk = pairingKeyRef.current || contextPairingKey;
+      const targetUrl = await getCachedPcUrl().catch(() => '');
+
+      // 1. Direct P2P transmit if targetUrl is reachable
+      let p2pSuccess = false;
+      if (targetUrl && targetUrl.startsWith('http')) {
+        try {
+          const hdrs: any = {
+            'Content-Type': 'application/json',
+            'X-FlyShelf-Client': 'MobileCompanion',
+            'X-Source-Device': deviceName || 'Mobile',
+          };
+          if (pk) hdrs['X-Pairing-Key'] = pk;
+
+          if (isTextOrUrl) {
+            const body = JSON.stringify({
+              type: item.Type,
+              title: item.Title || item.Raw || 'Text',
+              data: item.Raw || item.Title || '',
+              sourceDeviceName: deviceName || 'Mobile',
+              sourceDeviceId: `Mobile_${(deviceName || 'Phone').replace(/[^a-zA-Z0-9_]/g, '_')}`,
+              timestamp: NetworkClock.now(),
+            });
+            const sendTimeout = targetUrl.includes('trycloudflare.com') ? 8000 : 3000;
+            const res = await fetchWithTimeout(`${targetUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body }, sendTimeout);
+            p2pSuccess = res.ok;
+          } else {
+            // Media/File item: check if cached locally
+            let localPath = item.CachedUri || (item.Raw && item.Raw.startsWith('file://') ? item.Raw : '');
+            if (!localPath && item.Title) {
+              const safeName = item.Title.replace(/[^a-zA-Z0-9._-]/g, '_');
+              const subfolder = item.Type === 'Pdf' ? 'PDFs' : item.Type === 'Video' ? 'Videos' : item.Type === 'Audio' ? 'Audio' : 'Documents';
+              const candidate = `${DOWNLOAD_BASE}${subfolder}/${safeName}`;
+              const exists = await FileSystem.getInfoAsync(candidate);
+              if (exists.exists) localPath = candidate;
+            }
+
+            if (localPath) {
+              const uploadUrl = `${targetUrl}/api/sync_file?name=${encodeURIComponent(item.Title || 'file')}&type=${encodeURIComponent(item.Type)}&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`;
+              await FileSystem.uploadAsync(uploadUrl, localPath, {
+                httpMethod: 'POST',
+                uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+                headers: {
+                  'X-Original-Date': NetworkClock.now().toString(),
+                  'X-FlyShelf-Client': 'MobileCompanion',
+                  ...(pk ? { 'X-Pairing-Key': pk } : {}),
+                },
+              });
+              p2pSuccess = true;
+            }
+          }
+        } catch (p2pErr: any) {
+          syncLog('ACTIVE-SYNC', `P2P sync error: ${p2pErr?.message || p2pErr}`);
+        }
+      }
+
+      // 2. Firebase Cloud Sync Broadcast
+      if (pk) {
+        try {
+          await ensureFirebaseAuth();
+          const uid = auth?.currentUser?.uid;
+          if (uid) {
+            await set(ref(database, `members/${pk}/${uid}`), true).catch(() => {});
+          }
+
+          let cloudPayload: any = {
+            Type: item.Type,
+            Title: item.Title || 'Item',
+            Timestamp: NetworkClock.now(),
+            SourceDeviceName: deviceName || 'Mobile',
+            SourceDeviceType: 'Mobile',
+            ForcedBy: deviceName || 'Mobile',
+          };
+
+          if (isTextOrUrl) {
+            const rawContent = item.Raw || item.Title || '';
+            const enc = await aesEncrypt(rawContent).catch(() => rawContent);
+            cloudPayload.Raw = enc;
+          } else {
+            if (item.DownloadUrl) cloudPayload.DownloadUrl = item.DownloadUrl;
+            if ((item as any).Size) cloudPayload.Size = (item as any).Size;
+          }
+
+          const clipRef = push(ref(database, `clipboard/${pk}`));
+          await set(clipRef, cloudPayload);
+          syncLog('ACTIVE-SYNC', `✅ Broadcast active sync item to Firebase`);
+        } catch (fbErr: any) {
+          syncLog('ACTIVE-SYNC', `Firebase sync error: ${fbErr?.message || fbErr}`);
+        }
+      }
+
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(p2pSuccess ? '✅ Synced directly to PC!' : '✅ Synced via Cloud!', ToastAndroid.SHORT);
+      }
+    } catch (err: any) {
+      if (Platform.OS === 'android') ToastAndroid.show(`Sync failed: ${err?.message || 'Error'}`, ToastAndroid.SHORT);
+    }
+  };
+
   // ─── File/Camera/QR Actions ───
   const sendTextToPc = async () => { if (!inputText.trim()) return; await transmitTextSecurely(inputText); setInputText(''); };
   const pickFileAndSend = async () => {
@@ -1511,6 +1652,14 @@ function SyncScreenInner() {
               setActiveOptionsId(null);
             }} style={[styles.actionBtnIcon, {backgroundColor: '#4A62EB33'}]}>
               <Ionicons name="copy-outline" size={18} color={colors.accent.primary} />
+            </TouchableOpacity>
+
+            {/* ═══ ACTIVE SYNC — universal for all types ═══ */}
+            <TouchableOpacity onPress={() => {
+              activeSyncSingleItem(item);
+              setActiveOptionsId(null);
+            }} style={[styles.actionBtnIcon, {backgroundColor: '#10B98133'}]} accessibilityLabel={`Sync ${item.Title || 'item'} to PC`} accessibilityRole="button">
+              <Ionicons name="sync-outline" size={18} color="#10B981" />
             </TouchableOpacity>
 
             {/* ═══ EDIT — PDF only, opens PDF editor tab ═══ */}

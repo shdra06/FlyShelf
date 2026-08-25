@@ -916,7 +916,7 @@ namespace FlyShelf.Classes
                         ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp" => "Image",
                         ".doc" or ".docx" or ".txt" or ".rtf" => "Document",
                         ".ppt" or ".pptx" => "Presentation",
-                        ".apk" => "Archive",
+                        ".apk" or ".aab" or ".xapk" or ".apks" => "File",
                         _ => "File"
                     };
 

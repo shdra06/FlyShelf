@@ -39,7 +39,7 @@ namespace FlyShelf
 
             try
             {
-                _viewModel.HandleDrop(e.Data, true);
+                _viewModel.HandleDrop(e.Data, forceClipboardSync: false);
             }
             catch (Exception ex)
             {
@@ -1004,12 +1004,29 @@ namespace FlyShelf
             }
         }
 
+        private void ContextMenuQuickLook_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                ShowQuickLookForItem(item);
+            }
+        }
+
         private void ConvertImageToPdfSpecific_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
             if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
                 item.ConvertImageToPdf();
+            }
+        }
+
+        private void ConvertDocToPdfSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                item.ConvertDocumentTask();
             }
         }
         private async void RotateImageSpecific_Click(object sender, MouseButtonEventArgs e)
@@ -1291,8 +1308,7 @@ namespace FlyShelf
                     IDataObject data = Clipboard.GetDataObject();
                     if (data != null)
                     {
-                        _viewModel.HandleDrop(data, true);
-                        AnimateAndHide();
+                        _viewModel.HandleDrop(data, forceClipboardSync: false);
                     }
                 }
                 catch { } // Best-effort: failure is acceptable

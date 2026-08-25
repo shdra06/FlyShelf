@@ -45,7 +45,7 @@ async function resolveFileDownloadUrl(params: {
     for (const candidate of lanCandidates) {
       try {
         const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 3000);
+        const timer = setTimeout(() => ctrl.abort(), 1200);
         const h = await fetch(`${candidate}/api/health`, {
           headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' },
           signal: ctrl.signal,
@@ -203,7 +203,7 @@ export function useDeviceSync(params: {
       }
       try {
         const timeout = targetUrl.includes('trycloudflare.com') ? 5000 : 2000;
-        const syncHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
+        const syncHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion', 'Connection': 'keep-alive' };
         if (pairingKeyRef.current) syncHeaders['X-Pairing-Key'] = pairingKeyRef.current;
         const pollStart = performance.now();
         const response = await fetchWithTimeout(`${targetUrl}/api/sync`, { headers: syncHeaders }, timeout);
@@ -638,33 +638,26 @@ export function useDeviceSync(params: {
         }
       } catch (e) {
         syncLog('PC-POLL', `Poll failed: ${(e as any)?.message || e}`);
-        pollRetryCountRef.current = Math.min(pollRetryCountRef.current + 1, 15); // Increment backoff counter
-        // Track Cloudflare failures for forced re-resolution (Issue #7)
-        const failUrl = cachedPcUrlRef.current || '';
+        pollRetryCountRef.current = Math.min(pollRetryCountRef.current + 1, 4); // Capped at 4 for fast recovery
+        
+        // Invalidate in-memory cache so next poll runs fresh resolution (checking Firebase if needed)
         cachedPcUrlRef.current = null;
-        if (failUrl.includes('trycloudflare.com')) {
-          if (recordCloudflareFailure()) {
-            removeSecureItem('lastCloudflareUrl').catch(() => {});
-            removeSecureItem('pairedGlobalUrl').catch(() => {});
-          }
-        }
+        recordCloudflareFailure();
         markPcUnreachable();
       }
       } finally { pollLockRef.current = false; }
     };
-    // Adaptive polling: 2s (LAN active) → 5s (Cloud) → 10s (idle/no PC) → re-evaluate every cycle
+    // Adaptive polling: 2s (LAN active) → 4s (Cloud) → 4s (retry) → re-evaluate every cycle
     lastActivityRef.current = NetworkClock.now();
     const getAdaptiveInterval = () => {
       const retries = pollRetryCountRef.current;
-      // After 10 consecutive failures, switch to 60s low-frequency polling
-      if (retries >= 10) return 60000;
-      // Exponential backoff on failures: 1s, 2s, 4s, 8s... max 30s
-      if (retries > 0) return Math.min(1000 * Math.pow(2, retries), 30000);
+      // Fast retry while app is active — capped at 4s (never hang for 30-60s)
+      if (retries > 0) return Math.min(1000 * retries, 4000);
       const url = cachedPcUrlRef.current || '';
       const idleSecs = (NetworkClock.now() - lastActivityRef.current) / 1000;
-      if (!url) return 10000; // No PC found — slow poll
-      if (url.includes('trycloudflare')) return idleSecs > 120 ? 10000 : 5000; // Cloud: 5s active, 10s idle
-      return idleSecs > 120 ? 5000 : 2000; // LAN: 2s active, 5s idle
+      if (!url) return 4000; // No PC found — continuously retry every 4s
+      if (url.includes('trycloudflare')) return idleSecs > 120 ? 6000 : 3000; // Cloud: 3s active, 6s idle
+      return idleSecs > 120 ? 4000 : 2000; // LAN: 2s active, 4s idle
     };
     // Initial poll
     pollFn();
@@ -677,6 +670,17 @@ export function useDeviceSync(params: {
     };
     schedulePoll();
 
+    // ─── Instant Reconnect on App Foreground ───
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        syncLog('PC-POLL', '⚡ App foregrounded — resetting backoff and forcing instant probe');
+        pollRetryCountRef.current = 0;
+        cachedPcUrlRef.current = null;
+        if (pollTimer !== null) clearTimeout(pollTimer);
+        pollFn().then(() => schedulePoll());
+      }
+    });
+
     // ─── Long-Poll for instant notifications ───
     // /api/events blocks for up to 30s until clipboard changes on PC
     // When it returns 200, immediately fetch the new data via pollFn()
@@ -685,28 +689,20 @@ export function useDeviceSync(params: {
     let currentLongPollController: AbortController | null = null;
     let longPollBackoff = 0;
     const runLongPoll = async () => {
-      // Wait for first successful poll to establish cachedPcUrlRef
-      await new Promise(r => setTimeout(r, 3000));
       if (!longPollActive) return; // Bail if already torn down
       syncLog('LONG-POLL', 'Starting long-poll loop');
       while (longPollActive) {
-        // H-3 FIX: Disable long-poll when regular poll is in slow mode (PC unreachable)
-        if (pollRetryCountRef.current >= 10) {
-          syncLog('LONG-POLL', 'Regular poll in slow mode — suspending long-poll for 60s');
-          await new Promise(r => setTimeout(r, 60000));
-          continue;
-        }
         try {
           // Always resolve fresh URL (don't rely on potentially stale ref)
           const url = cachedPcUrlRef.current || (await getCachedPcUrl());
           if (!url) {
-            syncLog('LONG-POLL', 'No PC URL — waiting 5s');
-            await new Promise(r => setTimeout(r, 5000));
+            syncLog('LONG-POLL', 'No PC URL — waiting 2s');
+            await new Promise(r => setTimeout(r, 2000));
             continue;
           }
           try {
             const pairingKey = pairingKeyRef.current;
-            const lpHeaders: any = { 'X-FlyShelf-Client': 'MobileCompanion' };
+            const lpHeaders: any = { 'X-FlyShelf-Client': 'MobileCompanion', 'Connection': 'keep-alive' };
             if (pairingKey) lpHeaders['X-Pairing-Key'] = pairingKey;
             const controller = new AbortController();
             currentLongPollController = controller;
@@ -725,13 +721,10 @@ export function useDeviceSync(params: {
             // Normal long-poll timeout — reconnect immediately without backoff
             if ((innerErr as any)?.name === 'AbortError') { longPollBackoff = 0; continue; }
             if (!longPollActive) break;
-            // Invalidate stale Cloudflare URL on long-poll failure
-            if (url && url.includes('trycloudflare.com')) {
-              removeSecureItem('lastCloudflareUrl').catch(() => {});
-            }
-            // Backoff on errors: 1s, 2s, 4s... max 10s (reduced from 30s)
-            longPollBackoff = Math.min(longPollBackoff + 1, 4);
-            const delay = Math.min(1000 * Math.pow(2, longPollBackoff), 10000);
+            
+            // Backoff on errors: 1s, 2s, max 4s (preserve stored URLs!)
+            longPollBackoff = Math.min(longPollBackoff + 1, 3);
+            const delay = Math.min(1000 * Math.pow(1.5, longPollBackoff), 4000);
             syncLog('LONG-POLL', `Error: ${innerErr?.message || innerErr} — retry in ${delay}ms`);
             await new Promise(r => setTimeout(r, delay));
           }
@@ -739,13 +732,14 @@ export function useDeviceSync(params: {
           // Top-level catch — NEVER let the loop die
           if (!longPollActive) break; // H-1 fix: prevent zombie loops on unmount
           syncLog('LONG-POLL', `Loop crash prevented: ${outerErr?.message || outerErr}`);
-          await new Promise(r => setTimeout(r, 5000));
+          await new Promise(r => setTimeout(r, 3000));
         }
       }
     };
     runLongPoll(); // Fire and forget — runs in background
 
     return () => {
+      appStateSub.remove();
       if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; }
       longPollActive = false; // Stop long-poll loop
       if (currentLongPollController) currentLongPollController.abort();

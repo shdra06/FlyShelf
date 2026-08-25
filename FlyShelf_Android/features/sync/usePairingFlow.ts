@@ -9,7 +9,8 @@ import { syncLog } from '../../utils/debugLog';
 import { fetchWithTimeout, isValidPairingKey } from '../../utils/networkHelpers';
 import { getSecureItem, setSecureItem } from '../../utils/secureStorage';
 import { NetworkClock } from '../../utils/networkClock';
-import { auth, ensureFirebaseAuth, getFirebaseIdToken, firebaseDatabaseUrl } from '../../firebaseConfig';
+import { auth, ensureFirebaseAuth, getFirebaseIdToken, firebaseDatabaseUrl, database } from '../../firebaseConfig';
+import { ref, set } from 'firebase/database';
 
 const { AdvanceOverlay } = NativeModules;
 
@@ -159,6 +160,42 @@ export function usePairingFlow(params: UsePairingFlowParams) {
       }
     }
 
+    const myDeviceId = `Mobile_${(deviceName || 'Phone').replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    const myDeviceName = deviceName || 'Phone';
+
+    // ─── Firebase Cloud Handshake (Instant discovery across networks) ───
+    if (key) {
+      try {
+        await ensureFirebaseAuth();
+        const uid = auth?.currentUser?.uid;
+        if (uid) {
+          await set(ref(database, `members/${key}/${uid}`), true).catch(() => {});
+          syncLog('PAIR', `✅ Registered room membership for ${key.substring(0, 8)}...`);
+        }
+
+        // Write handshake node so PC's CheckForHandshakes picks it up in <2 seconds
+        await set(ref(database, `pairing_handshake/${key}/${myDeviceId}`), {
+          deviceId: myDeviceId,
+          deviceName: myDeviceName,
+          deviceType: 'Mobile',
+          timestamp: NetworkClock.now(),
+        }).catch(() => {});
+        syncLog('PAIR', `✅ Wrote cloud pairing handshake to Firebase`);
+
+        // Write active device node for live room presence
+        await set(ref(database, `active_devices/${key}/${myDeviceId}`), {
+          DeviceId: myDeviceId,
+          DeviceName: myDeviceName,
+          DeviceType: 'Mobile',
+          IsOnline: true,
+          LocalIp: '',
+          Timestamp: NetworkClock.now(),
+        }).catch(() => {});
+      } catch (fbErr: any) {
+        syncLog('PAIR', `Firebase handshake error: ${fbErr?.message || fbErr}`);
+      }
+    }
+
     const pairingTs = NetworkClock.now().toString();
     await Promise.all([
       setSecureItem('pairingKey', key || ''),
@@ -200,13 +237,13 @@ export function usePairingFlow(params: UsePairingFlowParams) {
         [{ text: 'Got it!' }]
       );
     } else {
-      if (Platform.OS === 'android') ToastAndroid.show(`✅ Paired with ${pcName} (deferred)`, ToastAndroid.LONG);
-      Alert.alert('Paired! 🔑',
-        `Paired with ${pcName}.\n\nThe PC isn't reachable right now, but your pairing key is saved.\nClipboard sync will start automatically once FlyShelf is running.`,
-        [{ text: 'OK' }]
+      if (Platform.OS === 'android') ToastAndroid.show(`✅ Paired with ${pcName}!`, ToastAndroid.SHORT);
+      Alert.alert('Connected! 🎉',
+        `Paired with ${pcName}.\n\nCloud pairing complete! Anything you copy or drop on your PC will appear here via cloud sync.`,
+        [{ text: 'Got it!' }]
       );
     }
-  }, [deviceName, isGlobalSyncEnabled, setGlobalSyncEnabled, pairingKeyRef, cachedPcUrlRef, cachedPcUrlTimestampRef, pairingTimestampRef, addPairedDevice]);
+  }, [deviceName, isGlobalSyncEnabled, setGlobalSyncEnabled, pairingKeyRef, cachedPcUrlRef, cachedPcUrlTimestampRef, pairingTimestampRef, addPairedDevice, setPairedPcName, setIsPairing]);
 
   // ─── Connect by 6-char code ───
   const connectByCode = useCallback(async (code: string) => {

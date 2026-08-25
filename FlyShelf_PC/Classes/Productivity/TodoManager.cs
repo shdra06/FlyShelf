@@ -582,8 +582,6 @@ namespace FlyShelf.Classes
                     snapshot = _days.ToList();
                     lock (_lock)
                     {
-                        var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
-                        _allDays.RemoveAll(d => !visibleDates.Contains(d.Date.Date));
                         foreach (var snapDay in snapshot)
                         {
                             int idx = _allDays.FindIndex(d => d.Date.Date == snapDay.Date.Date);
@@ -625,8 +623,6 @@ namespace FlyShelf.Classes
                 snapshot = _days.ToList();
                 lock (_lock)
                 {
-                    var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
-                    _allDays.RemoveAll(d => !visibleDates.Contains(d.Date.Date));
                     foreach (var snapDay in snapshot)
                     {
                         int idx = _allDays.FindIndex(d => d.Date.Date == snapDay.Date.Date);

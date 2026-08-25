@@ -21,15 +21,18 @@ namespace FlyShelf.Classes
             string ext = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
             return ext switch
             {
-                ".png" or ".jpg" or ".jpeg" or ".webp" or ".bmp" or ".gif" => "Image",
+                ".png" or ".jpg" or ".jpeg" or ".webp" or ".bmp" or ".gif" or ".svg" or ".ico" => "Image",
                 ".pdf" => "PDF",
-                ".docx" or ".doc" or ".rtf" or ".txt" => "Document",
-                ".xlsx" or ".xls" or ".csv" => "Spreadsheet",
-                ".pptx" or ".ppt" => "Presentation",
-                ".zip" or ".rar" or ".7z" or ".tar" or ".gz" => "Archive",
-                ".mp3" or ".wav" or ".m4a" or ".ogg" => "Audio",
-                ".mp4" or ".mkv" or ".avi" or ".mov" => "Video",
-                ".apk" => "Android App",
+                ".md" or ".markdown" => "Markdown",
+                ".docx" or ".doc" or ".rtf" or ".txt" or ".odt" => "Document",
+                ".xlsx" or ".xls" or ".csv" or ".ods" => "Spreadsheet",
+                ".pptx" or ".ppt" or ".key" or ".odp" => "Presentation",
+                ".zip" or ".rar" or ".7z" or ".tar" or ".gz" or ".bz2" or ".xz" or ".iso" => "Archive",
+                ".mp3" or ".wav" or ".m4a" or ".ogg" or ".flac" or ".aac" => "Audio",
+                ".mp4" or ".mkv" or ".avi" or ".mov" or ".webm" => "Video",
+                ".apk" or ".aab" or ".xapk" or ".apks" => "Android App",
+                ".exe" or ".msi" => "Application",
+                ".py" or ".js" or ".ts" or ".cs" or ".cpp" or ".c" or ".java" or ".json" or ".xml" or ".html" or ".css" => "Code",
                 _ => "File"
             };
         }

@@ -414,6 +414,8 @@ public partial class App : Application
         // ------------------------------------------------------------------
         // Single File Deployment: Synthesize the physical scripts locally FIRST!
         FlyShelf.Classes.RuntimeHost.Initialize();
+        // Warm up common file icons from Windows Shell in background
+        FlyShelf.Classes.ShellIconManager.WarmupCommonIcons();
         // ------------------------------------------------------------------
 
         // ═══ DEPENDENCY INJECTION: Register all services ═══

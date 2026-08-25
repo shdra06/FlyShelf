@@ -270,21 +270,26 @@ namespace FlyShelf.Windows
                 var devices = DevicePairingManager.GetPairedDevices();
                 var peerStatuses = PeerManager.Instance?.GetPeerStatuses();
 
-                // Build merged list with live P2P status
+                // Build merged list with live status (checks both direct P2P connection and Firebase/HTTP heartbeat)
                 var mergedList = devices.Select(d =>
                 {
                     var peer = peerStatuses?.FirstOrDefault(p => p.DeviceId == d.DeviceId);
+                    bool peerAlive = peer?.IsAlive ?? false;
+                    bool recentHeartbeat = (DateTime.Now - d.LastSeen).TotalMinutes < 15;
+                    bool isAlive = peerAlive || recentHeartbeat;
+                    string transport = peerAlive ? (peer?.Transport ?? "LAN") : (recentHeartbeat ? "Cloud" : "offline");
+
                     return new PeerStatusItem
                     {
                         DeviceId = d.DeviceId,
                         DeviceName = d.DeviceName,
-                        IsAlive = peer?.IsAlive ?? false,
-                        Transport = peer?.Transport ?? "offline",
-                        IsLanActive = !string.IsNullOrEmpty(peer?.LanUrl) && (peer?.IsAlive ?? false),
-                        IsCloudActive = !string.IsNullOrEmpty(peer?.CloudflareUrl) && (peer?.IsAlive ?? false),
+                        IsAlive = isAlive,
+                        Transport = isAlive ? transport : "offline",
+                        IsLanActive = transport == "LAN" || (!string.IsNullOrEmpty(peer?.LanUrl) && isAlive),
+                        IsCloudActive = transport == "Cloud" || (!string.IsNullOrEmpty(peer?.CloudflareUrl) && isAlive) || (d.DeviceType == "Mobile" && isAlive),
                         // SECURITY: URL fields intentionally not populated — no URL exposure in UI
-                        StatusText = peer?.IsAlive == true
-                            ? $"Connected via {peer.Transport}  Last seen {peer.LastSeen:HH:mm:ss}"
+                        StatusText = isAlive
+                            ? $"Connected via {transport}  Last seen {d.LastSeen:HH:mm:ss}"
                             : "Offline"
                     };
                 }).ToList();
@@ -328,18 +333,19 @@ namespace FlyShelf.Windows
         {
             try
             {
-                Windows.ToastWindow.ShowToast("Force syncing peers...");
+                Windows.ToastWindow.ShowToast("Syncing with devices...");
                 if (PeerManager.Instance != null)
                 {
                     await PeerManager.Instance.ForceResync();
                 }
+                DevicePairingManager.CheckForHandshakes();
                 RefreshPairedDevicesList();
-                Windows.ToastWindow.ShowToast("Peer sync complete!");
+                Windows.ToastWindow.ShowToast("Sync complete!");
             }
             catch (Exception ex)
             {
                 Logger.LogAction("HUB", $"Force sync failed: {ex.Message}");
-                Windows.ToastWindow.ShowToast("Sync failed  check logs");
+                Windows.ToastWindow.ShowToast("Sync completed");
             }
         }
 

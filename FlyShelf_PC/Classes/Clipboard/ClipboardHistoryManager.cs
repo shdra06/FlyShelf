@@ -227,28 +227,31 @@ namespace FlyShelf.Classes
 
         /// <summary>
         /// Appends a new item to the journal (fast — async I/O, no blocking).
+        private static bool _appDataDirCreated;
+
+        private static void EnsureAppDataDir()
+        {
+            if (!_appDataDirCreated)
+            {
+                try { Directory.CreateDirectory(_appDataDir); _appDataDirCreated = true; } catch { }
+            }
+        }
+
         private static System.Threading.Tasks.Task? _lastJournalWrite;
 
         /// <summary>
         /// Appends a new item to the fast append-only JSONL journal.
+        /// Fully non-blocking — all disk and size checks run on a background worker.
         /// </summary>
         public static void AppendToJournal(ViewModels.ClipboardItem item)
         {
             try
             {
-                Directory.CreateDirectory(_appDataDir);
+                EnsureAppDataDir();
                 var diskItem = CloneForDisk(item);
                 var entry = new JournalEntry { Action = "add", Item = diskItem, ItemId = GetItemId(item) };
                 var json = JsonSerializer.Serialize(entry);
                 var line = json + "\n";
-
-                lock (_lock)
-                {
-                    if (File.Exists(_journalPath) && new FileInfo(_journalPath).Length > 500 * 1024)
-                    {
-                        ScheduleCompaction();
-                    }
-                }
 
                 _lastJournalWrite = System.Threading.Tasks.Task.Run(() =>
                 {
@@ -256,6 +259,11 @@ namespace FlyShelf.Classes
                     {
                         try
                         {
+                            if (File.Exists(_journalPath) && new FileInfo(_journalPath).Length > 500 * 1024)
+                            {
+                                ScheduleCompaction();
+                            }
+
                             RunWithRetry(() => File.AppendAllText(_journalPath, line));
                             _journalEntryCount++;
 
@@ -292,7 +300,7 @@ namespace FlyShelf.Classes
         {
             try
             {
-                Directory.CreateDirectory(_appDataDir);
+                EnsureAppDataDir();
                 var entry = new JournalEntry { Action = "delete", ItemId = GetItemId(item) };
                 var json = JsonSerializer.Serialize(entry);
                 var line = json + "\n";
@@ -697,17 +705,48 @@ namespace FlyShelf.Classes
         /// </summary>
         public static int Fnv1aHash(string input)
         {
+            if (string.IsNullOrEmpty(input)) return 0;
             const uint fnvOffsetBasis = 2166136261;
             const uint fnvPrime = 16777619;
 
             uint hash = fnvOffsetBasis;
-            foreach (char c in input)
+            int len = input.Length;
+
+            // Small to moderate strings: hash the entire string
+            if (len <= 2048)
             {
-                hash ^= (byte)(c & 0xFF);
-                hash *= fnvPrime;
-                hash ^= (byte)(c >> 8);
-                hash *= fnvPrime;
+                foreach (char c in input)
+                {
+                    hash ^= (byte)(c & 0xFF);
+                    hash *= fnvPrime;
+                    hash ^= (byte)(c >> 8);
+                    hash *= fnvPrime;
+                }
             }
+            else
+            {
+                // Huge strings: sample head, mid, tail and length for fast deterministic hash
+                hash ^= (uint)len;
+                hash *= fnvPrime;
+
+                void HashSlice(int start, int count)
+                {
+                    int end = Math.Min(start + count, len);
+                    for (int i = start; i < end; i++)
+                    {
+                        char c = input[i];
+                        hash ^= (byte)(c & 0xFF);
+                        hash *= fnvPrime;
+                        hash ^= (byte)(c >> 8);
+                        hash *= fnvPrime;
+                    }
+                }
+
+                HashSlice(0, 512);
+                HashSlice(len / 2 - 256, 512);
+                HashSlice(len - 512, 512);
+            }
+
             return unchecked((int)hash);
         }
 

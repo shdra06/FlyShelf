@@ -134,11 +134,33 @@ namespace FlyShelf.ViewModels
 
                         // Regenerate non-serialized icons (Icon is [JsonIgnore])
                         if (item.IsPassword)
-                            item.GeneratePasswordIcon();
+                        {
+                            string sample = (item.RawContent ?? item.FileName ?? "").Trim();
+                            if (IsWebUrl(sample, out string? cleanUrl) || sample.Contains("://") || sample.Contains('/') || sample.Contains('?'))
+                            {
+                                item.IsPassword = false;
+                                item.ItemType = ClipboardItemType.Url;
+                                item.Extension = "LINK";
+                                if (string.IsNullOrEmpty(item.FileName) || item.FileName == "Protected Password" || item.FileName == "API Key")
+                                    item.FileName = cleanUrl ?? sample;
+                            }
+                            else
+                            {
+                                item.GeneratePasswordIcon();
+                            }
+                        }
                         else if (item.ItemType == ClipboardItemType.Folder)
                             item.GenerateFolderIcon();
-                        else if (item.ItemType == ClipboardItemType.Document && item.Extension == ".MD")
+                        else if (item.IsMarkdownPreview || item.Extension == ".MD" || item.Extension == "MARKDOWN" || item.Extension == ".md")
                             item.GenerateMarkdownIcon();
+                        else if (item.ItemType != ClipboardItemType.Text && item.ItemType != ClipboardItemType.Url && item.ItemType != ClipboardItemType.Image)
+                        {
+                            var shellIcon = Classes.ShellIconManager.GetIcon(item.FilePath, item.Extension);
+                            if (shellIcon != null)
+                                item.Icon = shellIcon;
+                            else if (item.IsApk)
+                                item.GenerateApkIcon();
+                        }
 
                         allItems.Add(item);
                     }
@@ -159,8 +181,19 @@ namespace FlyShelf.ViewModels
 
                 combinedItems.AddRange(allItems);
 
+                var distinctCombined = new List<ClipboardItem>();
+                var seenCombinedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var item in combinedItems)
+                {
+                    string key = GetDeduplicationKey(item);
+                    if (string.IsNullOrEmpty(key) || seenCombinedKeys.Add(key))
+                    {
+                        distinctCombined.Add(item);
+                    }
+                }
+
                 // Sort by DateCopied descending to preserve chronological order across both pinned and normal items
-                var sortedItems = combinedItems.OrderByDescending(x => x.DateCopied).ToList();
+                var sortedItems = distinctCombined.OrderByDescending(x => x.DateCopied).ToList();
 
                 if (sortedItems.Count > 0)
                 {
@@ -357,16 +390,26 @@ namespace FlyShelf.ViewModels
         }
 
         /// <summary>
-        /// Returns a unique key for deduplication. Uses FilePath for file-based items, RawContent for text items.
+        /// Returns a unique canonical key for deduplication. Uses canonical normalized file paths or raw content.
         /// </summary>
         private static string GetDeduplicationKey(ClipboardItem item)
         {
-            if (!string.IsNullOrEmpty(item.FilePath))
-                return "F:" + item.FilePath;
+            string? normPath = !string.IsNullOrEmpty(item.FilePath) 
+                ? ExtractNormalizedPath(item.FilePath) 
+                : ExtractNormalizedPath(item.RawContent);
+
+            if (!string.IsNullOrEmpty(normPath))
+                return "PATH:" + normPath.ToLowerInvariant();
+
             if (!string.IsNullOrEmpty(item.RawContent))
-                return "T:" + (item.RawContent.Length > 500 ? item.RawContent[..500] + ":" + item.RawContent.Length : item.RawContent);
+            {
+                string normContent = item.RawContent.Trim().Replace("\r\n", "\n");
+                return "TXT:" + (normContent.Length > 500 ? normContent[..500] + ":" + normContent.Length : normContent);
+            }
+
             if (!string.IsNullOrEmpty(item.FileName))
-                return "N:" + item.FileName;
+                return "NAME:" + item.FileName.Trim().ToLowerInvariant();
+
             return string.Empty;
         }
 
@@ -727,7 +770,8 @@ namespace FlyShelf.ViewModels
                 RawContent = $"Downloading from {sourceDevice}...",
                 SourceDeviceName = sourceDevice,
                 SourceDeviceType = sourceDeviceType,
-                TransferMethod = transferMethod
+                TransferMethod = transferMethod,
+                Icon = Classes.ShellIconManager.GetIcon(null, System.IO.Path.GetExtension(fileName))
             };
             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {

@@ -6,6 +6,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system/legacy';
+import EncryptedStorage from '../../utils/EncryptedStorage';
+import { DOWNLOAD_BASE, SYNC_CACHE_BASE, IMAGE_CACHE_BASE, CONVERTED_BASE } from '../../utils/clipTypes';
 import { useSettings, DeviceSyncPrefs } from '../../context/SettingsContext';
 
 import { getSecureItem } from '../../utils/secureStorage';
@@ -28,7 +31,7 @@ const VERSION_URL = 'https://raw.githubusercontent.com/shdra06/FlyShelf/main/ver
 function SettingsScreenInner() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { pcLocalIp, setPcLocalIp, isGlobalSyncEnabled, setGlobalSyncEnabled, deviceName, setDeviceName, isFloatingBallEnabled, setFloatingBallEnabled, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, syncPreferences, setSyncPreference, getSyncPrefsForDevice } = useSettings();
+  const { pcLocalIp, setPcLocalIp, isGlobalSyncEnabled, setGlobalSyncEnabled, deviceName, setDeviceName, isFloatingBallEnabled, setFloatingBallEnabled, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, syncPreferences, setSyncPreference, getSyncPrefsForDevice, autoSyncTop5, setAutoSyncTop5, isFcmSilentWakeEnabled, setIsFcmSilentWakeEnabled } = useSettings();
   const [localIpInput, setLocalIpInput] = useState(pcLocalIp);
   const [deviceNameInput, setDeviceNameInput] = useState(deviceName);
 
@@ -255,6 +258,54 @@ function SettingsScreenInner() {
                   />
               </View>
               <Text style={styles.helperText}>If disabled, your clipboard and files will ONLY synchronize when connected locally. Cloud Discovery allows paired devices to find each other over the internet using a lightweight signaling coordinator.</Text>
+            </View>
+
+            <View style={[styles.inputContainer, { marginTop: 20 }]}>
+              <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+                  <View style={styles.inputHeaderRow}>
+                    <Ionicons name="sync-outline" size={20} color={colors.accent.primary} />
+                    <Text style={styles.inputLabel}>Auto-Sync Recent Items (Top 5)</Text>
+                  </View>
+                  <Switch 
+                    value={autoSyncTop5} 
+                    onValueChange={(val) => { 
+                      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); } catch {}
+                      setAutoSyncTop5(val); 
+                    }} 
+                    trackColor={{ false: colors.text.disabled, true: "rgba(99,132,255,0.4)" }} 
+                    thumbColor="#FFF"
+                    accessibilityLabel={autoSyncTop5 ? 'Auto-sync top 5 items enabled' : 'Single latest item sync mode enabled'}
+                    accessibilityRole="switch"
+                  />
+              </View>
+              <Text style={styles.helperText}>
+                {autoSyncTop5
+                  ? 'Automatically fetches and syncs the top 5 recent clipboard items in sequence when connecting.'
+                  : 'Single-item mode: only syncs the latest incoming item upon connection.'}
+              </Text>
+            </View>
+
+            <View style={[styles.inputContainer, { marginTop: 20 }]}>
+              <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+                  <View style={styles.inputHeaderRow}>
+                    <Ionicons name="flash-outline" size={20} color={colors.accent.primary} />
+                    <Text style={styles.inputLabel}>FCM High-Priority Silent Wake</Text>
+                  </View>
+                  <Switch 
+                    value={isFcmSilentWakeEnabled} 
+                    onValueChange={(val) => { 
+                      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); } catch {}
+                      setIsFcmSilentWakeEnabled(val); 
+                    }} 
+                    trackColor={{ false: colors.text.disabled, true: "rgba(99,132,255,0.4)" }} 
+                    thumbColor="#FFF"
+                    accessibilityLabel={isFcmSilentWakeEnabled ? 'FCM silent wake enabled' : 'FCM silent wake disabled'}
+                    accessibilityRole="switch"
+                  />
+              </View>
+              <Text style={styles.helperText}>
+                Allows your PC to silently wake your phone when you copy an item or transfer a file while the phone is asleep. The Floating Ball receives the copied content instantly without opening the app.
+              </Text>
             </View>
           </View>
 
@@ -569,54 +620,159 @@ function SettingsScreenInner() {
               <Ionicons name="open-outline" size={14} color={colors.text.tertiary} />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={{
-                backgroundColor: colors.accent.errorDim,
-                borderRadius: radius.md,
-                padding: space.lg,
-                marginTop: space.sm,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: space.sm,
-                borderWidth: 1,
-                borderColor: colors.border.subtle,
-              }}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                Alert.alert(
-                  'Clear Cache',
-                  'This will clear cached clipboard items, notes, and todos. Your settings and paired devices will not be affected.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Clear',
-                      style: 'destructive',
-                      onPress: async () => {
-                        try {
-                          const allKeys = await AsyncStorage.getAllKeys();
-                          const cacheKeys = allKeys.filter(k => k.startsWith('@flyshelf_'));
-                          if (cacheKeys.length > 0) {
-                            await AsyncStorage.multiRemove(cacheKeys);
-                          }
-                          Alert.alert('Done', `Cleared ${cacheKeys.length} cached item${cacheKeys.length !== 1 ? 's' : ''}.`);
-                        } catch (e: any) {
-                          Alert.alert('Error', e?.message || 'Failed to clear cache.');
-                        }
-                      },
-                    },
-                  ]
-                );
-              }}
-              accessibilityLabel="Clear cache"
-              accessibilityRole="button"
-            >
-              <Ionicons name="trash-outline" size={18} color={colors.accent.error} />
-              <Text style={{ color: colors.accent.error, fontSize: 14, fontFamily: font.semibold }}>Clear Cache</Text>
-            </TouchableOpacity>
+            {/* ═══ Advanced Deletion / Mass Delete Section ═══ */}
+            <View style={{ marginTop: space.lg, paddingTop: space.md, borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
+              <Text style={{ color: colors.text.primary, fontSize: 14, fontFamily: font.semibold, marginBottom: space.sm }}>
+                Advanced Clean Up & Mass Deletion
+              </Text>
+              <Text style={[styles.helperText, { marginBottom: space.md }]}>
+                Choose specific data types or timeframes to mass delete from local storage.
+              </Text>
 
-            <Text style={[styles.helperText, { marginTop: space.md }]}>
-              Clears locally cached clipboard items, notes, and todos. Does not affect your settings, paired devices, or cloud data.
-            </Text>
+              {/* Action 1: Mass Delete All Clips */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: colors.accent.errorDim,
+                  borderRadius: radius.md,
+                  padding: space.md,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space.sm,
+                  borderWidth: 1,
+                  borderColor: colors.border.subtle,
+                  marginBottom: space.sm,
+                }}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  Alert.alert(
+                    'Delete All Saved Clips',
+                    'Are you sure you want to delete all saved clipboard items? This cannot be undone.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Delete All',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            await EncryptedStorage.removeItem('@flyshelf_clips');
+                            await AsyncStorage.removeItem('@flyshelf_clips');
+                            Alert.alert('Success', 'All saved clips removed from local storage.');
+                          } catch (e: any) {
+                            Alert.alert('Error', e?.message || 'Failed to clear clips.');
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Ionicons name="trash-outline" size={18} color={colors.accent.error} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.accent.error, fontSize: 14, fontFamily: font.semibold }}>Delete All Synced Clips</Text>
+                  <Text style={{ color: colors.text.tertiary, fontSize: 11 }}>Wipes all clipboard history from memory & disk</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Action 2: Clear Media & File Cache */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: colors.bg.input,
+                  borderRadius: radius.md,
+                  padding: space.md,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space.sm,
+                  borderWidth: 1,
+                  borderColor: colors.border.subtle,
+                  marginBottom: space.sm,
+                }}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  Alert.alert(
+                    'Clear Media & File Cache',
+                    'Delete downloaded images, documents, and converted PDFs from device storage to free up space. Text items will be preserved.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Clear Media Files',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            const dirs = [DOWNLOAD_BASE, SYNC_CACHE_BASE, IMAGE_CACHE_BASE, CONVERTED_BASE];
+                            for (const dir of dirs) {
+                              try {
+                                const info = await FileSystem.getInfoAsync(dir);
+                                if (info.exists) await FileSystem.deleteAsync(dir, { idempotent: true });
+                              } catch {}
+                            }
+                            Alert.alert('Success', 'Media and file cache cleared successfully.');
+                          } catch (e: any) {
+                            Alert.alert('Error', e?.message || 'Failed to clear media cache.');
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Ionicons name="images-outline" size={18} color={colors.accent.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text.primary, fontSize: 14, fontFamily: font.semibold }}>Clear Media & File Cache</Text>
+                  <Text style={{ color: colors.text.tertiary, fontSize: 11 }}>Frees storage while keeping your text history</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Action 3: Purge Older Than 7 Days */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: colors.bg.input,
+                  borderRadius: radius.md,
+                  padding: space.md,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space.sm,
+                  borderWidth: 1,
+                  borderColor: colors.border.subtle,
+                }}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  Alert.alert(
+                    'Delete History Older than 7 Days',
+                    'Remove items that are older than 7 days from local history.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Purge Old Items',
+                        onPress: async () => {
+                          try {
+                            const raw = await EncryptedStorage.getItem('@flyshelf_clips') || await AsyncStorage.getItem('@flyshelf_clips');
+                            if (raw) {
+                              const list = JSON.parse(raw);
+                              const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+                              const filtered = list.filter((item: any) => (item.Timestamp || 0) > cutoff || item.IsPinned);
+                              const json = JSON.stringify(filtered);
+                              await EncryptedStorage.setItem('@flyshelf_clips', json);
+                              await AsyncStorage.setItem('@flyshelf_clips', json);
+                              Alert.alert('Success', `Cleaned up old items. ${filtered.length} recent items kept.`);
+                            } else {
+                              Alert.alert('Info', 'No items found to clean.');
+                            }
+                          } catch (e: any) {
+                            Alert.alert('Error', e?.message || 'Failed to clean old items.');
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Ionicons name="time-outline" size={18} color={colors.accent.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text.primary, fontSize: 14, fontFamily: font.semibold }}>Delete Older Than 7 Days</Text>
+                  <Text style={{ color: colors.text.tertiary, fontSize: 11 }}>Keep only this week's clips and pinned items</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Bottom padding handled by scrollContent paddingBottom */}

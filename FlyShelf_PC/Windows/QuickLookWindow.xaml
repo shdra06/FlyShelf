@@ -98,6 +98,15 @@
                                    Visibility="Collapsed" AutomationProperties.Name="Translate text">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Earth24" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
+                        <!-- Copy Markdown Button (markdown only) -->
+                        <ui:Button x:Name="CopyMdBtn" Click="CopyMarkdownButton_Click" Appearance="Secondary" 
+                                   Foreground="{DynamicResource GeminiAccentColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Copy raw markdown (Ctrl+C)"
+                                   Visibility="Collapsed" AutomationProperties.Name="Copy raw markdown">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Copy24" Filled="True" FontSize="14"/>
+                                <TextBlock Text="Copy" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ui:Button>
                         <!-- Zoom Reset Button (markdown only) -->
                         <ui:Button x:Name="ZoomResetBtn" Click="MarkdownZoomReset_Click" Appearance="Secondary"
                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Padding="5,3" Margin="0,0,4,0" ToolTip="Reset zoom (Ctrl+0)"
@@ -152,6 +161,12 @@
                                 <ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" Filled="True" FontSize="14"/>
                                 <TextBlock x:Name="PinLabel" Text="Pin" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
+                        </ui:Button>
+                        <!-- Maximize / Restore Button -->
+                        <ui:Button x:Name="MaximizeBtn" Click="MaximizeButton_Click" Appearance="Secondary" 
+                                   Foreground="{DynamicResource ForegroundPrimary}" Padding="5,3" Margin="0,0,4,0" ToolTip="Maximize / Restore"
+                                   AutomationProperties.Name="Maximize or restore preview window">
+                            <ui:Button.Icon><ui:SymbolIcon x:Name="MaximizeIcon" Symbol="Maximize24" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- Close -->
                         <ui:Button x:Name="CloseBtn" Click="CloseButton_Click" Appearance="Secondary" Foreground="{DynamicResource DangerColor}" Padding="5,3" ToolTip="Close" AutomationProperties.Name="Close preview">
@@ -278,12 +293,7 @@
                     <ScrollViewer x:Name="TextPreviewScroll" Visibility="Collapsed" Background="{DynamicResource ThemeCodePreviewBg}">
                         <TextBlock x:Name="TextPreview" Foreground="{DynamicResource ThemeTextPrimary}" Margin="15" TextWrapping="Wrap" FontFamily="Consolas" FontSize="13" />
                     </ScrollViewer>
-                    
-                    <!-- Markdown Rendered Preview (WebView2 for modern JS support) -->
-                    <wv2:WebView2 x:Name="MarkdownWebView"
-                        Visibility="Collapsed"
-                        DefaultBackgroundColor="#1E1E2E" />
-                    
+
                     <!-- Syntax-Highlighted Code Preview -->
                     <avalonEdit:TextEditor x:Name="CodePreview"
                         Visibility="Collapsed"

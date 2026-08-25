@@ -33,6 +33,18 @@ namespace FlyShelf.Windows
             catch { } // Best-effort: failure is acceptable
         }
 
+        private void CopyMarkdownButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_markdownRawContent)) return;
+
+            try
+            {
+                Clipboard.SetText(_markdownRawContent);
+                FlyShelf.Windows.ToastWindow.ShowToast("Markdown copied to clipboard! 📋");
+            }
+            catch { }
+        }
+
         private async void MarkdownToPdf_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrEmpty(_markdownRawContent)) return;

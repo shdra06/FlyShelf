@@ -5,13 +5,15 @@
 // ═══════════════════════════════════════════════════════════════
 import { useRef, useCallback } from 'react';
 
-import { getSecureItem, removeSecureItem } from '../utils/secureStorage';
-import { fetchWithTimeout, resolveOptimalUrl, scanSubnetForPc } from '../utils/networkHelpers';
+import { getSecureItem, setSecureItem, removeSecureItem } from '../utils/secureStorage';
+import { fetchWithTimeout, resolveOptimalUrl, scanSubnetForPc, decryptDeviceList } from '../utils/networkHelpers';
 import { discoverPcOnLan, addToPcIpCache } from '../utils/lanDiscovery';
 import { NetworkClock } from '../utils/networkClock';
 import { syncLog } from '../utils/debugLog';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getLocalPairedDevices, updatePairedDeviceIp } from './useLanPresence';
+import { database } from '../firebaseConfig';
+import { ref, get } from 'firebase/database';
 // Audit: moved ActiveDeviceInfo to shared utils/deviceTypes.ts (was duplicated here)
 import { ActiveDeviceInfo } from '../utils/deviceTypes';
 // Re-export so any existing imports from this module keep working
@@ -34,15 +36,28 @@ export function usePcUrlResolver(
   const activeUrlResolutionPromiseRef = useRef<Promise<string> | null>(null);
   const discoveryMethodRef = useRef<'stored-lan' | 'subnet-scan' | 'firebase' | 'cloudflare' | null>(null);
 
-  /** Load persisted LAN URL on mount for instant reconnect */
+  /** Load persisted Cloudflare and LAN URLs on mount for instant reconnect */
   const persistedUrlLoadedRef = useRef(false);
   if (!persistedUrlLoadedRef.current) {
     persistedUrlLoadedRef.current = true;
-    AsyncStorage.getItem('@flyshelf_last_lan_url').then(url => {
-      if (url && !cachedPcUrlRef.current) {
-        cachedPcUrlRef.current = url;
-        cachedPcUrlTimestampRef.current = NetworkClock.now() - LAN_CACHE_TTL + 10_000; // Valid for 10s to allow fresh probe
-        syncLog('URL-RESOLVE', `Loaded persisted LAN URL: ${url}`);
+    Promise.all([
+      AsyncStorage.getItem('@flyshelf_last_lan_url').catch(() => null),
+      AsyncStorage.getItem('lastCloudflareUrl').catch(() => null),
+      AsyncStorage.getItem('pairedGlobalUrl').catch(() => null),
+      getSecureItem('pairedGlobalUrl').catch(() => null),
+    ]).then(([lanUrl, cfUrl, astGlobal, secGlobal]) => {
+      const bestCf = (cfUrl && cfUrl.includes('trycloudflare.com')) ? cfUrl
+        : ((astGlobal && astGlobal.includes('trycloudflare.com')) ? astGlobal
+        : ((secGlobal && secGlobal.includes('trycloudflare.com')) ? secGlobal : null));
+
+      if (bestCf && !cachedPcUrlRef.current) {
+        cachedPcUrlRef.current = bestCf.trim().replace(/\/$/, '');
+        cachedPcUrlTimestampRef.current = NetworkClock.now() - CLOUD_CACHE_TTL + 10_000;
+        syncLog('URL-RESOLVE', `Loaded persisted Cloudflare URL: ${cachedPcUrlRef.current}`);
+      } else if (lanUrl && !cachedPcUrlRef.current) {
+        cachedPcUrlRef.current = lanUrl.trim().replace(/\/$/, '');
+        cachedPcUrlTimestampRef.current = NetworkClock.now() - LAN_CACHE_TTL + 10_000;
+        syncLog('URL-RESOLVE', `Loaded persisted LAN URL: ${cachedPcUrlRef.current}`);
       }
     }).catch(() => {});
   }
@@ -88,159 +103,214 @@ export function usePcUrlResolver(
     const runResolution = async (): Promise<string> => {
       const startNow = NetworkClock.now();
       const pk = pairingKeyRef.current;
-      syncLog('URL-RESOLVE', `Starting resolution — pk=${pk ? 'set' : 'empty'}`);
+      syncLog('URL-RESOLVE', `Starting parallel resolution — pk=${pk ? 'set' : 'empty'}`);
 
-      const tryResolve = async (urls: string[], timeout = 2000): Promise<string | null> => {
-        if (urls.length === 0) return null;
-        // v6.0.2 audit: health probes should NOT send X-Pairing-Key
-        // The health endpoint is just a reachability check — no auth needed
-        const probeHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
-        syncLog('URL-RESOLVE', `Probing ${urls.length} URL(s): ${urls.slice(0, 3).join(', ')}`);
+      const probeHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
+
+      const probeUrl = async (url: string, timeout = 2000): Promise<string> => {
         try {
-          return await Promise.any(
-            urls.map(async (url) => {
-              try {
-                const res = await fetchWithTimeout(`${url}/api/health`, { headers: probeHeaders }, timeout);
-                // Accept 200 (ok) or 401 (server reachable but needs auth on other endpoints)
-                if (res.ok || res.status === 401) {
-                  syncLog('URL-RESOLVE', `✅ Reachable: ${url} (status=${res.status})`);
-                  return url;
-                }
-                syncLog('URL-RESOLVE', `❌ Bad status ${res.status} for ${url}`);
-              } catch (e: any) {
-                syncLog('URL-RESOLVE', `❌ Probe failed ${url}: ${e?.message}`);
-              }
-              throw new Error();
-            })
-          );
-        } catch {
-          // v6.0.2 fallback: return first URL as "best guess" even if all probes failed
-          // The PC may still be reachable — don't give up
-          syncLog('URL-RESOLVE', `⚠️ All probes failed — using best-guess: ${urls[0]}`);
-          return urls[0];
+          const res = await fetchWithTimeout(`${url}/api/health`, { headers: probeHeaders }, timeout);
+          if (res.ok || res.status === 401) {
+            syncLog('URL-RESOLVE', `✅ Reachable: ${url} (status=${res.status})`);
+            return url;
+          }
+        } catch (e: any) {
+          syncLog('URL-RESOLVE', `❌ Probe failed ${url}: ${e?.message || 'timeout'}`);
         }
+        throw new Error(`Probe failed for ${url}`);
       };
 
-      // 0. Probe locally stored paired device IPs (fastest — from pairing/last connection)
+      // ── 1. Gather all LAN candidates ──
+      const lanCandidates: string[] = [];
       try {
         const localDevices = await getLocalPairedDevices();
-        const allIps: string[] = [];
         for (const dev of Object.values(localDevices)) {
           if (dev.deviceType === 'PC' && dev.lastKnownIps?.length > 0) {
             for (const ip of dev.lastKnownIps) {
-              allIps.push(`http://${ip}`);
+              lanCandidates.push(ip.startsWith('http') ? ip : `http://${ip}`);
             }
-          }
-        }
-        if (allIps.length > 0) {
-          syncLog('URL-RESOLVE', `Step 0: Probing ${allIps.length} stored device IPs`);
-          const localHit = await tryResolve(allIps, 1500);
-          if (localHit) {
-            cachedPcUrlRef.current = localHit;
-            cachedPcUrlTimestampRef.current = startNow;
-            discoveryMethodRef.current = 'stored-lan';
-            // Update stored IP timestamp
-            try {
-              const urlObj = new URL(localHit);
-              for (const dev of Object.values(localDevices)) {
-                if (dev.deviceType === 'PC') {
-                  await updatePairedDeviceIp(dev.deviceId, `${urlObj.hostname}:${urlObj.port || '8999'}`);
-                }
-              }
-            } catch {}
-            return localHit;
           }
         }
       } catch {}
 
-      // 1. Check Pairing URLs & Local IP together (Highest priority)
-      // v6.0.2 audit: read from BOTH SecureStore AND AsyncStorage
-      // Old versions stored URLs in AsyncStorage — migration may not have happened
       const storedLocal = (await getSecureItem('pairedLocalUrl')) || (await AsyncStorage.getItem('pairedLocalUrl'));
       const storedTls = (await getSecureItem('pairedTlsUrl')) || (await AsyncStorage.getItem('pairedTlsUrl'));
-      const storedGlobal = (await getSecureItem('pairedGlobalUrl')) || (await AsyncStorage.getItem('pairedGlobalUrl'));
-      // Also check old Cloudflare cache key from v6.0.2
-      let lastCfUrl: string | null = null;
-      try { lastCfUrl = await AsyncStorage.getItem('lastCloudflareUrl'); } catch {}
-      
-      const lanCandidates: string[] = [];
       if (storedLocal) lanCandidates.push(...storedLocal.split(',').map((s: string) => s.trim()).filter(Boolean));
       if (storedTls) lanCandidates.push(storedTls.trim());
       if (pcLocalIp) lanCandidates.push(...pcLocalIp.split(',').map((s: string) => s.trim()).filter(Boolean));
 
-      // Add cached last successful LAN URL
       try {
         const lastLanUrl = await AsyncStorage.getItem('@flyshelf_last_lan_url');
         if (lastLanUrl) lanCandidates.push(lastLanUrl.trim());
       } catch {}
 
-      // Emulator fallback: host machine is always at 10.0.2.2 from inside an Android emulator
-      // localhost:8999 also works when 'adb reverse tcp:8999 tcp:8999' is active
-      // This fixes the case where the PC's pairedLocalUrl is 192.168.x.x (unreachable from emulator)
+      // Emulator fallbacks
       if (!lanCandidates.some(u => u.includes('10.0.2.2'))) {
         lanCandidates.push('http://10.0.2.2:8999');
+        lanCandidates.push('http://10.0.2.2:8080');
       }
       if (!lanCandidates.some(u => u.includes('localhost') || u.includes('127.0.0.1'))) {
         lanCandidates.push('http://127.0.0.1:8999');
+        lanCandidates.push('http://127.0.0.1:8080');
       }
 
-      const resolvedLan = await tryResolve(lanCandidates, 1500);
-      if (resolvedLan) {
-        cachedPcUrlRef.current = resolvedLan;
-        cachedPcUrlTimestampRef.current = startNow;
-        discoveryMethodRef.current = 'stored-lan';
-        // Persist LAN URL for instant reconnect on next app launch
-        if (!resolvedLan.includes('trycloudflare.com')) {
-          AsyncStorage.setItem('@flyshelf_last_lan_url', resolvedLan).catch(() => {});
-          try {
-            const urlObj = new URL(resolvedLan);
-            addToPcIpCache(urlObj.hostname, parseInt(urlObj.port) || 8999).catch(() => {});
-          } catch {}
+      // Normalize LAN URLs (support both 8999 and 8080)
+      const allLan: string[] = [];
+      for (const u of lanCandidates) {
+        let clean = u.trim().replace(/\/$/, '');
+        if (!clean.startsWith('http')) clean = `http://${clean}`;
+        if (!clean.replace(/^https?:\/\//, '').includes(':')) {
+          allLan.push(`${clean}:8999`);
+          allLan.push(`${clean}:8080`);
+        } else {
+          allLan.push(clean);
         }
-        return resolvedLan;
+      }
+      const uniqueLan = Array.from(new Set(allLan));
+
+      // ── 2. Gather all Cloud/Cloudflare candidates ──
+      const cfCandidates: string[] = [];
+      const storedGlobal = (await getSecureItem('pairedGlobalUrl')) || (await AsyncStorage.getItem('pairedGlobalUrl'));
+      if (storedGlobal && storedGlobal.includes('trycloudflare.com')) cfCandidates.push(storedGlobal.trim().replace(/\/$/, ''));
+      try {
+        const lastCfUrl = await AsyncStorage.getItem('lastCloudflareUrl');
+        if (lastCfUrl && lastCfUrl.includes('trycloudflare.com')) cfCandidates.push(lastCfUrl.trim().replace(/\/$/, ''));
+      } catch {}
+
+      const pc = activeDevicesRef.current.find((d: any) => d.DeviceType === 'PC');
+      if (pc?.GlobalUrl && pc.GlobalUrl.includes('trycloudflare.com')) {
+        cfCandidates.push(pc.GlobalUrl.trim().replace(/\/$/, ''));
+      }
+      if (pc?.LocalIp) {
+        const pcLan = pc.LocalIp.startsWith('http') ? pc.LocalIp : `http://${pc.LocalIp}`;
+        if (!uniqueLan.includes(pcLan)) uniqueLan.unshift(pcLan);
       }
 
-      // 2. Enhanced LAN Discovery (cached IPs + priority DHCP ranges + subnet scan)
+      const uniqueCloud = Array.from(new Set(cfCandidates));
+
+      // ── 3. Parallel Speed Race ──
+      // Launch LAN probe (1500ms) and Cloud probe (2500ms) concurrently.
+      const lanPromise = uniqueLan.length > 0
+        ? Promise.any(uniqueLan.map(url => probeUrl(url, 1500)))
+        : Promise.reject(new Error('No LAN candidates'));
+
+      const cloudPromise = uniqueCloud.length > 0
+        ? Promise.any(uniqueCloud.map(url => probeUrl(url, 2500)))
+        : Promise.reject(new Error('No Cloud candidates'));
+
+      // If LAN connects, it wins immediately (zero delay).
+      // If Cloud connects first, give LAN a tiny 150ms window to claim local priority, else accept Cloud.
+      try {
+        const winner = await Promise.race([
+          lanPromise.then(url => ({ type: 'lan' as const, url })),
+          cloudPromise.then(async url => {
+            // Give LAN 150ms chance to answer if on local network
+            const lanQuick = await Promise.race([
+              lanPromise.then(u => ({ type: 'lan' as const, url: u })).catch(() => null),
+              new Promise<null>(r => setTimeout(() => r(null), 150))
+            ]);
+            if (lanQuick) return lanQuick;
+            return { type: 'cloud' as const, url };
+          })
+        ]);
+
+        if (winner?.url) {
+          cachedPcUrlRef.current = winner.url;
+          cachedPcUrlTimestampRef.current = startNow;
+          discoveryMethodRef.current = winner.type === 'lan' ? 'stored-lan' : 'cloudflare';
+          if (winner.type === 'lan') {
+            AsyncStorage.setItem('@flyshelf_last_lan_url', winner.url).catch(() => {});
+            try {
+              const urlObj = new URL(winner.url);
+              addToPcIpCache(urlObj.hostname, parseInt(urlObj.port) || 8999).catch(() => {});
+            } catch {}
+          } else {
+            AsyncStorage.setItem('lastCloudflareUrl', winner.url).catch(() => {});
+            AsyncStorage.setItem('pairedGlobalUrl', winner.url).catch(() => {});
+          }
+          syncLog('URL-RESOLVE', `🚀 Race winner: ${winner.url} (${winner.type}) in ${NetworkClock.now() - startNow}ms`);
+          return winner.url;
+        }
+      } catch {
+        // Both initial quick probes failed
+      }
+
+      // If fast candidates failed, try whatever remaining promise might finish
+      try {
+        const fallbackWinner = await Promise.any([lanPromise, cloudPromise]);
+        if (fallbackWinner) {
+          cachedPcUrlRef.current = fallbackWinner;
+          cachedPcUrlTimestampRef.current = startNow;
+          discoveryMethodRef.current = fallbackWinner.includes('trycloudflare') ? 'cloudflare' : 'stored-lan';
+          return fallbackWinner;
+        }
+      } catch {}
+
+      // ── 4. Query Firebase Realtime Database for Fresh PC Tunnel URL ──
+      if (pk) {
+        try {
+          syncLog('URL-RESOLVE', '⚡ Probing saved URLs failed — asking Firebase for fresh PC tunnel link...');
+          const devSnap = await get(ref(database, `active_devices/${pk}`));
+          if (devSnap.exists()) {
+            const data = devSnap.val();
+            const devList = Object.keys(data).map(k => ({ ...data[k], _key: k })).filter(d => d.IsOnline !== false);
+            const decryptedList = await decryptDeviceList(devList);
+            const freshPc = decryptedList.find(d => d.DeviceType === 'PC');
+            if (freshPc?.GlobalUrl && freshPc.GlobalUrl.includes('trycloudflare.com')) {
+              const freshUrl = freshPc.GlobalUrl.trim().replace(/\/$/, '');
+              syncLog('URL-RESOLVE', `🔍 Firebase returned fresh PC GlobalUrl: ${freshUrl}`);
+              try {
+                const verifiedFresh = await probeUrl(freshUrl, 3000);
+                if (verifiedFresh) {
+                  cachedPcUrlRef.current = verifiedFresh;
+                  cachedPcUrlTimestampRef.current = startNow;
+                  discoveryMethodRef.current = 'cloudflare';
+                  AsyncStorage.setItem('lastCloudflareUrl', verifiedFresh).catch(() => {});
+                  AsyncStorage.setItem('pairedGlobalUrl', verifiedFresh).catch(() => {});
+                  setSecureItem('pairedGlobalUrl', verifiedFresh).catch(() => {});
+                  setSecureItem('lastCloudflareUrl', verifiedFresh).catch(() => {});
+                  return verifiedFresh;
+                }
+              } catch {
+                // If probe timed out, still assign freshUrl so poller continuously retries it!
+                cachedPcUrlRef.current = freshUrl;
+                cachedPcUrlTimestampRef.current = startNow;
+                discoveryMethodRef.current = 'cloudflare';
+                AsyncStorage.setItem('lastCloudflareUrl', freshUrl).catch(() => {});
+                return freshUrl;
+              }
+            }
+          }
+        } catch (fbErr: any) {
+          syncLog('URL-RESOLVE', `Firebase fresh URL query error: ${fbErr?.message || fbErr}`);
+        }
+      }
+
+      // ── 5. Non-blocking Background Subnet Discovery ──
       const myIp = pcLocalIp?.split(',')[0]?.trim();
       if (myIp) {
-        syncLog('URL-RESOLVE', 'LAN IPs unreachable — triggering enhanced LAN discovery...');
-        const discovered = await discoverPcOnLan(myIp);
-        if (discovered) {
-          cachedPcUrlRef.current = discovered.url;
-          cachedPcUrlTimestampRef.current = startNow;
-          discoveryMethodRef.current = 'subnet-scan';
-          AsyncStorage.setItem('@flyshelf_last_lan_url', discovered.url).catch(() => {});
-          return discovered.url;
-        }
+        discoverPcOnLan(myIp).then(discovered => {
+          if (discovered?.url) {
+            cachedPcUrlRef.current = discovered.url;
+            cachedPcUrlTimestampRef.current = NetworkClock.now();
+            AsyncStorage.setItem('@flyshelf_last_lan_url', discovered.url).catch(() => {});
+            syncLog('URL-RESOLVE', `📡 Background LAN scan found PC: ${discovered.url}`);
+          }
+        }).catch(() => {});
       }
 
-      // 3. Fallback to Firebase Discovered Devices (Race all known URLs)
-      const pc = activeDevicesRef.current.find((d: any) => d.DeviceType === 'PC');
-      if (pc) {
-        const resolved = await resolveOptimalUrl(pc, fetchWithTimeout, pk);
-        if (resolved) {
-          cachedPcUrlRef.current = resolved;
-          cachedPcUrlTimestampRef.current = startNow;
-          discoveryMethodRef.current = 'firebase';
-          return resolved;
-        }
+      // ── 6. Persistent Cloud Target Fallback ──
+      // If all quick strategies exhausted, keep trying the saved Cloudflare URL instead of giving up
+      if (uniqueCloud.length > 0) {
+        const defaultCf = uniqueCloud[0];
+        cachedPcUrlRef.current = defaultCf;
+        cachedPcUrlTimestampRef.current = startNow;
+        discoveryMethodRef.current = 'cloudflare';
+        syncLog('URL-RESOLVE', `🔄 Falling back to persistent target: ${defaultCf}`);
+        return defaultCf;
       }
 
-      // 4. Global Cloudflare Fallback (check both new and old storage keys)
-      const cfCandidates: string[] = [];
-      if (storedGlobal && storedGlobal.includes('trycloudflare.com')) cfCandidates.push(storedGlobal);
-      if (lastCfUrl && lastCfUrl.includes('trycloudflare.com') && !cfCandidates.includes(lastCfUrl)) cfCandidates.push(lastCfUrl);
-      if (cfCandidates.length > 0) {
-        const resolvedGlobal = await tryResolve(cfCandidates, 3000);
-        if (resolvedGlobal) {
-          cachedPcUrlRef.current = resolvedGlobal;
-          cachedPcUrlTimestampRef.current = startNow;
-          discoveryMethodRef.current = 'cloudflare';
-          return resolvedGlobal;
-        }
-      }
-
-      syncLog('URL-RESOLVE', '❌ All resolution strategies exhausted');
+      syncLog('URL-RESOLVE', '❌ All quick resolution strategies exhausted');
       return '';
     };
 

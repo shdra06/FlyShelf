@@ -17,6 +17,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Platform, Alert, ToastAndroid } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
 
@@ -113,8 +114,8 @@ export function useArchiveSync() {
         const filtered = Object.keys(data)
           .map(k => ({ ...data[k], firebaseKey: k }))
           .filter(d => d.IsOnline);
-        const allDevs = await decryptDeviceList(filtered);
-        setAllFirebaseDevices(allDevs);
+        const allDevs = await decryptDeviceList(filtered as any);
+        setAllFirebaseDevices(allDevs as any);
       } else {
         setAllFirebaseDevices([]);
       }

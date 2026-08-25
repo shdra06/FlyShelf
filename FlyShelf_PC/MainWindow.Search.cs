@@ -384,29 +384,33 @@ namespace FlyShelf
                 _isApplyingFilter = true;
                 try
                 {
+                    string qCleanExt = q.TrimStart('.');
                     view.Filter = obj =>
                     {
                         if (obj is FlyShelf.ViewModels.ClipboardItem item)
                         {
-                            // 1. Fuzzy match in text content or name (handles typos + word-order)
+                            // 1. Fast match on text content, filename, or precomputed lowercase
                             if (Classes.FuzzyMatcher.IsMatchAny(q, item.LowerFileName, item.LowerContent, item.FileName, item.RawContent))
                                 return true;
 
-                            // 2. Check exact extension match (direct property or via FilePath)
-                            if (!string.IsNullOrEmpty(item.Extension) && item.Extension.Replace(".", "").Trim().Equals(q, StringComparison.OrdinalIgnoreCase))
-                                return true;
+                            var qSpan = qCleanExt.AsSpan();
+
+                            // 2. Fast check extension match (zero substring allocations)
+                            if (!string.IsNullOrEmpty(item.Extension))
+                            {
+                                var extSpan = item.Extension.AsSpan().TrimStart('.');
+                                if (extSpan.Equals(qSpan, StringComparison.OrdinalIgnoreCase))
+                                    return true;
+                            }
                             if (!string.IsNullOrEmpty(item.FilePath))
                             {
-                                try
-                                {
-                                    string ext = System.IO.Path.GetExtension(item.FilePath).Replace(".", "").Trim();
-                                    if (ext.Equals(q, StringComparison.OrdinalIgnoreCase)) return true;
-                                }
-                                catch { } // Best-effort: failure is acceptable
+                                var extSpan = System.IO.Path.GetExtension(item.FilePath.AsSpan()).TrimStart('.');
+                                if (extSpan.Equals(qSpan, StringComparison.OrdinalIgnoreCase))
+                                    return true;
                             }
 
-                            // 3. Check exact match with the item type string
-                            if (item.ItemType.ToString().Equals(q, StringComparison.OrdinalIgnoreCase))
+                            // 3. Fast type check without Enum.ToString() allocation
+                            if (MatchesItemTypeQuick(item.ItemType, qSpan))
                                 return true;
                         }
                         return false;
@@ -1069,6 +1073,27 @@ namespace FlyShelf
         {
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
             ToggleClearConfirmPanel(true);
+        }
+
+        private static bool MatchesItemTypeQuick(ClipboardItemType type, ReadOnlySpan<char> name)
+        {
+            return type switch
+            {
+                ClipboardItemType.Text => name.Equals("Text", StringComparison.OrdinalIgnoreCase),
+                ClipboardItemType.Image => name.Equals("Image", StringComparison.OrdinalIgnoreCase),
+                ClipboardItemType.File => name.Equals("File", StringComparison.OrdinalIgnoreCase),
+                ClipboardItemType.Folder => name.Equals("Folder", StringComparison.OrdinalIgnoreCase),
+                ClipboardItemType.Code => name.Equals("Code", StringComparison.OrdinalIgnoreCase),
+                ClipboardItemType.Url => name.Equals("Url", StringComparison.OrdinalIgnoreCase) || name.Equals("Link", StringComparison.OrdinalIgnoreCase),
+                ClipboardItemType.Pdf => name.Equals("Pdf", StringComparison.OrdinalIgnoreCase),
+                ClipboardItemType.Document => name.Equals("Document", StringComparison.OrdinalIgnoreCase) || name.Equals("Doc", StringComparison.OrdinalIgnoreCase),
+                ClipboardItemType.Archive => name.Equals("Archive", StringComparison.OrdinalIgnoreCase) || name.Equals("Zip", StringComparison.OrdinalIgnoreCase),
+                ClipboardItemType.Video => name.Equals("Video", StringComparison.OrdinalIgnoreCase),
+                ClipboardItemType.Audio => name.Equals("Audio", StringComparison.OrdinalIgnoreCase),
+                ClipboardItemType.Presentation => name.Equals("Presentation", StringComparison.OrdinalIgnoreCase) || name.Equals("Ppt", StringComparison.OrdinalIgnoreCase),
+                ClipboardItemType.QRCode => name.Equals("QRCode", StringComparison.OrdinalIgnoreCase) || name.Equals("QR", StringComparison.OrdinalIgnoreCase),
+                _ => false
+            };
         }
     }
 }

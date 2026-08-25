@@ -236,6 +236,20 @@ namespace FlyShelf.Classes
                     TransportSwitched?.Invoke(peer.DeviceId, peer.Transport);
                 }
             }
+            else
+            {
+                // Instant URL Refresh: If local handshake failed on cached URLs, immediately query Firebase
+                // to see if the peer published a new Cloudflare/LAN URL, without waiting for the DiscoveryLoop!
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(1000); // 1s cooldown to allow peer's push to settle
+                        await DiscoverAndHandshake();
+                    }
+                    catch { }
+                });
+            }
         }
 
         // Exponential backoff for DiscoveryLoop — prevents Firebase saturation when peers are offline

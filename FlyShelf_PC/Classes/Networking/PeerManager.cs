@@ -40,18 +40,18 @@ namespace FlyShelf.Classes
         private static readonly string _urlCacheFile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "peer_urls.json");
 
-        // ═══ Robust Heartbeat Configuration (6+ device support) ═══
+        // ═══ Robust Heartbeat & Fast Handshake Configuration ═══
         private const int HEARTBEAT_MS = 4_000;              // Base heartbeat interval (4s)
         private const int HEARTBEAT_MS_RELAXED = 8_000;      // Relaxed interval when all peers healthy >60s
-        private const int HEARTBEAT_TIMEOUT_MS = 4_000;      // Per-ping timeout (was 8s — most LAN responses are <200ms)
-        private const int HEARTBEAT_TIMEOUT_LAN_MS = 3_000;  // Transport-aware: LAN peers get faster timeout
-        private const int HEARTBEAT_TIMEOUT_CF_MS_PING = 6_000; // Transport-aware: CF peers get more time
-        private const int MAX_FAILURES = 3;                  // Death detection: 3 × 4s = 12s (was 5 × 8s = 40s)
-        private const int DISCOVERY_MS = 30_000;             // Base Firebase re-scan interval
-        private const int HANDSHAKE_TIMEOUT_LAN_MS = 5_000;  // LAN handshake timeout
-        private const int HANDSHAKE_TIMEOUT_CF_MS = 8_000;   // Cloudflare handshake timeout
+        private const int HEARTBEAT_TIMEOUT_MS = 3_000;      // Per-ping timeout
+        private const int HEARTBEAT_TIMEOUT_LAN_MS = 1_500;  // Transport-aware: LAN peers get fast 1.5s timeout
+        private const int HEARTBEAT_TIMEOUT_CF_MS_PING = 5_000; // Transport-aware: CF peers get 5s timeout
+        private const int MAX_FAILURES = 3;                  // Death detection: 3 × 4s = 12s
+        private const int DISCOVERY_MS = 20_000;             // Base Firebase re-scan interval (20s)
+        private const int HANDSHAKE_TIMEOUT_LAN_MS = 2_500;  // LAN handshake timeout (fast 2.5s)
+        private const int HANDSHAKE_TIMEOUT_CF_MS = 6_000;   // Cloudflare handshake timeout (6s)
         private const int RELAXED_AFTER_MS = 60_000;         // Switch to relaxed heartbeat after 60s of all-healthy
-        private const int MAX_CONCURRENT_HANDSHAKES = 3;     // Limit simultaneous handshakes for 6+ devices
+        private const int MAX_CONCURRENT_HANDSHAKES = 4;     // Limit simultaneous handshakes
 
         // ═ ═ ═ Events ═ ═ ═
         public event Action<string, string>? PeerConnected;     // (deviceId, transport)

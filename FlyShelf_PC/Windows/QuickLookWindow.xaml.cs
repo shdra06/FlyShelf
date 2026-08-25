@@ -128,46 +128,68 @@ namespace FlyShelf.Windows
             if (_item == null) return;
 
             // Markdown clipboard items may have RawContent but no FilePath — allow them through
-            // Text items with file:/// URIs should also be allowed for smart resolution
-            if (string.IsNullOrEmpty(_item.FilePath) && _item.Extension != "MARKDOWN" && _item.Extension != ".MD" && _item.ItemType != FlyShelf.ViewModels.ClipboardItemType.Code && _item.Extension != "JSON")
+            // Text items with file paths, file:/// URIs, or markdown content should also be allowed for smart resolution
+            if (string.IsNullOrEmpty(_item.FilePath) && !_item.IsMarkdownPreview && _item.Extension != "MARKDOWN" && _item.Extension != ".MD" && _item.Extension != "MD" && _item.ItemType != FlyShelf.ViewModels.ClipboardItemType.Code && _item.Extension != "JSON")
             {
-                // ═══ SMART FILE URI RESOLUTION ═══
-                // If this is a text item containing a file:/// URI, try to resolve it
-                // so old clipboard entries (captured before the URI fix) still work in Quick Look
+                // ═══ SMART FILE PATH / URI RESOLUTION ═══
                 string rawText = _item.RawContent?.Trim();
-                if (!string.IsNullOrEmpty(rawText) && rawText.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrEmpty(rawText))
                 {
-                    try
+                    string candidatePath = rawText;
+                    if (candidatePath.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
                     {
-                        string resolvedPath = new Uri(rawText).LocalPath;
-                        // Fix %3A-encoded colons: "/c:/path" → "c:\path"
-                        if (resolvedPath.Length >= 3 && resolvedPath[0] == '/' && char.IsLetter(resolvedPath[1]) && resolvedPath[2] == ':')
-                            resolvedPath = resolvedPath.Substring(1);
-                        resolvedPath = resolvedPath.Replace('/', '\\');
-                        
-                        if (File.Exists(resolvedPath))
+                        try
                         {
-                            // Upgrade: treat this as a file item for Quick Look purposes
-                            _item.FilePath = resolvedPath;
-                            FlyShelf.Classes.Logger.LogAction("QUICKLOOK", $"Resolved file:// URI to: {resolvedPath}");
+                            candidatePath = new Uri(candidatePath).LocalPath;
+                            // Fix %3A-encoded colons: "/c:/path" → "c:\path"
+                            if (candidatePath.Length >= 3 && candidatePath[0] == '/' && char.IsLetter(candidatePath[1]) && candidatePath[2] == ':')
+                                candidatePath = candidatePath.Substring(1);
+                            candidatePath = candidatePath.Replace('/', '\\');
                         }
+                        catch { }
                     }
-                    catch { }
+                    else if (candidatePath.Length >= 2 && ((candidatePath[0] == '"' && candidatePath[^1] == '"') || (candidatePath[0] == '\'' && candidatePath[^1] == '\'')))
+                    {
+                        candidatePath = candidatePath.Substring(1, candidatePath.Length - 2).Trim();
+                    }
+
+                    if (!string.IsNullOrEmpty(candidatePath) && !candidatePath.Contains('\n') && File.Exists(candidatePath))
+                    {
+                        _item.FilePath = candidatePath;
+                        string fileExt = Path.GetExtension(candidatePath).ToLowerInvariant();
+                        if (fileExt == ".md")
+                        {
+                            _item.Extension = "MARKDOWN";
+                            try { _item.RawContent = File.ReadAllText(candidatePath); } catch { }
+                        }
+                        FlyShelf.Classes.Logger.LogAction("QUICKLOOK", $"Resolved path to: {candidatePath}");
+                    }
                 }
 
-                // If still no file path after resolution, show raw text content or return
+                // If still no file path after resolution, check for markdown text or show raw text content
                 if (string.IsNullOrEmpty(_item.FilePath))
                 {
                     if (!string.IsNullOrEmpty(_item.RawContent))
                     {
-                        // Show text content in the text preview
-                        TextPreviewScroll.Visibility = Visibility.Visible;
-                        TextPreview.Text = _item.RawContent;
-                        this.Width = 550;
-                        this.Height = 500;
-                        LoadingProgress.Visibility = Visibility.Collapsed;
+                        if (FlyShelf.Classes.MarkdownDetector.IsMarkdown(_item.RawContent))
+                        {
+                            _item.Extension = "MARKDOWN";
+                        }
+                        else
+                        {
+                            // Show text content in the text preview
+                            TextPreviewScroll.Visibility = Visibility.Visible;
+                            TextPreview.Text = _item.RawContent;
+                            this.Width = 550;
+                            this.Height = 500;
+                            LoadingProgress.Visibility = Visibility.Collapsed;
+                            return;
+                        }
                     }
-                    return;
+                    else
+                    {
+                        return;
+                    }
                 }
             }
 
@@ -186,24 +208,15 @@ namespace FlyShelf.Windows
                     {
                         try
                         {
-                            var _fi = new System.IO.FileInfo(_item.FilePath);
-                            if (_fi.Length > 100_000_000)
+                            if (!string.IsNullOrEmpty(_item.FilePath) && File.Exists(_item.FilePath))
                             {
-                                System.Diagnostics.Debug.WriteLine($"[QUICKLOOK] Skipped — file too large ({_fi.Length} bytes): {_item.FilePath}");
-                                return null;
+                                return FlyShelf.Classes.ImageThumbnailManager.LoadThumbnail(_item.FilePath, 4096);
                             }
-                            byte[] imgBytes = File.ReadAllBytes(_item.FilePath);
-                            BitmapImage bmp = new BitmapImage();
-                            using (var imgStream = new System.IO.MemoryStream(imgBytes))
+                            else if (!string.IsNullOrEmpty(_item.RawContent) && FlyShelf.Classes.ImageThumbnailManager.IsSvgMarkup(_item.RawContent))
                             {
-                                bmp.BeginInit();
-                                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                                bmp.DecodePixelWidth = 4096; // Cap decode to prevent OOM on very large images
-                                bmp.StreamSource = imgStream;
-                                bmp.EndInit();
+                                return FlyShelf.Classes.ImageThumbnailManager.RenderSvgFromMarkup(_item.RawContent, 2048, 2048);
                             }
-                            bmp.Freeze();
-                            return bmp;
+                            return _item.Icon;
                         }
                         catch
                         {
@@ -346,7 +359,7 @@ namespace FlyShelf.Windows
                     this.Width = 600;
                     this.Height = SystemParameters.WorkArea.Height * 0.8;
                 }
-                else if (ext == ".md" || _item.Extension == "MARKDOWN" || _item.Extension == ".MD")
+                else if (ext == ".md" || _item.IsMarkdownPreview || _item.Extension == "MARKDOWN" || _item.Extension == ".MD" || _item.Extension == "MD")
                 {
                     // Render Markdown beautifully using WebView2 + MarkdownTemplate (same engine as PDF export)
                     try
@@ -376,12 +389,16 @@ namespace FlyShelf.Windows
                             
                             WebPreview.Visibility = Visibility.Visible;
                             
-                            string userDataFolder = System.IO.Path.Combine(
-                                System.IO.Path.GetTempPath(), 
-                                "FlyShelf_MdQL_" + Environment.ProcessId);
-                            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, userDataFolder);
-                            await WebPreview.EnsureCoreWebView2Async(env);
-                            _webPreviewInitialized = true;
+                            if (!_webPreviewInitialized)
+                            {
+                                string userDataFolder = System.IO.Path.Combine(
+                                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
+                                    "FlyShelf", "WebView2_QuickLook");
+                                if (!Directory.Exists(userDataFolder)) Directory.CreateDirectory(userDataFolder);
+                                var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                                await WebPreview.EnsureCoreWebView2Async(env);
+                                _webPreviewInitialized = true;
+                            }
                             
                             WebPreview.CoreWebView2.Settings.AreDevToolsEnabled = false;
                             WebPreview.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
@@ -390,23 +407,49 @@ namespace FlyShelf.Windows
                             WebPreview.DefaultBackgroundColor = System.Drawing.Color.FromArgb(0xFF, 0x1E, 0x1E, 0x2E);
                             
                             // Track zoom changes for the zoom label
-                            _zoomHandler = (s, a) => MarkdownWebView_ZoomFactorChanged(s, EventArgs.Empty);
-                            WebPreview.ZoomFactorChanged += _zoomHandler;
+                            if (_zoomHandler == null)
+                            {
+                                _zoomHandler = (s, a) => MarkdownWebView_ZoomFactorChanged(s, EventArgs.Empty);
+                                WebPreview.ZoomFactorChanged += _zoomHandler;
+                            }
                             
-                            // ═══ FIX: Use NavigateToString instead of file:// URI ═══
-                            // file:// URIs in WebView2 can block inline <script> execution
-                            // due to security policies. NavigateToString bypasses this entirely
-                            // and is the same approach that works for SVG rendering.
+                            // Listen for render completion / errors
+                            WebPreview.CoreWebView2.WebMessageReceived += (s, a) =>
+                            {
+                                try
+                                {
+                                    string msg = a.TryGetWebMessageAsString();
+                                    if (msg == "RENDER_COMPLETE")
+                                    {
+                                        Dispatcher.Invoke(() => { LoadingProgress.Visibility = Visibility.Collapsed; });
+                                    }
+                                    else if (msg != null && msg.StartsWith("RENDER_ERROR:", StringComparison.Ordinal))
+                                    {
+                                        FlyShelf.Classes.Logger.LogAction("QUICKLOOK_MD_ERR", msg);
+                                        Dispatcher.Invoke(() => { LoadingProgress.Visibility = Visibility.Collapsed; });
+                                    }
+                                }
+                                catch { }
+                            };
+
+                            WebPreview.NavigationCompleted += (s, a) =>
+                            {
+                                Dispatcher.Invoke(() => { LoadingProgress.Visibility = Visibility.Collapsed; });
+                            };
+
                             WebPreview.NavigateToString(html);
                             
                             // Show markdown-specific buttons
+                            if (CopyMdBtn != null) CopyMdBtn.Visibility = Visibility.Visible;
                             MdToPdfBtn.Visibility = Visibility.Visible;
                             ZoomResetBtn.Visibility = Visibility.Visible;
+                            LoadingProgress.Visibility = Visibility.Collapsed;
                         }
                         else
                         {
                             TextPreviewScroll.Visibility = Visibility.Visible;
                             TextPreview.Text = "[Empty Markdown]";
+                            LoadingProgress.Visibility = Visibility.Collapsed;
                         }
                     }
                     catch (Exception mdEx)
@@ -417,10 +460,14 @@ namespace FlyShelf.Windows
                         TextPreviewScroll.Visibility = Visibility.Visible;
                         WebPreview.Visibility = Visibility.Collapsed;
                         TextPreview.Text = _item.RawContent ?? "[Failed to render Markdown]";
+                        LoadingProgress.Visibility = Visibility.Collapsed;
                     }
 
-                    this.Width = 600;
-                    this.Height = 700;
+                    double screenW = SystemParameters.WorkArea.Width;
+                    double screenH = SystemParameters.WorkArea.Height;
+                    this.Width = Math.Min(960, Math.Max(600, screenW * 0.85));
+                    this.Height = Math.Min(820, Math.Max(650, screenH * 0.90));
+                    CenterOnScreen();
                     _isImageLoaded = true;
                 }
                 else if (ext == ".svg")
@@ -617,6 +664,27 @@ namespace FlyShelf.Windows
             if (PinLabel != null) PinLabel.Text = this.Topmost ? "Pinned" : "Pin";
         }
 
+        private void MaximizeButton_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleMaximize();
+        }
+
+        private void ToggleMaximize()
+        {
+            if (this.WindowState == WindowState.Maximized)
+            {
+                this.WindowState = WindowState.Normal;
+                if (MaximizeIcon != null) MaximizeIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Maximize24;
+                if (MaximizeBtn != null) MaximizeBtn.ToolTip = "Maximize";
+            }
+            else
+            {
+                this.WindowState = WindowState.Maximized;
+                if (MaximizeIcon != null) MaximizeIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.SquareMultiple24;
+                if (MaximizeBtn != null) MaximizeBtn.ToolTip = "Restore";
+            }
+        }
+
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             this.Close();
@@ -700,8 +768,11 @@ namespace FlyShelf.Windows
 
         private void Window_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            // Removed: "remove double tap to full screen from quick look/ preview"
-            e.Handled = true;
+            if (e.OriginalSource is DependencyObject dep && !IsOcrTextBoxSource(dep) && !_isDoodleMode)
+            {
+                ToggleMaximize();
+                e.Handled = true;
+            }
         }
 
         private void Window_MouseMove(object sender, MouseEventArgs e)
@@ -871,28 +942,13 @@ namespace FlyShelf.Windows
             {
                 Classes.Logger.LogAction("QUICKLOOK_CLOSE", $"Error disposing WebPreview: {ex.Message}");
             }
-            try
-            {
-                if (MarkdownWebView != null)
-                {
-                    try { MarkdownWebView.NavigationStarting -= null; } catch { }
-                    try { MarkdownWebView.NavigationCompleted -= null; } catch { }
-                    MarkdownWebView.Source = new Uri("about:blank");
-                    MarkdownWebView.Dispose();
-                }
-            }
-            catch (Exception ex)
-            {
-                Classes.Logger.LogAction("QUICKLOOK_CLOSE", $"Error disposing MarkdownWebView: {ex.Message}");
-            }
-            // Cleanup WebView2 user data folders
+            // Cleanup WebView2 temp user data folders asynchronously
             try {
-                string pdfDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"FlyShelf_PdfQL_{Environment.ProcessId}");
-                if (System.IO.Directory.Exists(pdfDir))
-                    _ = System.Threading.Tasks.Task.Run(() => { try { System.IO.Directory.Delete(pdfDir, true); } catch {} });
-                string mdDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"FlyShelf_MdQL_{Environment.ProcessId}");
-                if (System.IO.Directory.Exists(mdDir))
-                    _ = System.Threading.Tasks.Task.Run(() => { try { System.IO.Directory.Delete(mdDir, true); } catch {} });
+                string[] tempDirs = System.IO.Directory.GetDirectories(System.IO.Path.GetTempPath(), "FlyShelf_QL_*");
+                foreach (var dir in tempDirs)
+                {
+                    _ = System.Threading.Tasks.Task.Run(() => { try { System.IO.Directory.Delete(dir, true); } catch {} });
+                }
             } catch {}
             base.OnClosed(e);
         }

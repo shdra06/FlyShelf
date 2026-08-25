@@ -653,13 +653,58 @@ namespace FlyShelf
             }
         }
 
-        private void CopyFilePath_Click(object sender, RoutedEventArgs e)
+        private void PasteFilePath_Click(object sender, RoutedEventArgs e)
         {
             if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item 
                 && !string.IsNullOrEmpty(item.FilePath))
             {
-                FlyShelf.Classes.ClipboardHelper.SafeSetTextAllowCapture(item.FilePath);
-                FlyShelf.Windows.ToastWindow.ShowToast("Path copied!");
+                _ = CopyItemAndPaste(item, hideWindow: true, pastePathOnly: true);
+            }
+        }
+
+        private void CopyFilePath_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                string? path = !string.IsNullOrEmpty(item.FilePath) ? item.FilePath : item.RawContent;
+                if (!string.IsNullOrEmpty(path))
+                {
+                    FlyShelf.Classes.ClipboardHelper.SafeSetTextAllowCapture(path);
+                    FlyShelf.Windows.ToastWindow.ShowToast("Path copied!");
+                }
+            }
+        }
+
+        private void CopyFile_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                if (!string.IsNullOrEmpty(item.FilePath) && (System.IO.File.Exists(item.FilePath) || System.IO.Directory.Exists(item.FilePath)))
+                {
+                    try
+                    {
+                        var dataObj = new DataObject();
+                        var dropList = new System.Collections.Specialized.StringCollection { item.FilePath };
+                        dataObj.SetFileDropList(dropList);
+                        dataObj.SetData("FileNameW", new string[] { item.FilePath });
+                        dataObj.SetData("FileName", new string[] { item.FilePath });
+                        dataObj.SetData(DataFormats.UnicodeText, item.FilePath);
+                        dataObj.SetData(DataFormats.Text, item.FilePath);
+
+                        byte[] moveEffect = new byte[] { 5, 0, 0, 0 }; // DragDropEffects.Copy
+                        using var dropEffect = new System.IO.MemoryStream();
+                        dropEffect.Write(moveEffect, 0, moveEffect.Length);
+                        dataObj.SetData("Preferred DropEffect", dropEffect);
+
+                        Classes.ClipboardHelper.SafeSetDataObject(dataObj, true);
+                        FlyShelf.Windows.ToastWindow.ShowToast("File copied!");
+                    }
+                    catch (Exception ex)
+                    {
+                        FlyShelf.Classes.Logger.LogAction("COPY_FILE_ERROR", ex.Message);
+                        FlyShelf.Windows.ToastWindow.ShowToast("Failed to copy file.");
+                    }
+                }
             }
         }
 

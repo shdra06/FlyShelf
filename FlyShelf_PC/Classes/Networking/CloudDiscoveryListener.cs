@@ -190,6 +190,12 @@ namespace FlyShelf.Classes
                     string globalUrl = prop.Value.TryGetProperty("GlobalUrl", out var gu) ? gu.GetString() ?? "" : "";
                     string localUrl = prop.Value.TryGetProperty("LocalIp", out var li) ? li.GetString() ?? "" : "";
                     string deviceName = prop.Value.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? prop.Name : prop.Name;
+                    bool isOnline = prop.Value.TryGetProperty("IsOnline", out var on) && on.GetBoolean();
+
+                    if (isOnline)
+                    {
+                        DevicePairingManager.RecordDeviceActivity(prop.Name, deviceName, !string.IsNullOrEmpty(localUrl) ? "LAN" : "Cloud");
+                    }
 
                     if (!string.IsNullOrEmpty(globalUrl) || !string.IsNullOrEmpty(localUrl))
                     {

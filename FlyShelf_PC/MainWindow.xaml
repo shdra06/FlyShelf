@@ -76,6 +76,15 @@
                           Command="{Binding PlacementTarget.Tag.TogglePinCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
 
+                <!-- ═══ Universal: Quick Look ═══ -->
+                <MenuItem Click="ContextMenuQuickLook_Click" 
+                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.CanQuickLook, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <MenuItem.Header>
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0"/><TextBlock Text="Quick Look"/></StackPanel>
+                    </MenuItem.Header>
+                </MenuItem>
+
                 <!-- ═══ Universal: Copy Content ═══ -->
                 <MenuItem Header="Copy to Clipboard" 
                           Command="{Binding PlacementTarget.Tag.CopyRawContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
@@ -280,11 +289,25 @@
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.CanShowInExplorer, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
+                <!-- ═══ FILE-BACKED: Paste File Path ═══ -->
+                <MenuItem Header="Paste Path" Click="PasteFilePath_Click"
+                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.HasFilePath, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"
+                          ToolTip="Paste file path directly into active window (or hold Ctrl when clicking)"
+                          AutomationProperties.Name="Paste file path into active window"/>
+
                 <!-- ═══ FILE-BACKED: Copy File Path ═══ -->
                 <MenuItem Header="Copy Path" Click="CopyFilePath_Click"
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.HasFilePath, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"
                           AutomationProperties.Name="Copy file path to clipboard"/>
+
+                <!-- ═══ FILE-BACKED: Copy File (for Explorer / Folders) ═══ -->
+                <MenuItem Header="Copy File" Click="CopyFile_Click"
+                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.HasFilePath, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"
+                          ToolTip="Copy file to clipboard for pasting into Explorer"
+                          AutomationProperties.Name="Copy file to clipboard"/>
 
                 <!-- ═══ Universal: Delete ═══ -->
                 <MenuItem Header="Delete" Click="DeleteContextMenu_Click" Foreground="{DynamicResource DangerColor}"/>
@@ -1020,6 +1043,7 @@
                   Focusable="True" KeyboardNavigation.DirectionalNavigation="Contained" FocusVisualStyle="{x:Null}"
                   AutomationProperties.Name="Clipboard items list" TabIndex="10"
                   UseLayoutRounding="True" SnapsToDevicePixels="True"
+                  TextOptions.TextFormattingMode="Ideal"
                   TextOptions.TextRenderingMode="ClearType"
                   TextOptions.TextHintingMode="Auto"
                   RenderOptions.ClearTypeHint="Enabled"
@@ -1028,7 +1052,7 @@
                   VirtualizingStackPanel.IsVirtualizing="True"
                   VirtualizingStackPanel.VirtualizationMode="Recycling"
                   VirtualizingPanel.ScrollUnit="Pixel"
-                  VirtualizingPanel.CacheLength="0.5,0.5"
+                  VirtualizingPanel.CacheLength="3,3"
                   VirtualizingPanel.CacheLengthUnit="Page"
                   SelectionMode="Extended" MouseMove="ShelfListView_MouseMove" PreviewMouseLeftButtonDown="ShelfListView_PreviewMouseLeftButtonDown"
                   PreviewMouseLeftButtonUp="ShelfListView_PreviewMouseLeftButtonUp"
@@ -1424,6 +1448,7 @@
                                         <Style TargetType="Border" BasedOn="{StaticResource ActionPillStyle}">
                                             <Setter Property="Visibility" Value="Collapsed"/>
                                             <Style.Triggers>
+                                                <DataTrigger Binding="{Binding CanQuickLook}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                                 <DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                                 <DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                                 <DataTrigger Binding="{Binding IsMarkdownPreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
@@ -1914,6 +1939,10 @@
                                             <Setter Property="Symbol" Value="Document24" />
                                             <Setter Property="Foreground" Value="#60A5FA" />
                                             <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsApk}" Value="True">
+                                                    <Setter Property="Symbol" Value="Phone24"/>
+                                                    <Setter Property="Foreground" Value="#3DDC84"/>
+                                                </DataTrigger>
                                                 <DataTrigger Binding="{Binding ItemType}" Value="Code">
                                                     <Setter Property="Symbol" Value="Code24"/>
                                                     <Setter Property="Foreground" Value="{StaticResource TypeCodeColor}"/>
@@ -2851,7 +2880,7 @@
                                                 </MultiDataTrigger></Style.Triggers>
                                             </Style></StackPanel.Style>
                                             <StackPanel.Resources><Style x:Key="AeroPill" TargetType="Border"><Setter Property="CornerRadius" Value="5"/><Setter Property="Background" Value="{DynamicResource AltBottomBarBg}"/><Setter Property="BorderBrush" Value="{DynamicResource AltCardBorder}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Width" Value="24"/><Setter Property="Height" Value="24"/><Setter Property="Margin" Value="0,0,1,0"/><Setter Property="Cursor" Value="Hand"/></Style></StackPanel.Resources>
-                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="QuickLookSpecific_Click"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding IsMarkdownPreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource AltAccent_Image}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
+                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="QuickLookSpecific_Click"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding CanQuickLook}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding IsMarkdownPreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding IsDocPreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding IsPdfPreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource AltAccent_Image}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
                                             <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="OpenSpecific_Click"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Document"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="File"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Video"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Audio"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Archive"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Presentation"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Open24" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource AltAccent_Document}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
                                             <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="GoogleSearchSpecific_Click"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Search24" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource AltAccent_Url}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
                                             <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="PeekPasswordSpecific_Click" ToolTip="Peek password (5s)"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsPassword}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Eye24" Filled="True" FontSize="{StaticResource TypeBody}" Foreground="{DynamicResource AltAccent_Password}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>

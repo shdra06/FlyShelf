@@ -111,12 +111,29 @@ namespace FlyShelf.ViewModels
                 // but do it ONLY when there are no file paths available.
                 try
                 {
-                    if (data.GetDataPresent(DataFormats.Bitmap))
+                    if (data.GetDataPresent("PNG"))
+                    {
+                        try
+                        {
+                            if (data.GetData("PNG") is System.IO.MemoryStream ms)
+                            {
+                                bitmap = System.Windows.Media.Imaging.BitmapFrame.Create(ms, System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+                            }
+                        }
+                        catch { }
+                    }
+                    if (bitmap == null && data.GetDataPresent(DataFormats.Bitmap))
                         bitmap = data.GetData(DataFormats.Bitmap) as BitmapSource;
                     if (bitmap == null && data.GetDataPresent(typeof(BitmapSource)))
                         bitmap = data.GetData(typeof(BitmapSource)) as BitmapSource;
                     if (bitmap == null && data.GetDataPresent(DataFormats.Dib))
-                        bitmap = data.GetData(DataFormats.Bitmap) as BitmapSource;
+                    {
+                        try
+                        {
+                            bitmap = data.GetData(DataFormats.Bitmap) as BitmapSource;
+                        }
+                        catch { }
+                    }
 
                     if (bitmap != null && bitmap.CanFreeze && !bitmap.IsFrozen)
                         bitmap.Freeze(); // Frozen to be safe for background threads
@@ -230,21 +247,47 @@ namespace FlyShelf.ViewModels
                     newItems.Add((item, file));
                 }
 
+                // Deduplicate within the batch itself first
+                var distinctNewItems = new List<ClipboardItem>();
+                var seenBatchKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var (item, _) in newItems)
+                {
+                    string key = GetDeduplicationKey(item);
+                    if (string.IsNullOrEmpty(key) || seenBatchKeys.Add(key))
+                    {
+                        distinctNewItems.Add(item);
+                    }
+                }
+
                 // Phase 2: Batch-insert into ObservableCollection on UI thread
                 Application.Current?.Dispatcher?.InvokeAsync(() =>
                 {
-                    // Run deduplication for each individual new item
-                    foreach (var newItem in newItems.Select(x => x.item))
+                    var duplicatesToRemove = new List<ClipboardItem>();
+                    foreach (var newItem in distinctNewItems)
                     {
-                        DeduplicateItem(newItem);
+                        int checkCount = Math.Min(10, DroppedItems.Count);
+                        for (int i = 0; i < checkCount; i++)
+                        {
+                            var existing = DroppedItems[i];
+                            if (existing != null && !existing.IsPinned && !duplicatesToRemove.Contains(existing) && IsDuplicate(newItem, existing))
+                            {
+                                duplicatesToRemove.Add(existing);
+                            }
+                        }
                     }
-                    DroppedItems.InsertRange(0, newItems.Select(x => x.item));
+
+                    if (duplicatesToRemove.Count > 0)
+                    {
+                        BulkRemoveItems(duplicatesToRemove);
+                    }
+
+                    DroppedItems.InsertRange(0, distinctNewItems);
                     PruneOldItems();
                     OnPropertyChanged(nameof(ShelfVisibility));
 
                     if (!string.IsNullOrEmpty(sourceDevice))
                     {
-                        foreach (var newItem in newItems.Select(x => x.item))
+                        foreach (var newItem in distinctNewItems)
                         {
                             string fileFp = $"IMG::{newItem.FormattedSize}";
                             MarkAsCloudSourced(fileFp);
@@ -530,7 +573,7 @@ namespace FlyShelf.ViewModels
                         // the file on disk is already downscaled to ≤4K by the encoder above).
                         // Always use 300px decode width for sharp thumbnails — this runs on a
                         // background thread so the UI thread is not blocked.
-                        BitmapImage? bitmapImage = null;
+                        BitmapSource? bitmapImage = null;
                         try
                         {
                             bitmapImage = LoadImageThumbnail(tempFile, 300);
@@ -636,13 +679,13 @@ namespace FlyShelf.ViewModels
             else if (!string.IsNullOrWhiteSpace(text))
             {
                 text = text.Trim().TrimEnd('\0');
-                if (string.IsNullOrWhiteSpace(text)) return;
+                if (string.IsNullOrWhiteSpace(text) || text == "\\n" || text == "\\r\\n" || text == "\\r") return;
 
                 if (text.Length < 10000)
                 {
                     string visibleCheck = System.Text.RegularExpressions.Regex.Replace(text, 
                         @"[\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFE00-\uFE0F\uFEFF\u00AD]", "");
-                    if (string.IsNullOrWhiteSpace(visibleCheck)) return;
+                    if (string.IsNullOrWhiteSpace(visibleCheck) || visibleCheck == "\\n" || visibleCheck == "\\r\\n") return;
                 }
 
                 FlyShelf.Classes.Logger.LogAction("DRAG IN", $"Processing Text payload length: {text.Length} (no-dedup)");
@@ -656,92 +699,39 @@ namespace FlyShelf.ViewModels
 
                     try
                     {
-                        string possiblePath = capturedText;
-                        bool wasQuoted = false;
-
-                        // Detect surrounding quotes — if the user copied a quoted path
-                        // (e.g. "E:\path\file.md" or 'E:\path\file.md'), treat it as
-                        // plain text, NOT as a file reference. Only strip quotes for
-                        // file:// URIs which are always meant as file references.
-                        if (possiblePath.Length >= 2 && possiblePath[0] == '"' && possiblePath[possiblePath.Length - 1] == '"')
+                        string? normPath = ExtractNormalizedPath(capturedText);
+                        if (!string.IsNullOrEmpty(normPath))
                         {
-                            wasQuoted = true;
-                            possiblePath = possiblePath.Substring(1, possiblePath.Length - 2);
-                        }
-                        else if (possiblePath.Length >= 2 && possiblePath[0] == '\'' && possiblePath[possiblePath.Length - 1] == '\'')
-                        {
-                            wasQuoted = true;
-                            possiblePath = possiblePath.Substring(1, possiblePath.Length - 2);
-                        }
-
-                        // Handle file:// and file:/// URI schemes with percent-encoded chars
-                        // file:// URIs always indicate a file reference, even if quoted
-                        if (possiblePath.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
-                        {
-                            wasQuoted = false; // Override: file:// URIs are always file references
-                            try
+                            if (File.Exists(normPath))
                             {
-                                possiblePath = new Uri(possiblePath).LocalPath;
-                                // FIX: When colon is percent-encoded (file:///c%3A/path),
-                                // Uri.LocalPath returns "/c:/path" instead of "C:\path".
-                                // Strip the leading slash for drive-letter paths.
-                                if (possiblePath.Length >= 3 && possiblePath[0] == '/' &&
-                                    char.IsLetter(possiblePath[1]) && possiblePath[2] == ':')
+                                FlyShelf.Classes.Logger.LogAction("DRAG IN", $"Resolved text path to file: {normPath}");
+                                item = new ClipboardItem(normPath);
+
+                                // If item doesn't have a custom vector icon (e.g. Markdown or APK), load shell icon
+                                if (item.Icon == null)
                                 {
-                                    possiblePath = possiblePath.Substring(1);
+                                    string p = normPath;
+                                    var it = item;
+                                    _ = System.Threading.Tasks.Task.Run(() =>
+                                    {
+                                        var icon = GetIcon(p);
+                                        if (icon != null)
+                                        {
+                                            Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                            {
+                                                if (it.Icon == null) it.Icon = icon;
+                                            });
+                                        }
+                                    });
                                 }
                             }
-                            catch { } // Best-effort: failure is acceptable
-                        }
-
-                        // Only resolve as a file if the text was NOT quoted
-                        if (!wasQuoted)
-                        {
-                            // Normalize path separators (VS Code on Windows sometimes uses forward slashes)
-                            possiblePath = possiblePath.Replace('/', '\\');
-
-                            // Trim trailing whitespace/newlines that may sneak in from drag payloads
-                            possiblePath = possiblePath.TrimEnd();
-                            
-                            // Skip UNC paths to avoid 30-second SMB timeout on File.Exists
-                            if (possiblePath.StartsWith(@"\\", StringComparison.Ordinal))
+                            else if (Directory.Exists(normPath))
                             {
-                                // UNC path — treat as plain text rather than risk network hang
-                            }
-                            else if (File.Exists(possiblePath))
-                            {
-                                // ═══ CONTENT vs DEV FILE DISTINCTION ═══
-                                // When a path is copied as TEXT (not dragged from Explorer), only
-                                // resolve to an actual file item for content/media types that
-                                // benefit from preview (images, PDFs, documents, etc.).
-                                // Dev/script file paths (.py, .bat, .cpp, .ps1, .c, .cs, .js, etc.)
-                                // should stay as plain text — developers copy these paths to use
-                                // them in terminals, scripts, or share them as references.
-                                string pathExt = Path.GetExtension(possiblePath).ToLowerInvariant();
-                                bool isContentFile = pathExt switch
-                                {
-                                    // Images — show thumbnail preview
-                                    ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".webp" or ".svg" or ".ico" or ".tiff" => true,
-                                    // Documents — show document card
-                                    ".pdf" or ".doc" or ".docx" or ".txt" or ".md" or ".rtf" => true,
-                                    // Presentations
-                                    ".ppt" or ".pptx" => true,
-                                    // Video — show video card
-                                    ".mp4" or ".mkv" or ".avi" or ".mov" or ".wmv" or ".flv" => true,
-                                    // Audio
-                                    ".mp3" or ".wav" or ".flac" or ".ogg" or ".aac" or ".wma" => true,
-                                    // Archives
-                                    ".zip" or ".rar" or ".7z" or ".tar" or ".gz" or ".apk" => true,
-                                    // Everything else (dev/code files) → keep as text path
-                                    _ => false
-                                };
-
-                                if (isContentFile)
-                                {
-                                    FlyShelf.Classes.Logger.LogAction("DRAG IN", $"Resolved text path to content file: {possiblePath}");
-                                    item = new ClipboardItem(possiblePath);
-                                }
-                                // else: dev file path stays as plain text — will be classified below
+                                FlyShelf.Classes.Logger.LogAction("DRAG IN", $"Resolved text path to folder: {normPath}");
+                                item = new ClipboardItem(normPath);
+                                item.ItemType = ClipboardItemType.Folder;
+                                item.Extension = "FOLDER";
+                                item.GenerateFolderIcon();
                             }
                         }
                     }
@@ -754,10 +744,8 @@ namespace FlyShelf.ViewModels
                         item.RawContent = capturedText;
                         item.FormattedSize = string.Empty;
 
-                        if (Uri.TryCreate(capturedText, UriKind.Absolute, out Uri? uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps))
+                        if (IsWebUrl(capturedText, out string? cleanUrl))
                         {
-                            string cleanUrl = _rxUtmClean.Replace(capturedText, string.Empty).TrimEnd('?', '&');
-                            
                             item.RawContent = cleanUrl;
                             item.ItemType = ClipboardItemType.Url;
                             item.FileName = cleanUrl;
@@ -767,65 +755,71 @@ namespace FlyShelf.ViewModels
                         {
                             bool classified = false;
 
-                            // ═══ FILE PATH FALLBACK ═══
-                            // If the text looks like a file path with a known content extension
-                            // AND the file actually exists on disk, classify it as a document card.
-                            // If File.Exists fails (stale path, network drive, etc.), fall through
-                            // to normal text classification — paths that don't resolve to real files
-                            // should be treated as plain text.
-                            // Quoted strings ("path" or 'path') are treated as text, NOT files.
-                            string trimmedText = capturedText.Trim();
-
-                            // ── Quote detection: "path" → treat as string, not file ──
-                            bool isQuotedString = (trimmedText.Length >= 2
-                                && ((trimmedText[0] == '"' && trimmedText[^1] == '"')
-                                    || (trimmedText[0] == '\'' && trimmedText[^1] == '\'')));
-
-                            bool looksLikeFilePath = !isQuotedString
-                                                     && (trimmedText.Contains('\\') || trimmedText.Contains('/'))
-                                                     && !trimmedText.Contains('\n')
-                                                     && trimmedText.Length < 1000;
-                            if (looksLikeFilePath)
+                            // ═══ 1. SVG MARKUP DETECTION ═══
+                            if (Classes.ImageThumbnailManager.IsSvgMarkup(capturedText))
                             {
-                                // Normalize and check existence
-                                string normalizedPath = trimmedText.Replace('/', '\\').TrimEnd();
-                                bool fileExists = false;
-                                try { fileExists = File.Exists(normalizedPath); } catch { }
+                                item.ItemType = ClipboardItemType.Image;
+                                item.Extension = "SVG";
+                                item.FileName = "Vector Graphic.svg";
+                                item.RawContent = capturedText;
+                                item.Icon = Classes.ImageThumbnailManager.RenderSvgFromMarkup(capturedText, 300);
+                                if (item.Icon != null) item.IsLoadedHighQuality = true;
+                                classified = true;
+                            }
 
-                                if (fileExists)
+                            // ═══ 2. UNIVERSAL FILE PATH DETECTION (Physical files, URLs, or path strings) ═══
+                            if (!classified)
+                            {
+                                string trimmedText = capturedText.Trim();
+                                string potentialPath = trimmedText;
+                                if (potentialPath.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
                                 {
-                                    string pathExt = Path.GetExtension(normalizedPath).ToUpperInvariant();
-
-                                    // Only resolve content/media types (same list as drag/drop detection)
-                                    bool isContentFile = pathExt switch
+                                    try
                                     {
-                                        ".PNG" or ".JPG" or ".JPEG" or ".GIF" or ".BMP" or ".WEBP" or ".SVG" or ".ICO" or ".TIFF" => true,
-                                        ".PDF" or ".DOC" or ".DOCX" or ".TXT" or ".MD" or ".RTF" => true,
-                                        ".PPT" or ".PPTX" => true,
-                                        ".MP4" or ".MKV" or ".AVI" or ".MOV" or ".WMV" or ".FLV" => true,
-                                        ".MP3" or ".WAV" or ".FLAC" or ".OGG" or ".AAC" or ".WMA" => true,
-                                        ".ZIP" or ".RAR" or ".7Z" or ".TAR" or ".GZ" or ".APK" => true,
-                                        _ => false
-                                    };
-
-                                    if (isContentFile)
-                                    {
-                                        item.ItemType = ClipboardItemType.Document;
-                                        item.Extension = pathExt;
-                                        item.FileName = Path.GetFileName(normalizedPath);
-                                        item.FilePath = normalizedPath;
-                                        item.RawContent = capturedText;
-
-                                        if (pathExt == ".MD")
-                                        {
-                                            // Read file contents for rich markdown preview in QuickLook
-                                            try { item.RawContent = File.ReadAllText(normalizedPath); } catch { }
-                                            item.Extension = "MARKDOWN"; // QuickLook checks for "MARKDOWN", not ".MD"
-                                            item.GenerateMarkdownIcon();
-                                        }
-
-                                        classified = true;
+                                        potentialPath = new Uri(potentialPath).LocalPath;
+                                        if (potentialPath.Length >= 3 && potentialPath[0] == '/' && char.IsLetter(potentialPath[1]) && potentialPath[2] == ':')
+                                            potentialPath = potentialPath.Substring(1);
                                     }
+                                    catch { }
+                                }
+                                else if (potentialPath.Length >= 2 && ((potentialPath[0] == '"' && potentialPath[^1] == '"') || (potentialPath[0] == '\'' && potentialPath[^1] == '\'')))
+                                {
+                                    potentialPath = potentialPath.Substring(1, potentialPath.Length - 2).Trim();
+                                }
+
+                                bool isPhysical = File.Exists(potentialPath) || Directory.Exists(potentialPath);
+                                bool looksLikeFilePath = isPhysical || 
+                                    (((potentialPath.Contains('\\') || potentialPath.Contains('/')) || (potentialPath.Length >= 2 && char.IsLetter(potentialPath[0]) && potentialPath[1] == ':'))
+                                     && !potentialPath.Contains('\n')
+                                     && potentialPath.Length < 1000);
+
+                                if (looksLikeFilePath)
+                                {
+                                    try
+                                    {
+                                        string normalizedPath = potentialPath.Replace('/', '\\').TrimEnd();
+                                        string candidateFileName = Path.GetFileName(normalizedPath);
+                                        string candidateExt = Path.GetExtension(normalizedPath);
+
+                                        if (!string.IsNullOrEmpty(candidateFileName) && (!string.IsNullOrEmpty(candidateExt) && candidateExt.Length >= 2 && candidateExt.Length <= 8 || isPhysical))
+                                        {
+                                            // Construct item with full file classification rules
+                                            item = new ClipboardItem(normalizedPath);
+                                            item.FilePath = normalizedPath;
+                                            item.FileName = candidateFileName;
+                                            if (item.ItemType == ClipboardItemType.Image && item.Icon == null && File.Exists(normalizedPath))
+                                            {
+                                                var thumb = Classes.ImageThumbnailManager.LoadThumbnail(normalizedPath, 300);
+                                                if (thumb != null)
+                                                {
+                                                    item.Icon = thumb;
+                                                    item.IsLoadedHighQuality = true;
+                                                }
+                                            }
+                                            classified = true;
+                                        }
+                                    }
+                                    catch { }
                                 }
                             }
 
@@ -1036,166 +1030,17 @@ namespace FlyShelf.ViewModels
         // P/Invoke declarations and SHFILEINFO struct centralized in NativeMethods.cs
 
         /// <summary>
-        /// Reliably loads an image file as a thumbnail BitmapImage of specified decodeWidth.
-        /// Uses StreamSource (not UriSource) to avoid URI-related loading failures.
+        /// Reliably loads an image file as a thumbnail BitmapSource of specified decodeWidth.
+        /// Supports standard raster formats (PNG, JPG, BMP, WEBP, GIF, ICO, TIFF) and vector SVG.
         /// </summary>
-        public static BitmapImage? LoadImageThumbnail(string filePath, int decodeWidth = 300)
+        public static BitmapSource? LoadImageThumbnail(string filePath, int decodeWidth = 300)
         {
-            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
-                return null;
-
-            try
-            {
-                var fi = new FileInfo(filePath);
-                if (fi.Length > 50_000_000) // 50 MB cap — thumbnails don't need files larger than this
-                {
-                    System.Diagnostics.Debug.WriteLine($"[DROP] Skipped thumbnail — file too large ({fi.Length} bytes): {filePath}");
-                    return null;
-                }
-                // PERF: Use FileStream instead of ReadAllBytes to avoid LOH allocation.
-                // CacheOption.OnLoad ensures the stream is fully consumed before disposal.
-                var bmp = new BitmapImage();
-                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                {
-                    bmp.BeginInit();
-                    bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
-                    bmp.StreamSource = fs;
-                    bmp.CacheOption = BitmapCacheOption.OnLoad;
-                    if (decodeWidth > 0)
-                    {
-                        bmp.DecodePixelWidth = decodeWidth;
-                    }
-                    bmp.EndInit();
-                }
-                bmp.Freeze();
-                return bmp;
-            }
-            catch (Exception ex)
-            {
-                Classes.Logger.LogAction("THUMB_LOAD_FAIL", $"Failed to load image bytes for {filePath}: {ex.Message}");
-                return null;
-            }
+            return Classes.ImageThumbnailManager.LoadThumbnail(filePath, decodeWidth);
         }
 
         public BitmapSource? GetIcon(string filePath)
         {
-            const uint SHGFI_ICON = 0x100;
-            const uint SHGFI_LARGEICON = 0x0;
-            const uint SHGFI_USEFILEATTRIBUTES = 0x10;
-            const uint FILE_ATTRIBUTE_NORMAL = 0x80;
-
-            // For document types (PDF, DOCX, etc.), always use extension-based lookup
-            // so every file of the same type shows the same consistent icon (the default
-            // app's file-type icon) rather than varying per-file association.
-            string ext = System.IO.Path.GetExtension(filePath)?.ToLowerInvariant() ?? "";
-
-            // Check cache first — avoids redundant SHGetFileInfo calls for same extension
-            if (!string.IsNullOrEmpty(ext) && _shellIconCache.TryGetValue(ext, out var cached))
-                return cached;
-
-            bool forceGenericIcon = ext is ".pdf" or ".doc" or ".docx" or ".xls" or ".xlsx"
-                                         or ".ppt" or ".pptx" or ".odt" or ".ods" or ".odp"
-                                         or ".rtf" or ".csv" or ".epub";
-
-            // PRIORITY 1: If the file exists on disk and is NOT a document type,
-            // query the shell without SHGFI_USEFILEATTRIBUTES. This returns the icon
-            // of the actual default application (e.g. VLC's cone for .mp4).
-            if (!forceGenericIcon && !string.IsNullOrEmpty(filePath) && System.IO.File.Exists(filePath))
-            {
-                try
-                {
-                    var shinfo = new NativeMethods.SHFILEINFO();
-                    IntPtr res = NativeMethods.SHGetFileInfo(filePath, 0, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON);
-
-                    if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
-                    {
-                        try
-                        {
-                            var bitmapSource = Imaging.CreateBitmapSourceFromHIcon(
-                                shinfo.hIcon,
-                                Int32Rect.Empty,
-                                BitmapSizeOptions.FromEmptyOptions());
-
-                            bitmapSource.Freeze();
-                            if (!string.IsNullOrEmpty(ext)) _shellIconCache.TryAdd(ext, bitmapSource);
-                            return bitmapSource;
-                        }
-                        finally
-                        {
-                            NativeMethods.DestroyIcon(shinfo.hIcon);
-                        }
-                    }
-                }
-                catch { } // Best-effort: failure is acceptable
-            }
-
-            // FALLBACK: File missing or first call failed — use extension-based lookup.
-            // SHGFI_USEFILEATTRIBUTES returns a generic icon for the file type based
-            // on whichever app is registered as the default handler for this extension.
-            try
-            {
-                var shinfo = new NativeMethods.SHFILEINFO();
-                IntPtr res = NativeMethods.SHGetFileInfo(filePath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
-
-                if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
-                {
-                    try
-                    {
-                        var bitmapSource = Imaging.CreateBitmapSourceFromHIcon(
-                            shinfo.hIcon,
-                            Int32Rect.Empty,
-                            BitmapSizeOptions.FromEmptyOptions());
-
-                        bitmapSource.Freeze();
-                        if (!string.IsNullOrEmpty(ext)) _shellIconCache.TryAdd(ext, bitmapSource);
-                        return bitmapSource;
-                    }
-                    finally
-                    {
-                        NativeMethods.DestroyIcon(shinfo.hIcon);
-                    }
-                }
-            }
-            catch (Exception ex) { Logger.LogAction("DROP", $"Non-critical: {ex.Message}"); }
-
-            // LAST RESORT: If SHGetFileInfo failed even with SHGFI_USEFILEATTRIBUTES
-            // (e.g. malformed path, null bytes, very long path), retry with a clean
-            // dummy filename using just the extension. This guarantees the system's
-            // default app icon is returned for known extensions like .pdf, .docx, etc.
-            if (!string.IsNullOrEmpty(ext))
-            {
-                try
-                {
-                    string dummyPath = "file" + ext; // e.g. "file.pdf"
-                    var shinfo = new NativeMethods.SHFILEINFO();
-                    IntPtr res = NativeMethods.SHGetFileInfo(dummyPath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
-
-                    if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
-                    {
-                        try
-                        {
-                            var bitmapSource = Imaging.CreateBitmapSourceFromHIcon(
-                                shinfo.hIcon,
-                                Int32Rect.Empty,
-                                BitmapSizeOptions.FromEmptyOptions());
-
-                            bitmapSource.Freeze();
-                            _shellIconCache.TryAdd(ext, bitmapSource);
-                            return bitmapSource;
-                        }
-                        finally
-                        {
-                            NativeMethods.DestroyIcon(shinfo.hIcon);
-                        }
-                    }
-                }
-                catch { } // Best-effort: failure is acceptable
-            }
-
-            // Cache null result to avoid retrying for extensions that have no icon
-            if (!string.IsNullOrEmpty(ext))
-                _shellIconCache.TryAdd(ext, null);
-            return null;
+            return Classes.ShellIconManager.GetIcon(filePath);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -1311,6 +1156,62 @@ namespace FlyShelf.ViewModels
             return codeDensity >= 0.35;
         }
 
+        public static bool IsWebUrl(string text, out string? cleanUrl)
+        {
+            cleanUrl = null;
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            string trimmed = text.Trim();
+            if (trimmed.Contains('\n') || trimmed.Contains('\r') || trimmed.Contains(' ')) return false;
+
+            // 1. Check with scheme (http://, https://, ftp://)
+            if (Uri.TryCreate(trimmed, UriKind.Absolute, out Uri? uriResult) &&
+                (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps || uriResult.Scheme == Uri.UriSchemeFtp))
+            {
+                cleanUrl = _rxUtmClean.Replace(trimmed, string.Empty).TrimEnd('?', '&');
+                return true;
+            }
+
+            // 2. Check schemeless web URLs (e.g., meet.google.com/..., github.com/..., www.example.com, localhost:3000, 192.168.1.1:8080)
+            if (trimmed.Contains('.') || trimmed.StartsWith("localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                // Must not be a local Windows file path
+                if (trimmed.Contains('\\') || trimmed.Contains(":/") || trimmed.Contains(":\\")) return false;
+
+                if (Uri.TryCreate("https://" + trimmed, UriKind.Absolute, out Uri? httpsUri) &&
+                    httpsUri.Scheme == Uri.UriSchemeHttps &&
+                    !string.IsNullOrEmpty(httpsUri.Host))
+                {
+                    string host = httpsUri.Host.ToLowerInvariant();
+                    if (host == "localhost" || host.Contains('.'))
+                    {
+                        int lastDot = host.LastIndexOf('.');
+                        if (lastDot > 0 && lastDot < host.Length - 1)
+                        {
+                            string tld = host.Substring(lastDot + 1);
+                            bool isNumeric = int.TryParse(tld, out _); // IPv4
+                            bool isValidTld = tld.Length >= 2 && tld.Length <= 24 && tld.All(char.IsLetter);
+
+                            if (isValidTld || isNumeric)
+                            {
+                                bool isFileExtension = CommonExtensions.Contains("." + tld);
+                                bool hasUrlIndicators = trimmed.Contains('/') || trimmed.Contains('?') || trimmed.Contains(':') || 
+                                                        host.StartsWith("www.") || host.StartsWith("meet.") || host.StartsWith("zoom.") || 
+                                                        host.StartsWith("api.") || host.StartsWith("app.") || host.StartsWith("docs.");
+
+                                if (!isFileExtension || hasUrlIndicators)
+                                {
+                                    cleanUrl = _rxUtmClean.Replace(trimmed, string.Empty).TrimEnd('?', '&');
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
         public static bool DetectIfPasswordOrApiKey(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return false;
@@ -1330,13 +1231,13 @@ namespace FlyShelf.ViewModels
 
             string lower = trimmed.ToLowerInvariant();
 
-            // File paths (e.g., "E:\Comfy-Desktop", "C:\Users\...", "/home/user/...")
+            // 1. File paths (e.g., "E:\Comfy-Desktop", "C:\Users\...", "/home/user/...")
             if (trimmed.Contains(":\\", StringComparison.Ordinal) || trimmed.Contains(":/", StringComparison.Ordinal) || 
                 trimmed.StartsWith("\\\\", StringComparison.Ordinal) || trimmed.StartsWith('/') ||
                 trimmed.Contains('\\') || System.IO.Path.IsPathRooted(trimmed))
                 return false;
 
-            // URLs and URIs (e.g., "http://...", "https://...", "ftp://...", "localhost:3000")
+            // 2. URLs, URIs, and Web Links (http, https, ftp, file, ws, wss, ssh, git, www, localhost, ://)
             if (lower.StartsWith("http://", StringComparison.Ordinal) || lower.StartsWith("https://", StringComparison.Ordinal) || 
                 lower.StartsWith("ftp://", StringComparison.Ordinal) || lower.StartsWith("file://", StringComparison.Ordinal) ||
                 lower.StartsWith("ws://", StringComparison.Ordinal) || lower.StartsWith("wss://", StringComparison.Ordinal) ||
@@ -1345,29 +1246,48 @@ namespace FlyShelf.ViewModels
                 lower.StartsWith("www.", StringComparison.Ordinal))
                 return false;
 
-            // Email addresses
+            // 3. Schemeless URLs, Web addresses, meeting links, web paths, and query parameter strings
+            // (e.g., "meet.google.com/...", "github.com/...", "zoom.us/...", "domain.com/path?key=1")
+            if (trimmed.Contains('/') || trimmed.Contains('?') || (trimmed.Contains('&') && trimmed.Contains('=')))
+                return false;
+
+            // Domain endings & subdomains
+            if (lower.EndsWith(".com") || lower.EndsWith(".org") || lower.EndsWith(".net") || lower.EndsWith(".io") || 
+                lower.EndsWith(".ai") || lower.EndsWith(".co") || lower.EndsWith(".in") || lower.EndsWith(".app") || 
+                lower.EndsWith(".dev") || lower.EndsWith(".xyz") || lower.EndsWith(".me") || lower.EndsWith(".to") || 
+                lower.EndsWith(".gg") || lower.EndsWith(".gov") || lower.EndsWith(".edu") || lower.EndsWith(".info"))
+                return false;
+
+            if (lower.StartsWith("meet.") || lower.StartsWith("zoom.") || lower.StartsWith("teams.") || 
+                lower.StartsWith("mail.") || lower.StartsWith("docs.") || lower.StartsWith("drive.") || 
+                lower.StartsWith("app.") || lower.StartsWith("web.") || lower.StartsWith("portal."))
+                return false;
+
+            if (IsWebUrl(trimmed, out _))
+                return false;
+
+            // 4. Email addresses
             if (trimmed.Contains('@') && trimmed.Contains('.') && !trimmed.Contains(' '))
                 return false;
 
-            // File extensions (e.g., "readme.md", "index.html", "package.json")
+            // 5. File extensions (e.g., "readme.md", "index.html", "package.json")
             foreach (var ext in CommonExtensions)
             {
                 if (lower.EndsWith(ext, StringComparison.Ordinal)) return false;
             }
 
-            // Common non-password words/phrases people copy
+            // 6. Common non-password words/phrases people copy
             if (lower == "password" || lower == "username" || lower == "admin" ||
                 lower.StartsWith("hello", StringComparison.Ordinal) || lower.StartsWith("test", StringComparison.Ordinal) ||
                 lower.StartsWith("example", StringComparison.Ordinal) || lower.StartsWith("sample", StringComparison.Ordinal) ||
                 lower.StartsWith("version", StringComparison.Ordinal) || lower.StartsWith("release", StringComparison.Ordinal))
                 return false;
 
-            // Pure numbers (phone numbers, IDs, etc.) -- not passwords
+            // 7. Pure numbers (phone numbers, IDs, etc.) -- not passwords
             if (trimmed.All(c => char.IsDigit(c) || c == '-' || c == '+' || c == '(' || c == ')' || c == ' '))
                 return false;
 
-            // Plain English words: if it contains only letters and is a single word, skip
-            // (real passwords mix character types with randomness, not readable words)
+            // 8. Plain English words: if it contains only letters and is a single word, skip
             if (words.Length == 1 && trimmed.All(char.IsLetter))
                 return false;
 
@@ -1386,6 +1306,9 @@ namespace FlyShelf.ViewModels
             // Test each word for password-like entropy
             foreach (var w in words)
             {
+                // Disallow characters typical of URLs or filesystem paths
+                if (w.Contains('/') || w.Contains('\\') || w.Contains('?') || w.Contains('&') || w.Contains('=')) continue;
+
                 bool hasUpper = w.Any(char.IsUpper);
                 bool hasLower = w.Any(char.IsLower);
                 bool hasDigit = w.Any(char.IsDigit);
@@ -1398,18 +1321,13 @@ namespace FlyShelf.ViewModels
                 if (hasSymbol) charTypes++;
 
                 // Require ALL 4 character types for shorter strings, or 3+ for longer ones
-                // This prevents "MyFolder-123" (3 types) from triggering
                 if (charTypes >= 4 && w.Length >= 8) return true;
-                if (charTypes >= 3 && w.Length >= 12) return true;
+                if (charTypes >= 3 && w.Length >= 12 && hasSymbol && (hasUpper || hasLower) && hasDigit) return true;
 
                 // High-entropy API key/token: 20+ chars, alphanumeric, with mixed case or digits
-                // But exclude anything with path separators
                 if (w.Length >= 20 && hasUpper && hasLower && hasDigit && 
-                    !w.Contains('\\') && !w.Contains('/') &&
                     w.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' || c == '+'))
                 {
-                    // Extra check: ensure it's not just camelCase words (e.g., "MyApplicationSettings")
-                    // Real tokens have runs of random chars, not readable words
                     int consecutiveDigits = 0;
                     int maxConsecutiveDigits = 0;
                     foreach (char c in w)
@@ -1417,7 +1335,6 @@ namespace FlyShelf.ViewModels
                         if (char.IsDigit(c)) { consecutiveDigits++; maxConsecutiveDigits = Math.Max(maxConsecutiveDigits, consecutiveDigits); }
                         else consecutiveDigits = 0;
                     }
-                    // Real API keys typically have digit runs or are mostly random
                     if (maxConsecutiveDigits >= 2 || w.Count(char.IsDigit) >= 3) return true;
                 }
             }

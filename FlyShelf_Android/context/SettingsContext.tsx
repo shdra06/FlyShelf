@@ -60,6 +60,12 @@ type SettingsContextType = {
   updateDeviceStatus: (deviceId: string, status: { isOnline?: boolean; connectionType?: ConnectionType; latencyMs?: number; lastSeen?: number; localUrl?: string; globalUrl?: string }) => void;
   pairingKey: string;
   regeneratePairingKey: () => Promise<string>;
+  // ── Auto Sync Mode ──
+  autoSyncTop5: boolean;
+  setAutoSyncTop5: (val: boolean) => Promise<void>;
+  // ── FCM Silent Wake ──
+  isFcmSilentWakeEnabled: boolean;
+  setIsFcmSilentWakeEnabled: (val: boolean) => Promise<void>;
   // ── Per-Device Sync Preferences ──
   syncPreferences: SyncPreferences;
   setSyncPreference: (deviceId: string, category: keyof DeviceSyncPrefs, enabled: boolean) => Promise<void>;
@@ -91,6 +97,10 @@ const SettingsContext = createContext<SettingsContextType>({
   updateDeviceStatus: () => {},
   pairingKey: '',
   regeneratePairingKey: async () => '',
+  autoSyncTop5: true,
+  setAutoSyncTop5: async () => {},
+  isFcmSilentWakeEnabled: false,
+  setIsFcmSilentWakeEnabled: async () => {},
   syncPreferences: {},
   setSyncPreference: async () => {},
   getSyncPrefsForDevice: () => DEFAULT_SYNC_PREFS,
@@ -116,15 +126,33 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [defaultTargetDeviceName, setDefaultTargetDeviceNameState] = useState('');
   const [floatingBallSize, setFloatingBallSizeState] = useState(48);
   const [floatingBallAutoHide, setFloatingBallAutoHideState] = useState(3000);
+  const [autoSyncTop5, setAutoSyncTop5State] = useState(true);
+  const [isFcmSilentWakeEnabled, setIsFcmSilentWakeEnabledState] = useState(false);
   const [pairedDevices, setPairedDevicesState] = useState<PairedDevice[]>([]);
   const [pairingKey, setPairingKeyState] = useState('');
   const [syncPreferences, setSyncPreferencesState] = useState<SyncPreferences>({});
   const [isLoading, setIsLoading] = useState(true);
   const pairedDevicesHydrated = useRef(false);
 
+  const setAutoSyncTop5 = useCallback(async (val: boolean) => {
+    setAutoSyncTop5State(val);
+    await AsyncStorage.setItem('@autoSyncTop5', String(val)).catch(() => {});
+  }, []);
+
+  const setIsFcmSilentWakeEnabled = useCallback(async (val: boolean) => {
+    setIsFcmSilentWakeEnabledState(val);
+    await AsyncStorage.setItem('@isFcmSilentWakeEnabled', String(val)).catch(() => {});
+  }, []);
+
   useEffect(() => {
     const initStorage = async () => {
       try {
+        const autoSyncStored = await AsyncStorage.getItem('@autoSyncTop5');
+        if (autoSyncStored !== null) setAutoSyncTop5State(autoSyncStored === 'true');
+
+        const fcmStored = await AsyncStorage.getItem('@isFcmSilentWakeEnabled');
+        if (fcmStored !== null) setIsFcmSilentWakeEnabledState(fcmStored === 'true');
+
         const keys = [
           '@pcLocalIp', '@deviceName', '@isCloudDiscoveryEnabled', '@isGlobalSyncEnabled',
           '@isFloatingBallEnabled', '@defaultTargetDeviceName', '@floatingBallSize',
@@ -299,7 +327,16 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setPairedDevicesState(prev => {
       let changed = false;
       const updated = prev.map(device => {
-        const status = pending.get(device.deviceId);
+        let status = pending.get(device.deviceId);
+        if (!status && device.deviceType === 'PC') {
+          // Fallback matching for PC device if key was prefixed or matched name
+          for (const [key, val] of pending.entries()) {
+            if (key.includes(device.deviceId) || device.deviceId.includes(key) || key.toLowerCase() === device.deviceName?.toLowerCase()) {
+              status = val;
+              break;
+            }
+          }
+        }
         if (!status) return device;
         const hasChange = Object.entries(status).some(([k, v]) => (device as any)[k] !== v);
         if (!hasChange) return device;
@@ -368,6 +405,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     defaultTargetDeviceName, setDefaultTargetDeviceName, floatingBallSize, setFloatingBallSize,
     floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, addPairedDevice, removePairedDevice,
     updatePairedDeviceLicensing, updateDeviceStatus, pairingKey, regeneratePairingKey,
+    autoSyncTop5, setAutoSyncTop5,
+    isFcmSilentWakeEnabled, setIsFcmSilentWakeEnabled,
     syncPreferences, setSyncPreference, getSyncPrefsForDevice, setAllSyncPrefsForDevice,
   }), [
     pcLocalIp, setPcLocalIp, deviceName, setDeviceName, deviceId, isLoading,
@@ -375,6 +414,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     defaultTargetDeviceName, setDefaultTargetDeviceName, floatingBallSize, setFloatingBallSize,
     floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, addPairedDevice, removePairedDevice,
     updatePairedDeviceLicensing, updateDeviceStatus, pairingKey, regeneratePairingKey,
+    autoSyncTop5, setAutoSyncTop5,
+    isFcmSilentWakeEnabled, setIsFcmSilentWakeEnabled,
     syncPreferences, setSyncPreference, getSyncPrefsForDevice, setAllSyncPrefsForDevice,
   ]);
 

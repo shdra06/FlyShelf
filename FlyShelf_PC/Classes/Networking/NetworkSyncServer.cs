@@ -197,6 +197,23 @@ namespace FlyShelf.Classes
             int sseCount = _sseClipboardClients.Count;
             BroadcastClipboardToSSE(payload);
 
+            // 3. Optional Silent Background Wake Signal (for Android Floating Ball background sync)
+            if (SettingsManager.Current.EnableFcmSilentWake && SettingsManager.Current.EnableCloudDiscovery)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        string pairingKey = DevicePairingManager.EnsurePairingKey();
+                        if (!string.IsNullOrEmpty(pairingKey))
+                        {
+                            await CloudDiscoveryManager.SendSilentWakePing(pairingKey, itemType);
+                        }
+                    }
+                    catch { }
+                });
+            }
+
             Logger.LogAction("PUSH", $"NotifyClipboardChanged: {itemType} — {waiterCount} long-poll, {sseCount} SSE client(s)");
         }
         

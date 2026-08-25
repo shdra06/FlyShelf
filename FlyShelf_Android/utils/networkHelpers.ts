@@ -1,6 +1,7 @@
 // Network utility helpers for FlyShelf Android
 // Optimized for large file handling (50MB+) and direct LAN discovery
 import { decrypt as aesDecrypt } from './syncCrypto';
+import { getSecureItem } from './secureStorage';
 // @ts-ignore — export names differ between type definitions and runtime API
 import { decode as quickDecode, encode as quickEncode } from 'react-native-quick-base64';
 import { ActiveDeviceInfo, PairedDevice, MediaClipItem } from './deviceTypes';
@@ -189,9 +190,9 @@ export const connectionColors: Record<string, string> = {
 
 /**
  * Normalize a raw IP/URL into a clean http:// URL with port.
- * Default port set to 8999 to match FlyShelf PC default.
+ * Default port set to 8080 to match FlyShelf PC HTTP server.
  */
-export const normalizeUrl = (raw: string, defaultPort = 8999): string => {
+export const normalizeUrl = (raw: string, defaultPort = 8080): string => {
   let url = raw.trim();
   if (!url) return '';
   // Check if this is a Cloudflare tunnel URL by parsing the hostname properly
@@ -282,6 +283,53 @@ export const resolveBestPcUrl = (pairedDevices: PairedDevice[], manualIp?: strin
     return `http://${withPort}`;
   }
 
+  return null;
+};
+
+/**
+ * Async live URL resolution that checks SecureStore global/local URLs,
+ * active devices, and probes endpoints to guarantee reaching the PC across networks.
+ */
+export const resolveLivePcUrl = async (pairedDevices?: PairedDevice[], manualIp?: string): Promise<string | null> => {
+  try {
+    const storedGlobal = await getSecureItem('pairedGlobalUrl');
+    const storedLocal = await getSecureItem('pairedLocalUrl');
+
+    // 1. If storedGlobal is Cloudflare URL, probe it quickly
+    if (storedGlobal && storedGlobal.includes('trycloudflare.com')) {
+      try {
+        const res = await fetchWithTimeout(`${storedGlobal}/api/health`, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, 2000);
+        if (res.ok || res.status === 401) return storedGlobal.replace(/\/$/, '');
+      } catch {}
+    }
+
+    // 2. Probe local if available
+    if (storedLocal && storedLocal.startsWith('http')) {
+      try {
+        const res = await fetchWithTimeout(`${storedLocal}/api/health`, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, 1000);
+        if (res.ok || res.status === 401) return storedLocal.replace(/\/$/, '');
+      } catch {}
+    }
+
+    // 3. Check pairedDevices
+    if (pairedDevices && pairedDevices.length > 0) {
+      const pc = pairedDevices.find(d => d.deviceType === 'PC');
+      if (pc?.globalUrl) return pc.globalUrl.replace(/\/$/, '');
+      if (pc?.localUrl) return pc.localUrl.replace(/\/$/, '');
+    }
+
+    // 4. Return storedGlobal or storedLocal if set
+    if (storedGlobal) return storedGlobal.replace(/\/$/, '');
+    if (storedLocal) return storedLocal.replace(/\/$/, '');
+
+    // 5. Fallback to manual IP
+    if (manualIp) {
+      const trimmed = manualIp.trim();
+      if (trimmed) {
+        return trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
+      }
+    }
+  } catch {}
   return null;
 };
 

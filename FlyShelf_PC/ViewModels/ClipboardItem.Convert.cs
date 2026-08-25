@@ -65,6 +65,18 @@ namespace FlyShelf.ViewModels
                         workFilePath = Path.Combine(Path.GetTempPath(), $"FlyShelf_MD_{DateTime.Now:yyyyMMdd_HHmmss}.md");
                         File.WriteAllText(workFilePath, mdContent, System.Text.Encoding.UTF8);
                     }
+                    else if ((ItemType == ClipboardItemType.Text || ItemType == ClipboardItemType.Code) && (string.IsNullOrEmpty(workFilePath) || !File.Exists(workFilePath)))
+                    {
+                        string txtContent = !string.IsNullOrEmpty(RawContent) ? RawContent : FileName;
+                        if (string.IsNullOrEmpty(txtContent))
+                        {
+                            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                FlyShelf.Windows.ToastWindow.ShowToast("No text content to convert"));
+                            return;
+                        }
+                        workFilePath = Path.Combine(Path.GetTempPath(), $"FlyShelf_TXT_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
+                        File.WriteAllText(workFilePath, txtContent, System.Text.Encoding.UTF8);
+                    }
                     else if (string.IsNullOrEmpty(workFilePath) || !File.Exists(workFilePath))
                     {
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>

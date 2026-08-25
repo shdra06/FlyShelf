@@ -598,14 +598,17 @@ namespace FlyShelf.Classes
                         _directDeviceLastSeen[deviceId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                         CloudDiscoveryManager.DirectlyConnectedDeviceCount = GetDirectlyConnectedDeviceCount();
 
-                        // Also register as nearby device so Scan button shows them
+                        // Also register as nearby device and record activity so device status shows online
                         string mobileIp = req.RemoteEndPoint?.Address?.ToString() ?? "";
                         string mobileClient = req.Headers["X-FlyShelf-Client"] ?? "";
+                        string mobileDeviceName = req.Headers["X-Source-Device"] ?? "Mobile";
+                        string mobileDeviceId = req.Headers["X-Device-Id"] ?? deviceId;
+
+                        DevicePairingManager.RecordDeviceActivity(mobileDeviceId, mobileDeviceName, !string.IsNullOrEmpty(mobileIp) ? "LAN" : "Cloud");
+
                         if (!string.IsNullOrEmpty(mobileIp) && NearbyDiscovery.Instance != null
                             && (mobileClient == "MobileCompanion" || req.Headers["X-Source-Device"] != null))
                         {
-                            string mobileDeviceName = req.Headers["X-Source-Device"] ?? "Mobile";
-                            string mobileDeviceId = req.Headers["X-Device-Id"] ?? deviceId;
                             NearbyDiscovery.Instance.RecordHttpDiscovery(
                                 mobileDeviceId, mobileDeviceName, mobileIp, 8999, "Mobile");
                         }
@@ -684,6 +687,11 @@ namespace FlyShelf.Classes
         /// <summary>
         /// Holds a WebSocket connection with a peer for instant liveness detection.
         /// Sends ping every 30s, receives pong. If the peer dies or tunnel drops,
+        private static readonly byte[] s_wsPongBytes = Encoding.UTF8.GetBytes("pong");
+
+        /// <summary>
+        /// Holds a WebSocket connection with a peer for instant liveness detection.
+        /// Sends ping every 30s, receives pong. If the peer dies or tunnel drops,
         /// the WebSocket closes instantly — no 50s heartbeat delay.
         /// </summary>
         private async Task HandlePeerWebSocket(WebSocket ws, string peerDeviceId)
@@ -693,32 +701,41 @@ namespace FlyShelf.Classes
             {
                 while (ws.State == WebSocketState.Open && _isRunning)
                 {
-                    using var ms = new MemoryStream();
-                    WebSocketReceiveResult result;
-                    do
+                    using var recvCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+                    var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), recvCts.Token);
+                    if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        // Fix #10: Use a 2-minute timeout instead of CancellationToken.None
-                        // to prevent blocking forever on shutdown or zombie connections
-                        using var recvCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-                        result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), recvCts.Token);
-                        if (result.MessageType == WebSocketMessageType.Close)
-                        {
-                            Logger.LogAction("WS", $"Peer {peerDeviceId} closed WebSocket gracefully");
-                            try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None); } catch { } // Best-effort: failure is acceptable
-                            return;
-                        }
-                        ms.Write(buffer, 0, result.Count);
-                    } while (!result.EndOfMessage);
+                        Logger.LogAction("WS", $"Peer {peerDeviceId} closed WebSocket gracefully");
+                        try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None); } catch { }
+                        return;
+                    }
 
-                    byte[] messageBytes = ms.ToArray();
+                    string text;
+                    if (result.EndOfMessage)
+                    {
+                        // Fast path: Single-frame message (pings, sync JSON <= 64KB) - 0 MemoryStream allocation
+                        text = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    }
+                    else
+                    {
+                        // Slow path: Multi-chunk message > 64KB
+                        using var ms = new MemoryStream();
+                        ms.Write(buffer, 0, result.Count);
+                        while (!result.EndOfMessage)
+                        {
+                            using var chunkCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+                            result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), chunkCts.Token);
+                            if (result.MessageType == WebSocketMessageType.Close) return;
+                            ms.Write(buffer, 0, result.Count);
+                        }
+                        text = Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length);
+                    }
 
                     if (result.MessageType == WebSocketMessageType.Text)
                     {
-                        string text = Encoding.UTF8.GetString(messageBytes);
                         if (text == "ping")
                         {
-                            byte[] pong = Encoding.UTF8.GetBytes("pong");
-                            await ws.SendAsync(new ArraySegment<byte>(pong), WebSocketMessageType.Text, true, CancellationToken.None);
+                            await ws.SendAsync(new ArraySegment<byte>(s_wsPongBytes), WebSocketMessageType.Text, true, CancellationToken.None);
                             continue;
                         }
 

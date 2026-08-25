@@ -150,6 +150,17 @@ namespace FlyShelf.ViewModels
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasPreviewImage)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CardSubtitle)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormatIdentifier)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsMarkdownPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MarkdownPreviewContent)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanQuickLook)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDocPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPdfPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsImagePreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsJsonPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsCodePreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsTerminalPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsCPlusPlusPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsCsvPreview)));
                 }
             }
         }
@@ -373,6 +384,13 @@ namespace FlyShelf.ViewModels
                     SafeNotify(nameof(IsAudioPreview));
                     SafeNotify(nameof(IsPresentationPreview));
                     SafeNotify(nameof(IsFilePreview));
+                    SafeNotify(nameof(IsMarkdownPreview));
+                    SafeNotify(nameof(MarkdownPreviewContent));
+                    SafeNotify(nameof(CanQuickLook));
+                    SafeNotify(nameof(IsJsonPreview));
+                    SafeNotify(nameof(IsTerminalPreview));
+                    SafeNotify(nameof(IsCPlusPlusPreview));
+                    SafeNotify(nameof(IsCsvPreview));
 
                     // Trigger-consolidation computed properties
                     SafeNotify(nameof(ShowSemanticIcon));
@@ -621,14 +639,47 @@ namespace FlyShelf.ViewModels
         public bool IsGifPreview => IsImagePreview && !string.IsNullOrEmpty(FilePath) && FilePath.EndsWith(".gif", StringComparison.OrdinalIgnoreCase);
         public bool IsStaticImagePreview => IsImagePreview && !IsGifPreview;
         public string GifFilePath => IsGifPreview ? FilePath : "";
-        public bool IsDocPreview => ItemType == ClipboardItemType.Document && (Extension == ".DOCX" || Extension == ".DOC" || Extension == ".TXT");
-        public bool IsPdfPreview => ItemType == ClipboardItemType.Pdf;
+        public bool IsDocPreview
+        {
+            get
+            {
+                if (ItemType != ClipboardItemType.Document) return false;
+                string norm = (Extension ?? "").TrimStart('.').ToUpperInvariant();
+                return norm is "DOCX" or "DOC" or "TXT" or "RTF" or "ODT" or "LOG" or "CSV";
+            }
+        }
+        public bool IsPdfPreview => ItemType == ClipboardItemType.Pdf || (Extension != null && Extension.TrimStart('.').Equals("PDF", StringComparison.OrdinalIgnoreCase));
         public bool IsUrlPreview => ItemType == ClipboardItemType.Url;
         public bool IsCodePreview => ItemType == ClipboardItemType.Code;
         public bool IsMarkdownPreview => 
-            (ItemType == ClipboardItemType.Text && Extension == "MARKDOWN") ||
-            (ItemType == ClipboardItemType.Document && 
-             (Extension == ".MD" || Extension == "MD"));
+            Extension == "MARKDOWN" ||
+            (Extension != null && Extension.TrimStart('.').Equals("MD", StringComparison.OrdinalIgnoreCase)) ||
+            (!string.IsNullOrEmpty(FilePath) && FilePath.EndsWith(".md", StringComparison.OrdinalIgnoreCase));
+
+        public bool CanConvertDocToPdf
+        {
+            get
+            {
+                if (ItemType == ClipboardItemType.Document || ItemType == ClipboardItemType.Text) return true;
+                string norm = (Extension ?? "").TrimStart('.').ToUpperInvariant();
+                if (norm is "DOCX" or "DOC" or "TXT" or "MD" or "MARKDOWN" or "RTF" or "ODT" or "LOG" or "CSV" or "HTML" or "HTM" or "JSON" or "XML" or "YAML" or "YML") return true;
+                if (!string.IsNullOrEmpty(FilePath))
+                {
+                    string ext = System.IO.Path.GetExtension(FilePath).ToUpperInvariant().TrimStart('.');
+                    if (ext is "DOCX" or "DOC" or "TXT" or "MD" or "RTF" or "ODT" or "LOG" or "CSV" or "HTML" or "HTM" or "JSON" or "XML" or "YAML" or "YML") return true;
+                }
+                return false;
+            }
+        }
+
+        public bool IsApk => 
+            Extension == "APK" || 
+            Extension == ".APK" || 
+            Extension == "AAB" || 
+            Extension == ".AAB" ||
+            (!string.IsNullOrEmpty(FilePath) && (FilePath.EndsWith(".apk", StringComparison.OrdinalIgnoreCase) || FilePath.EndsWith(".aab", StringComparison.OrdinalIgnoreCase)));
+
+        public bool CanQuickLook => IsImagePreview || IsQRCodePreview || IsMarkdownPreview || IsDocPreview || IsPdfPreview || IsCodePreview;
 
         /// <summary>
         /// Returns the markdown source text for rich rendering in the clipboard card.
@@ -863,6 +914,13 @@ namespace FlyShelf.ViewModels
                 string trimmed = RawContent.Trim();
                 if (trimmed.Length == 0) return false;
                 
+                // Exclude URLs, web addresses, and file paths
+                if (trimmed.Contains("://") || trimmed.Contains('/') || trimmed.Contains('\\') || trimmed.Contains('?') ||
+                    trimmed.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.StartsWith("meet.", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.StartsWith("zoom.", StringComparison.OrdinalIgnoreCase))
+                    return false;
+
                 // [FIX M-53]: Count words without allocating a string array
                 int wordCount = 1;
                 bool inSep = false;
@@ -925,19 +983,36 @@ namespace FlyShelf.ViewModels
 
         private string ComputeSemanticIconGlyph()
         {
+            if (IsApk) return "Phone24";
+            if (IsMarkdownPreview) return "Document24";
             return ItemType switch
             {
                 ClipboardItemType.Image => "Image24",
-                ClipboardItemType.File => (Extension?.ToLowerInvariant()) switch
+                ClipboardItemType.Pdf => "DocumentPdf24",
+                ClipboardItemType.Archive => "FolderZip24",
+                ClipboardItemType.Video => "Video24",
+                ClipboardItemType.Audio => "MusicNote224",
+                ClipboardItemType.Code => "Code24",
+                ClipboardItemType.Folder => "Folder24",
+                ClipboardItemType.Presentation => "SlideLayout24",
+                ClipboardItemType.Document => (Extension?.ToLowerInvariant().TrimStart('.')) switch
                 {
-                    ".pdf" => "DocumentPdf24",
-                    ".doc" or ".docx" => "Document24",
-                    ".xls" or ".xlsx" => "Table24",
-                    ".ppt" or ".pptx" => "SlideLayout24",
-                    ".zip" or ".rar" or ".7z" or ".tar" or ".gz" => "FolderZip24",
-                    ".mp3" or ".wav" or ".flac" or ".aac" => "MusicNote224",
-                    ".mp4" or ".avi" or ".mkv" or ".mov" => "Video24",
-                    ".exe" or ".msi" => "AppGeneric24",
+                    "xls" or "xlsx" or "csv" or "ods" => "Table24",
+                    "ppt" or "pptx" or "key" => "SlideLayout24",
+                    _ => "Document24"
+                },
+                ClipboardItemType.File => (Extension?.ToLowerInvariant().TrimStart('.')) switch
+                {
+                    "apk" or "aab" or "xapk" or "apks" => "Phone24",
+                    "pdf" => "DocumentPdf24",
+                    "doc" or "docx" or "txt" or "rtf" => "Document24",
+                    "xls" or "xlsx" or "csv" => "Table24",
+                    "ppt" or "pptx" => "SlideLayout24",
+                    "zip" or "rar" or "7z" or "tar" or "gz" or "iso" => "FolderZip24",
+                    "mp3" or "wav" or "flac" or "aac" => "MusicNote224",
+                    "mp4" or "avi" or "mkv" or "mov" => "Video24",
+                    "exe" or "msi" or "deb" or "rpm" => "AppGeneric24",
+                    "cpp" or "c" or "py" or "js" or "ts" or "cs" or "java" => "Code24",
                     _ => "Document24"
                 },
                 ClipboardItemType.Url => "Link24",
@@ -956,9 +1031,29 @@ namespace FlyShelf.ViewModels
 
         private string ComputeCardSubtitle()
         {
-            if (ItemType == ClipboardItemType.Image) return "Image";
+            if (ItemType == ClipboardItemType.Image) 
+                return !string.IsNullOrEmpty(FormattedSize) && FormattedSize != "Loading..." ? $"Image • {FormattedSize}" : "Image";
             if (ItemType == ClipboardItemType.Url) return "Link";
-            if (ItemType == ClipboardItemType.File) return Extension?.ToUpperInvariant()?.TrimStart('.') ?? "File";
+            if (ItemType == ClipboardItemType.Folder) return "Folder";
+            
+            if (IsApk)
+            {
+                string label = Extension == "AAB" ? "AAB" : "APK";
+                return !string.IsNullOrEmpty(FormattedSize) && FormattedSize != "Loading..." ? $"{label} • {FormattedSize}" : label;
+            }
+
+            if (ItemType == ClipboardItemType.File || ItemType == ClipboardItemType.Document || ItemType == ClipboardItemType.Pdf || ItemType == ClipboardItemType.Archive || ItemType == ClipboardItemType.Video || ItemType == ClipboardItemType.Audio || ItemType == ClipboardItemType.Presentation)
+            {
+                string extLabel = Extension?.ToUpperInvariant()?.TrimStart('.') ?? "FILE";
+                if (extLabel == "MARKDOWN") extLabel = "MD";
+                return !string.IsNullOrEmpty(FormattedSize) && FormattedSize != "Loading..." ? $"{extLabel} • {FormattedSize}" : extLabel;
+            }
+
+            if (ItemType == ClipboardItemType.Code)
+            {
+                string extLabel = Extension?.ToUpperInvariant()?.TrimStart('.') ?? "CODE";
+                return !string.IsNullOrEmpty(FormattedSize) && FormattedSize != "Loading..." ? $"{extLabel} • {FormattedSize}" : extLabel;
+            }
             
             // Text: show character count
             if (!string.IsNullOrEmpty(_rawContentBackingFile))
