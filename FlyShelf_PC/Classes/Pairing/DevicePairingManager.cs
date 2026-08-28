@@ -540,6 +540,50 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
+        /// AUDIT FIX #1: Validate HMAC-based auth token (X-Auth-Token) with timestamp.
+        /// Returns true if the HMAC matches any known pairing key within a 5-minute window.
+        /// This prevents sending the raw pairing key over the wire.
+        /// </summary>
+        public static bool ValidateHmacAuth(string hmacToken, string timestampStr)
+        {
+            if (string.IsNullOrEmpty(hmacToken) || string.IsNullOrEmpty(timestampStr)) return false;
+            if (!long.TryParse(timestampStr, out long timestamp)) return false;
+
+            // Validate timestamp is within ±5 minutes to prevent replay attacks
+            long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (Math.Abs(nowMs - timestamp) > 300_000) return false;
+
+            // Check against our own key
+            string myKey = EnsurePairingKey();
+            if (VerifyHmac(myKey, timestampStr, hmacToken)) return true;
+
+            // Check against all paired device keys
+            lock (_lock)
+            {
+                if (_pairedDevices != null)
+                {
+                    foreach (var dev in _pairedDevices)
+                    {
+                        if (VerifyHmac(dev.PairingKey, timestampStr, hmacToken)) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private static bool VerifyHmac(string key, string message, string expectedHmac)
+        {
+            try
+            {
+                using var hmac = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(key));
+                byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(message));
+                string computed = Convert.ToHexString(hash).ToLowerInvariant();
+                return string.Equals(computed, expectedHmac, StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
         /// Gets the pairing key for a given deviceId from the paired devices list.
         /// </summary>
         public static string GetPairingKeyForDevice(string deviceId)

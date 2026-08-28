@@ -11,6 +11,55 @@ export const isValidPairingKey = (key: string | null | undefined): boolean => {
   return /^[a-f0-9]{32}$/i.test(key);
 };
 
+/**
+ * AUDIT FIX #1: Generate HMAC-SHA256 auth token from pairing key + timestamp.
+ * This replaces sending the raw pairing key over HTTP headers.
+ * Returns { token, timestamp } for use in X-Auth-Token and X-Auth-Timestamp headers.
+ */
+export const generateHmacAuth = async (pairingKey: string): Promise<{ token: string; timestamp: string }> => {
+  const timestamp = Date.now().toString();
+  const crypto = globalThis.crypto || (await import('expo-crypto') as any);
+  
+  // Convert key and message to ArrayBuffer
+  const enc = new TextEncoder();
+  const keyData = enc.encode(pairingKey);
+  const msgData = enc.encode(timestamp);
+  
+  // Import key for HMAC-SHA256
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  
+  // Sign
+  const sig = await crypto.subtle.sign('HMAC', cryptoKey, msgData);
+  
+  // Convert to hex string
+  const hashArray = Array.from(new Uint8Array(sig));
+  const token = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  
+  return { token, timestamp };
+};
+
+/**
+ * AUDIT FIX #1: Generate auth headers using HMAC instead of raw pairing key.
+ * Falls back to raw key if HMAC generation fails (backward compatibility).
+ */
+export const generateAuthHeaders = async (pairingKey: string | null | undefined): Promise<Record<string, string>> => {
+  if (!pairingKey) return {};
+  try {
+    const { token, timestamp } = await generateHmacAuth(pairingKey);
+    return {
+      'X-Auth-Token': token,
+      'X-Auth-Timestamp': timestamp,
+      // Keep X-Pairing-Key for backward compat with older PC versions
+      'X-Pairing-Key': pairingKey,
+    };
+  } catch {
+    // Fallback to raw key if crypto fails
+    return { 'X-Pairing-Key': pairingKey };
+  }
+};
+
 /** 
  * Robust private IP check covering RFC1918 and typical local ranges.
  * 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16

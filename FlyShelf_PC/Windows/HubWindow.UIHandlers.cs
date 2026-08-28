@@ -1,4 +1,4 @@
-﻿// ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
 // HubWindow.UIHandlers.cs — Settings UI click handlers: incognito mode,
 // size reset/steppers/preview, widget alignment buttons, and widget toggle.
 // Part of the HubWindow partial class split.
@@ -32,13 +32,7 @@ namespace FlyShelf.Windows
                     hours = h;
             }
 
-            // Pro gate for 6h and 8h
-            if (hours >= 6 && !LicenseManager.IsPro)
-            {
-                ToastWindow.ShowToast("6+ hour incognito requires Pro!");
-                UpgradePrompt.ShowActivationDialog(this);
-                return;
-            }
+            // v7.2: All incognito durations unlocked for all users
 
             Classes.IncognitoManager.EnableIncognito(hours);
             UpdateIncognitoUI();

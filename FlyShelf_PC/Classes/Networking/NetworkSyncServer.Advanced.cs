@@ -185,11 +185,21 @@ namespace FlyShelf.Classes
                 string archiveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Synced", batchName);
                 Directory.CreateDirectory(archiveDir);
 
-                int counter = 1;
+                // AUDIT FIX #9: Atomic unique file path — use FileMode.CreateNew to avoid TOCTOU race
                 string finalPath = Path.Combine(archiveDir, rawName);
-                while (File.Exists(finalPath))
+                int counter = 1;
+                while (true)
                 {
-                    finalPath = Path.Combine(archiveDir, $"{Path.GetFileNameWithoutExtension(rawName)}_{counter++}{Path.GetExtension(rawName)}");
+                    try
+                    {
+                        // Attempt atomic creation — fails if file already exists
+                        using (new FileStream(finalPath, FileMode.CreateNew, FileAccess.Write, FileShare.None)) { }
+                        break; // Successfully claimed this path
+                    }
+                    catch (IOException)
+                    {
+                        finalPath = Path.Combine(archiveDir, $"{Path.GetFileNameWithoutExtension(rawName)}_{counter++}{Path.GetExtension(rawName)}");
+                    }
                 }
 
                 var chunkFiles = Directory.GetFiles(chunkDir, "chunk_*").OrderBy(f => f).ToArray();
@@ -676,6 +686,17 @@ namespace FlyShelf.Classes
                     return;
                 }
 
+                // AUDIT FIX #7: Limit URL count to prevent resource exhaustion DoS
+                if (urls.Count > 50)
+                {
+                    res.StatusCode = 400;
+                    byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"Maximum 50 URLs allowed per merge request.\"}");
+                    res.ContentType = "application/json";
+                    await res.OutputStream.WriteAsync(errBytes, 0, errBytes.Length);
+                    res.Close();
+                    return;
+                }
+
                 string mergeTempDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Merges");
                 Directory.CreateDirectory(mergeTempDir);
 
@@ -925,22 +946,37 @@ namespace FlyShelf.Classes
                 if (uri.Scheme != "http" && uri.Scheme != "https") return false;
                 // Block cloud metadata endpoints
                 if (uri.Host == "169.254.169.254" || uri.Host == "metadata.google.internal") return false;
-                // Block loopback and private IPs
-                if (System.Net.IPAddress.TryParse(uri.Host, out var ip))
+                // Block localhost variants
+                if (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)) return false;
+
+                // AUDIT FIX #3: Resolve DNS and validate ALL resolved IPs against private ranges
+                // This prevents DNS rebinding attacks (e.g. localtest.me -> 127.0.0.1)
+                System.Net.IPAddress[] resolvedAddresses;
+                if (System.Net.IPAddress.TryParse(uri.Host, out var directIp))
+                {
+                    resolvedAddresses = new[] { directIp };
+                }
+                else
+                {
+                    try { resolvedAddresses = System.Net.Dns.GetHostAddresses(uri.Host); }
+                    catch { return false; } // DNS resolution failed — block
+                }
+
+                foreach (var ip in resolvedAddresses)
                 {
                     if (System.Net.IPAddress.IsLoopback(ip)) return false;
                     byte[] bytes = ip.GetAddressBytes();
                     if (bytes.Length == 4)
                     {
-                        // 10.x.x.x, 172.16-31.x.x, 192.168.x.x
                         if (bytes[0] == 10) return false;
                         if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) return false;
                         if (bytes[0] == 192 && bytes[1] == 168) return false;
                         if (bytes[0] == 127) return false;
+                        if (bytes[0] == 0) return false; // 0.x.x.x
+                        if (bytes[0] == 169 && bytes[1] == 254) return false; // link-local
                     }
                 }
-                // Block localhost variants
-                if (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)) return false;
+
                 return true;
             }
             catch { return false; }

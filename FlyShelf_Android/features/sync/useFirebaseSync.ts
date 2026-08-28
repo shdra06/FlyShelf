@@ -118,16 +118,15 @@ export function useFirebaseSync(params: {
     pairingKeyRef.current = pk;
 
     // ─── Active Devices: REAL-TIME onValue listener ───
-    // Catches PC URLs the instant they appear — critical because
-    // v5 PC auto-deletes its URL from Firebase after 5 seconds.
-    // The listener caches URLs locally so they survive deletion.
+    // AUDIT FIX #5: PC now preserves URLs in Firebase (no longer auto-deletes after 5s).
+    // Listener caches URLs locally and uses Timestamp-based liveness checking.
     const peerDevicesRef = ref(database, `active_devices/${pk}`);
     const processDevicesSnapshot = async (snapshot: any) => {
       try {
         // Issue #6: Skip expensive LAN probing if PC is already reachable via direct polling
         const pcAlreadyReachable = lastWorkingPcUrlRef.current && (NetworkClock.now() - lastSuccessfulPollRef.current) < 10_000;
         if (!snapshot.exists()) {
-          // Firebase entry was auto-deleted — keep using cached URLs, don't clear them
+          // Firebase entry doesn't exist — keep using cached URLs, don't clear them
           return;
         }
         let rawDevices: any[] = [];

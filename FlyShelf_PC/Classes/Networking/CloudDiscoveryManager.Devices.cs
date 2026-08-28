@@ -191,11 +191,9 @@ namespace FlyShelf.Classes
                                 string name = prop.Value.TryGetProperty("DeviceName", out var n) ? n.GetString() ?? "" : "";
                                 string devId = prop.Value.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name;
 
-                                // Guard: Always skip self (by DeviceId, node key, or machine name)
+                                // AUDIT FIX #11: Skip self by DeviceId only — not DeviceName (two PCs can share the same hostname)
                                 if (string.Equals(prop.Name, myId, StringComparison.OrdinalIgnoreCase) ||
-                                    string.Equals(devId, myId, StringComparison.OrdinalIgnoreCase) ||
-                                    string.Equals(name, myName, StringComparison.OrdinalIgnoreCase) ||
-                                    string.Equals(prop.Name, myName, StringComparison.OrdinalIgnoreCase))
+                                    string.Equals(devId, myId, StringComparison.OrdinalIgnoreCase))
                                 {
                                     continue;
                                 }

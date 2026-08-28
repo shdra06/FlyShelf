@@ -126,6 +126,41 @@ function NotesScreenInner() {
     modifiedDatesRef, schedulePost, schedulePostRef, daysRef,
   } = useNotesSync();
 
+  // ─── Zoom & View Mode State ───
+  const [noteZoom, setNoteZoom] = useState(1.0);
+  const [noteMode, setNoteMode] = useState<'page' | 'bullet' | 'freeform'>('page');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const savedZoom = await AsyncStorage.getItem('@flyshelf_notes_zoom');
+        if (savedZoom) {
+          const parsed = parseFloat(savedZoom);
+          if (!isNaN(parsed) && parsed >= 0.7 && parsed <= 2.0) setNoteZoom(parsed);
+        }
+        const savedMode = await AsyncStorage.getItem('@flyshelf_notes_view_mode');
+        if (savedMode === 'page' || savedMode === 'bullet' || savedMode === 'freeform') {
+          setNoteMode(savedMode);
+        }
+      } catch {}
+    })();
+  }, []);
+
+  const handleZoomChange = useCallback((delta: number) => {
+    setNoteZoom(prev => {
+      const next = Math.min(1.6, Math.max(0.8, parseFloat((prev + delta).toFixed(2))));
+      AsyncStorage.setItem('@flyshelf_notes_zoom', String(next)).catch(() => {});
+      return next;
+    });
+    safeHaptic();
+  }, []);
+
+  const handleSetMode = useCallback((mode: 'page' | 'bullet' | 'freeform') => {
+    safeHaptic(Haptics.ImpactFeedbackStyle.Medium);
+    setNoteMode(mode);
+    AsyncStorage.setItem('@flyshelf_notes_view_mode', mode).catch(() => {});
+  }, []);
+
   // ─── UI-only state ───
   const [selectedDateIdx, setSelectedDateIdx] = useState(0);
   const [deletingBulletId, setDeletingBulletId] = useState<string | null>(null);
@@ -154,28 +189,25 @@ function NotesScreenInner() {
 
   // ─── Current day data ───
   const currentDay = days.find(d => d.Date === selectedDateKey);
-  const isFreeformMode = currentDay?.IsFreeformMode ?? false;
+  const isFreeformMode = noteMode === 'freeform' || (currentDay?.IsFreeformMode ?? false);
 
   // ═══════════════════════════════════════════════════════════
   // EDIT HELPERS
   // ═══════════════════════════════════════════════════════════
 
-  /** Update days state + mark date as modified + persist + schedule POST */
+  /** Update days state + mark date as modified + persist immediately + schedule POST */
   const updateDays = useCallback((updater: (prev: NoteDay[]) => NoteDay[], dateKey?: string) => {
     setDays(prev => {
       const updated = updater(prev);
-      // Persist outside setState would be ideal, but we need the computed value.
-      // Using a microtask to avoid calling async side-effects inside the updater.
-      queueMicrotask(() => {
-        EncryptedStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
-      });
+      daysRef.current = updated;
+      EncryptedStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
       return updated;
     });
     if (dateKey) {
       modifiedDatesRef.current.add(dateKey);
     }
     schedulePost();
-  }, [schedulePost]);
+  }, [schedulePost, setDays, daysRef, modifiedDatesRef]);
 
   /** Update a specific bullet in the current day */
   const updateBullet = useCallback((bulletId: string, updater: (b: NoteBullet) => NoteBullet) => {
@@ -204,6 +236,28 @@ function NotesScreenInner() {
           ),
         };
       });
+    }, selectedDateKey);
+  }, [selectedDateKey, updateDays]);
+
+  /** Save entire page text (Page View mode) */
+  const handleSavePage = useCallback((content: string) => {
+    updateDays(prev => {
+      const { days: updated, day, idx } = ensureDay(prev, selectedDateKey);
+      const curSections = day.FreeformSections || [];
+      const sectionId = curSections[0]?.Id || generateId();
+      const updatedSections: FreeformSection[] = [
+        {
+          Id: sectionId,
+          Content: content,
+          CreatedAt: curSections[0]?.CreatedAt || new Date().toISOString(),
+        }
+      ];
+      updated[idx] = {
+        ...day,
+        FreeformSections: updatedSections,
+        LastModified: NetworkClock.now(),
+      };
+      return updated;
     }, selectedDateKey);
   }, [selectedDateKey, updateDays]);
 

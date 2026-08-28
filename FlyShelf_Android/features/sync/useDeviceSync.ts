@@ -56,8 +56,14 @@ async function resolveFileDownloadUrl(params: {
               signal: ctrl.signal,
             });
             clearTimeout(timer);
-            if (h.ok) return candidate;
-            throw new Error('not ok');
+            // AUDIT FIX #8: Validate response is actually FlyShelf, not a random server
+            if (h.ok) {
+              try {
+                const body = await h.json();
+                if (body?.app === 'FlyShelf') return candidate;
+              } catch { /* non-JSON response — not FlyShelf */ }
+            }
+            throw new Error('not FlyShelf');
           } catch (e) {
             clearTimeout(timer);
             syncLog('FILE-DL', `LAN probe failed for ${candidate}: ${(e as any)?.message || e}`);
@@ -385,8 +391,14 @@ export function useDeviceSync(params: {
                                   signal: ctrl.signal,
                                 });
                                 clearTimeout(timer);
-                                if (h.ok) return candidate;
-                                throw new Error('not ok');
+                                // AUDIT FIX #8: Validate response is actually FlyShelf
+                                if (h.ok) {
+                                  try {
+                                    const body = await h.json();
+                                    if (body?.app === 'FlyShelf') return candidate;
+                                  } catch { /* non-JSON — not FlyShelf */ }
+                                }
+                                throw new Error('not FlyShelf');
                               } catch (e) {
                                 clearTimeout(timer);
                                 syncLog('FILE-DL', `LAN health probe failed for ${candidate}: ${(e as any)?.message || e}`);
@@ -547,8 +559,14 @@ export function useDeviceSync(params: {
                           signal: ctrl.signal,
                         });
                         clearTimeout(timer);
-                        if (h.ok) return candidate;
-                        throw new Error('not ok');
+                        // AUDIT FIX #8: Validate response is actually FlyShelf
+                        if (h.ok) {
+                          try {
+                            const body = await h.json();
+                            if (body?.app === 'FlyShelf') return candidate;
+                          } catch { /* non-JSON — not FlyShelf */ }
+                        }
+                        throw new Error('not FlyShelf');
                       } catch (e) {
                         clearTimeout(timer);
                         syncLog('FILE-DL', `LAN probe failed for ${candidate}: ${(e as any)?.message || e}`);

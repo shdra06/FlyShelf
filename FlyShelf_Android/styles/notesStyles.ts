@@ -508,6 +508,122 @@ export const createNotesStyles = (colors: ThemeColors, shadows: ThemeShadows) =>
   colorOptionSelected: {
     borderColor: colors.text.primary,
   },
+
+  // ═══ Zoom Controls ═══
+  zoomContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bg.card,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    marginRight: space.xs,
+  },
+  zoomBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+  },
+  zoomBtnText: {
+    fontFamily: font.bold,
+    fontSize: 11,
+    color: colors.text.secondary,
+  },
+  zoomValueText: {
+    fontFamily: font.semibold,
+    fontSize: 10,
+    color: colors.accent.primary,
+    paddingHorizontal: 4,
+    minWidth: 32,
+    textAlign: 'center',
+  },
+
+  // ═══ One-Page Notebook Section View ═══
+  pageContainer: {
+    flex: 1,
+  },
+  pagePaper: {
+    backgroundColor: colors.bg.card,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    padding: space.lg,
+    minHeight: 480,
+    marginBottom: 120,
+    ...shadows.card,
+  },
+  pagePaperHeader: {
+    borderBottomWidth: 1.5,
+    borderBottomColor: colors.border.medium,
+    paddingBottom: space.md,
+    marginBottom: space.md,
+  },
+  pagePaperTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pagePaperTitleInput: {
+    flex: 1,
+    fontFamily: font.bold,
+    fontSize: 18,
+    color: colors.text.primary,
+    padding: 0,
+  },
+  pagePaperDateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: space.xs,
+    gap: space.xs,
+  },
+  pagePaperDateText: {
+    fontFamily: font.medium,
+    fontSize: 12,
+    color: colors.text.tertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  pagePaperBody: {
+    flex: 1,
+  },
+  pagePaperInput: {
+    fontFamily: font.regular,
+    fontSize: 15,
+    color: colors.text.primary,
+    lineHeight: 24,
+    minHeight: 320,
+    textAlignVertical: 'top',
+    padding: 0,
+  },
+  pageQuickBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bg.elevated,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border.medium,
+    paddingHorizontal: space.sm,
+    paddingVertical: 6,
+    marginTop: space.md,
+    gap: space.xs,
+    justifyContent: 'space-around',
+  },
+  pageQuickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.sm,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.bg.card,
+    gap: 4,
+  },
+  pageQuickBtnText: {
+    fontFamily: font.medium,
+    fontSize: 11,
+    color: colors.text.secondary,
+  },
 });
 
 /** @deprecated Use createNotesStyles(colors, shadows) for theme support */

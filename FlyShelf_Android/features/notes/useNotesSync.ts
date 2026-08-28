@@ -26,6 +26,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import EncryptedStorage from '../../utils/EncryptedStorage';
 import { Platform, ToastAndroid } from 'react-native';
 import { toast } from '../../context/ToastContext';
 
@@ -51,10 +52,10 @@ const queueFailedDates = async (failedDates: string[]) => {
   if (isQueueingDates) return; // Simple lock to prevent interleaving
   isQueueingDates = true;
   try {
-    const stored = await AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY);
+    const stored = await EncryptedStorage.getItem(PENDING_NOTES_SYNC_KEY) || await AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY);
     const existing: string[] = stored ? JSON.parse(stored) : [];
     const mergedDates = [...new Set([...existing, ...failedDates])];
-    await AsyncStorage.setItem(PENDING_NOTES_SYNC_KEY, JSON.stringify(mergedDates));
+    await EncryptedStorage.setItem(PENDING_NOTES_SYNC_KEY, JSON.stringify(mergedDates));
   } catch {} // Best-effort
   finally { isQueueingDates = false; }
 };
@@ -109,11 +110,15 @@ export function useNotesSync() {
   useEffect(() => {
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem(NOTES_STORAGE_KEY);
+        let stored = await EncryptedStorage.getItem(NOTES_STORAGE_KEY);
+        if (!stored) {
+          stored = await AsyncStorage.getItem(NOTES_STORAGE_KEY);
+        }
         if (stored) {
           const parsed: NoteDay[] = JSON.parse(stored);
           if (Array.isArray(parsed) && parsed.length > 0) {
             setDays(parsed);
+            daysRef.current = parsed;
           }
         }
       } catch (e) { console.warn('[Notes] Failed to load cached notes:', e); }
@@ -223,13 +228,12 @@ export function useNotesSync() {
             merged.push(remote);
           }
         }
+        daysRef.current = merged;
         // Persist after merge
         queueMicrotask(() => {
           if (isPersistingRef.current) return;
           isPersistingRef.current = true;
-          AsyncStorage.setItem(`${NOTES_STORAGE_KEY}_pending`, JSON.stringify(merged))
-            .then(() => AsyncStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(merged)))
-            .then(() => AsyncStorage.removeItem(`${NOTES_STORAGE_KEY}_pending`))
+          EncryptedStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(merged))
             .catch(() => {})
             .finally(() => { isPersistingRef.current = false; });
         });
@@ -248,14 +252,15 @@ export function useNotesSync() {
 
       // Flush offline queue: re-add pending dates and trigger POST
       try {
-        const pendingRaw = await AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY);
+        const pendingRaw = await EncryptedStorage.getItem(PENDING_NOTES_SYNC_KEY) || await AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY);
         if (pendingRaw) {
           const pendingDates: string[] = JSON.parse(pendingRaw);
           if (pendingDates.length > 0) {
             for (const dateKey of pendingDates) {
               modifiedDatesRef.current.add(dateKey);
             }
-            await AsyncStorage.removeItem(PENDING_NOTES_SYNC_KEY);
+            await EncryptedStorage.removeItem(PENDING_NOTES_SYNC_KEY);
+            await AsyncStorage.removeItem(PENDING_NOTES_SYNC_KEY).catch(() => {});
             // Use queueMicrotask to defer — schedulePost may be defined after fetchRemoteNotes
             queueMicrotask(() => { if (schedulePostRef.current) schedulePostRef.current(); });
           }
@@ -325,6 +330,7 @@ export function useNotesSync() {
           setSyncStatus('synced');
           syncFailCountRef.current = 0;
           // Clear pending offline queue on success
+          EncryptedStorage.removeItem(PENDING_NOTES_SYNC_KEY).catch(() => {});
           AsyncStorage.removeItem(PENDING_NOTES_SYNC_KEY).catch(() => {});
         } else {
           setSyncStatus('offline');

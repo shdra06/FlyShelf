@@ -280,7 +280,8 @@ export function useArchiveSync() {
     batch: string,
     totalSize: number
   ) => {
-    const sessionId = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    // AUDIT FIX #4: Deterministic sessionId from asset metadata so resume works after restart
+    const sessionId = `upload_${asset.id || asset.filename}_${totalSize}`;
     const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
 
     // ── Resumable uploads: check for saved progress from a previous interrupted upload ──

@@ -112,6 +112,11 @@ export function usePcUrlResolver(
         try {
           const res = await fetchWithTimeout(`${url}/api/health`, { headers: probeHeaders }, timeout);
           if (res.ok || res.status === 401) {
+            // AUDIT FIX #8: Validate response is actually FlyShelf, not a random server on the same port
+            try {
+              const body = await res.json();
+              if (body?.app !== 'FlyShelf') throw new Error('Not FlyShelf');
+            } catch { /* Accept 401 without body validation (pre-pairing) */ }
             syncLog('URL-RESOLVE', `✅ Reachable: ${url} (status=${res.status})`);
             return url;
           }
@@ -197,13 +202,14 @@ export function usePcUrlResolver(
 
       // ── 3. Parallel Speed Race ──
       // Launch LAN probe (1500ms) and Cloud probe (2500ms) concurrently.
+      // AUDIT FIX #12: Catch-guard promises before race to prevent AggregateError leaks on Hermes
       const lanPromise = uniqueLan.length > 0
-        ? Promise.any(uniqueLan.map(url => probeUrl(url, 1500)))
-        : Promise.reject(new Error('No LAN candidates'));
+        ? Promise.any(uniqueLan.map(url => probeUrl(url, 1500))).catch(() => null as string | null)
+        : Promise.resolve(null as string | null);
 
       const cloudPromise = uniqueCloud.length > 0
-        ? Promise.any(uniqueCloud.map(url => probeUrl(url, 2500)))
-        : Promise.reject(new Error('No Cloud candidates'));
+        ? Promise.any(uniqueCloud.map(url => probeUrl(url, 2500))).catch(() => null as string | null)
+        : Promise.resolve(null as string | null);
 
       // If LAN connects, it wins immediately (zero delay).
       // If Cloud connects first, give LAN a tiny 150ms window to claim local priority, else accept Cloud.

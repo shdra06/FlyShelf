@@ -235,44 +235,53 @@ namespace FlyShelf.Classes
 
                         if (string.IsNullOrEmpty(text) || !text.Contains(APP_SIGNATURE)) continue;
 
-                        using var doc = JsonDocument.Parse(text);
-                        var root = doc.RootElement;
-
-                        string action = root.TryGetProperty("action", out var ap) ? ap.GetString() ?? "" : "";
-                        string deviceId = root.TryGetProperty("deviceId", out var dp) ? dp.GetString() ?? "" : "";
-                        string deviceName = root.TryGetProperty("deviceName", out var np) ? np.GetString() ?? "" : "";
-                        string probeDeviceType = root.TryGetProperty("deviceType", out var dtp) ? dtp.GetString() ?? "PC" : "PC";
-                        int httpPort = root.TryGetProperty("httpPort", out var hp) ? hp.GetInt32() : 8080;
-                        int transferPort = root.TryGetProperty("transferPort", out var tp) ? tp.GetInt32() : 8998;
-                        string hmac = root.TryGetProperty("hmac", out var hm) ? hm.GetString() ?? "" : "";
-
-                        // Skip self
-                        string myId = SettingsManager.Current.DeviceId ?? "";
-                        if (deviceId == myId) continue;
-
-                        // Try paired-key HMAC first (post-pairing: only paired devices visible)
-                        // Fall back to app-wide HMAC (pre-pairing: all FlyShelf instances visible)
-                        string myPairingKey = DevicePairingManager.EnsurePairingKey();
-                        if (!VerifyProbeHmac(deviceId, hmac, myPairingKey) && !VerifyProbeHmac(deviceId, hmac))
-                            continue;
-
-                        string senderIp = result.RemoteEndPoint.Address.ToString();
-
-                        // Mark connected status but don't skip — show all devices
-                        bool isAlreadyConnected = PeerManager.Instance?.ConnectedPeers.Values
-                            .Any(p => p.DeviceId == deviceId && p.IsAlive) == true;
-
-                        if (action == "probe")
+                        // AUDIT FIX #10: Inner try-catch for JSON parsing — malformed packets must not tear down the socket
+                        try
                         {
-                            // Respond with our info
-                            _ = Task.Run(() => SendProbeResponse(result.RemoteEndPoint.Address, ct));
+                            using var doc = JsonDocument.Parse(text);
+                            var root = doc.RootElement;
 
-                            // Record the discovered device
-                            RecordDiscovery(deviceId, deviceName, senderIp, httpPort, transferPort, probeDeviceType, isAlreadyConnected);
+                            string action = root.TryGetProperty("action", out var ap) ? ap.GetString() ?? "" : "";
+                            string deviceId = root.TryGetProperty("deviceId", out var dp) ? dp.GetString() ?? "" : "";
+                            string deviceName = root.TryGetProperty("deviceName", out var np) ? np.GetString() ?? "" : "";
+                            string probeDeviceType = root.TryGetProperty("deviceType", out var dtp) ? dtp.GetString() ?? "PC" : "PC";
+                            int httpPort = root.TryGetProperty("httpPort", out var hp) ? hp.GetInt32() : 8080;
+                            int transferPort = root.TryGetProperty("transferPort", out var tp) ? tp.GetInt32() : 8998;
+                            string hmac = root.TryGetProperty("hmac", out var hm) ? hm.GetString() ?? "" : "";
+
+                            // Skip self
+                            string myId = SettingsManager.Current.DeviceId ?? "";
+                            if (deviceId == myId) continue;
+
+                            // Try paired-key HMAC first (post-pairing: only paired devices visible)
+                            // Fall back to app-wide HMAC (pre-pairing: all FlyShelf instances visible)
+                            string myPairingKey = DevicePairingManager.EnsurePairingKey();
+                            if (!VerifyProbeHmac(deviceId, hmac, myPairingKey) && !VerifyProbeHmac(deviceId, hmac))
+                                continue;
+
+                            string senderIp = result.RemoteEndPoint.Address.ToString();
+
+                            // Mark connected status but don't skip — show all devices
+                            bool isAlreadyConnected = PeerManager.Instance?.ConnectedPeers.Values
+                                .Any(p => p.DeviceId == deviceId && p.IsAlive) == true;
+
+                            if (action == "probe")
+                            {
+                                // Respond with our info
+                                _ = Task.Run(() => SendProbeResponse(result.RemoteEndPoint.Address, ct));
+
+                                // Record the discovered device
+                                RecordDiscovery(deviceId, deviceName, senderIp, httpPort, transferPort, probeDeviceType, isAlreadyConnected);
+                            }
+                            else if (action == "response")
+                            {
+                                RecordDiscovery(deviceId, deviceName, senderIp, httpPort, transferPort, probeDeviceType, isAlreadyConnected);
+                            }
                         }
-                        else if (action == "response")
+                        catch (System.Text.Json.JsonException)
                         {
-                            RecordDiscovery(deviceId, deviceName, senderIp, httpPort, transferPort, probeDeviceType, isAlreadyConnected);
+                            // Malformed packet — silently drop and continue listening
+                            continue;
                         }
                     }
                     catch (OperationCanceledException) { break; }
@@ -355,10 +364,9 @@ namespace FlyShelf.Classes
                 try
                 {
                     var sw = System.Diagnostics.Stopwatch.StartNew();
+                    // AUDIT FIX #2: Do NOT send X-Pairing-Key to unverified IPs — use unauthenticated health check
                     using var req = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, $"http://{ip}:{httpPort}/api/health");
-                    var pairingKey = DevicePairingManager.EnsurePairingKey();
-                    if (!string.IsNullOrEmpty(pairingKey))
-                        req.Headers.TryAddWithoutValidation("X-Pairing-Key", pairingKey);
+                    req.Headers.TryAddWithoutValidation("X-FlyShelf-Client", "NearbyProbe");
                     using var resp = await _latencyClient.SendAsync(req);
                     sw.Stop();
                     info.LatencyMs = (int)sw.ElapsedMilliseconds;

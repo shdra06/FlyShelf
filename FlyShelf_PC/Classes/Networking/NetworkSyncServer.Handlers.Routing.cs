@@ -505,7 +505,11 @@ namespace FlyShelf.Classes
                     // X-FlyShelf-Client header is NOT used — it's trivially spoofable (just like User-Agent).
                     string providedPin = req.Headers["Authorization"]?.Replace("Bearer ", "") ?? req.QueryString["pin"];
                     string pairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"];
-                    bool isPairedDevice = DevicePairingManager.IsDevicePaired(pairingKey);
+                    // AUDIT FIX #1: Accept HMAC-based auth as alternative to raw pairing key
+                    string hmacToken = req.Headers["X-Auth-Token"];
+                    string hmacTimestamp = req.Headers["X-Auth-Timestamp"];
+                    bool isPairedDevice = DevicePairingManager.IsDevicePaired(pairingKey)
+                                       || DevicePairingManager.ValidateHmacAuth(hmacToken, hmacTimestamp);
 
                     // SECURITY: Over Cloudflare tunnel, ONLY paired devices allowed (no PIN-only web client)
                     if (isFromTunnel && !isPairedDevice)
@@ -547,6 +551,7 @@ namespace FlyShelf.Classes
                             // SECURITY: Do NOT expose transport URLs — return connection type only
                             var healthData = new
                             {
+                                app = "FlyShelf",  // AUDIT FIX #8: Signature so probes can verify this is actually FlyShelf
                                 status = "online",
                                 version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0",
                                 deviceId = SettingsManager.Current.DeviceId,
@@ -854,15 +859,17 @@ namespace FlyShelf.Classes
                                     if (sourceDeviceId == SettingsManager.Current.DeviceId)
                                     {
                                         Logger.LogAction("WS", $"Ignored loopback WS SyncFileStart from self: {fileName}");
-                                        // Drain the WebSocket bytes to keep it alive
+                                        // AUDIT FIX #13: Drain with idle timeout to prevent Slowloris
                                         long bytesSkipped = 0;
+                                        using var drainCts1 = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                                         while (bytesSkipped < fileSize)
                                         {
                                             long remain = fileSize - bytesSkipped;
                                             int toRead = (int)Math.Min(buffer.Length, remain);
-                                            var skipResult = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead), CancellationToken.None);
+                                            var skipResult = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead), drainCts1.Token);
                                             if (skipResult.MessageType == WebSocketMessageType.Close) return;
                                             bytesSkipped += skipResult.Count;
+                                            drainCts1.CancelAfter(TimeSpan.FromSeconds(30)); // Reset idle timeout
                                         }
                                         continue;
                                     }
@@ -870,15 +877,17 @@ namespace FlyShelf.Classes
                                     if (DevicePairingManager.IsDeviceBlocked(sourceDeviceId))
                                     {
                                         Logger.LogAction("PEER", $"Rejected WS file from blocked device: {sourceDeviceId} ({fileName})");
-                                        // Drain the WebSocket bytes to keep it alive
+                                        // AUDIT FIX #13: Drain with idle timeout to prevent Slowloris
                                         long bytesSkipped2 = 0;
+                                        using var drainCts2 = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                                         while (bytesSkipped2 < fileSize)
                                         {
                                             long remain2 = fileSize - bytesSkipped2;
                                             int toRead2 = (int)Math.Min(buffer.Length, remain2);
-                                            var skipResult2 = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead2), CancellationToken.None);
+                                            var skipResult2 = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead2), drainCts2.Token);
                                             if (skipResult2.MessageType == WebSocketMessageType.Close) return;
                                             bytesSkipped2 += skipResult2.Count;
+                                            drainCts2.CancelAfter(TimeSpan.FromSeconds(30)); // Reset idle timeout
                                         }
                                         continue;
                                     }
@@ -956,8 +965,9 @@ namespace FlyShelf.Classes
                                     var lastProgressUpdate = DateTime.MinValue;
                                     try
                                     {
-                                        // 5-minute timeout prevents infinite hang if sender declares large fileSize but stops sending
-                                        using var wsFileCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                                        // AUDIT FIX #6: Idle timeout instead of wall-clock — resets on each successful chunk
+                                        using var wsFileCts = new CancellationTokenSource();
+                                        wsFileCts.CancelAfter(TimeSpan.FromMinutes(2)); // Initial idle timeout
                                         using (var fileFs = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true))
                                         {
                                             while (bytesReceived < fileSize)
@@ -971,6 +981,8 @@ namespace FlyShelf.Classes
                                                 }
                                                 await fileFs.WriteAsync(buffer, 0, chunkResult.Count);
                                                 bytesReceived += chunkResult.Count;
+                                                // Reset idle timeout on each successful chunk
+                                                wsFileCts.CancelAfter(TimeSpan.FromMinutes(2));
 
                                                 if (isLargeFile && placeholder != null && (DateTime.Now - lastProgressUpdate).TotalMilliseconds >= 300)
                                                 {

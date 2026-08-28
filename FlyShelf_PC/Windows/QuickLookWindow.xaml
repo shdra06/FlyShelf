@@ -92,7 +92,25 @@
                                    Visibility="Collapsed" AutomationProperties.Name="Copy all OCR text">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Copy24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
-                        <!-- Translate Button (text items only) -->
+                        <!-- Edit / View Code & Text Button -->
+                        <ui:Button x:Name="CodeEditBtn" Click="CodeEditToggle_Click" Appearance="Secondary" 
+                                   Foreground="#A78BFA" Padding="5,3" Margin="0,0,4,0" ToolTip="Edit code (Ctrl+E)"
+                                   Visibility="Collapsed" AutomationProperties.Name="Toggle code edit mode">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon x:Name="CodeEditIcon" Symbol="Edit24" FontSize="14"/>
+                                <TextBlock x:Name="CodeEditLabel" Text="Edit" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ui:Button>
+                        <!-- Save Code & Text Button -->
+                        <ui:Button x:Name="CodeSaveBtn" Click="CodeSave_Click" Appearance="Primary" 
+                                   Foreground="White" Padding="5,3" Margin="0,0,4,0" ToolTip="Save Code (Ctrl+S)"
+                                   Visibility="Collapsed" AutomationProperties.Name="Save code changes">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Save24" Filled="True" FontSize="14"/>
+                                <TextBlock Text="Save" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ui:Button>
+                        <!-- Translate Button (OCR/Image fallback) -->
                         <ui:Button x:Name="TranslateBtn" Click="TranslateButton_Click" Appearance="Secondary" 
                                    Foreground="{DynamicResource InfoColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Translate text"
                                    Visibility="Collapsed" AutomationProperties.Name="Translate text">

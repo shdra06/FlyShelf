@@ -82,28 +82,27 @@ namespace FlyShelf.Classes
         private const int REVALIDATION_INTERVAL_DAYS = 7;
         private const int OFFLINE_GRACE_PERIOD_DAYS = 14;
 
-        // ═══ DAILY LIMITS (Free tier) ═══
-        // All these features are 100% offline — generous limits cost us nothing
-        // and build goodwill. Only power users hit these.
-        public const int FREE_HISTORY_CAP = 1000;
+        // ═══ DAILY LIMITS (Free tier — v7.2: All limits raised to professional levels) ═══
+        // Pro tier still exists for future premium features, but free users get
+        // generous professional-grade limits that never feel restrictive.
+        public const int FREE_HISTORY_CAP = 10000;      // Was 1000 — matched to Pro
         public const int PRO_HISTORY_CAP = 10000;
-        public const int FREE_PDF_MERGE_DAILY = 20;
-        public const int FREE_PDF_SAVE_DAILY = 20;
-        public const int FREE_DOC_CONVERT_DAILY = 20;
-        public const int FREE_IMAGE_TO_PDF_DAILY = 20;
-        public const int FREE_QR_SCAN_DAILY = 5;
-        public const int FREE_OCR_DAILY = 20;
-        public const int FREE_TABLE_EXTRACT_DAILY = 5;
-        public const int FREE_PIN_LIMIT = 50;
-        public const int FREE_TODO_DAILY = 10;
-        public const int FREE_NOTE_DAYS = 60;
-        public const int FREE_NOTE_IMAGES_PER_CARD = 1;
+        public const int FREE_PDF_MERGE_DAILY = 500;     // Was 20
+        public const int FREE_PDF_SAVE_DAILY = 500;      // Was 20
+        public const int FREE_DOC_CONVERT_DAILY = 500;   // Was 20
+        public const int FREE_IMAGE_TO_PDF_DAILY = 500;  // Was 20
+        public const int FREE_QR_SCAN_DAILY = 500;       // Was 5
+        public const int FREE_OCR_DAILY = 500;           // Was 20
+        public const int FREE_TABLE_EXTRACT_DAILY = 500; // Was 5
+        public const int FREE_PIN_LIMIT = int.MaxValue;  // Was 50 — now unlimited
+        public const int FREE_TODO_DAILY = 500;          // Was 10
+        public const int FREE_NOTE_DAYS = 0;             // Was 60 — 0 means show all notes
+        public const int FREE_NOTE_IMAGES_PER_CARD = 5;  // Was 1 — matched to Pro
         public const int PRO_NOTE_IMAGES_PER_CARD = 5;
 
         // ═══ SYNC SIZE LIMIT (Free tier) ═══
-        // Maximum file size for sync operations on the free tier (50 GB).
-        // Pro users have no size limit.
-        public const long FREE_SYNC_SIZE_LIMIT = 50L * 1024 * 1024 * 1024; // 50 GB
+        // v7.2: Raised to match Pro — no file size restrictions
+        public const long FREE_SYNC_SIZE_LIMIT = long.MaxValue; // Was 50 GB — now unlimited
 
         // ═══ KEY VALIDATION SECRET (XOR-obfuscated so it's not plaintext in the binary) ═══
         // Obfuscated with XOR key — decoded at runtime only when needed
@@ -258,18 +257,16 @@ namespace FlyShelf.Classes
             return _data.DailyUsage.TableExtractions < FREE_TABLE_EXTRACT_DAILY;
         }
 
-        /// <summary>Check if a theme can be used. Free users can only use "FlyShelf Default".</summary>
+        /// <summary>Check if a theme can be used. v7.2: Unlocked for all users.</summary>
         public static bool CanUseTheme(string? themeName)
         {
-            if (IsPro) return true;
-            if (string.IsNullOrEmpty(themeName)) return true; // disabling themes is always allowed
-            return themeName.Equals("FlyShelf Default", StringComparison.OrdinalIgnoreCase);
+            return true; // v7.2: All themes unlocked
         }
 
-        /// <summary>Check if custom wallpaper can be set.</summary>
+        /// <summary>Check if custom wallpaper can be set. v7.2: Unlocked for all users.</summary>
         public static bool CanSetCustomWallpaper()
         {
-            return IsPro;
+            return true; // v7.2: Custom wallpaper unlocked
         }
 
         /// <summary>Check if Glass UI (Acrylic Blur) theme can be applied. Free for all users.</summary>
@@ -278,16 +275,16 @@ namespace FlyShelf.Classes
             return true;
         }
 
-        /// <summary>Check if Cloudflare tunnel can be enabled.</summary>
+        /// <summary>Check if Cloudflare tunnel can be enabled. v7.2: Unlocked for all users.</summary>
         public static bool CanUseCloudflare()
         {
-            return IsPro;
+            return true; // v7.2: Cloudflare tunnel unlocked
         }
 
-        /// <summary>Check if custom sniffer paths can be added.</summary>
+        /// <summary>Check if custom sniffer paths can be added. v7.2: Unlocked for all users.</summary>
         public static bool CanAddCustomSnifferPaths()
         {
-            return IsPro;
+            return true; // v7.2: Custom sniffer paths unlocked
         }
 
         /// <summary>Returns the history cap for the current tier.</summary>
@@ -299,7 +296,7 @@ namespace FlyShelf.Classes
         /// <summary>Returns the max pin count for the current tier.</summary>
         public static int GetPinLimit()
         {
-            return IsPro ? int.MaxValue : FREE_PIN_LIMIT;
+            return int.MaxValue; // v7.2: Unlimited pins for all
         }
 
         /// <summary>Returns the max to-do items per day for the current tier.</summary>

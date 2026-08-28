@@ -72,6 +72,7 @@ namespace FlyShelf.Windows
         private Dictionary<int, string> _pdfModifiedPages = new(); // index -> temp image path
         private bool _isPdfModified = false;
         private bool _isDocxMode = false;
+        private bool _isCodeEditMode = false;
 
         public QuickLookWindow(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null, bool autoTriggerOcr = false)
         {
@@ -390,6 +391,7 @@ namespace FlyShelf.Windows
                             this.Width = 550;
                             this.Height = 500;
                             LoadingProgress.Visibility = Visibility.Collapsed;
+                            if (CodeEditBtn != null) CodeEditBtn.Visibility = Visibility.Visible;
                             return;
                         }
                     }
@@ -775,7 +777,7 @@ namespace FlyShelf.Windows
                     this.Width = 650;
                     this.Height = 700;
                     _isImageLoaded = true;
-                    if (TranslateBtn != null) TranslateBtn.Visibility = Visibility.Visible;
+                    if (CodeEditBtn != null) CodeEditBtn.Visibility = Visibility.Visible;
                 }
                 else if (ext == ".docx")
                 {
@@ -848,7 +850,6 @@ namespace FlyShelf.Windows
                     this.Width = 640;
                     this.Height = 720;
                     _isImageLoaded = true; // allow native dragging for textual representations
-                    if (TranslateBtn != null) TranslateBtn.Visibility = Visibility.Visible;
                 }
                 else if (ext == ".txt" || ext == ".log")
                 {
@@ -877,8 +878,8 @@ namespace FlyShelf.Windows
                     this.Height = 650;
                     _isImageLoaded = true; // allow native dragging for textual representations
 
-                    // Show translate button for text-type items
-                    if (TranslateBtn != null) TranslateBtn.Visibility = Visibility.Visible;
+                    // Show edit button for text-type items
+                    if (CodeEditBtn != null) CodeEditBtn.Visibility = Visibility.Visible;
                 }
                 else
                 {
@@ -1162,10 +1163,15 @@ namespace FlyShelf.Windows
                 this.Close();
                 e.Handled = true;
             }
-            // Markdown / DOCX / Doodle keyboard shortcuts
+            // Markdown / Code / Text / DOCX / Doodle keyboard shortcuts
             if (e.Key == Key.E && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
             {
-                if (!string.IsNullOrEmpty(_markdownRawContent) || MdEditBtn.Visibility == Visibility.Visible)
+                if (CodeEditBtn != null && CodeEditBtn.Visibility == Visibility.Visible)
+                {
+                    CodeEditToggle_Click(null, null);
+                    e.Handled = true;
+                }
+                else if (!string.IsNullOrEmpty(_markdownRawContent) || (MdEditBtn != null && MdEditBtn.Visibility == Visibility.Visible))
                 {
                     MarkdownEditToggle_Click(null, null);
                     e.Handled = true;
@@ -1181,6 +1187,11 @@ namespace FlyShelf.Windows
                 else if (_isDocxMode)
                 {
                     DocxSave_Click(null, null);
+                    e.Handled = true;
+                }
+                else if (_isCodeEditMode || (CodeSaveBtn != null && CodeSaveBtn.Visibility == Visibility.Visible))
+                {
+                    CodeSave_Click(null, null);
                     e.Handled = true;
                 }
                 else if (_isMarkdownEditMode || !string.IsNullOrEmpty(_markdownRawContent))
@@ -1201,6 +1212,81 @@ namespace FlyShelf.Windows
                     DoodleRedo_Click(null, null);
                     e.Handled = true;
                 }
+            }
+        }
+
+        private void CodeEditToggle_Click(object sender, RoutedEventArgs e)
+        {
+            _isCodeEditMode = !_isCodeEditMode;
+            if (_isCodeEditMode)
+            {
+                if (CodePreview != null && CodePreview.Visibility == Visibility.Visible)
+                {
+                    CodePreview.IsReadOnly = false;
+                    CodePreview.Focus();
+                }
+                if (TextPreview != null && TextPreviewScroll.Visibility == Visibility.Visible)
+                {
+                    TextPreview.IsReadOnly = false;
+                    TextPreview.Focus();
+                }
+
+                if (CodeEditLabel != null) CodeEditLabel.Text = "Lock";
+                if (CodeEditIcon != null) CodeEditIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.LockClosed24;
+                if (CodeSaveBtn != null) CodeSaveBtn.Visibility = Visibility.Visible;
+
+                FlyShelf.Windows.ToastWindow.ShowToast("Code editor enabled (Ctrl+S to save, Ctrl+E to lock)");
+            }
+            else
+            {
+                if (CodePreview != null) CodePreview.IsReadOnly = true;
+                if (TextPreview != null) TextPreview.IsReadOnly = true;
+
+                if (CodeEditLabel != null) CodeEditLabel.Text = "Edit";
+                if (CodeEditIcon != null) CodeEditIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Edit24;
+                if (CodeSaveBtn != null) CodeSaveBtn.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private async void CodeSave_Click(object sender, RoutedEventArgs e)
+        {
+            string updatedContent = CodePreview != null && CodePreview.Visibility == Visibility.Visible
+                ? CodePreview.Text
+                : (TextPreview?.Text ?? "");
+
+            if (string.IsNullOrEmpty(updatedContent) && _item == null) return;
+
+            try
+            {
+                if (CodeSaveBtn != null) CodeSaveBtn.IsEnabled = false;
+
+                if (_item != null)
+                {
+                    _item.RawContent = updatedContent;
+                    if (_item.ItemType == FlyShelf.ViewModels.ClipboardItemType.Text)
+                    {
+                        _item.FileName = updatedContent.Length > 100 ? updatedContent.Substring(0, 100) : updatedContent;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(_item?.FilePath) && File.Exists(_item.FilePath))
+                {
+                    await File.WriteAllTextAsync(_item.FilePath, updatedContent, System.Text.Encoding.UTF8);
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Saved! 💾 {Path.GetFileName(_item.FilePath)}");
+                }
+                else
+                {
+                    Classes.ClipboardHelper.SafeSetText(updatedContent);
+                    FlyShelf.Windows.ToastWindow.ShowToast("Code updated & copied to clipboard! 💾");
+                }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"Failed to save: {ex.Message} ❌");
+            }
+            finally
+            {
+                if (CodeSaveBtn != null) CodeSaveBtn.IsEnabled = true;
             }
         }
 
