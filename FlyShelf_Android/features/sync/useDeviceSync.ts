@@ -229,6 +229,8 @@ export function useDeviceSync(params: {
         const timeout = targetUrl.includes('trycloudflare.com') ? 5000 : 2000;
         const syncHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion', 'Connection': 'keep-alive' };
         if (pairingKeyRef.current) syncHeaders['X-Pairing-Key'] = pairingKeyRef.current;
+        // Send device identity so PC can update device status and show real name
+        if (deviceName) syncHeaders['X-Source-Device'] = deviceName;
         const pollStart = performance.now();
         const syncUrl = lastSyncTimestampRef.current > 0
           ? `${targetUrl}/api/sync?since=${lastSyncTimestampRef.current}`
@@ -255,10 +257,17 @@ export function useDeviceSync(params: {
           // H-3: Connection quality indicator
           const pollLatency = Math.round(performance.now() - pollStart);
           setConnectionInfo({ url: targetUrl, latencyMs: pollLatency, type: targetUrl.includes('trycloudflare.com') ? 'Cloud' : 'LAN' });
-          // Update paired device status with connection type & latency
+          // Read PC identity from response headers — PC sends name, ID, and transport status
+          const pcDeviceName = response.headers.get('X-PC-DeviceName') || '';
+          const pcDeviceId = response.headers.get('X-PC-DeviceId') || '';
+          // Update paired device status with real PC name, connection type & latency
           const connType = targetUrl.includes('trycloudflare.com') ? 'Cloud' as const : 'LAN' as const;
           pairedDevicesRef.current.filter(d => d.deviceType === 'PC').forEach(d => {
-            updateDeviceStatus(d.deviceId, { isOnline: true, connectionType: connType, latencyMs: pollLatency, lastSeen: NetworkClock.now() });
+            updateDeviceStatus(pcDeviceId || d.deviceId, {
+              isOnline: true, connectionType: connType, latencyMs: pollLatency, lastSeen: NetworkClock.now(),
+              localUrl: connType === 'LAN' ? targetUrl : undefined,
+              globalUrl: connType === 'Cloud' ? targetUrl : undefined,
+            });
           });
           // Mark this URL as proven-working for the image sweep to use
           lastWorkingPcUrlRef.current = targetUrl;

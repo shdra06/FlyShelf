@@ -25,7 +25,7 @@ echo org.gradle.workers.max=4>> gradle.properties
 
 echo.
 echo Compiling Android APK natively (Stable Speed: 4 Workers, 6GB JVM Heap, arm64-v8a Only)...
-call gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+call gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a
 
 echo.
 echo Re-packaging...

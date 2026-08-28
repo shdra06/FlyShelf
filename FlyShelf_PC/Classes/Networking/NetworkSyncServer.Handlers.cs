@@ -150,6 +150,11 @@ namespace FlyShelf.Classes
                 var jsonBytes = Encoding.UTF8.GetBytes(json);
                 res.ContentType = "application/json; charset=utf-8";
                 res.ContentLength64 = jsonBytes.Length;
+                // Send PC identity in response headers so Android can update device status
+                res.AddHeader("X-PC-DeviceName", SettingsManager.Current.DeviceName ?? Environment.MachineName);
+                res.AddHeader("X-PC-DeviceId", SettingsManager.Current.DeviceId ?? "");
+                res.AddHeader("X-PC-LAN-Active", (!string.IsNullOrEmpty(CloudDiscoveryManager.CachedLocalUrl)).ToString());
+                res.AddHeader("X-PC-Cloud-Active", (!string.IsNullOrEmpty(CloudDiscoveryManager.CachedGlobalUrl)).ToString());
                 await res.OutputStream.WriteAsync(jsonBytes, 0, jsonBytes.Length);
                 await res.OutputStream.FlushAsync();
                 res.Close();
