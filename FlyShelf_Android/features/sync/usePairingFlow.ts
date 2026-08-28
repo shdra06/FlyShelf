@@ -232,15 +232,15 @@ export function usePairingFlow(params: UsePairingFlowParams) {
     setIsPairing(false);
 
     if (paired) {
-      toast.success(`Paired with ${pcName}!`, 'Direct LAN mesh connection established');
-      Alert.alert('Connected! 🎉',
-        `Paired with ${pcName}.\n\nAnything you copy or drop on your PC will appear here instantly — from anywhere in the world.`,
+      toast.success(`Paired with ${pcName}!`, 'Connected via LAN');
+      Alert.alert('Paired! 🎉',
+        `Connected to ${pcName} on your local network.\n\nClipboard, files, and screenshots will sync automatically.`,
         [{ text: 'Got it!' }]
       );
     } else {
-      toast.success(`Paired with ${pcName}!`, 'Global Cloud relay connection active');
-      Alert.alert('Connected! 🎉',
-        `Paired with ${pcName}.\n\nCloud pairing complete! Anything you copy or drop on your PC will appear here via cloud sync.`,
+      toast.success(`Paired with ${pcName}!`, 'Saved — searching for PC...');
+      Alert.alert('Paired! 🎉',
+        `Pairing with ${pcName} saved via cloud.\n\nWill connect automatically when your PC is reachable.`,
         [{ text: 'Got it!' }]
       );
     }

@@ -1,4 +1,4 @@
-﻿import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -72,14 +72,14 @@ export const toast = {
     globalShowToast?.({
       type: 'sync_lan',
       title: title || 'Synced via Direct LAN',
-      message: deviceName ? `Connected to ${deviceName}` : 'High-speed local transfer',
+      message: deviceName ? `Connected to ${deviceName}` : 'Synced via LAN',
       detail: detail || '⚡ <5ms P2P',
     }),
   syncCloud: (title: string, deviceName?: string, detail?: string) =>
     globalShowToast?.({
       type: 'sync_cloud',
       title: title || 'Synced via Cloud Tunnel',
-      message: deviceName ? `Delivered to ${deviceName}` : 'Encrypted relay active',
+      message: deviceName ? `Delivered to ${deviceName}` : 'Synced via cloud',
       detail: detail || '☁️ Remote Sync',
     }),
   clipboard: (title: string, preview?: string) =>

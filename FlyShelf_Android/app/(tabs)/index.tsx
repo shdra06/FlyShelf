@@ -722,7 +722,7 @@ function SyncScreenInner() {
         lastWorkingPcUrlRef.current = null;
         cachedPcUrlRef.current = null;
       } else if (!state.isConnected) {
-        setConnectionInfo({ url: '', latencyMs: 0, type: 'LAN' });
+        setConnectionInfo(null);
       }
     });
     return () => { netInfoUnsubscribe(); };
@@ -935,9 +935,9 @@ function SyncScreenInner() {
 
           if (localSuccess) {
             if (activeUrl.includes('trycloudflare.com')) {
-              toast.syncCloud('✓ Delivered to PC', undefined, 'Cloud Relay');
+              toast.syncCloud('✓ Delivered to PC', undefined, '☁️ Cloud');
             } else {
-              toast.syncLan('✓ Delivered to PC', undefined, 'Direct LAN');
+              toast.syncLan('✓ Delivered to PC', undefined, '⚡ LAN');
             }
           }
         } catch(e) {
@@ -961,9 +961,9 @@ function SyncScreenInner() {
               localSuccess = retryRes.ok;
               if (localSuccess) {
                 if (freshUrl.includes('trycloudflare.com')) {
-                  toast.syncCloud('✓ Delivered to PC', undefined, 'Cloud Relay');
+                  toast.syncCloud('✓ Delivered to PC', undefined, '☁️ Cloud');
                 } else {
-                  toast.syncLan('✓ Delivered to PC', undefined, 'Direct LAN');
+                  toast.syncLan('✓ Delivered to PC', undefined, '⚡ LAN');
                 }
               }
             }
@@ -1349,9 +1349,9 @@ function SyncScreenInner() {
 
       if (p2pSuccess) {
         if (targetUrl?.includes('trycloudflare.com')) {
-          toast.syncCloud('✓ Synced to PC', undefined, 'Cloud Relay');
+          toast.syncCloud('✓ Synced to PC', undefined, '☁️ Cloud');
         } else {
-          toast.syncLan('✓ Synced to PC', undefined, 'Direct LAN');
+          toast.syncLan('✓ Synced to PC', undefined, '⚡ LAN');
         }
       } else {
         toast.error('PC Unreachable', 'Ensure your PC companion app is active and on the same network');
@@ -1896,7 +1896,7 @@ function SyncScreenInner() {
         {/* Header */}
         <ScreenHeader
           title="FlyShelf"
-          subtitle={pairingKeyRef.current ? (pairedPcName ? `Connected to ${pairedPcName}${isPairedPcPro ? ' (Pro)' : ' (Free)'}${connectionInfo ? ` ${connectionInfo.type === 'LAN' ? '🟢' : '🟡'} ${connectionInfo.type === 'LAN' ? `LAN${(() => { try { const m = connectionInfo.url.match(/:\/\/([^:/]+)/); return m ? ' ' + m[1] : ''; } catch { return ''; } })()} • ` : 'Cloud • '}${connectionInfo.latencyMs}ms` : ''}` : 'Cloud Active') : '⚠ Not Paired'}
+          subtitle={pairingKeyRef.current ? (connectionInfo ? `${pairedPcName || 'PC'}${isPairedPcPro ? ' (Pro)' : ''} ${connectionInfo.type === 'LAN' ? '🟢' : '🟡'} ${connectionInfo.type === 'LAN' ? `LAN${(() => { try { const m = connectionInfo.url.match(/:\/\/([^:/]+)/); return m ? ' ' + m[1] : ''; } catch { return ''; } })()} • ` : 'Cloud • '}${connectionInfo.latencyMs}ms` : (pairedPcName ? `${pairedPcName} — ⏳ Searching...` : '⏳ Searching for PC...')) : '⚠ Not Paired'}
           scrollY={scrollY}
           statusBadge={
             pairedDevices.length > 0 ? (

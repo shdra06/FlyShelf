@@ -188,9 +188,9 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
             if (upRes.status === 200) {
               syncLog('SCREENSHOT', `Sent to PC via ${targetUrl.includes('trycloudflare') ? 'Cloud' : 'LAN'}: ${fileName}`);
               if (targetUrl.includes('trycloudflare')) {
-                toast.syncCloud('Screenshot Synced to PC', undefined, 'Cloud Relay');
+                toast.syncCloud('Screenshot Synced to PC', undefined, '☁️ Cloud');
               } else {
-                toast.syncLan('Screenshot Synced to PC', undefined, 'Direct LAN');
+                toast.syncLan('Screenshot Synced to PC', undefined, '⚡ LAN');
               }
             }
           } catch (e: any) {
@@ -310,9 +310,9 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
                   toast.warning('Screenshot Saved Locally', 'PC unreachable — will automatically sync when reconnected');
                 } else {
                   if (targetUrl?.includes('trycloudflare')) {
-                    toast.syncCloud('Screenshot Synced to PC', undefined, 'Cloud Relay');
+                    toast.syncCloud('Screenshot Synced to PC', undefined, '☁️ Cloud');
                   } else {
-                    toast.syncLan('Screenshot Synced to PC', undefined, 'Direct LAN');
+                    toast.syncLan('Screenshot Synced to PC', undefined, '⚡ LAN');
                   }
                 }
               } else {

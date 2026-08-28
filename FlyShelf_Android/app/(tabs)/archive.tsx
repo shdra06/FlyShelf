@@ -184,7 +184,7 @@ function FilesScreenInner() {
       if (relayPC) {
         resolvedUrl = relayPC.localUrl || relayPC.globalUrl;
         useRelay = true;
-        toast.syncCloud(`Relaying via ${relayPC.deviceName}`, undefined, 'Cloud Relay');
+        toast.syncCloud(`Routing via ${relayPC.deviceName}`, undefined, '☁️ Cloud');
       } else {
         Alert.alert('No Route Available', 'No PC with Cloudflare is online to relay files.\n\nEnsure at least one PC is running FlyShelf with internet access.');
         return;
