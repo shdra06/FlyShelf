@@ -332,16 +332,20 @@ namespace FlyShelf.Windows
         /// <summary>Check if we can add another image to this section (tier limits).</summary>
         private bool CanAddImage()
         {
-            int maxImages = LicenseManager.IsPro
-                ? LicenseManager.PRO_NOTE_IMAGES_PER_CARD
-                : LicenseManager.FREE_NOTE_IMAGES_PER_CARD;
+            int maxImages = 5; // v7.2 FREE: Raised for all users
+            // ORIGINAL:
+            // int maxImages = LicenseManager.IsPro
+            //     ? LicenseManager.PRO_NOTE_IMAGES_PER_CARD
+            //     : LicenseManager.FREE_NOTE_IMAGES_PER_CARD;
 
             if (_section.Images.Count >= maxImages)
             {
-                if (!LicenseManager.IsPro)
-                    UpgradePrompt.ShowNoteImageLimit();
-                else
-                    ToastWindow.ShowToast($"Max {LicenseManager.PRO_NOTE_IMAGES_PER_CARD} images per card");
+                // v7.2 FREE: Unlocked — uncomment to re-enable Pro gate
+                // if (!LicenseManager.IsPro)
+                //     UpgradePrompt.ShowNoteImageLimit();
+                // else
+                //     ToastWindow.ShowToast($"Max {LicenseManager.PRO_NOTE_IMAGES_PER_CARD} images per card");
+                ToastWindow.ShowToast($"Max {maxImages} images per card");
                 return false;
             }
             return true;

@@ -309,7 +309,7 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
                 if (!localSuccess) {
                   toast.warning('Screenshot Saved Locally', 'PC unreachable — will automatically sync when reconnected');
                 } else {
-                  if (activeUrl.includes('trycloudflare')) {
+                  if (targetUrl?.includes('trycloudflare')) {
                     toast.syncCloud('Screenshot Synced to PC', undefined, 'Cloud Relay');
                   } else {
                     toast.syncLan('Screenshot Synced to PC', undefined, 'Direct LAN');

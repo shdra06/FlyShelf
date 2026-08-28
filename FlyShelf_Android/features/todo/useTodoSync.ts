@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import EncryptedStorage from '../../utils/EncryptedStorage';
 
 import { getSecureItem } from '../../utils/secureStorage';
 import { fetchWithTimeout, resolveLivePcUrl } from '../../utils/networkHelpers';
@@ -122,10 +123,10 @@ export function useTodoSync({
       for (const k of keysToSync) changedDayKeysRef.current.add(k);
       // Persist failed sync keys for retry on next successful connection
       try {
-        const existing = await AsyncStorage.getItem('@flyshelf_pending_todo_sync');
+        const existing = await EncryptedStorage.getItem('@flyshelf_pending_todo_sync') || await AsyncStorage.getItem('@flyshelf_pending_todo_sync');
         const pending: string[] = existing ? JSON.parse(existing) : [];
         for (const k of keys) { if (!pending.includes(k)) pending.push(k); }
-        await AsyncStorage.setItem('@flyshelf_pending_todo_sync', JSON.stringify(pending));
+        await EncryptedStorage.setItem('@flyshelf_pending_todo_sync', JSON.stringify(pending));
       } catch {}
     }
   }, [pairingKey, deviceName, daysRef, changedDayKeysRef, mountedRef, onStatusChange]);
@@ -161,6 +162,7 @@ export function useTodoSync({
       if (resp.ok) {
         const remote: TodoDay[] = await resp.json();
         const merged = mergeDays(daysRef.current, remote);
+        daysRef.current = merged;
         onDaysMerged(merged);
         saveLocal(merged);
         onStatusChange('connected');
@@ -169,7 +171,7 @@ export function useTodoSync({
 
         // Flush offline queue on successful connection
         try {
-          const pendingRaw = await AsyncStorage.getItem('@flyshelf_pending_todo_sync');
+          const pendingRaw = await EncryptedStorage.getItem('@flyshelf_pending_todo_sync') || await AsyncStorage.getItem('@flyshelf_pending_todo_sync');
           if (pendingRaw) {
             const pendingKeys: string[] = JSON.parse(pendingRaw);
             if (pendingKeys.length > 0) {
@@ -181,7 +183,8 @@ export function useTodoSync({
                   body: JSON.stringify(payload),
                 }, 5000);
               }
-              await AsyncStorage.removeItem('@flyshelf_pending_todo_sync');
+              await EncryptedStorage.removeItem('@flyshelf_pending_todo_sync');
+              await AsyncStorage.removeItem('@flyshelf_pending_todo_sync').catch(() => {});
             }
           }
         } catch {}

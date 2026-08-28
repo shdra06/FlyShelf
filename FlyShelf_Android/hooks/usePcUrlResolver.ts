@@ -112,16 +112,22 @@ export function usePcUrlResolver(
         try {
           const res = await fetchWithTimeout(`${url}/api/health`, { headers: probeHeaders }, timeout);
           if (res.ok || res.status === 401) {
-            // AUDIT FIX #8: Validate response is actually FlyShelf, not a random server on the same port
-            try {
-              const body = await res.json();
-              if (body?.app !== 'FlyShelf') throw new Error('Not FlyShelf');
-            } catch { /* Accept 401 without body validation (pre-pairing) */ }
+            // AUDIT FIX #8: Validate response is actually FlyShelf
+            if (res.ok) {
+              try {
+                const body = await res.json();
+                if (body?.app !== 'FlyShelf') throw new Error(`Probe failed for ${url}`);
+              } catch (e: any) {
+                if (e?.message?.includes('Probe failed')) throw e; // Re-throw validation failure
+                // Swallow JSON parse errors (non-JSON response from FlyShelf is OK)
+              }
+            }
             syncLog('URL-RESOLVE', `✅ Reachable: ${url} (status=${res.status})`);
             return url;
           }
         } catch (e: any) {
           syncLog('URL-RESOLVE', `❌ Probe failed ${url}: ${e?.message || 'timeout'}`);
+          throw e;
         }
         throw new Error(`Probe failed for ${url}`);
       };
@@ -202,14 +208,19 @@ export function usePcUrlResolver(
 
       // ── 3. Parallel Speed Race ──
       // Launch LAN probe (1500ms) and Cloud probe (2500ms) concurrently.
-      // AUDIT FIX #12: Catch-guard promises before race to prevent AggregateError leaks on Hermes
+      // AUDIT FIX #12: Catch-guard the Promise.any to prevent AggregateError leaks on Hermes
+      // but keep rejection semantics so Promise.race doesn't resolve with null
       const lanPromise = uniqueLan.length > 0
-        ? Promise.any(uniqueLan.map(url => probeUrl(url, 1500))).catch(() => null as string | null)
-        : Promise.resolve(null as string | null);
+        ? Promise.any(uniqueLan.map(url => probeUrl(url, 1500)))
+        : Promise.reject(new Error('No LAN candidates'));
 
       const cloudPromise = uniqueCloud.length > 0
-        ? Promise.any(uniqueCloud.map(url => probeUrl(url, 2500))).catch(() => null as string | null)
-        : Promise.resolve(null as string | null);
+        ? Promise.any(uniqueCloud.map(url => probeUrl(url, 2500)))
+        : Promise.reject(new Error('No Cloud candidates'));
+
+      // Attach .catch to suppress unhandled rejection warnings without changing semantics
+      lanPromise.catch(() => {});
+      cloudPromise.catch(() => {});
 
       // If LAN connects, it wins immediately (zero delay).
       // If Cloud connects first, give LAN a tiny 150ms window to claim local priority, else accept Cloud.

@@ -260,13 +260,19 @@ namespace FlyShelf.Classes
         /// <summary>Check if a theme can be used. v7.2: Unlocked for all users.</summary>
         public static bool CanUseTheme(string? themeName)
         {
-            return true; // v7.2: All themes unlocked
+            return true; // v7.2 FREE: All themes unlocked
+            // ORIGINAL PRO GATE:
+            // if (IsPro) return true;
+            // if (string.IsNullOrEmpty(themeName)) return true; // disabling themes is always allowed
+            // return themeName.Equals("FlyShelf Default", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>Check if custom wallpaper can be set. v7.2: Unlocked for all users.</summary>
         public static bool CanSetCustomWallpaper()
         {
-            return true; // v7.2: Custom wallpaper unlocked
+            return true; // v7.2 FREE: Custom wallpaper unlocked
+            // ORIGINAL PRO GATE:
+            // return IsPro;
         }
 
         /// <summary>Check if Glass UI (Acrylic Blur) theme can be applied. Free for all users.</summary>
@@ -278,13 +284,17 @@ namespace FlyShelf.Classes
         /// <summary>Check if Cloudflare tunnel can be enabled. v7.2: Unlocked for all users.</summary>
         public static bool CanUseCloudflare()
         {
-            return true; // v7.2: Cloudflare tunnel unlocked
+            return true; // v7.2 FREE: Cloudflare tunnel unlocked
+            // ORIGINAL PRO GATE:
+            // return IsPro;
         }
 
         /// <summary>Check if custom sniffer paths can be added. v7.2: Unlocked for all users.</summary>
         public static bool CanAddCustomSnifferPaths()
         {
-            return true; // v7.2: Custom sniffer paths unlocked
+            return true; // v7.2 FREE: Custom sniffer paths unlocked
+            // ORIGINAL PRO GATE:
+            // return IsPro;
         }
 
         /// <summary>Returns the history cap for the current tier.</summary>
@@ -296,19 +306,25 @@ namespace FlyShelf.Classes
         /// <summary>Returns the max pin count for the current tier.</summary>
         public static int GetPinLimit()
         {
-            return int.MaxValue; // v7.2: Unlimited pins for all
+            return int.MaxValue; // v7.2 FREE: Unlimited pins for all
+            // ORIGINAL PRO GATE:
+            // return IsPro ? int.MaxValue : FREE_PIN_LIMIT;
         }
 
         /// <summary>Returns the max to-do items per day for the current tier.</summary>
         public static int GetTodoDailyLimit()
         {
-            return IsPro ? int.MaxValue : FREE_TODO_DAILY;
+            return int.MaxValue; // v7.2 FREE: Unlimited to-do items for all
+            // ORIGINAL PRO GATE:
+            // return IsPro ? int.MaxValue : FREE_TODO_DAILY;
         }
 
         /// <summary>Returns the max note history days for the current tier.</summary>
         public static int GetNoteHistoryDays()
         {
-            return IsPro ? int.MaxValue : FREE_NOTE_DAYS;
+            return int.MaxValue; // v7.2 FREE: All notes visible forever
+            // ORIGINAL PRO GATE:
+            // return IsPro ? int.MaxValue : FREE_NOTE_DAYS;
         }
 
         /// <summary>Returns retention day options for current tier.</summary>
@@ -318,7 +334,9 @@ namespace FlyShelf.Classes
         /// </remarks>
         public static int[] GetRetentionOptions()
         {
-            return IsPro ? new[] { 7, 14, 30, 0 } : new[] { 30, 0 };
+            return new[] { 7, 14, 30, 0 }; // v7.2 FREE: All retention options available
+            // ORIGINAL PRO GATE:
+            // return IsPro ? new[] { 7, 14, 30, 0 } : new[] { 30, 0 };
         }
 
         // ═══════════════════════════════════════════════════════════════

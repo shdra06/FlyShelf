@@ -27,6 +27,8 @@ export type NoteBullet = {
   IsPinned: boolean;
   SortOrder: number;
   SubBullets: SubBulletItem[];
+  ParentNoteId?: string | null;
+  SubNotes: NoteBullet[];
   CreatedByDevice?: string;
   LastEditedByDevice?: string;
 };
@@ -36,6 +38,8 @@ export type FreeformSection = {
   Title?: string;
   Content: string;
   CreatedAt: string;
+  ParentNoteId?: string | null;
+  SubNotes: FreeformSection[];
 };
 
 export type NoteDay = {
@@ -44,7 +48,20 @@ export type NoteDay = {
   Bullets: NoteBullet[];
   FreeformSections: FreeformSection[];
   FreeformContent?: string;
+  FolderId?: string | null;
   LastModified?: number;
+};
+
+export type NoteFolder = {
+  Id: string;
+  Name: string;
+  ParentId?: string | null;
+  Icon: string;
+  Color: string;
+  IsExpanded: boolean;
+  SortOrder: number;
+  CreatedAt: string;
+  LastModified: string;
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -144,6 +161,7 @@ export const createNoteBullet = (content = ''): NoteBullet => ({
   IsPinned: false,
   SortOrder: 0,
   SubBullets: [],
+  SubNotes: [],
 });
 
 /** Create a blank FreeformSection */
@@ -152,6 +170,7 @@ export const createFreeformSection = (content = ''): FreeformSection => ({
   Title: '',
   Content: content,
   CreatedAt: new Date().toISOString(),
+  SubNotes: [],
 });
 
 /** Create a blank NoteDay for today */
@@ -161,6 +180,19 @@ export const createNoteDay = (date?: Date): NoteDay => ({
   Bullets: [],
   FreeformSections: [createFreeformSection()],
   LastModified: Date.now(),
+});
+
+/** Create a blank NoteFolder */
+export const createNoteFolder = (name = 'New Folder', parentId?: string): NoteFolder => ({
+  Id: generateId(),
+  Name: name,
+  ParentId: parentId || null,
+  Icon: '📁',
+  Color: '',
+  IsExpanded: true,
+  SortOrder: 0,
+  CreatedAt: new Date().toISOString(),
+  LastModified: new Date().toISOString(),
 });
 
 /** Create a blank TodoItem. SubTasks support nesting but enforce max depth of 3 in the UI. */

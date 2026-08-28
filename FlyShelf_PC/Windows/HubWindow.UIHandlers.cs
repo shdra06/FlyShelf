@@ -32,7 +32,13 @@ namespace FlyShelf.Windows
                     hours = h;
             }
 
-            // v7.2: All incognito durations unlocked for all users
+            // v7.2 FREE: Pro gate temporarily bypassed — uncomment to re-enable
+            // if (hours >= 6 && !LicenseManager.IsPro)
+            // {
+            //     ToastWindow.ShowToast("6+ hour incognito requires Pro!");
+            //     UpgradePrompt.ShowActivationDialog(this);
+            //     return;
+            // }
 
             Classes.IncognitoManager.EnableIncognito(hours);
             UpdateIncognitoUI();

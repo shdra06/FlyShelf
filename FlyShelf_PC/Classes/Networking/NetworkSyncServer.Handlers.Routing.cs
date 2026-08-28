@@ -298,7 +298,8 @@ namespace FlyShelf.Classes
                          string.IsNullOrWhiteSpace(req.Headers["X-Pairing-Key"]) &&
                          string.IsNullOrEmpty(req.QueryString["key"]) &&
                          string.IsNullOrEmpty(req.Headers["Authorization"]) &&
-                         string.IsNullOrEmpty(req.QueryString["pin"]))
+                         string.IsNullOrEmpty(req.QueryString["pin"]) &&
+                         string.IsNullOrEmpty(req.Headers["X-Auth-Token"]))
                 {
                     // SECURITY: Unauthenticated health endpoint — expose ONLY liveness status.
                     // Full device info (name, ID, URLs, peers) is served behind auth below.
@@ -306,6 +307,7 @@ namespace FlyShelf.Classes
                     {
                         var healthData = new
                         {
+                            app = "FlyShelf",  // AUDIT FIX #8: Signature for probe validation
                             status = "online",
                             timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                             httpPort = Instance?.CurrentPort ?? 8080,

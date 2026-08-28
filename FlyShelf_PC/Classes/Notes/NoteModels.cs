@@ -21,6 +21,58 @@ namespace FlyShelf.Classes
     // DATA MODELS
     // ═══════════════════════════════════════════════════════════
 
+    /// <summary>A folder in the notes hierarchy. Supports infinite nesting via ParentId.</summary>
+    public class NoteFolder : INotifyPropertyChanged
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12];
+        
+        private string _name = "New Folder";
+        public string Name
+        {
+            get => _name;
+            set { if (_name != value) { _name = value; OnPropertyChanged(nameof(Name)); } }
+        }
+        
+        /// <summary>Null = root-level folder.</summary>
+        public string? ParentId { get; set; }
+        
+        private string _icon = "📁";
+        public string Icon
+        {
+            get => _icon;
+            set { if (_icon != value) { _icon = value; OnPropertyChanged(nameof(Icon)); } }
+        }
+        
+        private string _color = "";
+        public string Color
+        {
+            get => _color;
+            set { if (_color != value) { _color = value ?? ""; OnPropertyChanged(nameof(Color)); OnPropertyChanged(nameof(HasColor)); } }
+        }
+        
+        [JsonIgnore] public bool HasColor => !string.IsNullOrEmpty(_color);
+        
+        private bool _isExpanded = true;
+        public bool IsExpanded
+        {
+            get => _isExpanded;
+            set { if (_isExpanded != value) { _isExpanded = value; OnPropertyChanged(nameof(IsExpanded)); } }
+        }
+        
+        private int _sortOrder;
+        public int SortOrder
+        {
+            get => _sortOrder;
+            set { if (_sortOrder != value) { _sortOrder = value; OnPropertyChanged(nameof(SortOrder)); } }
+        }
+        
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime LastModified { get; set; } = DateTime.Now;
+        
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
     public class NoteBullet : INotifyPropertyChanged
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..8];
@@ -213,6 +265,24 @@ namespace FlyShelf.Classes
             }
         }
 
+        // ── Parent/Child Note Hierarchy (Stacked Subnotes) ──────
+        /// <summary>If set, this bullet is a subnote of another bullet.</summary>
+        public string? ParentNoteId { get; set; }
+
+        private ObservableCollection<NoteBullet> _subNotes = new();
+        /// <summary>Child notes displayed as stacked cards below this note.</summary>
+        public ObservableCollection<NoteBullet> SubNotes
+        {
+            get => _subNotes;
+            set { _subNotes = value ?? new(); OnPropertyChanged(nameof(SubNotes)); OnPropertyChanged(nameof(HasSubNotes)); }
+        }
+
+        [JsonIgnore]
+        public bool HasSubNotes => _subNotes.Count > 0;
+
+        /// <summary>Called after mutating SubNotes directly to refresh HasSubNotes binding.</summary>
+        public void OnSubNotesChanged() => OnPropertyChanged(nameof(HasSubNotes));
+
         // ── Sub-bullets (nested items inside this bullet card) ──
         private ObservableCollection<SubBulletItem> _subBullets = new();
         public ObservableCollection<SubBulletItem> SubBullets
@@ -315,6 +385,21 @@ namespace FlyShelf.Classes
         /// <summary>Rich formatted content stored as XAML (used by expand window). Plain Content is kept in sync.</summary>
         public string RichContent { get; set; } = "";
 
+        // ── Parent/Child Note Hierarchy (Stacked Subnotes) ──────
+        /// <summary>If set, this section is a subnote of another section.</summary>
+        public string? ParentNoteId { get; set; }
+
+        private ObservableCollection<FreeformSection> _subNotes = new();
+        /// <summary>Child notes displayed as stacked cards below this section.</summary>
+        public ObservableCollection<FreeformSection> SubNotes
+        {
+            get => _subNotes;
+            set { _subNotes = value ?? new(); OnPropertyChanged(nameof(SubNotes)); OnPropertyChanged(nameof(HasSubNotes)); }
+        }
+
+        [JsonIgnore]
+        public bool HasSubNotes => _subNotes.Count > 0;
+
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -412,6 +497,9 @@ namespace FlyShelf.Classes
 
         [JsonIgnore]
         public bool IsToday => Date.Date == DateTime.Today;
+
+        /// <summary>Optional folder assignment. Null = Daily Journal (legacy behavior).</summary>
+        public string? FolderId { get; set; }
 
         public long? LastModified { get; set; }
 

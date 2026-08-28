@@ -33,6 +33,7 @@ namespace FlyShelf.Classes
 
         private static ObservableCollection<NoteDay> _days = new();
         private static List<NoteDay> _allDays = new();
+        private static ObservableCollection<NoteFolder> _folders = new();
         private static Timer? _saveTimer;
         private static readonly object _lock = new();
         private static readonly SemaphoreSlim _fileLock = new(1, 1);
@@ -45,6 +46,9 @@ namespace FlyShelf.Classes
 
         /// <summary>All note days, sorted newest-first.</summary>
         public static ObservableCollection<NoteDay> Days => _days;
+
+        /// <summary>All note folders, sorted by SortOrder.</summary>
+        public static ObservableCollection<NoteFolder> Folders => _folders;
 
         /// <summary>Returns the permanent image storage directory for notes, creating it if needed.</summary>
         public static string GetImagesDirectory()
@@ -67,16 +71,39 @@ namespace FlyShelf.Classes
                     {
                         _days = new ObservableCollection<NoteDay>();
                         _allDays = new List<NoteDay>();
+                        _folders = new ObservableCollection<NoteFolder>();
                         _isLoaded = true;
                         return;
                     }
 
                     // NM-4 FIX: Use RunWithRetry so a brief file lock from concurrent .bak copy doesn't immediately fall to backup recovery
                     string json = RunWithRetry(() => File.ReadAllText(_notesPath));
-                    var loaded = JsonSerializer.Deserialize<List<NoteDay>>(json, new JsonSerializerOptions
+                    
+                    List<NoteDay>? loaded = null;
+                    try
                     {
-                        PropertyNameCaseInsensitive = true
-                    });
+                        using var doc = JsonDocument.Parse(json);
+                        if ((doc.RootElement.TryGetProperty("Version", out var versionElement) && versionElement.GetInt32() >= 2) || doc.RootElement.TryGetProperty("Folders", out _))
+                        {
+                            var v2Data = JsonSerializer.Deserialize<NotesDataV2>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            if (v2Data != null)
+                            {
+                                loaded = v2Data.Days;
+                                if (v2Data.Folders != null)
+                                {
+                                    _folders = new ObservableCollection<NoteFolder>(v2Data.Folders);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            loaded = JsonSerializer.Deserialize<List<NoteDay>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        }
+                    }
+                    catch
+                    {
+                        loaded = JsonSerializer.Deserialize<List<NoteDay>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    }
 
                     if (loaded != null)
                     {
@@ -111,10 +138,32 @@ namespace FlyShelf.Classes
                         try
                         {
                             string backupJson = RunWithRetry(() => File.ReadAllText(backupPath));
-                            var loadedBackup = JsonSerializer.Deserialize<List<NoteDay>>(backupJson, new JsonSerializerOptions
+                            List<NoteDay>? loadedBackup = null;
+                            try
                             {
-                                PropertyNameCaseInsensitive = true
-                            });
+                                using var doc = JsonDocument.Parse(backupJson);
+                                if ((doc.RootElement.TryGetProperty("Version", out var versionElement) && versionElement.GetInt32() >= 2) || doc.RootElement.TryGetProperty("Folders", out _))
+                                {
+                                    var v2Data = JsonSerializer.Deserialize<NotesDataV2>(backupJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                    if (v2Data != null)
+                                    {
+                                        loadedBackup = v2Data.Days;
+                                        if (v2Data.Folders != null)
+                                        {
+                                            _folders = new ObservableCollection<NoteFolder>(v2Data.Folders);
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    loadedBackup = JsonSerializer.Deserialize<List<NoteDay>>(backupJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                }
+                            }
+                            catch
+                            {
+                                loadedBackup = JsonSerializer.Deserialize<List<NoteDay>>(backupJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            }
+
                             if (loadedBackup != null)
                             {
                                 foreach (var d in loadedBackup)
@@ -144,22 +193,25 @@ namespace FlyShelf.Classes
 
         private static void FilterVisibleDays()
         {
-            int maxDays = LicenseManager.GetNoteHistoryDays();
-            List<NoteDay> source;
-            if (maxDays < int.MaxValue)
-            {
-                DateTime cutoff = DateTime.Today.AddDays(-maxDays);
-                source = _allDays.Where(d => d.Date.Date >= cutoff.Date).ToList();
-                if (_allDays.Count > source.Count)
-                {
-                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        UpgradePrompt.ShowNoteHistoryLimit());
-                }
-            }
-            else
-            {
-                source = new List<NoteDay>(_allDays);
-            }
+            // v7.2 FREE: All notes visible forever — no day-based filtering
+            List<NoteDay> source = new List<NoteDay>(_allDays);
+            // ORIGINAL PRO GATE:
+            // int maxDays = LicenseManager.GetNoteHistoryDays();
+            // List<NoteDay> source;
+            // if (maxDays < int.MaxValue)
+            // {
+            //     DateTime cutoff = DateTime.Today.AddDays(-maxDays);
+            //     source = _allDays.Where(d => d.Date.Date >= cutoff.Date).ToList();
+            //     if (_allDays.Count > source.Count)
+            //     {
+            //         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+            //             UpgradePrompt.ShowNoteHistoryLimit());
+            //     }
+            // }
+            // else
+            // {
+            //     source = new List<NoteDay>(_allDays);
+            // }
 
             // Filter out empty days (no content at all) — today is always kept
             var today = DateTime.Today;
@@ -197,8 +249,11 @@ namespace FlyShelf.Classes
                     _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
                     
                     // If it falls within the visible days, insert it into _days too
-                    int maxDays = LicenseManager.GetNoteHistoryDays();
-                    if (maxDays == int.MaxValue || dateOnly >= DateTime.Today.AddDays(-maxDays))
+                    // v7.2 FREE: Always insert into visible days (no day limit)
+                    if (true)
+                    // ORIGINAL PRO GATE:
+                    // int maxDays = LicenseManager.GetNoteHistoryDays();
+                    // if (maxDays == int.MaxValue || dateOnly >= DateTime.Today.AddDays(-maxDays))
                     {
                         int insertIdx = 0;
                         while (insertIdx < _days.Count && _days[insertIdx].Date > dateOnly)
@@ -356,9 +411,11 @@ namespace FlyShelf.Classes
             // Take lightweight snapshot on current thread (fast — just list copy)
             List<NoteDay> snapshot;
             List<NoteDay> allDaysCopy;
+            List<NoteFolder> foldersCopy;
             try
             {
                 snapshot = _days.ToList();
+                foldersCopy = _folders.ToList();
                 lock (_lock)
                 {
                     var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
@@ -388,7 +445,7 @@ namespace FlyShelf.Classes
             // AUDIT FIX: Move heavy serialization + disk write entirely to background thread
             LastSaveTask = Task.Run(() =>
             {
-                string jsonStr = SerializeSnapshot(allDaysCopy);
+                string jsonStr = SerializeSnapshot(allDaysCopy, foldersCopy);
                 SaveSnapshotJson(snapshot, jsonStr);
             });
         }
@@ -397,10 +454,12 @@ namespace FlyShelf.Classes
         {
             if (!_isLoaded) return;
             List<NoteDay> snapshot;
+            List<NoteFolder> foldersCopy;
             string jsonStr;
             try
             {
                 snapshot = _days.ToList();
+                foldersCopy = _folders.ToList();
                 lock (_lock)
                 {
                     var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
@@ -421,7 +480,7 @@ namespace FlyShelf.Classes
                     _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
 
                     var serializableList = _allDays.ToList();
-                    jsonStr = SerializeSnapshot(serializableList);
+                    jsonStr = SerializeSnapshot(serializableList, foldersCopy);
                 }
             }
             catch { return; }
@@ -429,9 +488,10 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>Serialize a snapshot list to JSON string (called on the thread that owns the data).</summary>
-        private static string SerializeSnapshot(List<NoteDay> snapshot)
+        private static string SerializeSnapshot(List<NoteDay> snapshot, List<NoteFolder> foldersSnapshot)
         {
-            return JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+            var data = new NotesDataV2 { Folders = foldersSnapshot, Days = snapshot };
+            return JsonSerializer.Serialize(data, new JsonSerializerOptions
             {
                 WriteIndented = false,
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
@@ -831,6 +891,85 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("NOTES_SYNC", $"MergeFromMobile failed: {ex.Message}");
             }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // FOLDER CRUD
+        // ═══════════════════════════════════════════════════════════
+
+        /// <summary>Create a new folder, optionally nested under a parent.</summary>
+        public static NoteFolder CreateFolder(string name, string? parentId = null)
+        {
+            var folder = new NoteFolder
+            {
+                Name = name,
+                ParentId = parentId,
+                SortOrder = _folders.Count
+            };
+            _folders.Add(folder);
+            MarkDirty();
+            return folder;
+        }
+
+        /// <summary>Rename a folder.</summary>
+        public static void RenameFolder(string folderId, string newName)
+        {
+            var folder = _folders.FirstOrDefault(f => f.Id == folderId);
+            if (folder != null)
+            {
+                folder.Name = newName;
+                folder.LastModified = DateTime.Now;
+                MarkDirty();
+            }
+        }
+
+        /// <summary>Delete a folder and optionally move its children to the parent.</summary>
+        public static void DeleteFolder(string folderId)
+        {
+            var folder = _folders.FirstOrDefault(f => f.Id == folderId);
+            if (folder == null) return;
+            
+            // Re-parent child folders to the deleted folder's parent
+            foreach (var child in _folders.Where(f => f.ParentId == folderId).ToList())
+            {
+                child.ParentId = folder.ParentId;
+            }
+            
+            // Un-assign notes from deleted folder (move to root/daily)
+            foreach (var day in _allDays.Where(d => d.FolderId == folderId))
+            {
+                day.FolderId = folder.ParentId;
+            }
+            
+            _folders.Remove(folder);
+            MarkDirty();
+        }
+
+        /// <summary>Get child folders of a parent (null = root level).</summary>
+        public static IEnumerable<NoteFolder> GetChildFolders(string? parentId)
+        {
+            return _folders.Where(f => f.ParentId == parentId).OrderBy(f => f.SortOrder);
+        }
+
+        /// <summary>Get notes assigned to a specific folder.</summary>
+        public static IEnumerable<NoteDay> GetNotesInFolder(string? folderId)
+        {
+            return _allDays.Where(d => d.FolderId == folderId).OrderByDescending(d => d.Date);
+        }
+
+        /// <summary>Move a note day to a folder.</summary>
+        public static void MoveNoteToFolder(NoteDay day, string? folderId)
+        {
+            day.FolderId = folderId;
+            MarkDirty();
+        }
+
+        /// <summary>Wrapper for the new JSON schema that includes folders.</summary>
+        private class NotesDataV2
+        {
+            public int Version { get; set; } = 2;
+            public List<NoteFolder> Folders { get; set; } = new();
+            public List<NoteDay> Days { get; set; } = new();
         }
     }
 }

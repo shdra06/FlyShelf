@@ -152,16 +152,20 @@ namespace FlyShelf.Controls
         /// </summary>
         private bool CanAddImageToSection(FreeformSection section)
         {
-            int maxImages = LicenseManager.IsPro
-                ? LicenseManager.PRO_NOTE_IMAGES_PER_CARD
-                : LicenseManager.FREE_NOTE_IMAGES_PER_CARD;
+            int maxImages = 5; // v7.2 FREE: Raised for all users
+            // ORIGINAL:
+            // int maxImages = LicenseManager.IsPro
+            //     ? LicenseManager.PRO_NOTE_IMAGES_PER_CARD
+            //     : LicenseManager.FREE_NOTE_IMAGES_PER_CARD;
 
             if (section.Images.Count >= maxImages)
             {
-                if (!LicenseManager.IsPro)
-                    UpgradePrompt.ShowNoteImageLimit();
-                else
-                    Windows.ToastWindow.ShowToast($"Max {LicenseManager.PRO_NOTE_IMAGES_PER_CARD} images per card");
+                // v7.2 FREE: Unlocked — uncomment to re-enable Pro gate
+                // if (!LicenseManager.IsPro)
+                //     UpgradePrompt.ShowNoteImageLimit();
+                // else
+                //     Windows.ToastWindow.ShowToast($"Max {LicenseManager.PRO_NOTE_IMAGES_PER_CARD} images per card");
+                Windows.ToastWindow.ShowToast($"Max {maxImages} images per card");
                 return false;
             }
             return true;
@@ -584,12 +588,13 @@ namespace FlyShelf.Controls
                     return;
                 }
 
-                bool hasCloudKey = AiProviderService.Instance.HasCloudApiKey;
-                if (!LicenseManager.IsPro && !hasCloudKey)
-                {
-                    UpgradePrompt.ShowNotesAILimit(GetMainWindow());
-                    return;
-                }
+                // v7.2 FREE: AI features unlocked — uncomment to re-enable Pro gate
+                // bool hasCloudKey = AiProviderService.Instance.HasCloudApiKey;
+                // if (!LicenseManager.IsPro && !hasCloudKey)
+                // {
+                //     UpgradePrompt.ShowNotesAILimit(GetMainWindow());
+                //     return;
+                // }
 
                 // Snapshot for undo before AI modifies the text
                 _notesUndoText = section.Content;

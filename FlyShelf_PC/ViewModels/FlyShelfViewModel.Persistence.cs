@@ -1116,7 +1116,7 @@ namespace FlyShelf.ViewModels
             try
             {
                 int retentionDays = Classes.SettingsManager.Current.ClipboardRetentionDays;
-                if (retentionDays <= 0) return;
+                if (retentionDays <= 0) return; // "Never" mode — skip cleanup entirely
 
                 var cutoff = DateTime.Now.AddDays(-retentionDays);
 
@@ -1124,20 +1124,26 @@ namespace FlyShelf.ViewModels
                 {
                     Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
-                        var toRemove = DroppedItems.Where(i => !i.IsPinned && i.DateCopied < cutoff).ToList();
-                        if (toRemove.Count > 0)
+                        var expiredItems = DroppedItems.Where(i => !i.IsPinned && i.DateCopied < cutoff).ToList();
+                        if (expiredItems.Count > 0)
                         {
-                            BulkRemoveItems(toRemove);
-                            PersistHistory();
-                            OnPropertyChanged(nameof(ShelfVisibility));
-                            Classes.Logger.LogAction("AUTO_CLEANUP", $"Removed {toRemove.Count} expired items (retention: {retentionDays} days).");
+                            // v7.2 FREE: Show warning instead of auto-deleting
+                            Classes.Logger.LogAction("AUTO_CLEANUP", $"⚠️ {expiredItems.Count} unpinned items are older than {retentionDays} days. Pin important items to keep them forever.");
+                            // Show a non-intrusive toast warning (not a blocking dialog)
+                            Windows.ToastWindow.ShowToast($"{expiredItems.Count} old clipboard items found. Pin important ones to keep them!");
+                            // DO NOT delete — user must manually clear if they want
+                            // ORIGINAL AUTO-DELETE:
+                            // BulkRemoveItems(expiredItems);
+                            // PersistHistory();
+                            // OnPropertyChanged(nameof(ShelfVisibility));
+                            // Classes.Logger.LogAction("AUTO_CLEANUP", $"Removed {expiredItems.Count} expired items (retention: {retentionDays} days).");
                         }
                     });
                 }
             }
             catch (Exception ex)
             {
-                Classes.Logger.LogAction("AUTO_CLEANUP_ERROR", $"Cleanup failed: {ex.Message}");
+                Classes.Logger.LogAction("AUTO_CLEANUP_ERROR", $"Cleanup check failed: {ex.Message}");
             }
         }
 

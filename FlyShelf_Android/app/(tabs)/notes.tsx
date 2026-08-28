@@ -112,6 +112,138 @@ const showToast = (msg: string) => {
   }
 };
 
+// ─── ONE-PAGE NOTEBOOK PAPER EDITOR ───
+const PageModeEditor = React.memo(({
+  day,
+  dateKey,
+  onSavePage,
+  zoom,
+  colors,
+  styles,
+  onOpenTemplates,
+}: {
+  day: NoteDay | undefined;
+  dateKey: string;
+  onSavePage: (content: string) => void;
+  zoom: number;
+  colors: any;
+  styles: any;
+  onOpenTemplates: () => void;
+}) => {
+  const initialContent = useMemo(() => {
+    if (!day) return '';
+    if (day.FreeformSections && day.FreeformSections.length > 0) {
+      return day.FreeformSections.map(s => s.Content).filter(Boolean).join('\n\n');
+    }
+    if (day.Bullets && day.Bullets.length > 0) {
+      return day.Bullets.map(b => {
+        let line = '';
+        if (b.Header) line += `${b.Header}\n`;
+        if (b.Content) line += `${b.Content}\n`;
+        if (b.SubBullets && b.SubBullets.length > 0) {
+          line += b.SubBullets.map(s => `  ${s.IsDone ? '✓' : '•'} ${s.Text}`).join('\n') + '\n';
+        }
+        return line.trim();
+      }).filter(Boolean).join('\n\n');
+    }
+    return '';
+  }, [day?.Date, day?.LastModified]);
+
+  const [text, setText] = useState(initialContent);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevDateKey = useRef(dateKey);
+
+  useEffect(() => {
+    if (dateKey !== prevDateKey.current) {
+      prevDateKey.current = dateKey;
+      setText(initialContent);
+    } else if (initialContent !== text && !debounceRef.current) {
+      setText(initialContent);
+    }
+  }, [dateKey, initialContent]);
+
+  const handleChange = (val: string) => {
+    setText(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onSavePage(val);
+      debounceRef.current = null;
+    }, 350);
+  };
+
+  const handleInsert = (token: string) => {
+    safeHaptic();
+    const updated = text ? `${text}\n${token}` : token;
+    setText(updated);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    onSavePage(updated);
+  };
+
+  const displayDateStr = useMemo(() => {
+    const d = parseDate(dateKey);
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+  }, [dateKey]);
+
+  return (
+    <ScrollView
+      style={styles.pageContainer}
+      contentContainerStyle={styles.listContent}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={styles.pagePaper}>
+        <View style={styles.pagePaperHeader}>
+          <View style={styles.pagePaperTitleRow}>
+            <View style={styles.pagePaperDateBadge}>
+              <Ionicons name="calendar-outline" size={14 * zoom} color={colors.accent.primary} />
+              <Text style={[styles.pagePaperDateText, { fontSize: 12 * zoom }]}>{displayDateStr}</Text>
+            </View>
+            <TouchableOpacity onPress={onOpenTemplates} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Note templates" accessibilityRole="button">
+              <Text style={{ fontSize: 16 }}>📋</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.pagePaperBody}>
+          <TextInput
+            style={[
+              styles.pagePaperInput,
+              {
+                fontSize: 15 * zoom,
+                lineHeight: 24 * zoom,
+                color: colors.text.primary,
+              },
+            ]}
+            value={text}
+            onChangeText={handleChange}
+            placeholder="Tap to start writing today's notes... Press Enter for new lines."
+            placeholderTextColor={colors.text.tertiary}
+            multiline
+            scrollEnabled={false}
+            autoCapitalize="sentences"
+            textAlignVertical="top"
+          />
+        </View>
+
+        <View style={styles.pageQuickBar}>
+          <TouchableOpacity style={styles.pageQuickBtn} onPress={() => handleInsert('• ')} accessibilityLabel="Add bullet point" accessibilityRole="button">
+            <Text style={[styles.pageQuickBtnText, { fontSize: 11 * zoom }]}>• Bullet</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.pageQuickBtn} onPress={() => handleInsert('[ ] ')} accessibilityLabel="Add checkbox" accessibilityRole="button">
+            <Text style={[styles.pageQuickBtnText, { fontSize: 11 * zoom }]}>✓ Box</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.pageQuickBtn} onPress={() => handleInsert('## ')} accessibilityLabel="Add heading" accessibilityRole="button">
+            <Text style={[styles.pageQuickBtnText, { fontSize: 11 * zoom }]}># Title</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.pageQuickBtn} onPress={() => { safeHaptic(); onSavePage(text); toast.success('Saved', 'Page saved to local storage'); }} accessibilityLabel="Save note" accessibilityRole="button">
+            <Text style={[styles.pageQuickBtnText, { color: colors.accent.primary, fontWeight: '700', fontSize: 11 * zoom }]}>💾 Save</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </ScrollView>
+  );
+});
+
 // ═══════════════════════════════════════════════════════════
 // MAIN SCREEN
 // ═══════════════════════════════════════════════════════════
@@ -538,7 +670,7 @@ function NotesScreenInner() {
                   </TouchableOpacity>
                 )}
                 <TextInput
-                  style={styles.bulletHeaderInput}
+                  style={[styles.bulletHeaderInput, { fontSize: 15 * noteZoom, lineHeight: 20 * noteZoom }]}
                   value={item.Header}
                   onChangeText={text => updateBullet(item.Id, b => ({ ...b, Header: text }))}
                   placeholder="Title..."
@@ -562,7 +694,7 @@ function NotesScreenInner() {
 
               {/* Content */}
               <TextInput
-                style={styles.bulletContent}
+                style={[styles.bulletContent, { fontSize: 14 * noteZoom, lineHeight: 20 * noteZoom }]}
                 value={item.Content}
                 onChangeText={text => updateBullet(item.Id, b => ({ ...b, Content: text }))}
                 placeholder="Write something..."
@@ -582,12 +714,12 @@ function NotesScreenInner() {
                     accessibilityLabel={`Tag: ${tag}. Long press to remove`}
                     accessibilityRole="button"
                   >
-                    <Text style={styles.tagPillText}>{tag}</Text>
+                    <Text style={[styles.tagPillText, { fontSize: 10 * noteZoom }]}>{tag}</Text>
                   </TouchableOpacity>
                 ))}
                 {isEditingTag ? (
                   <TextInput
-                    style={styles.tagInput}
+                    style={[styles.tagInput, { fontSize: 10 * noteZoom }]}
                     value={newTagText}
                     onChangeText={setNewTagText}
                     onSubmitEditing={() => handleAddTag(item.Id, newTagText)}
@@ -604,7 +736,7 @@ function NotesScreenInner() {
                     accessibilityLabel="Add tag"
                     accessibilityRole="button"
                   >
-                    <Text style={styles.addTagText}>+ tag</Text>
+                    <Text style={[styles.addTagText, { fontSize: 10 * noteZoom }]}>+ tag</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -629,6 +761,7 @@ function NotesScreenInner() {
                         style={[
                           styles.subBulletText,
                           sub.IsDone && styles.subBulletTextDone,
+                          { fontSize: 13 * noteZoom },
                         ]}
                         value={sub.Text}
                         onChangeText={text => handleUpdateSubBulletText(item.Id, sub.Id, text)}
@@ -797,7 +930,7 @@ function NotesScreenInner() {
           onDebouncedChange={updateFreeformSection}
           placeholder="Start writing..."
           placeholderTextColor={colors.text.tertiary}
-          style={styles.freeformInput}
+          style={[styles.freeformInput, { fontSize: 15 * noteZoom, lineHeight: 22 * noteZoom }]}
         />
         <View style={styles.freeformMeta}>
           <Text style={styles.freeformTime}>
@@ -827,7 +960,7 @@ function NotesScreenInner() {
         <Text style={styles.addSectionText}>section</Text>
       </TouchableOpacity>
     </View>
-  ), [colors, updateFreeformSection, handleAddFreeformSection, handleDeleteFreeformSection, freeformData.length, DebouncedFreeformInput]);
+  ), [colors, updateFreeformSection, handleAddFreeformSection, handleDeleteFreeformSection, freeformData.length, DebouncedFreeformInput, noteZoom]);
 
   // ═══════════════════════════════════════════════════════════
   // RENDER: Empty State
@@ -835,11 +968,11 @@ function NotesScreenInner() {
 
   const renderEmpty = () => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyIcon}>{isFreeformMode ? '📝' : '✏️'}</Text>
+      <Text style={styles.emptyIcon}>{noteMode === 'freeform' ? '📝' : '✏️'}</Text>
       <Text style={styles.emptyTitle}>No notes for this day</Text>
       <Text style={styles.emptySubtitle}>
         Tap the + button to add your first{'\n'}
-        {isFreeformMode ? 'freeform section' : 'bullet note'}
+        {noteMode === 'freeform' ? 'freeform section' : 'bullet note'}
       </Text>
     </View>
   );
@@ -1025,17 +1158,17 @@ function NotesScreenInner() {
                   {r.bullet ? (
                     <>
                       {r.bullet.Header ? (
-                        <Text style={{ color: colors.text.primary, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{r.bullet.Header}</Text>
+                        <Text style={{ color: colors.text.primary, fontSize: 14 * noteZoom, fontWeight: '600' }} numberOfLines={1}>{r.bullet.Header}</Text>
                       ) : null}
                       {r.bullet.Content ? (
-                        <Text style={{ color: colors.text.secondary, fontSize: 13, marginTop: 2 }} numberOfLines={2}>{r.bullet.Content}</Text>
+                        <Text style={{ color: colors.text.secondary, fontSize: 13 * noteZoom, marginTop: 2 }} numberOfLines={2}>{r.bullet.Content}</Text>
                       ) : null}
                       {r.bullet.Tags && r.bullet.Tags.length > 0 ? (
                         <Text style={{ color: colors.accent.primary, fontSize: 11, marginTop: 4 }}>{r.bullet.Tags.join(', ')}</Text>
                       ) : null}
                     </>
                   ) : r.freeform ? (
-                    <Text style={{ color: colors.text.secondary, fontSize: 13, fontStyle: 'italic' }} numberOfLines={3}>{r.freeform.Content}</Text>
+                    <Text style={{ color: colors.text.secondary, fontSize: 13 * noteZoom, fontStyle: 'italic' }} numberOfLines={3}>{r.freeform.Content}</Text>
                   ) : null}
                 </TouchableOpacity>
               ))}
@@ -1063,69 +1196,92 @@ function NotesScreenInner() {
             scrollY={scrollY}
             rightActions={
               <View style={styles.headerRight}>
-              {/* Sync indicator */}
-              <View style={styles.syncIndicator}>
-                <View style={[styles.syncDot, { backgroundColor: syncColor }]} />
-                <Text style={[styles.syncText, { color: syncColor }]}>
-                  {syncStatus === 'synced' ? 'SYNCED' : syncStatus === 'syncing' ? 'SYNC' : 'OFFLINE'}
-                </Text>
-              </View>
-
-              {/* Templates button */}
-              <TouchableOpacity
-                style={{ padding: 6, marginRight: 2 }}
-                onPress={() => setShowTemplates(true)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel="Note templates"
-                accessibilityRole="button"
-              >
-                <Text style={{ fontSize: 18 }}>📋</Text>
-              </TouchableOpacity>
-
-              {/* Export button */}
-              <TouchableOpacity
-                style={{ padding: 6, marginRight: 6 }}
-                onPress={handleExport}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel="Export notes"
-                accessibilityRole="button"
-              >
-                <Text style={{ fontSize: 16, color: colors.text.secondary }}>↗</Text>
-              </TouchableOpacity>
-
-              {/* Mode toggle */}
-              <View style={styles.modeToggle}>
-                <TouchableOpacity
-                  style={[styles.modeButton, !isFreeformMode && styles.modeButtonActive]}
-                  onPress={isFreeformMode ? handleToggleMode : undefined}
-                  activeOpacity={isFreeformMode ? 0.7 : 1}
-                  accessibilityLabel={`Bullet mode${!isFreeformMode ? ', active' : ''}`}
-                  accessibilityRole="tab"
-                >
-                  <Text style={[
-                    styles.modeButtonText,
-                    !isFreeformMode && styles.modeButtonTextActive,
-                  ]}>
-                    Bullet
+                {/* Sync indicator */}
+                <View style={styles.syncIndicator}>
+                  <View style={[styles.syncDot, { backgroundColor: syncColor }]} />
+                  <Text style={[styles.syncText, { color: syncColor }]}>
+                    {syncStatus === 'synced' ? 'SYNCED' : syncStatus === 'syncing' ? 'SYNC' : 'OFFLINE'}
                   </Text>
-                </TouchableOpacity>
+                </View>
+
+                {/* Zoom Controls */}
+                <View style={styles.zoomContainer}>
+                  <TouchableOpacity
+                    style={styles.zoomBtn}
+                    onPress={() => handleZoomChange(-0.15)}
+                    accessibilityLabel="Zoom out text"
+                    accessibilityRole="button"
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.zoomBtnText}>A-</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => { setNoteZoom(1.0); AsyncStorage.setItem('@flyshelf_notes_zoom', '1.0'); safeHaptic(); }}
+                    accessibilityLabel="Reset zoom"
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.zoomValueText}>{Math.round(noteZoom * 100)}%</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.zoomBtn}
+                    onPress={() => handleZoomChange(0.15)}
+                    accessibilityLabel="Zoom in text"
+                    accessibilityRole="button"
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.zoomBtnText}>A+</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Export button */}
                 <TouchableOpacity
-                  style={[styles.modeButton, isFreeformMode && styles.modeButtonActive]}
-                  onPress={!isFreeformMode ? handleToggleMode : undefined}
-                  activeOpacity={!isFreeformMode ? 0.7 : 1}
-                  accessibilityLabel={`Free mode${isFreeformMode ? ', active' : ''}`}
-                  accessibilityRole="tab"
+                  style={{ padding: 6, marginRight: 2 }}
+                  onPress={handleExport}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Export notes"
+                  accessibilityRole="button"
                 >
-                  <Text style={[
-                    styles.modeButtonText,
-                    isFreeformMode && styles.modeButtonTextActive,
-                  ]}>
-                    Free
-                  </Text>
+                  <Text style={{ fontSize: 16, color: colors.text.secondary }}>↗</Text>
                 </TouchableOpacity>
+
+                {/* Mode toggle */}
+                <View style={styles.modeToggle}>
+                  <TouchableOpacity
+                    style={[styles.modeButton, noteMode === 'page' && styles.modeButtonActive]}
+                    onPress={() => handleSetMode('page')}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Page mode"
+                    accessibilityRole="tab"
+                  >
+                    <Text style={[styles.modeButtonText, noteMode === 'page' && styles.modeButtonTextActive]}>
+                      Page
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modeButton, noteMode === 'bullet' && styles.modeButtonActive]}
+                    onPress={() => handleSetMode('bullet')}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Cards mode"
+                    accessibilityRole="tab"
+                  >
+                    <Text style={[styles.modeButtonText, noteMode === 'bullet' && styles.modeButtonTextActive]}>
+                      Cards
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modeButton, noteMode === 'freeform' && styles.modeButtonActive]}
+                    onPress={() => handleSetMode('freeform')}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Freeform mode"
+                    accessibilityRole="tab"
+                  >
+                    <Text style={[styles.modeButtonText, noteMode === 'freeform' && styles.modeButtonTextActive]}>
+                      Free
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          }
+            }
           />
           {/* ─── Day Selector ─── */}
           {renderDayChips()}
@@ -1173,7 +1329,17 @@ function NotesScreenInner() {
               </View>
             ) : isSearching && searchQuery.trim() ? (
               renderSearchResults()
-            ) : isFreeformMode ? (
+            ) : noteMode === 'page' ? (
+              <PageModeEditor
+                day={currentDay}
+                dateKey={selectedDateKey}
+                onSavePage={handleSavePage}
+                zoom={noteZoom}
+                colors={colors}
+                styles={styles}
+                onOpenTemplates={() => setShowTemplates(true)}
+              />
+            ) : noteMode === 'freeform' ? (
               // Freeform mode
               freeformData.length === 0 ? (
                 renderEmpty()
@@ -1198,7 +1364,7 @@ function NotesScreenInner() {
                   renderItem={renderBulletCard}
                   keyExtractor={(item: NoteBullet) => item.Id}
                   estimatedItemSize={200}
-                  extraData={`${deletingBulletId}-${editingTagBulletId}-${showColorPicker}`}
+                  extraData={`${deletingBulletId}-${editingTagBulletId}-${showColorPicker}-${noteZoom}`}
                   contentContainerStyle={styles.listContent}
                   showsVerticalScrollIndicator={false}
                   onScroll={scrollHandler}
@@ -1208,20 +1374,22 @@ function NotesScreenInner() {
             )}
           </View>
 
-          {/* ─── FAB ─── */}
-          <Animated.View style={[styles.fab, { transform: [{ scale: fabScale }] }]}>
-            <TouchableOpacity
-              onPress={isFreeformMode ? () => handleAddFreeformSection() : handleAddBullet}
-              onPressIn={handleFabPressIn}
-              onPressOut={handleFabPressOut}
-              activeOpacity={0.9}
-              style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}
-              accessibilityLabel={isFreeformMode ? 'Add freeform section' : 'Add bullet note'}
-              accessibilityRole="button"
-            >
-              <Text style={styles.fabText}>+</Text>
-            </TouchableOpacity>
-          </Animated.View>
+          {/* ─── FAB (visible in cards/freeform mode) ─── */}
+          {noteMode !== 'page' && (
+            <Animated.View style={[styles.fab, { transform: [{ scale: fabScale }] }]}>
+              <TouchableOpacity
+                onPress={noteMode === 'freeform' ? () => handleAddFreeformSection() : handleAddBullet}
+                onPressIn={handleFabPressIn}
+                onPressOut={handleFabPressOut}
+                activeOpacity={0.9}
+                style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}
+                accessibilityLabel={noteMode === 'freeform' ? 'Add freeform section' : 'Add bullet note'}
+                accessibilityRole="button"
+              >
+                <Text style={styles.fabText}>+</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
         </View>
       </LinearGradient>
     </View>

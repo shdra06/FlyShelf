@@ -124,6 +124,29 @@ export function useArchiveSync() {
     return () => unsubscribeNodes();
   }, [pairingKey]);
 
+  // ─── Storage Constants ───
+  const MEDIA_CACHE_KEY = '@flyshelf_cached_media_assets';
+  const MEDIA_LAST_SCAN_KEY = '@flyshelf_last_media_scan_ts';
+  const SCAN_CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour index freshness
+
+  // ═══════════════════════════════════════════════════════════
+  // Load cached media index on mount
+  // ═══════════════════════════════════════════════════════════
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(MEDIA_CACHE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMediaAssets(parsed);
+            hasScannedRef.current = true;
+          }
+        }
+      } catch {}
+    })();
+  }, []);
+
   // ═══════════════════════════════════════════════════════════
   // Permissions on mount
   // ═══════════════════════════════════════════════════════════
@@ -147,7 +170,6 @@ export function useArchiveSync() {
       return;
     }
     setIsScanning(true);
-    setMediaAssets([]);
     toast.info('Scanning Media...', 'Indexing documents, photos, and videos in date range');
 
     try {
@@ -186,6 +208,12 @@ export function useArchiveSync() {
       uniqueAssets.sort((a, b) => b.creationTime - a.creationTime);
       setMediaAssets(uniqueAssets);
 
+      // Cache indexed assets for fast instant loading on next app open
+      try {
+        await AsyncStorage.setItem(MEDIA_CACHE_KEY, JSON.stringify(uniqueAssets.slice(0, 500)));
+        await AsyncStorage.setItem(MEDIA_LAST_SCAN_KEY, Date.now().toString());
+      } catch {}
+
       const imgCount = uniqueAssets.filter(a => a.mediaType === 'photo').length;
       const vidCount = uniqueAssets.filter(a => a.mediaType === 'video').length;
       const docCount = uniqueAssets.filter(a => a.mediaType === 'pdf' || a.mediaType === 'doc').length;
@@ -196,10 +224,22 @@ export function useArchiveSync() {
     setIsScanning(false);
   }, [hasPermission]);
 
-  // Auto-scan when permission is available and haven't scanned yet
-  const autoScan = useCallback((startDate: Date, endDate: Date) => {
-    if (hasPermission && !hasScannedRef.current && mediaAssets.length === 0 && !isScanning) {
+  // Auto-scan when permission is available and haven't scanned yet or cache is stale
+  const autoScan = useCallback(async (startDate: Date, endDate: Date) => {
+    if (hasPermission && !isScanning) {
+      if (hasScannedRef.current && mediaAssets.length > 0) return;
       hasScannedRef.current = true;
+
+      // Check last scan timestamp from cache
+      try {
+        const lastScanRaw = await AsyncStorage.getItem(MEDIA_LAST_SCAN_KEY);
+        const lastScan = lastScanRaw ? parseInt(lastScanRaw, 10) : 0;
+        const isCacheFresh = (Date.now() - lastScan) < SCAN_CACHE_MAX_AGE_MS;
+        if (mediaAssets.length > 0 && isCacheFresh) {
+          return; // Skip heavy scan, already loaded from fresh index!
+        }
+      } catch {}
+
       scanMedia(startDate, endDate);
     }
   }, [hasPermission, mediaAssets.length, isScanning, scanMedia]);

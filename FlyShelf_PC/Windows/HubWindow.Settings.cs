@@ -1303,13 +1303,22 @@ namespace FlyShelf.Windows
             if (SettingsProBadge != null)
                 SettingsProBadge.Visibility = isPro ? Visibility.Visible : Visibility.Collapsed;
 
-            // Sizing controls locked overlays for Free tier
+            // Sizing controls locked overlays for Free tier (v7.2 FREE: Unlocked)
             if (ClipboardSizeLockedOverlay != null)
-                ClipboardSizeLockedOverlay.Visibility = isPro ? Visibility.Collapsed : Visibility.Visible;
+            {
+                ClipboardSizeLockedOverlay.Visibility = Visibility.Collapsed; // v7.2 FREE: Unlocked
+                // ORIGINAL: ClipboardSizeLockedOverlay.Visibility = isPro ? Visibility.Collapsed : Visibility.Visible;
+            }
             if (FlyShelfSizeLockedOverlay != null)
-                FlyShelfSizeLockedOverlay.Visibility = isPro ? Visibility.Collapsed : Visibility.Visible;
+            {
+                FlyShelfSizeLockedOverlay.Visibility = Visibility.Collapsed; // v7.2 FREE: Unlocked
+                // ORIGINAL: FlyShelfSizeLockedOverlay.Visibility = isPro ? Visibility.Collapsed : Visibility.Visible;
+            }
             if (SmartHistoryCleanupLockedOverlay != null)
-                SmartHistoryCleanupLockedOverlay.Visibility = isPro ? Visibility.Collapsed : Visibility.Visible;
+            {
+                SmartHistoryCleanupLockedOverlay.Visibility = Visibility.Collapsed; // v7.2 FREE: Unlocked
+                // ORIGINAL: SmartHistoryCleanupLockedOverlay.Visibility = isPro ? Visibility.Collapsed : Visibility.Visible;
+            }
 
             // Dynamically prefix/unprefix lock indicators on RetentionCombo items (Never is locked for Free)
             if (RetentionCombo != null)

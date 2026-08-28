@@ -183,7 +183,10 @@ function TodoScreenInner() {
   // ─── Load from AsyncStorage + migrate incomplete tasks ─
   const loadLocal = useCallback(async () => {
     try {
-      const raw = await EncryptedStorage.getItem(TODOS_STORAGE_KEY);
+      let raw = await EncryptedStorage.getItem(TODOS_STORAGE_KEY);
+      if (!raw) {
+        raw = await AsyncStorage.getItem(TODOS_STORAGE_KEY);
+      }
       if (raw) {
         let parsed: TodoDay[] = JSON.parse(raw);
 
@@ -244,6 +247,7 @@ function TodoScreenInner() {
         }
         // ── End migration ────────────────────────────────
 
+        daysRef.current = parsed;
         setDays(parsed);
         await EncryptedStorage.setItem(TODOS_STORAGE_KEY, JSON.stringify(parsed));
       }
@@ -253,11 +257,8 @@ function TodoScreenInner() {
   // ─── Save to AsyncStorage ──────────────────────────────
   const saveLocal = useCallback(async (allDays: TodoDay[]) => {
     try {
-      // Atomic write: write to temp key first, then swap
-      const tempKey = `${TODOS_STORAGE_KEY}_pending`;
-      await EncryptedStorage.setItem(tempKey, JSON.stringify(allDays));
+      daysRef.current = allDays;
       await EncryptedStorage.setItem(TODOS_STORAGE_KEY, JSON.stringify(allDays));
-      await EncryptedStorage.removeItem(tempKey);
     } catch (e) {
       console.warn('Todo saveLocal: error', (e as any)?.message || e);
     }
@@ -329,16 +330,19 @@ function TodoScreenInner() {
     mountedRef,
     mergeDays,
     saveLocal,
-    onDaysMerged: (merged) => setDays(merged),
+    onDaysMerged: (merged) => {
+      daysRef.current = merged;
+      setDays(merged);
+    },
     onStatusChange: (status) => setSyncStatus(status),
   });
-
 
   // ─── Mark day modified & trigger sync (M-8 fix: immutable copy) ──
   const markModified = useCallback((dayKey: string, inputDays: TodoDay[]) => {
     const updatedDays = inputDays.map(d =>
       d.Date === dayKey ? { ...d, LastModified: NetworkClock.now() } : d
     );
+    daysRef.current = updatedDays;
     setDays(updatedDays);
     saveLocal(updatedDays);
     schedulePush(dayKey);

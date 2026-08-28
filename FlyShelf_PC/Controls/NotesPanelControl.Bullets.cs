@@ -491,13 +491,13 @@ namespace FlyShelf.Controls
             }
             else if (string.IsNullOrEmpty(bullet.ImagePath2))
             {
-                if (!LicenseManager.IsPro)
-                {
-                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        Windows.ToastWindow.ShowToast("Embedding 2 images per bullet is a Pro feature."));
-                    return false;
-                }
-
+                // v7.2 FREE: Unlocked for all users — uncomment to re-enable Pro gate
+                // if (!LicenseManager.IsPro)
+                // {
+                //     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                //         Windows.ToastWindow.ShowToast("Embedding 2 images per bullet is a Pro feature."));
+                //     return false;
+                // }
                 bullet.ImagePath2 = path;
                 bullet.ImageDisplayWidth2 = width;
                 NoteManager.MarkDirty();

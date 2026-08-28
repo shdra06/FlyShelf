@@ -515,12 +515,13 @@ namespace FlyShelf.Controls
             var improve = new MenuItem { Header = "Improve Writing", FontWeight = FontWeights.SemiBold };
             improve.Click += (s, ev) =>
             {
-                bool hasCloudKey = AiProviderService.Instance.HasCloudApiKey;
-                if (!LicenseManager.IsPro && !hasCloudKey)
-                {
-                    UpgradePrompt.ShowNotesAILimit(GetMainWindow());
-                    return;
-                }
+                // v7.2 FREE: AI features unlocked — uncomment to re-enable Pro gate
+                // bool hasCloudKey = AiProviderService.Instance.HasCloudApiKey;
+                // if (!LicenseManager.IsPro && !hasCloudKey)
+                // {
+                //     UpgradePrompt.ShowNotesAILimit(GetMainWindow());
+                //     return;
+                // }
 
                 var aiWindow = new FlyShelf.Windows.NotesAIDiffWindow(originalText);
                 aiWindow.Owner = GetMainWindow();
@@ -584,12 +585,12 @@ namespace FlyShelf.Controls
         {
             bool hasCloudKey = AiProviderService.Instance.HasCloudApiKey;
 
-            // Allow if Pro OR if user has their own cloud API key
-            if (!LicenseManager.IsPro && !hasCloudKey)
-            {
-                UpgradePrompt.ShowNotesAILimit(GetMainWindow());
-                return;
-            }
+            // v7.2 FREE: AI features unlocked — uncomment to re-enable Pro gate
+            // if (!LicenseManager.IsPro && !hasCloudKey)
+            // {
+            //     UpgradePrompt.ShowNotesAILimit(GetMainWindow());
+            //     return;
+            // }
 
             // Cloud-only actions require an API key (no offline fallback)
             bool isCloudOnly = actionType.StartsWith("Translate:", StringComparison.OrdinalIgnoreCase)

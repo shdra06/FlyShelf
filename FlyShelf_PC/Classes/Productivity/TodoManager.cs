@@ -482,13 +482,14 @@ namespace FlyShelf.Classes
 
         public static TodoItem? AddItem(TodoDay day, string text = "")
         {
-            int maxItems = LicenseManager.GetTodoDailyLimit();
-            if (maxItems < int.MaxValue && day.Items.Count >= maxItems)
-            {
-                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    UpgradePrompt.ShowTodoLimit());
-                return null;
-            }
+            // v7.2 FREE: Daily limit check bypassed — uncomment to re-enable Pro gate
+            // int maxItems = LicenseManager.GetTodoDailyLimit();
+            // if (maxItems < int.MaxValue && day.Items.Count >= maxItems)
+            // {
+            //     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+            //         UpgradePrompt.ShowTodoLimit());
+            //     return null;
+            // }
 
             var item = new TodoItem { Text = text, CreatedAt = DateTime.Now };
             day.Items.Add(item);
@@ -498,13 +499,14 @@ namespace FlyShelf.Classes
 
         public static TodoItem? InsertItem(TodoDay day, int index, string text = "")
         {
-            int maxItems = LicenseManager.GetTodoDailyLimit();
-            if (maxItems < int.MaxValue && day.Items.Count >= maxItems)
-            {
-                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    UpgradePrompt.ShowTodoLimit());
-                return null;
-            }
+            // v7.2 FREE: Daily limit check bypassed — uncomment to re-enable Pro gate
+            // int maxItems = LicenseManager.GetTodoDailyLimit();
+            // if (maxItems < int.MaxValue && day.Items.Count >= maxItems)
+            // {
+            //     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+            //         UpgradePrompt.ShowTodoLimit());
+            //     return null;
+            // }
 
             var item = new TodoItem { Text = text, CreatedAt = DateTime.Now };
             if (index < 0 || index >= day.Items.Count)
