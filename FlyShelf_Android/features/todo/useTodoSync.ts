@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
-import { Platform, ToastAndroid } from 'react-native';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { getSecureItem } from '../../utils/secureStorage';

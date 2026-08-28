@@ -90,6 +90,9 @@ namespace FlyShelf.Styles
             FindHub(sender)?.ExpandToggleSpecific_Click(sender, e);
         }
 
+        private void ReadMoreSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.ReadMoreSpecific_Click(sender, e);
+        private void ShowAllSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.ShowAllSpecific_Click(sender, e);
+        private void CollapseSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.CollapseSpecific_Click(sender, e);
 
         private void SendToDevice_Click(object sender, MouseButtonEventArgs e)
         {

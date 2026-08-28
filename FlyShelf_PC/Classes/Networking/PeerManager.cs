@@ -324,15 +324,32 @@ namespace FlyShelf.Classes
                 var pairedDevices = DevicePairingManager.GetPairedDevices();
                 var pairedDeviceIds = new HashSet<string>(pairedDevices.Select(d => d.DeviceId), StringComparer.OrdinalIgnoreCase);
 
+                // Prune memory: remove any peers that have been unpaired
+                foreach (var pId in _peers.Keys.ToList())
+                {
+                    if (!pairedDeviceIds.Contains(pId))
+                    {
+                        _peers.TryRemove(pId, out _);
+                    }
+                }
+
                 using var doc = JsonDocument.Parse(json);
+                string myName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
                 int totalPeers = 0;
                 foreach (var prop in doc.RootElement.EnumerateObject())
                 {
                     var dev = prop.Value;
                     string devId = dev.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name;
-                    if (devId == _myDeviceId) continue;
-
                     string name = dev.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? "" : "";
+
+                    // Guard: Always skip self (by ID, node key, or machine name)
+                    if (string.Equals(devId, _myDeviceId, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(prop.Name, _myDeviceId, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(name, myName, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(prop.Name, myName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
 
                     // Guard: skip ghost entries with empty DeviceId or DeviceName
                     if (string.IsNullOrWhiteSpace(devId) || string.IsNullOrWhiteSpace(name)) continue;

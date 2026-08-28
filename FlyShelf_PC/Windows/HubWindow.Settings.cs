@@ -779,6 +779,14 @@ namespace FlyShelf.Windows
             }
         }
 
+        private void ImageGrid_Pin(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is ClipboardItem clip && _viewModel != null)
+            {
+                _viewModel.TogglePin(clip);
+            }
+        }
+
         private void ImageGrid_Delete(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.Tag is ClipboardItem clip)

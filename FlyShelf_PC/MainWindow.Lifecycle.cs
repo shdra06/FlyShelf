@@ -904,7 +904,7 @@ namespace FlyShelf
                                 imageCount++;
                                 if (imageCount <= 6)
                                 {
-                                    // Keep the top 6 images loaded in RAM to hide the sudden appearance on summon
+                                    // Keep the top 6 images loaded in RAM to hide the appearance latency on summon
                                     continue;
                                 }
 
@@ -917,6 +917,9 @@ namespace FlyShelf
                                 }
                             }
                         }
+
+                        // Clear cached thumbnail references so Gen 2 GC reclaims memory immediately
+                        Classes.ImageThumbnailManager.ClearCache();
                     }
                 }
             }
@@ -924,29 +927,27 @@ namespace FlyShelf
 
             // 2. GC + working set trim — aggressive memory reclaiming when unsummoned.
             //    Run a forced Gen 2 Garbage Collection to reclaim all WPF controls, resources, and image caches,
-            //    then set working set limits to -1 to empty the working set and page out inactive memory.
-            System.Threading.Tasks.Task.Run(() =>
+            //    then call EmptyWorkingSet to page out inactive memory and return pages to Windows.
+            System.Threading.Tasks.Task.Run(async () =>
             {
                 try
                 {
+                    // Delay 300ms so UI hide animation completes smoothly before GC runs
+                    await System.Threading.Tasks.Task.Delay(300);
+
+                    // If window was re-summoned during the delay, abort trimming
+                    if (_isCurrentlySummoned) return;
+
+                    // Force Gen 2 collection + finalizers + compaction
+                    GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+
                     using (var currentProcess = System.Diagnostics.Process.GetCurrentProcess())
                     {
-                        currentProcess.Refresh();
-                        long workingSet = currentProcess.WorkingSet64;
-
-                        // Only trim if working set is higher than 45MB
-                        if (workingSet > 45 * 1024 * 1024)
-                        {
-                            // Removed forced GC.Collect — let the runtime manage memory naturally.
-                            // Previous code caused unnecessary Gen2 collection pauses (10-100ms).
-
-                            // Set working set floor to 20MB, ceiling to 50MB for aggressive idle trimming.
-                            // 20MB keeps .NET runtime + core WPF resources resident, avoiding cold-start lag.
-                            // 50MB ceiling (down from 80MB) lets OS reclaim more inactive pages at idle.
-                            const nint MIN_WS = 20 * 1024 * 1024;   // 20 MB
-                            const nint MAX_WS = 50 * 1024 * 1024;   // 50 MB
-                            NativeMethods.SetProcessWorkingSetSize(currentProcess.Handle, MIN_WS, MAX_WS);
-                        }
+                        // Release all inactive committed virtual memory pages back to Windows
+                        NativeMethods.EmptyWorkingSet(currentProcess.Handle);
+                        NativeMethods.SetProcessWorkingSetSize(currentProcess.Handle, (nint)(-1), (nint)(-1));
                     }
                 }
                 catch { } // Best-effort: failure is acceptable

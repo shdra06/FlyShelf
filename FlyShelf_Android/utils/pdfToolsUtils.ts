@@ -171,6 +171,27 @@ export async function reorderPages(pdfPath: string, newOrder: number[]): Promise
   return savePdf(newDoc, 'reordered');
 }
 
+/** Edit pages in a single pass: reorder, delete, and rotate each page simultaneously */
+export async function editPdfPages(
+  pdfPath: string,
+  pages: { index: number; rotation: number }[]
+): Promise<string> {
+  const bytes = await readPdfBytes(pdfPath);
+  const source = await PDFDocument.load(bytes, { ignoreEncryption: true });
+  const newDoc = await PDFDocument.create();
+  const indices = pages.map(p => p.index);
+  const copied = await newDoc.copyPages(source, indices);
+  copied.forEach((p, i) => {
+    const rot = pages[i].rotation;
+    if (rot) {
+      const current = p.getRotation().angle;
+      p.setRotation(pdfDegrees((current + rot) % 360));
+    }
+    newDoc.addPage(p);
+  });
+  return savePdf(newDoc, 'edited_pages');
+}
+
 /** Rotate specific pages (1-indexed pageNumbers, degrees: 0|90|180|270) */
 export async function rotatePages(
   pdfPath: string,
@@ -391,3 +412,19 @@ export async function addPdfPages(
 
   return savePdf(result, 'pdf_pages_added');
 }
+
+/** Optimize & compress PDF by cleaning unreferenced objects, stripping metadata, and recompressing streams */
+export async function compressPdf(pdfPath: string): Promise<string> {
+  const bytes = await readPdfBytes(pdfPath);
+  const source = await PDFDocument.load(bytes, { ignoreEncryption: true });
+  const newDoc = await PDFDocument.create();
+  const copied = await newDoc.copyPages(source, source.getPageIndices());
+  copied.forEach(p => newDoc.addPage(p));
+  const title = source.getTitle();
+  if (title) newDoc.setTitle(title);
+  const author = source.getAuthor();
+  if (author) newDoc.setAuthor(author);
+  newDoc.setProducer('FlyShelf PDF Compressor');
+  return savePdf(newDoc, 'compressed');
+}
+

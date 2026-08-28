@@ -379,84 +379,30 @@ namespace FlyShelf.Classes
                 string pdfName = Path.GetFileNameWithoutExtension(fileName) + ".pdf";
                 string pdfPath = Path.Combine(convertDir, pdfName);
 
-                // Try LibreOffice conversion first (most reliable cross-platform)
+                string ext = Path.GetExtension(fileName).ToLowerInvariant();
                 bool converted = false;
-#if !MSIX_STORE
-                string[] libreOfficePaths = new[] {
-                    @"C:\Program Files\LibreOffice\program\soffice.exe",
-                    @"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "LibreOffice", "program", "soffice.exe")
-                };
 
-                string sofficePath = libreOfficePaths.FirstOrDefault(p => File.Exists(p));
-                if (sofficePath != null)
+                // ═══════════════════════════════════════════════════════════
+                // UNIVERSAL MULTI-FORMAT PDF CONVERSION ENGINE
+                // ═══════════════════════════════════════════════════════════
+                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".bmp" || ext == ".gif" || ext == ".tiff" || ext == ".ico" || ext == ".heic")
                 {
-                    var psi = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = sofficePath,
-                        Arguments = $"--headless --convert-to pdf --outdir \"{convertDir}\" \"{inputPath}\"",
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true
-                    };
-                    
-                    using (var proc = System.Diagnostics.Process.Start(psi))
-                    {
-                        if (proc != null)
-                        {
-                            await proc.WaitForExitAsync();
-                            converted = proc.ExitCode == 0 && File.Exists(pdfPath);
-                        }
-                    }
+                    string resPath = ConversionUtils.ConvertImageToPdf(inputPath, pdfPath);
+                    converted = !string.IsNullOrEmpty(resPath) && File.Exists(resPath);
                 }
-#endif
-
-                // Fallback: Try Microsoft Word COM automation with full dialog suppression
-                if (!converted)
+                else if (ext == ".md")
                 {
-                    try
-                    {
-                        Type wordType = Type.GetTypeFromProgID("Word.Application");
-                        if (wordType != null)
-                        {
-                            dynamic word = Activator.CreateInstance(wordType);
-                            word.Visible = false;
-                            word.DisplayAlerts = 0;           // wdAlertsNone — suppress ALL dialogs
-                            word.AutomationSecurity = 3;       // msoAutomationSecurityForceDisable
-                            try { word.Options.DoNotPromptForConvert = true; } catch { } // Best-effort: failure is acceptable
-
-                            dynamic doc = word.Documents.Open(
-                                inputPath,          // FileName
-                                false,              // ConfirmConversions
-                                true,               // ReadOnly
-                                false,              // AddToRecentFiles
-                                "",                 // PasswordDocument
-                                "",                 // PasswordTemplate
-                                true,               // Revert
-                                "",                 // WritePasswordDocument
-                                "",                 // WritePasswordTemplate
-                                Type.Missing,       // Format
-                                Type.Missing,       // Encoding
-                                false,              // Visible
-                                false,              // OpenAndRepair
-                                Type.Missing,       // DocumentDirection
-                                true,               // NoEncodingDialog
-                                Type.Missing        // XMLTransform
-                            );
-
-                            // ExportAsFixedFormat is silent — no save dialog
-                            doc.ExportAsFixedFormat(
-                                pdfPath, 17, false, 0, 0, 1, 1, 0, true, true, 0, true, true, false);
-
-                            doc.Close(0); // wdDoNotSaveChanges
-                            word.Quit(0);
-                            converted = File.Exists(pdfPath);
-                            System.Runtime.InteropServices.Marshal.ReleaseComObject(doc);
-                            System.Runtime.InteropServices.Marshal.ReleaseComObject(word);
-                        }
-                    }
-                    catch { } // Best-effort: failure is acceptable
+                    converted = await ConversionUtils.ConvertMarkdownToPdfAsync(inputPath, pdfPath);
+                }
+                else if (ext == ".docx" || ext == ".doc" || ext == ".rtf")
+                {
+                    string resPath = await ConversionUtils.ConvertDocToPdfAsync(inputPath, pdfPath);
+                    converted = !string.IsNullOrEmpty(resPath) && File.Exists(resPath);
+                }
+                else
+                {
+                    // Fallback for TXT, CSV, Code, Logs, etc.
+                    converted = ConversionUtils.ConvertTextToPdf(inputPath, pdfPath, fileName);
                 }
 
                 if (converted && File.Exists(pdfPath))
@@ -484,7 +430,7 @@ namespace FlyShelf.Classes
                 }
                 else
                 {
-                    string json = JsonSerializer.Serialize(new { success = false, error = "No converter found. Install LibreOffice or Microsoft Word." });
+                    string json = JsonSerializer.Serialize(new { success = false, error = "Document conversion failed." });
                     byte[] buffer = Encoding.UTF8.GetBytes(json);
                     res.ContentType = "application/json; charset=utf-8";
                     res.ContentLength64 = buffer.Length;
@@ -496,6 +442,73 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("CONVERT PDF ERROR", ex.Message);
                 res.StatusCode = 500;
+            }
+            finally
+            {
+                res.Close();
+            }
+        }
+
+        private async Task HandleConvertPdfToWord(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            try
+            {
+                string fileName = req.QueryString["name"] ?? "";
+                if (!string.IsNullOrEmpty(fileName))
+                {
+                    try { fileName = Path.GetFileName(Uri.UnescapeDataString(fileName)); } catch { }
+                }
+                if (string.IsNullOrWhiteSpace(fileName)) fileName = $"document_{DateTime.Now.Ticks}.pdf";
+
+                string convertDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Conversions");
+                Directory.CreateDirectory(convertDir);
+
+                string inputPdfPath = Path.Combine(convertDir, fileName);
+                using (var fs = new FileStream(inputPdfPath, FileMode.Create, FileAccess.Write))
+                {
+                    await req.InputStream.CopyToAsync(fs);
+                }
+
+                string docxName = Path.GetFileNameWithoutExtension(fileName) + ".docx";
+                string docxPath = Path.Combine(convertDir, docxName);
+
+                bool converted = await Task.Run(() =>
+                {
+                    try
+                    {
+                        return PdfToWordConverter.Convert(inputPdfPath, docxPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("PDF2WORD_API_ERR", ex.Message);
+                        return false;
+                    }
+                });
+
+                if (converted && File.Exists(docxPath))
+                {
+                    string downloadUrl = $"/download?path={Uri.EscapeDataString(docxPath)}";
+                    string json = JsonSerializer.Serialize(new { success = true, downloadUrl, fileName = docxName });
+                    byte[] buffer = Encoding.UTF8.GetBytes(json);
+                    res.ContentType = "application/json; charset=utf-8";
+                    res.ContentLength64 = buffer.Length;
+                    res.StatusCode = 200;
+                    try { await res.OutputStream.WriteAsync(buffer, 0, buffer.Length); } catch { }
+                }
+                else
+                {
+                    string json = JsonSerializer.Serialize(new { success = false, error = "PDF to Word conversion failed." });
+                    byte[] buffer = Encoding.UTF8.GetBytes(json);
+                    res.ContentType = "application/json; charset=utf-8";
+                    res.ContentLength64 = buffer.Length;
+                    res.StatusCode = 500;
+                    try { await res.OutputStream.WriteAsync(buffer, 0, buffer.Length); } catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("PDF2WORD_HANDLER_ERR", ex.Message);
+                try { res.StatusCode = 500; } catch { }
             }
             finally
             {

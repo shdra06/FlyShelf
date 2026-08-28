@@ -348,57 +348,49 @@ namespace FlyShelf.Classes
 
         public static Task? LastSaveTask;
 
-        /// <summary>Immediately persist to disk (atomic write).</summary>
+        /// <summary>Immediately persist to disk (atomic write). AUDIT FIX: serialization moved off UI thread.</summary>
         public static void SaveNow()
         {
             if (!_isLoaded) return;
 
-            Action performSave = () =>
+            // Take lightweight snapshot on current thread (fast — just list copy)
+            List<NoteDay> snapshot;
+            List<NoteDay> allDaysCopy;
+            try
             {
-                List<NoteDay> snapshot;
-                string jsonStr;
-                try
+                snapshot = _days.ToList();
+                lock (_lock)
                 {
-                    snapshot = _days.ToList();
-                    
-                    lock (_lock)
+                    var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
+                    int maxDays = LicenseManager.GetNoteHistoryDays();
+                    DateTime? cutoff = maxDays < int.MaxValue ? (DateTime?)DateTime.Today.AddDays(-maxDays) : null;
+
+                    _allDays.RemoveAll(d => {
+                        if (cutoff.HasValue && d.Date.Date < cutoff.Value.Date) return false;
+                        return !visibleDates.Contains(d.Date.Date);
+                    });
+
+                    foreach (var snapDay in snapshot)
                     {
-                        var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
-                        int maxDays = LicenseManager.GetNoteHistoryDays();
-                        DateTime? cutoff = maxDays < int.MaxValue ? (DateTime?)DateTime.Today.AddDays(-maxDays) : null;
-
-                        _allDays.RemoveAll(d => {
-                            if (cutoff.HasValue && d.Date.Date < cutoff.Value.Date) return false;
-                            return !visibleDates.Contains(d.Date.Date);
-                        });
-
-                        foreach (var snapDay in snapshot)
-                        {
-                            int idx = _allDays.FindIndex(d => d.Date.Date == snapDay.Date.Date);
-                            if (idx >= 0) _allDays[idx] = snapDay;
-                            else _allDays.Add(snapDay);
-                        }
-                        _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
-
-                        var serializableList = _allDays.ToList();
-                        jsonStr = SerializeSnapshot(serializableList);
+                        int idx = _allDays.FindIndex(d => d.Date.Date == snapDay.Date.Date);
+                        if (idx >= 0) _allDays[idx] = snapDay;
+                        else _allDays.Add(snapDay);
                     }
+                    _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
+                    allDaysCopy = _allDays.ToList();
                 }
-                catch
-                {
-                    return;
-                }
-                LastSaveTask = Task.Run(() => SaveSnapshotJson(snapshot, jsonStr));
-            };
+            }
+            catch
+            {
+                return;
+            }
 
-            if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == false)
+            // AUDIT FIX: Move heavy serialization + disk write entirely to background thread
+            LastSaveTask = Task.Run(() =>
             {
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(performSave);
-            }
-            else
-            {
-                performSave();
-            }
+                string jsonStr = SerializeSnapshot(allDaysCopy);
+                SaveSnapshotJson(snapshot, jsonStr);
+            });
         }
 
         public static void SaveNowSync()
@@ -485,7 +477,19 @@ namespace FlyShelf.Classes
                     return;
                 }
                 File.WriteAllText(tmpPath, json);
-                File.Move(tmpPath, _notesPath, overwrite: true);
+                // AUDIT FIX: Retry loop for File.Move to handle transient file locks (AV, indexers)
+                for (int attempt = 0; attempt < 3; attempt++)
+                {
+                    try
+                    {
+                        File.Move(tmpPath, _notesPath, overwrite: true);
+                        break;
+                    }
+                    catch (IOException) when (attempt < 2)
+                    {
+                        Thread.Sleep(50);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -511,7 +515,7 @@ namespace FlyShelf.Classes
             List<NoteDay> snapshot;
             lock (_lock) { snapshot = _days.ToList(); }
 
-            var results = new List<(NoteDay, NoteBullet)>();
+            var results = new List<(NoteDay Day, NoteBullet Bullet, double Score)>();
             foreach (var day in snapshot)
             {
                 foreach (var bullet in day.Bullets)
@@ -522,11 +526,39 @@ namespace FlyShelf.Classes
                     bool matchSub = bullet.SubBullets.Any(sb => FuzzyMatcher.IsMatch(q, sb.Text ?? ""));
                     if (matchContent || matchHeader || matchTags || matchSub)
                     {
-                        results.Add((day, bullet));
-                        if (results.Count >= MAX_SEARCH_RESULTS) return results;
+                        double score = Math.Max(
+                            FuzzyMatcher.Score(q, bullet.Content ?? ""),
+                            FuzzyMatcher.Score(q, bullet.Header ?? "")
+                        );
+                        results.Add((day, bullet, score));
+                        if (results.Count >= MAX_SEARCH_RESULTS) break;
                     }
                 }
-                // Also search freeform content — create a virtual bullet for display
+
+                // Search modern freeform sections
+                if (day.FreeformSections != null)
+                {
+                    foreach (var sec in day.FreeformSections)
+                    {
+                        string content = sec.Content ?? "";
+                        string title = sec.Title ?? "";
+                        if (FuzzyMatcher.IsMatch(q, content) || (!string.IsNullOrEmpty(title) && FuzzyMatcher.IsMatch(q, title)))
+                        {
+                            var virtualBullet = new NoteBullet
+                            {
+                                Id = "section_" + sec.Id,
+                                Header = title,
+                                Content = content.Length > 200 ? string.Concat(content.AsSpan(0, 200), "...") : content,
+                                CreatedAt = day.Date
+                            };
+                            double score = Math.Max(FuzzyMatcher.Score(q, content), FuzzyMatcher.Score(q, title));
+                            results.Add((day, virtualBullet, score));
+                            if (results.Count >= MAX_SEARCH_RESULTS) break;
+                        }
+                    }
+                }
+
+                // Also search legacy freeform content — create a virtual bullet for display
                 if (!string.IsNullOrEmpty(day.FreeformContent) && FuzzyMatcher.IsMatch(q, day.FreeformContent))
                 {
                     var virtualBullet = new NoteBullet
@@ -535,11 +567,16 @@ namespace FlyShelf.Classes
                         Content = day.FreeformContent.Length > 200 ? string.Concat(day.FreeformContent.AsSpan(0, 200), "...") : day.FreeformContent,
                         CreatedAt = day.Date
                     };
-                    results.Add((day, virtualBullet));
-                    if (results.Count >= MAX_SEARCH_RESULTS) return results;
+                    double score = FuzzyMatcher.Score(q, day.FreeformContent);
+                    results.Add((day, virtualBullet, score));
+                    if (results.Count >= MAX_SEARCH_RESULTS) break;
                 }
             }
-            return results;
+
+            // Rank results by match score (highest score first)
+            results.Sort((a, b) => b.Score.CompareTo(a.Score));
+
+            return results.Select(r => (r.Day, r.Bullet)).ToList();
         }
 
         // ═══════════════════════════════════════════════════════════

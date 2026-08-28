@@ -429,6 +429,7 @@ namespace FlyShelf
                 }
                 else if (e.PropertyName == nameof(FlyShelfViewModel.CurrentMode))
                 {
+                    if (_isSearchActive) CloseSearch();
                     UpdateToolbarButtonsVisibility();
                 }
                 });

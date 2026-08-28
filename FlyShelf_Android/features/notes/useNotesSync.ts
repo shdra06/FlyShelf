@@ -27,6 +27,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, ToastAndroid } from 'react-native';
+import { toast } from '../../context/ToastContext';
 
 import { useSettings } from '../../context/SettingsContext';
 import { fetchWithTimeout, resolveBestPcUrl, resolveLivePcUrl } from '../../utils/networkHelpers';
@@ -39,11 +40,9 @@ const POLL_INTERVAL = 10_000;
 const DEBOUNCE_POST_MS = 2_000;
 
 // ─── Helpers ───────────────────────────────────────────────────
-/** Android-only toast; silently no-ops on other platforms. */
+/** Android toast with structured contextual guidance */
 const showToast = (msg: string) => {
-  if (Platform.OS === 'android') {
-    ToastAndroid.show(msg, ToastAndroid.SHORT);
-  }
+  toast.warning('Notes Sync Deferred', 'PC offline — your notes are safely saved and will sync automatically upon reconnection');
 };
 
 // A-16 FIX: Shared helper for offline queue persist with simple lock

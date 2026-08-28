@@ -67,10 +67,31 @@ namespace FlyShelf.Windows
         /// <summary>
         /// Configures the toast content based on message semantics.
         /// Uses a subtle accent-dot color instead of large icons.
+        /// Supports multi-line messages with Title and Subtitle.
         /// </summary>
         private void ConfigureForMessage(string message)
         {
-            MessageText.Text = message;
+            string title = message;
+            string? subtitle = null;
+
+            if (message.Contains('\n'))
+            {
+                var parts = message.Split(new[] { '\n' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                title = parts[0].Trim();
+                if (parts.Length > 1) subtitle = parts[1].Trim();
+            }
+
+            MessageText.Text = title;
+            if (!string.IsNullOrEmpty(subtitle))
+            {
+                SubtitleText.Text = subtitle;
+                SubtitleText.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                SubtitleText.Visibility = Visibility.Collapsed;
+            }
+
             _isProgressMode = false;
             
             // Show standard layout, hide progress layout
@@ -371,6 +392,19 @@ namespace FlyShelf.Windows
         /// the message is queued and will display after the current toast dismisses.
         /// </summary>
         public static void ShowToast(string message) => ShowToast(message, 0);
+
+        public static void ShowToast(string title, string? subtitle, int durationMs = 0)
+        {
+            if (string.IsNullOrWhiteSpace(subtitle))
+                ShowToast(title, durationMs);
+            else
+                ShowToast($"{title}\n{subtitle}", durationMs);
+        }
+
+        public static void ShowSuccess(string title, string? subtitle = null) => ShowToast(title, subtitle, 2600);
+        public static void ShowError(string title, string? reason = null) => ShowToast(title, reason, 5000);
+        public static void ShowWarning(string title, string? message = null) => ShowToast(title, message, 4000);
+        public static void ShowInfo(string title, string? message = null) => ShowToast(title, message, 2800);
 
         public static void ShowToast(string message, int durationMs)
         {

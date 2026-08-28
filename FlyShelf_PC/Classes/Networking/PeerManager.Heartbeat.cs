@@ -8,6 +8,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -119,10 +122,33 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
-        /// HTTP health ping with short timeout. Returns true if peer responds.
+        /// Fast health ping. Uses active duplex WebSocket if open, falls back to HTTP with short timeout.
         /// </summary>
         private async Task<bool> PingPeer(PeerConnection peer)
         {
+            if (peer.LiveSocket != null && peer.LiveSocket.State == WebSocketState.Open)
+            {
+                try
+                {
+                    var pingBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { type = "Ping", ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }));
+                    using var wsPingCts = new CancellationTokenSource(1500);
+                    await peer.SendSemaphore.WaitAsync(wsPingCts.Token);
+                    try
+                    {
+                        await peer.LiveSocket.SendAsync(new ArraySegment<byte>(pingBytes), WebSocketMessageType.Text, true, wsPingCts.Token);
+                        return true;
+                    }
+                    finally
+                    {
+                        peer.SendSemaphore.Release();
+                    }
+                }
+                catch
+                {
+                    // WebSocket ping failed, fall through to HTTP ping
+                }
+            }
+
             if (string.IsNullOrEmpty(peer.ActiveUrl)) return false;
             try
             {

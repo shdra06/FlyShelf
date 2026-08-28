@@ -621,6 +621,11 @@ public static partial class NativeMethods
     [DllImport("kernel32.dll", EntryPoint = "SetProcessWorkingSetSize", SetLastError = true)]
     internal static extern int SetProcessWorkingSetSize(IntPtr process, nint minimumWorkingSetSize, nint maximumWorkingSetSize);
 
+    /// <summary>Flushes all inactive pages from the working set of the specified process to disk/pagefile.</summary>
+    [LibraryImport("psapi.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool EmptyWorkingSet(IntPtr hProcess);
+
     /// <summary>Sets information for the specified process (e.g. power throttling).</summary>
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

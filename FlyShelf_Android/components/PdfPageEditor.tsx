@@ -4,6 +4,7 @@ import {
   View, Text, Modal, TouchableOpacity, ScrollView, ActivityIndicator,
   ToastAndroid, Platform, StyleSheet, Alert, TextInput,
 } from 'react-native';
+import { toast } from '../context/ToastContext';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { getPdfPageInfo, extractPages } from '../utils/pdfUtils';
@@ -122,9 +123,7 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
       // Pass cached bytes to avoid re-loading the entire PDF
       await extractPages(pdfUri, selectedPages, outputPath, cachedBytesRef.current || undefined);
 
-      if (Platform.OS === 'android') {
-        ToastAndroid.show(`\u2705 Saved: ${outputName}`, ToastAndroid.LONG);
-      }
+      toast.success('PDF Saved', outputName);
 
       if (onSaved) {
         onSaved(outputPath, outputName);

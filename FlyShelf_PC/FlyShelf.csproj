@@ -34,6 +34,7 @@
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     <RetainVM>false</RetainVM>
+    <DefaultItemExcludes>$(DefaultItemExcludes);FINAL\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <!-- Microsoft Store build: pass /p:StorePublish=true to define MSIX_STORE -->

@@ -275,6 +275,24 @@ namespace FlyShelf.Windows
             e.Handled = true;
         }
 
+        internal void ReadMoreSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item) { item.AdvancePhase(); }
+            e.Handled = true;
+        }
+
+        internal void ShowAllSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item) { item.ShowAllPhase(); }
+            e.Handled = true;
+        }
+
+        internal void CollapseSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item) { item.CollapsePhase(); }
+            e.Handled = true;
+        }
+
         private void SelectAll_Click(object sender, RoutedEventArgs e)
         {
             bool anyUnselected = _viewModel.DroppedItems.Any(i => !i.IsCheckedForMerge);

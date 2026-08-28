@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------
+// ---------------------------------------------------------------
 // HubWindow — Networking Command Center Handlers
 // Inner tab switching (Devices/Queue/History/Nearby), file staging,
 // transfer history UI, nearby device scanning, and send-to context menus.
@@ -125,7 +125,11 @@ namespace FlyShelf.Windows
                 if (_peerFastRefreshTimer == null)
                 {
                     _peerFastRefreshTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-                    _peerFastRefreshTimer.Tick += (s, ev) => RefreshPairedDevicesList();
+                    _peerFastRefreshTimer.Tick += (s, ev) =>
+                    {
+                        RefreshPairedDevicesList();
+                        RefreshDevices_Click(null, null);
+                    };
                 }
                 _peerFastRefreshTimer.Start();
             }

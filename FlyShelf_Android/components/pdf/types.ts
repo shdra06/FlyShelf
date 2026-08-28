@@ -1,4 +1,4 @@
-export type ToolId = 'merge' | 'split' | 'editPages' | 'imagesToPdf' | 'extract' | 'watermark' | 'password' | 'metadata' | 'info';
+export type ToolId = 'merge' | 'split' | 'editPages' | 'imagesToPdf' | 'extract' | 'watermark' | 'password' | 'metadata' | 'info' | 'compress' | 'pdfToWord';
 
 export interface SelectedFile {
   uri: string;

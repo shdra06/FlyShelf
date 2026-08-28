@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -9,7 +10,8 @@ namespace FlyShelf.Classes
 {
     /// <summary>
     /// High-performance thumbnail generation and image loader supporting standard raster formats
-    /// (PNG, JPEG, GIF, BMP, WEBP, ICO, TIFF) and vector SVG formats via SharpVectors.
+    /// (PNG, JPEG, GIF, BMP, WEBP, ICO, TIFF, HEIC) and vector SVG formats via SharpVectors.
+    /// Features an ultra-fast in-memory ConcurrentDictionary cache to guarantee instant, flicker-free rendering.
     /// </summary>
     public static class ImageThumbnailManager
     {
@@ -17,6 +19,10 @@ namespace FlyShelf.Classes
         {
             ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico", ".tiff", ".tif", ".heic", ".heif"
         };
+
+        private record CachedThumbnail(BitmapSource Bitmap, long LastWriteTicks, long FileLength, int DecodeWidth);
+        private static readonly ConcurrentDictionary<string, CachedThumbnail> _thumbnailCache =
+            new ConcurrentDictionary<string, CachedThumbnail>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Checks if a file extension corresponds to a supported image type.
@@ -42,6 +48,7 @@ namespace FlyShelf.Classes
 
         /// <summary>
         /// Loads an image file as a thumbnail BitmapSource. Supports both raster images and SVGs.
+        /// Guaranteed thread-safe with in-memory caching and multi-tier decoder fallbacks.
         /// </summary>
         public static BitmapSource? LoadThumbnail(string? filePath, int decodeWidth = 300)
         {
@@ -50,43 +57,104 @@ namespace FlyShelf.Classes
 
             try
             {
-                string ext = Path.GetExtension(filePath).ToLowerInvariant();
-
-                // 1. Vector SVG rendering
-                if (ext == ".svg")
-                {
-                    return RenderSvgFromFile(filePath, decodeWidth, decodeWidth);
-                }
-
-                // 2. Standard raster image loading (PNG, JPG, BMP, WEBP, GIF, ICO, TIFF)
                 var fi = new FileInfo(filePath);
-                if (fi.Length > 80_000_000) // 80 MB cap for thumbnails
+                long currentTicks = fi.LastWriteTimeUtc.Ticks;
+                long currentLength = fi.Length;
+
+                if (currentLength > 80_000_000) // 80 MB cap for thumbnails
                 {
-                    Logger.LogAction("THUMB_SKIP", $"File too large ({fi.Length} bytes): {filePath}");
+                    Logger.LogAction("THUMB_SKIP", $"File too large ({currentLength} bytes): {filePath}");
                     return null;
                 }
 
-                var bmp = new BitmapImage();
-                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                // 1. Check in-memory cache
+                if (_thumbnailCache.TryGetValue(filePath, out var cached))
                 {
-                    bmp.BeginInit();
-                    bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
-                    bmp.StreamSource = fs;
-                    bmp.CacheOption = BitmapCacheOption.OnLoad;
-                    if (decodeWidth > 0)
+                    if (cached.LastWriteTicks == currentTicks && cached.FileLength == currentLength && (cached.DecodeWidth >= decodeWidth || decodeWidth <= 0))
                     {
-                        bmp.DecodePixelWidth = decodeWidth;
+                        return cached.Bitmap;
                     }
-                    bmp.EndInit();
                 }
-                bmp.Freeze();
-                return bmp;
+
+                string ext = Path.GetExtension(filePath).ToLowerInvariant();
+
+                // 2. Vector SVG rendering
+                if (ext == ".svg")
+                {
+                    var svgBmp = RenderSvgFromFile(filePath, decodeWidth, decodeWidth);
+                    if (svgBmp != null)
+                    {
+                        _thumbnailCache[filePath] = new CachedThumbnail(svgBmp, currentTicks, currentLength, decodeWidth);
+                    }
+                    return svgBmp;
+                }
+
+                // 3. Standard raster image loading (PNG, JPG, BMP, WEBP, GIF, ICO, TIFF)
+                BitmapSource? resultBmp = null;
+
+                try
+                {
+                    var bmp = new BitmapImage();
+                    using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    {
+                        bmp.BeginInit();
+                        bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
+                        bmp.StreamSource = fs;
+                        bmp.CacheOption = BitmapCacheOption.OnLoad;
+                        if (decodeWidth > 0)
+                        {
+                            bmp.DecodePixelWidth = decodeWidth;
+                        }
+                        bmp.EndInit();
+                    }
+                    bmp.Freeze();
+                    resultBmp = bmp;
+                }
+                catch
+                {
+                    // Fallback to BitmapDecoder for CMYK, progressive, or unusual color spaces
+                    try
+                    {
+                        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                        var decoder = BitmapDecoder.Create(fs, BitmapCreateOptions.IgnoreColorProfile, BitmapCacheOption.OnLoad);
+                        if (decoder.Frames.Count > 0)
+                        {
+                            var frame = decoder.Frames[0];
+                            if (decodeWidth > 0 && frame.PixelWidth > decodeWidth)
+                            {
+                                double scale = (double)decodeWidth / frame.PixelWidth;
+                                var transformed = new TransformedBitmap(frame, new ScaleTransform(scale, scale));
+                                transformed.Freeze();
+                                resultBmp = transformed;
+                            }
+                            else
+                            {
+                                var converted = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
+                                converted.Freeze();
+                                resultBmp = converted;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                if (resultBmp != null)
+                {
+                    _thumbnailCache[filePath] = new CachedThumbnail(resultBmp, currentTicks, currentLength, decodeWidth);
+                    return resultBmp;
+                }
+
+                // Fallback to Shell Icon if all decoders failed
+                var shellIcon = ShellIconManager.GetIcon(filePath);
+                if (shellIcon != null)
+                {
+                    _thumbnailCache[filePath] = new CachedThumbnail(shellIcon, currentTicks, currentLength, decodeWidth);
+                }
+                return shellIcon;
             }
             catch (Exception ex)
             {
                 Logger.LogAction("THUMB_LOAD_ERR", $"Raster load failed for {filePath}: {ex.Message}");
-
-                // Fallback to Shell Icon if direct decode failed
                 try
                 {
                     return ShellIconManager.GetIcon(filePath);
@@ -186,6 +254,14 @@ namespace FlyShelf.Classes
                 Logger.LogAction("SVG_CONV_ERR", $"DrawingGroup to Bitmap conversion error: {ex.Message}");
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Clears the in-memory thumbnail cache.
+        /// </summary>
+        public static void ClearCache()
+        {
+            _thumbnailCache.Clear();
         }
     }
 }

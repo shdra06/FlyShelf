@@ -104,7 +104,40 @@
                                    Visibility="Collapsed" AutomationProperties.Name="Copy raw markdown">
                             <StackPanel Orientation="Horizontal">
                                 <ui:SymbolIcon Symbol="Copy24" Filled="True" FontSize="14"/>
-                                <TextBlock Text="Copy" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Raw" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ui:Button>
+                        <!-- Copy Rendered HTML Button (markdown only) -->
+                        <ui:Button x:Name="CopyHtmlBtn" Click="CopyHtmlButton_Click" Appearance="Secondary" 
+                                   Foreground="#38BDF8" Padding="5,3" Margin="0,0,4,0" ToolTip="Copy as rich HTML"
+                                   Visibility="Collapsed" AutomationProperties.Name="Copy as HTML">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Code24" FontSize="14"/>
+                                <TextBlock Text="HTML" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ui:Button>
+                        <!-- Edit / Preview Markdown Toggle Button -->
+                        <ui:Button x:Name="MdEditBtn" Click="MarkdownEditToggle_Click" Appearance="Secondary" 
+                                   Foreground="#A78BFA" Padding="5,3" Margin="0,0,4,0" ToolTip="Toggle Edit / Preview (Ctrl+E)"
+                                   Visibility="Collapsed" AutomationProperties.Name="Toggle markdown edit mode">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon x:Name="MdEditIcon" Symbol="Edit24" FontSize="14"/>
+                                <TextBlock x:Name="MdEditLabel" Text="Edit" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ui:Button>
+                        <!-- Save Markdown Button -->
+                        <ui:Button x:Name="MdSaveBtn" Click="MarkdownSave_Click" Appearance="Primary" 
+                                   Foreground="White" Padding="5,3" Margin="0,0,4,0" ToolTip="Save Markdown (Ctrl+S)"
+                                   Visibility="Collapsed" AutomationProperties.Name="Save markdown changes">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Save24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
+                        <!-- Save DOCX Button -->
+                        <ui:Button x:Name="DocxSaveBtn" Click="DocxSave_Click" Appearance="Primary" 
+                                   Foreground="White" Padding="5,3" Margin="0,0,4,0" ToolTip="Save DOCX (Ctrl+S)"
+                                   Visibility="Collapsed" AutomationProperties.Name="Save DOCX document">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Save24" Filled="True" FontSize="14"/>
+                                <TextBlock Text="Save" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                         </ui:Button>
                         <!-- Zoom Reset Button (markdown only) -->
@@ -137,6 +170,21 @@
                                    Visibility="Collapsed" AutomationProperties.Name="Add PDF pages">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Add24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
+                        <!-- PDF Export to Images Button -->
+                        <ui:Button x:Name="PdfToImagesBtn" Click="PdfExportImages_Click" Appearance="Secondary" 
+                                   Foreground="#38BDF8" Padding="5,3" Margin="0,0,4,0" ToolTip="Export Pages as PNG Images"
+                                   Visibility="Collapsed" AutomationProperties.Name="Export PDF pages as images">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Image24" FontSize="14"/>
+                                <TextBlock Text="PNG" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ui:Button>
+                        <!-- PDF Compress Button -->
+                        <ui:Button x:Name="PdfCompressBtn" Click="PdfCompress_Click" Appearance="Secondary" 
+                                   Foreground="#34D399" Padding="5,3" Margin="0,0,4,0" ToolTip="Compress &amp; Optimize PDF Size"
+                                   Visibility="Collapsed" AutomationProperties.Name="Compress PDF">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Flash24" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
                         <!-- PDF Save Button (Split) -->
                         <ui:Button x:Name="PdfSaveBtn" Click="PdfSave_Click" Appearance="Primary" 
                                    Foreground="White" Padding="5,3" Margin="0,0,4,0" ToolTip="Save Changes (Right click for more)"
@@ -149,6 +197,16 @@
                                     </MenuItem>
                                     <MenuItem Header="Save as Copy..." Click="PdfSaveAs_Click">
                                         <MenuItem.Icon><ui:SymbolIcon Symbol="SaveCopy24"/></MenuItem.Icon>
+                                    </MenuItem>
+                                    <Separator/>
+                                    <MenuItem Header="Export Pages as Images (PNG)" Click="PdfExportImages_Click">
+                                        <MenuItem.Icon><ui:SymbolIcon Symbol="Image24"/></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Compress &amp; Reduce Size" Click="PdfCompress_Click">
+                                        <MenuItem.Icon><ui:SymbolIcon Symbol="Flash24"/></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Protect with Password..." Click="PdfProtect_Click">
+                                        <MenuItem.Icon><ui:SymbolIcon Symbol="LockClosed24"/></MenuItem.Icon>
                                     </MenuItem>
                                 </ContextMenu>
                             </ui:Button.ContextMenu>
@@ -175,7 +233,7 @@
                     </StackPanel>
                 </Grid>
 
-                <Grid Grid.Row="1" Background="#20000000">
+                <Grid Grid.Row="1" Background="Transparent">
                     <ProgressBar IsIndeterminate="True" x:Name="LoadingProgress" VerticalAlignment="Top" Height="3" Background="Transparent" Foreground="{DynamicResource ThemeAccentLight}" BorderThickness="0" Visibility="Collapsed" Panel.ZIndex="10" />
                     <!-- Image Mode Grid -->
                     <Grid x:Name="ImageModeGrid" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
@@ -290,8 +348,14 @@
                     </Grid>
                     
                     <!-- Raw Text/Code/DOCX Extracted Frame -->
-                    <ScrollViewer x:Name="TextPreviewScroll" Visibility="Collapsed" Background="{DynamicResource ThemeCodePreviewBg}">
-                        <TextBlock x:Name="TextPreview" Foreground="{DynamicResource ThemeTextPrimary}" Margin="15" TextWrapping="Wrap" FontFamily="Consolas" FontSize="13" />
+                    <ScrollViewer x:Name="TextPreviewScroll" Visibility="Collapsed" Background="#181825"
+                                  TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
+                                  UseLayoutRounding="True" SnapsToDevicePixels="True">
+                        <TextBox x:Name="TextPreview" Foreground="#CDD6F4" Margin="16" TextWrapping="Wrap"
+                                 FontFamily="Cascadia Code, Cascadia Mono, JetBrains Mono, Consolas, monospace" FontSize="13"
+                                 IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                 SelectionBrush="#5061AFEF" CaretBrush="Transparent"
+                                 TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType" />
                     </ScrollViewer>
 
                     <!-- Syntax-Highlighted Code Preview -->
@@ -299,14 +363,21 @@
                         Visibility="Collapsed"
                         IsReadOnly="True"
                         ShowLineNumbers="True"
-                        FontFamily="Cascadia Code, Cascadia Mono, Consolas, monospace"
+                        FontFamily="Cascadia Code, Cascadia Mono, JetBrains Mono, Fira Code, Consolas, monospace"
                         FontSize="13"
-                        Background="#1E1E2E"
+                        Background="#181825"
                         Foreground="#CDD6F4"
-                        Padding="12"
+                        LineNumbersForeground="#5C6370"
+                        Padding="14,10,14,10"
                         HorizontalScrollBarVisibility="Auto"
                         VerticalScrollBarVisibility="Auto"
-                        Focusable="True" />
+                        Focusable="True"
+                        TextOptions.TextFormattingMode="Display"
+                        TextOptions.TextRenderingMode="ClearType"
+                        TextOptions.TextHintingMode="Fixed"
+                        RenderOptions.ClearTypeHint="Enabled"
+                        UseLayoutRounding="True"
+                        SnapsToDevicePixels="True" />
 
                     <!-- Document Mode (Fallback when all else fails) -->
                     <StackPanel x:Name="DocumentPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">

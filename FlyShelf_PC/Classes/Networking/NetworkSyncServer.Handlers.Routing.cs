@@ -167,41 +167,18 @@ namespace FlyShelf.Classes
                     return;
                 }
 
-                // ═══ CLOUDFLARE TUNNEL SECURITY GATE ═══
-                // Public URL is for SENDING data to this device only.
-                // Web client, logs, dashboard, and data-read endpoints are LAN-only.
-                // Over tunnel: only paired devices allowed (no PIN-only access).
                 bool isFromTunnel = IsCloudflareRequest(req);
-                if (isFromTunnel)
-                {
-                    // Block web client over tunnel — LAN only
-                    if (path == "/" || path == "/index.html")
-                    {
-                        res.StatusCode = 403;
-                        byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Web client is LAN-only\"}");
-                        res.ContentType = "application/json";
-                        try { res.OutputStream.Write(err, 0, err.Length); } catch { }
-                        res.Close();
-                        return;
-                    }
 
-                    // Block logs, dashboard, and debug endpoints over tunnel
-                    if (path == "/logs" || path.StartsWith("/api/logs", StringComparison.Ordinal)
-                        || path == "/api/network/dashboard" || path == "/api/speedtest"
-                        || path == "/api/shortcuts")
-                    {
-                        res.StatusCode = 403;
-                        byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Not available over public URL\"}");
-                        res.ContentType = "application/json";
-                        try { res.OutputStream.Write(err, 0, err.Length); } catch { }
-                        res.Close();
-                        return;
-                    }
-                }
-
-                if (path == "/" || path == "/index.html")
+                // ═══ STEALTH API GATEWAY: NO VISUAL WEBPAGE / DIRECTORY LISTING ═══
+                // Any browser or crawler hitting the root URL gets a clean blank 404 response
+                if (path == "/" || path == "/index.html" || path == "/index.htm")
                 {
-                    await ServeHtml(res);
+                    res.StatusCode = 404;
+                    res.ContentType = "text/plain";
+                    byte[] notFound = Encoding.UTF8.GetBytes("Not Found");
+                    try { res.OutputStream.Write(notFound, 0, notFound.Length); } catch { }
+                    res.Close();
+                    return;
                 }
                 else if (path == "/ping")
                 {
@@ -613,7 +590,7 @@ namespace FlyShelf.Classes
                                 mobileDeviceId, mobileDeviceName, mobileIp, 8999, "Mobile");
                         }
 
-                        await ServeClipboardData(res);
+                        await ServeClipboardData(req, res);
                     }
                     else if (path == "/api/events" && req.HttpMethod == "GET")
                     {
@@ -656,6 +633,7 @@ namespace FlyShelf.Classes
                     else if (path == "/api/upload_finalize" && req.HttpMethod == "POST") { await HandleChunkFinalize(req, res); }
                     else if (path == "/api/relay_upload" && req.HttpMethod == "POST") { await HandleRelayUpload(req, res); }
                     else if (path == "/api/convert_to_pdf" && req.HttpMethod == "POST") { await HandleConvertToPdf(req, res); }
+                    else if (path == "/api/convert_pdf_to_word" && req.HttpMethod == "POST") { await HandleConvertPdfToWord(req, res); }
                     else if (path == "/api/merge_pdfs" && req.HttpMethod == "POST") { await HandleMergePdfs(req, res); }
                     else if (path == "/download" && req.HttpMethod == "GET") { await ServeFileDownload(req, res); }
                     else if (path == "/logs" && req.HttpMethod == "GET") { ServeLogDashboard(res); }
@@ -696,6 +674,7 @@ namespace FlyShelf.Classes
         /// </summary>
         private async Task HandlePeerWebSocket(WebSocket ws, string peerDeviceId)
         {
+            RegisterPeerWebSocket(peerDeviceId, ws);
             byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(65536);
             try
             {
@@ -747,7 +726,21 @@ namespace FlyShelf.Classes
                                 var root = doc.RootElement;
                                 string envelopeType = root.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : "";
 
-                                if (envelopeType == "SyncText")
+                                if (envelopeType == "Ping" || envelopeType == "Heartbeat")
+                                {
+                                    long clientTs = root.TryGetProperty("ts", out var tsProp) ? tsProp.GetInt64() : 0;
+                                    string pongMsg = JsonSerializer.Serialize(new {
+                                        type = "Pong",
+                                        ts = clientTs,
+                                        serverTs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                                        deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
+                                        deviceId = SettingsManager.Current.DeviceId ?? "PC"
+                                    });
+                                    byte[] pongBytes = Encoding.UTF8.GetBytes(pongMsg);
+                                    await ws.SendAsync(new ArraySegment<byte>(pongBytes), WebSocketMessageType.Text, true, CancellationToken.None);
+                                    continue;
+                                }
+                                else if (envelopeType == "SyncText")
                                 {
                                     string sourceDeviceId = root.TryGetProperty("sourceDeviceId", out var idProp) ? idProp.GetString() ?? "" : "";
                                     if (sourceDeviceId == SettingsManager.Current.DeviceId)
@@ -1041,6 +1034,7 @@ namespace FlyShelf.Classes
             }
             finally
             {
+                UnregisterPeerWebSocket(peerDeviceId);
                 System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
                 ws.Dispose();
             }

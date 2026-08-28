@@ -90,6 +90,18 @@
                           Command="{Binding PlacementTarget.Tag.CopyRawContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
 
+                <!-- ═══ TEXT / DOC / CODE: Convert to PDF (Always Visible for Text/Docs/Code) ═══ -->
+                <MenuItem Command="{Binding PlacementTarget.Tag.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          Visibility="{Binding PlacementTarget.DataContext.CanConvertDocToPdf, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <MenuItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="DocumentPdf24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0" Foreground="{DynamicResource TypePdfColor}"/>
+                            <TextBlock Text="Convert to PDF"/>
+                        </StackPanel>
+                    </MenuItem.Header>
+                </MenuItem>
+
                 <Separator />
 
                 <!-- ═══ TEXT / CODE Actions ═══ -->
@@ -221,25 +233,47 @@
                               Visibility="{Binding PlacementTarget.DataContext.IsCodePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 </MenuItem>
 
-                <!-- ═══ IMAGE: OCR Extract + Gemini Table ═══ -->
-                <MenuItem Header="Extract Text (OCR)" 
-                          Command="{Binding PlacementTarget.Tag.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                <!-- ═══ IMAGE: Convert Image to PDF (Directly Visible) ═══ -->
+                <MenuItem Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                          Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <MenuItem Header="Extract Table Data" 
-                          Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <MenuItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="DocumentPdf24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0" Foreground="{DynamicResource TypePdfColor}"/>
+                            <TextBlock Text="Convert Image to PDF"/>
+                        </StackPanel>
+                    </MenuItem.Header>
+                </MenuItem>
+
+                <!-- ═══ IMAGE: Extract Table Data (Directly Visible) ═══ -->
+                <MenuItem Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Foreground="{DynamicResource GeminiAccentColor}"
-                          Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <MenuItem Header="Convert Image to PDF" 
-                          Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                          Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <MenuItem Header="Scan QR Code" 
-                          Command="{Binding PlacementTarget.Tag.ManualScanQRCodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                          Foreground="{DynamicResource GeminiAccentColor}"
-                          Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                          Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <MenuItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Table24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0" Foreground="{DynamicResource GeminiAccentColor}"/>
+                            <TextBlock Text="Extract Table Data" Foreground="{DynamicResource GeminiAccentColor}"/>
+                        </StackPanel>
+                    </MenuItem.Header>
+                </MenuItem>
+
+                <!-- ═══ IMAGE: Image & OCR Tools Category Submenu ═══ -->
+                <MenuItem Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <MenuItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="TextDescription24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0" Foreground="{DynamicResource MenuOcrColor}"/>
+                            <TextBlock Text="Image &amp; OCR Tools"/>
+                        </StackPanel>
+                    </MenuItem.Header>
+                    <MenuItem Header="Extract Text (OCR)" 
+                              Command="{Binding PlacementTarget.Tag.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                    <MenuItem Header="Scan QR Code" 
+                              Command="{Binding PlacementTarget.Tag.ManualScanQRCodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              Foreground="{DynamicResource GeminiAccentColor}"/>
+                </MenuItem>
 
                 <!-- ═══ PDF: Open + Convert ═══ -->
                 <MenuItem Header="Open PDF in Browser" 
@@ -252,12 +286,6 @@
                 <MenuItem Header="Reorder PDF Pages" Click="ReorderPdfPages_Click" 
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.IsPdfPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-
-                <!-- ═══ DOCUMENT: Convert to PDF ═══ -->
-                <MenuItem Header="Convert to PDF" 
-                          Command="{Binding PlacementTarget.Tag.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                          Visibility="{Binding PlacementTarget.DataContext.IsDocPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
                 <!-- ═══ URL: Open in Browser ═══ -->
                 <MenuItem Header="Open in Browser" 
@@ -278,36 +306,34 @@
                     <!-- Sub-items populated dynamically in CardContextMenu_Opened -->
                 </MenuItem>
 
-                <!-- ═══ FILE-BACKED: Rename ═══ -->
-                <MenuItem Header="Rename" Click="RenameItem_Click"
-                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                          Visibility="{Binding PlacementTarget.DataContext.CanRename, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-
-                <!-- ═══ FILE-BACKED: Show in Explorer ═══ -->
-                <MenuItem Header="Show in Explorer" 
-                          Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                          Visibility="{Binding PlacementTarget.DataContext.CanShowInExplorer, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-
-                <!-- ═══ FILE-BACKED: Paste File Path ═══ -->
-                <MenuItem Header="Paste Path" Click="PasteFilePath_Click"
-                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                          Visibility="{Binding PlacementTarget.DataContext.HasFilePath, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"
-                          ToolTip="Paste file path directly into active window (or hold Ctrl when clicking)"
-                          AutomationProperties.Name="Paste file path into active window"/>
-
-                <!-- ═══ FILE-BACKED: Copy File Path ═══ -->
-                <MenuItem Header="Copy Path" Click="CopyFilePath_Click"
-                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                          Visibility="{Binding PlacementTarget.DataContext.HasFilePath, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"
-                          AutomationProperties.Name="Copy file path to clipboard"/>
-
-                <!-- ═══ FILE-BACKED: Copy File (for Explorer / Folders) ═══ -->
-                <MenuItem Header="Copy File" Click="CopyFile_Click"
-                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                          Visibility="{Binding PlacementTarget.DataContext.HasFilePath, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"
-                          ToolTip="Copy file to clipboard for pasting into Explorer"
-                          AutomationProperties.Name="Copy file to clipboard"/>
+                <!-- ═══ FILE & PATH TOOLS Category Submenu ═══ -->
+                <MenuItem Visibility="{Binding PlacementTarget.DataContext.HasFilePath, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <MenuItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Folder24" FontSize="{StaticResource TypeSubtitle}" Margin="0,0,8,0" Foreground="{DynamicResource ThemeTextSecondary}"/>
+                            <TextBlock Text="File &amp; Path Tools"/>
+                        </StackPanel>
+                    </MenuItem.Header>
+                    <MenuItem Header="Show in Explorer" 
+                              Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              Visibility="{Binding PlacementTarget.DataContext.CanShowInExplorer, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    <MenuItem Header="Rename" Click="RenameItem_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              Visibility="{Binding PlacementTarget.DataContext.CanRename, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    <Separator/>
+                    <MenuItem Header="Paste Path" Click="PasteFilePath_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              ToolTip="Paste file path directly into active window (or hold Ctrl when clicking)"
+                              AutomationProperties.Name="Paste file path into active window"/>
+                    <MenuItem Header="Copy Path" Click="CopyFilePath_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              AutomationProperties.Name="Copy file path to clipboard"/>
+                    <MenuItem Header="Copy File" Click="CopyFile_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              ToolTip="Copy file to clipboard for pasting into Explorer"
+                              AutomationProperties.Name="Copy file to clipboard"/>
+                </MenuItem>
 
                 <!-- ═══ Universal: Delete ═══ -->
                 <MenuItem Header="Delete" Click="DeleteContextMenu_Click" Foreground="{DynamicResource DangerColor}"/>
@@ -1625,7 +1651,7 @@
                             </Border>
 
                              <!-- Image Placeholder — shown when Icon hasn't loaded yet for image items -->
-                             <Border Name="ImagePlaceholderBorder">
+                             <Border Name="ImagePlaceholderBorder" Loaded="ImagePlaceholderBorder_Loaded">
                                  <Border.Style>
                                      <Style TargetType="Border">
                                          <Setter Property="Grid.Row" Value="0"/>
@@ -2096,6 +2122,78 @@
                                            Text="{Binding DisplayText}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" FontFamily="Segoe UI Emoji, Segoe UI" FontWeight="Medium" FontSize="{StaticResource TypeSubtitle}" LineHeight="19" TextWrapping="Wrap" 
                                            TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" />
 
+                                <!-- ═══ Phased Progressive Disclosure Footer (500-word batches for 10K+ line texts) ═══ -->
+                                <Border Visibility="{Binding HasPhasedExpansion, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                        Margin="0,6,0,2" Padding="8,4"
+                                        Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
+                                        BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"
+                                        BorderThickness="1" CornerRadius="{StaticResource RadiusSM}"
+                                        HorizontalAlignment="Stretch">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Phase Status Indicator -->
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <ui:SymbolIcon Symbol="DocumentText24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource TypeCodeColor}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding ShowingWordsText}" FontSize="{StaticResource TypeCaption}"
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontWeight="Medium" VerticalAlignment="Center"/>
+                                        </StackPanel>
+
+                                        <!-- Phase Action Buttons -->
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <!-- Read next 500 words Button -->
+                                            <Button Visibility="{Binding HasMorePhases, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                    PreviewMouseLeftButtonDown="ReadMoreSpecific_Click"
+                                                    Cursor="Hand" Margin="0,0,6,0" Padding="8,3"
+                                                    Background="{DynamicResource ThemeAccent}" Foreground="{DynamicResource ThemeTextOnAccent}"
+                                                    BorderThickness="0">
+                                                <Button.Resources>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="CornerRadius" Value="4"/>
+                                                    </Style>
+                                                </Button.Resources>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <ui:SymbolIcon Symbol="Add24" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding ReadMoreButtonText}" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+
+                                            <!-- Show All Button -->
+                                            <Button Visibility="{Binding HasMorePhases, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                    PreviewMouseLeftButtonDown="ShowAllSpecific_Click"
+                                                    Cursor="Hand" Margin="0,0,6,0" Padding="8,3"
+                                                    Background="Transparent" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                                                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
+                                                <Button.Resources>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="CornerRadius" Value="4"/>
+                                                    </Style>
+                                                </Button.Resources>
+                                                <TextBlock Text="Show all" FontSize="{StaticResource TypeCaption}" VerticalAlignment="Center"/>
+                                            </Button>
+
+                                            <!-- Collapse Button -->
+                                            <Button PreviewMouseLeftButtonDown="CollapseSpecific_Click"
+                                                    Cursor="Hand" Padding="8,3"
+                                                    Background="Transparent" Foreground="{DynamicResource DangerColor}"
+                                                    BorderBrush="{DynamicResource DangerBorder}" BorderThickness="1">
+                                                <Button.Resources>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="CornerRadius" Value="4"/>
+                                                    </Style>
+                                                </Button.Resources>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <ui:SymbolIcon Symbol="ChevronUp24" FontSize="11" Margin="0,0,3,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Collapse" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
                                 <!-- Markdown Tag — lightweight visual indicator, no inline rendering -->
                                 <Border CornerRadius="4" Padding="6,1,6,1" Margin="0,3,0,0" HorizontalAlignment="Left">
                                     <Border.Style>
@@ -2483,11 +2581,14 @@
 
         <!-- ═══ Unified Search Results Panel (Notes + Todos + Smart Commands) ═══ -->
         <Border x:Name="UnifiedSearchPanel" Grid.Row="1" VerticalAlignment="Bottom" 
-                Visibility="Collapsed" MaxHeight="280" Margin="8,0,8,8"
-                Background="{DynamicResource ThemeOverlayBg}" CornerRadius="{StaticResource RadiusMD}"
+                Visibility="Collapsed" MaxHeight="220" Margin="8,0,8,8"
+                Background="#F81C1C20" CornerRadius="{StaticResource RadiusMD}"
                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                 Panel.ZIndex="50">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="280" Padding="0">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="16" ShadowDepth="4" Direction="270" Color="#000000" Opacity="0.75"/>
+            </Border.Effect>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="220" Padding="0">
                 <StackPanel Margin="10,8,10,8">
 
                     <!-- ── 📝 Notes Section ── -->

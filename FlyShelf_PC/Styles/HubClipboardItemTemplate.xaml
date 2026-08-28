@@ -50,14 +50,17 @@
                                             <!-- Universal Actions -->
                                             <ui:MenuItem Header="Copy Content" Icon="{ui:SymbolIcon Copy24}" Command="{Binding PlacementTarget.Tag.CopyRawContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
                                             <ui:MenuItem Header="Pin / Unpin" Icon="{ui:SymbolIcon Pin24}" Command="{Binding PlacementTarget.Tag.TogglePinCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
-                                            <!-- V-04: Gate on CanShowInExplorer so plain text items don't show this -->
-                                            <ui:MenuItem Header="Show in Explorer" Icon="{ui:SymbolIcon FolderOpen24}" Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding CanShowInExplorer, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <Separator />
-                                            <!-- Image Tools Submenu -->
-                                            <ui:MenuItem Header="Image Tools" Icon="{ui:SymbolIcon Image24}" Foreground="#60A5FA" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            
+                                            <!-- Text & Doc: Convert to PDF (Always Visible for Text/Docs/Code) -->
+                                            <ui:MenuItem Header="Convert to PDF" Icon="{ui:SymbolIcon DocumentPdf24}" Foreground="{DynamicResource TypePdfColor}" Command="{Binding PlacementTarget.Tag.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding CanConvertDocToPdf, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                                            <!-- Image Direct Actions (Always visible for images) -->
+                                            <ui:MenuItem Header="Convert Image to PDF" Icon="{ui:SymbolIcon DocumentPdf24}" Foreground="{DynamicResource TypePdfColor}" Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            <ui:MenuItem Header="Extract Table Data" Icon="{ui:SymbolIcon Table24}" Foreground="{DynamicResource GeminiAccentColor}" Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                                            <!-- Image & OCR Tools Submenu -->
+                                            <ui:MenuItem Header="Image &amp; OCR Tools" Icon="{ui:SymbolIcon TextDescription24}" Foreground="{DynamicResource MenuOcrColor}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}">
                                                 <ui:MenuItem Header="Extract Text (OCR)" Icon="{ui:SymbolIcon TextDescription24}" Foreground="{DynamicResource MenuOcrColor}" Command="{Binding PlacementTarget.Tag.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
-                                                <ui:MenuItem Header="Extract Table Data" Icon="{ui:SymbolIcon Table24}" Foreground="{DynamicResource MenuOcrColor}" Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
-                                                <ui:MenuItem Header="Convert Image to PDF" Icon="{ui:SymbolIcon Document24}" Foreground="{DynamicResource MenuConvertColor}" Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
                                                 <ui:MenuItem Header="Scan QR Code" Icon="{ui:SymbolIcon QrCode24}" Foreground="{DynamicResource MenuOcrColor}" Command="{Binding PlacementTarget.Tag.ManualScanQRCodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
                                             </ui:MenuItem>
                                             
@@ -74,9 +77,6 @@
                                                 <ui:MenuItem Header="Merge Selected PDFs" Icon="{ui:SymbolIcon DocumentCopy24}" Foreground="{DynamicResource DangerColor}" Command="{Binding PlacementTarget.Tag.MergeSelectedPdfsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                             </ui:MenuItem>
                                             
-                                            <!-- Document Actions -->
-                                            <ui:MenuItem Header="Convert to PDF" Icon="{ui:SymbolIcon Document24}" Foreground="{DynamicResource TypeDocColor}" Command="{Binding PlacementTarget.Tag.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsDocPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            
                                             <!-- Code Tools Submenu -->
                                             <ui:MenuItem Header="Code Tools" Icon="{ui:SymbolIcon Code24}" Foreground="#34D399" Visibility="{Binding IsCodePreview, Converter={StaticResource BooleanToVisibilityConverter}}">
                                                 <ui:MenuItem Header="Run in Terminal" Icon="{ui:SymbolIcon Play24}" Foreground="{DynamicResource MenuCodeActionColor}" Command="{Binding PlacementTarget.Tag.LaunchTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
@@ -85,6 +85,11 @@
                                                 <ui:MenuItem Header="Run as Administrator" Icon="{ui:SymbolIcon Shield24}" Foreground="{DynamicResource DangerColor}" Command="{Binding PlacementTarget.Tag.RunAdminTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsTerminalPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             </ui:MenuItem>
                                             
+                                            <!-- File & Path Tools Submenu -->
+                                            <ui:MenuItem Header="File &amp; Path Tools" Icon="{ui:SymbolIcon Folder24}" Foreground="{DynamicResource ThemeTextSecondary}" Visibility="{Binding HasFilePath, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <ui:MenuItem Header="Show in Explorer" Icon="{ui:SymbolIcon FolderOpen24}" Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding CanShowInExplorer, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            </ui:MenuItem>
+
                                             <!-- V-05: Only show separator when color actions are visible -->
                                             <Separator Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             
@@ -210,11 +215,11 @@
                                             </Border.Style>
                                         </Border>
 
-                                        <!-- CheckBox (after gap) -->
-                                        <CheckBox Grid.Column="2" IsChecked="{Binding IsCheckedForMerge, Mode=TwoWay}" VerticalAlignment="Center" Margin="6,0,0,0" Click="ItemCheckBox_Click" />
+                                        <!-- CheckBox (always anchored to upper-left start of card) -->
+                                        <CheckBox Grid.Column="2" IsChecked="{Binding IsCheckedForMerge, Mode=TwoWay}" VerticalAlignment="Top" Margin="6,14,0,0" Click="ItemCheckBox_Click" />
 
                                         <!-- File Type Icon Badge -->
-                                        <Border Grid.Column="3" Width="44" Height="44" CornerRadius="{StaticResource RadiusMD}" ClipToBounds="True" Margin="12,10,12,10">
+                                        <Border Grid.Column="3" Width="44" Height="44" CornerRadius="{StaticResource RadiusMD}" ClipToBounds="True" Margin="12,10,12,10" VerticalAlignment="Top">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
@@ -590,7 +595,7 @@
                                         </Button>
 
                                         <!-- Content Block -->
-                                        <StackPanel Grid.Column="4" VerticalAlignment="Center" Margin="0,12,0,12">
+                                        <StackPanel Grid.Column="4" VerticalAlignment="Top" Margin="0,10,0,12">
                                             <StackPanel Orientation="Horizontal">
                                                 <!-- Color detection dot -->
                                                 <Border Width="12" Height="12" CornerRadius="{StaticResource RadiusSM}" Margin="0,0,6,0" VerticalAlignment="Center" Background="{Binding DetectedColorBrush}" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}" BorderBrush="{Binding DetectedColorBrush}" BorderThickness="1.5"/>
@@ -714,6 +719,78 @@
                                                     </Style>
                                                 </Button.Style>
                                             </Button>
+
+                                            <!-- ═══ Phased Progressive Disclosure Footer (500-word batches for 10K+ line texts) ═══ -->
+                                            <Border Visibility="{Binding HasPhasedExpansion, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                    Margin="0,8,0,2" Padding="8,5"
+                                                    Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
+                                                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"
+                                                    BorderThickness="1" CornerRadius="{StaticResource RadiusSM}"
+                                                    HorizontalAlignment="Stretch">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- Phase Status Indicator -->
+                                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <ui:SymbolIcon Symbol="DocumentText24" FontSize="{StaticResource TypeSubtitle}" Foreground="{DynamicResource TypeCodeColor}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{Binding ShowingWordsText}" FontSize="{StaticResource TypeCaption}"
+                                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontWeight="Medium" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+
+                                                    <!-- Phase Action Buttons -->
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <!-- Read next 500 words Button -->
+                                                        <Button Visibility="{Binding HasMorePhases, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                                PreviewMouseLeftButtonDown="ReadMoreSpecific_Click"
+                                                                Cursor="Hand" Margin="0,0,6,0" Padding="8,3"
+                                                                Background="{DynamicResource ThemeAccent}" Foreground="{DynamicResource ThemeTextOnAccent}"
+                                                                BorderThickness="0">
+                                                            <Button.Resources>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="CornerRadius" Value="4"/>
+                                                                </Style>
+                                                            </Button.Resources>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <ui:SymbolIcon Symbol="Add24" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                                <TextBlock Text="{Binding ReadMoreButtonText}" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Button>
+
+                                                        <!-- Show All Button -->
+                                                        <Button Visibility="{Binding HasMorePhases, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                                PreviewMouseLeftButtonDown="ShowAllSpecific_Click"
+                                                                Cursor="Hand" Margin="0,0,6,0" Padding="8,3"
+                                                                Background="Transparent" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                                                                BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
+                                                            <Button.Resources>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="CornerRadius" Value="4"/>
+                                                                </Style>
+                                                            </Button.Resources>
+                                                            <TextBlock Text="Show all" FontSize="{StaticResource TypeCaption}" VerticalAlignment="Center"/>
+                                                        </Button>
+
+                                                        <!-- Collapse Button -->
+                                                        <Button PreviewMouseLeftButtonDown="CollapseSpecific_Click"
+                                                                Cursor="Hand" Padding="8,3"
+                                                                Background="Transparent" Foreground="{DynamicResource DangerColor}"
+                                                                BorderBrush="{DynamicResource DangerBorder}" BorderThickness="1">
+                                                            <Button.Resources>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="CornerRadius" Value="4"/>
+                                                                </Style>
+                                                            </Button.Resources>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <ui:SymbolIcon Symbol="ChevronUp24" FontSize="11" Margin="0,0,3,0" VerticalAlignment="Center"/>
+                                                                <TextBlock Text="Collapse" FontSize="{StaticResource TypeCaption}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
                                             
                                             <!-- File Transfer / Download Progress Panel -->
                                             <StackPanel Margin="0,4,0,0" Visibility="{Binding IsTransferring, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -765,9 +842,25 @@
                                                     </ui:Button.Icon>
                                                 </ui:Button>
 
-                                                <!-- Progress Slider -->
-                                                <Slider Grid.Column="1" Value="{Binding AudioPosition, Mode=TwoWay}" Maximum="{Binding AudioDuration}" Minimum="0"
-                                                        VerticalAlignment="Center" Height="22" Focusable="False" Foreground="#EC4899"/>
+                                                <!-- Waveform / Progress bar -->
+                                                <ProgressBar Grid.Column="1" Value="{Binding AudioPlaybackProgress}" Minimum="0" Maximum="100" Height="6"
+                                                             Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
+                                                             Foreground="#EC4899" VerticalAlignment="Center">
+                                                    <ProgressBar.Style>
+                                                        <Style TargetType="ProgressBar">
+                                                            <Setter Property="Template">
+                                                                <Setter.Value>
+                                                                    <ControlTemplate TargetType="ProgressBar">
+                                                                        <Grid>
+                                                                            <Border Background="{TemplateBinding Background}" CornerRadius="3"/>
+                                                                            <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" CornerRadius="3" HorizontalAlignment="Left"/>
+                                                                        </Grid>
+                                                                    </ControlTemplate>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                        </Style>
+                                                    </ProgressBar.Style>
+                                                </ProgressBar>
 
                                                 <!-- Time indicator text -->
                                                 <TextBlock Grid.Column="2" Text="{Binding AudioPlaybackText}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
@@ -777,7 +870,7 @@
                                         </StackPanel>
 
                                         <!-- Actions -->
-                                        <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,10,0">
+                                        <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Top" Margin="4,10,10,0">
 
                                             <!-- Smart Action -->
                                             <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorLight1}" PreviewMouseLeftButtonDown="SmartActionSpecific_Click">

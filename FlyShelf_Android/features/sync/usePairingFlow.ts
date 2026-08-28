@@ -1,5 +1,6 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
 import { Platform, Alert, ToastAndroid, NativeModules } from 'react-native';
+import { toast } from '../../context/ToastContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import * as Clipboard from 'expo-clipboard';
@@ -124,7 +125,7 @@ export function usePairingFlow(params: UsePairingFlowParams) {
   const executePairing = useCallback(async (pairInfo: PairInfo) => {
     const { key, local, global: globalUrl, pin, name: pcName, id: pcId } = pairInfo;
     setIsPairing(true);
-    if (Platform.OS === 'android') ToastAndroid.show(`Connecting to ${pcName || 'device'}...`, ToastAndroid.SHORT);
+    toast.info('Connecting to Device...', `Establishing handshake with ${pcName || 'paired device'}`);
 
     const urls = [local, globalUrl].filter(u => u && u.startsWith('http')) as string[];
     let paired = false, workingUrl = '';
@@ -231,13 +232,13 @@ export function usePairingFlow(params: UsePairingFlowParams) {
     setIsPairing(false);
 
     if (paired) {
-      if (Platform.OS === 'android') ToastAndroid.show(`✅ Paired with ${pcName}!`, ToastAndroid.LONG);
+      toast.success(`Paired with ${pcName}!`, 'Direct LAN mesh connection established');
       Alert.alert('Connected! 🎉',
         `Paired with ${pcName}.\n\nAnything you copy or drop on your PC will appear here instantly — from anywhere in the world.`,
         [{ text: 'Got it!' }]
       );
     } else {
-      if (Platform.OS === 'android') ToastAndroid.show(`✅ Paired with ${pcName}!`, ToastAndroid.SHORT);
+      toast.success(`Paired with ${pcName}!`, 'Global Cloud relay connection active');
       Alert.alert('Connected! 🎉',
         `Paired with ${pcName}.\n\nCloud pairing complete! Anything you copy or drop on your PC will appear here via cloud sync.`,
         [{ text: 'Got it!' }]
@@ -252,7 +253,7 @@ export function usePairingFlow(params: UsePairingFlowParams) {
       return;
     }
     setIsPairing(true);
-    if (Platform.OS === 'android') ToastAndroid.show('Looking up code...', ToastAndroid.SHORT);
+    toast.info('Validating Code...', `Looking up 6-character PIN ${code.toUpperCase()}`);
     try {
       await ensureFirebaseAuth();
       const _authToken = await getFirebaseIdToken();
@@ -346,7 +347,7 @@ export function usePairingFlow(params: UsePairingFlowParams) {
         return;
       }
       setMyPairingCode(code);
-      if (Platform.OS === 'android') ToastAndroid.show(`Code: ${code} (5 min) — Waiting for device...`, ToastAndroid.SHORT);
+      toast.info(`Pairing Code: ${code}`, 'Active for 5 minutes — enter on your PC');
 
       if (connectionPollRef.current) clearInterval(connectionPollRef.current);
       if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
@@ -395,7 +396,7 @@ export function usePairingFlow(params: UsePairingFlowParams) {
 
           setPairedPcName(resp.deviceName);
           if (!isGlobalSyncEnabledRef.current) setGlobalSyncEnabled(true);
-          if (Platform.OS === 'android') ToastAndroid.show(`✅ Paired with ${resp.deviceName}!`, ToastAndroid.LONG);
+          toast.success(`Paired with ${resp.deviceName}!`, 'Cross-device mesh sync is now active');
 
           clearInterval(pollForConnection);
           connectionPollRef.current = null;
@@ -446,7 +447,7 @@ export function usePairingFlow(params: UsePairingFlowParams) {
         return;
       }
       await Clipboard.setStringAsync(data);
-      if (Platform.OS === 'android') ToastAndroid.show('Copied QR content', ToastAndroid.SHORT);
+      toast.clipboard('QR Content Copied', data);
       if (data.toLowerCase().startsWith('http://') || data.toLowerCase().startsWith('https://')) Linking.openURL(data).catch(() => {});
     } catch (e: any) {
       syncLog('QR', `Scan handling failed: ${e?.message || e}`);

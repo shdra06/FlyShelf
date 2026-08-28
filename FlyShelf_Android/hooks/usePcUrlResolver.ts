@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getLocalPairedDevices, updatePairedDeviceIp } from './useLanPresence';
 import { database } from '../firebaseConfig';
 import { ref, get } from 'firebase/database';
+import NetInfo from '@react-native-community/netinfo';
 // Audit: moved ActiveDeviceInfo to shared utils/deviceTypes.ts (was duplicated here)
 import { ActiveDeviceInfo } from '../utils/deviceTypes';
 // Re-export so any existing imports from this module keep working
@@ -120,38 +121,44 @@ export function usePcUrlResolver(
         throw new Error(`Probe failed for ${url}`);
       };
 
-      // ── 1. Gather all LAN candidates ──
+      // Network state check: If on cellular data (outside the house), skip LAN probing for instant Cloudflare switch
+      const netState = await NetInfo.fetch().catch(() => null);
+      const isCellular = netState?.type === 'cellular';
+
+      // ── 1. Gather all LAN candidates (only if on Wi-Fi/Ethernet/unknown) ──
       const lanCandidates: string[] = [];
-      try {
-        const localDevices = await getLocalPairedDevices();
-        for (const dev of Object.values(localDevices)) {
-          if (dev.deviceType === 'PC' && dev.lastKnownIps?.length > 0) {
-            for (const ip of dev.lastKnownIps) {
-              lanCandidates.push(ip.startsWith('http') ? ip : `http://${ip}`);
+      if (!isCellular) {
+        try {
+          const localDevices = await getLocalPairedDevices();
+          for (const dev of Object.values(localDevices)) {
+            if (dev.deviceType === 'PC' && dev.lastKnownIps?.length > 0) {
+              for (const ip of dev.lastKnownIps) {
+                lanCandidates.push(ip.startsWith('http') ? ip : `http://${ip}`);
+              }
             }
           }
+        } catch {}
+
+        const storedLocal = (await getSecureItem('pairedLocalUrl')) || (await AsyncStorage.getItem('pairedLocalUrl'));
+        const storedTls = (await getSecureItem('pairedTlsUrl')) || (await AsyncStorage.getItem('pairedTlsUrl'));
+        if (storedLocal) lanCandidates.push(...storedLocal.split(',').map((s: string) => s.trim()).filter(Boolean));
+        if (storedTls) lanCandidates.push(storedTls.trim());
+        if (pcLocalIp) lanCandidates.push(...pcLocalIp.split(',').map((s: string) => s.trim()).filter(Boolean));
+
+        try {
+          const lastLanUrl = await AsyncStorage.getItem('@flyshelf_last_lan_url');
+          if (lastLanUrl) lanCandidates.push(lastLanUrl.trim());
+        } catch {}
+
+        // Emulator fallbacks
+        if (!lanCandidates.some(u => u.includes('10.0.2.2'))) {
+          lanCandidates.push('http://10.0.2.2:8999');
+          lanCandidates.push('http://10.0.2.2:8080');
         }
-      } catch {}
-
-      const storedLocal = (await getSecureItem('pairedLocalUrl')) || (await AsyncStorage.getItem('pairedLocalUrl'));
-      const storedTls = (await getSecureItem('pairedTlsUrl')) || (await AsyncStorage.getItem('pairedTlsUrl'));
-      if (storedLocal) lanCandidates.push(...storedLocal.split(',').map((s: string) => s.trim()).filter(Boolean));
-      if (storedTls) lanCandidates.push(storedTls.trim());
-      if (pcLocalIp) lanCandidates.push(...pcLocalIp.split(',').map((s: string) => s.trim()).filter(Boolean));
-
-      try {
-        const lastLanUrl = await AsyncStorage.getItem('@flyshelf_last_lan_url');
-        if (lastLanUrl) lanCandidates.push(lastLanUrl.trim());
-      } catch {}
-
-      // Emulator fallbacks
-      if (!lanCandidates.some(u => u.includes('10.0.2.2'))) {
-        lanCandidates.push('http://10.0.2.2:8999');
-        lanCandidates.push('http://10.0.2.2:8080');
-      }
-      if (!lanCandidates.some(u => u.includes('localhost') || u.includes('127.0.0.1'))) {
-        lanCandidates.push('http://127.0.0.1:8999');
-        lanCandidates.push('http://127.0.0.1:8080');
+        if (!lanCandidates.some(u => u.includes('localhost') || u.includes('127.0.0.1'))) {
+          lanCandidates.push('http://127.0.0.1:8999');
+          lanCandidates.push('http://127.0.0.1:8080');
+        }
       }
 
       // Normalize LAN URLs (support both 8999 and 8080)

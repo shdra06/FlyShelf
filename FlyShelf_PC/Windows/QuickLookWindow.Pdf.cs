@@ -268,12 +268,198 @@ namespace FlyShelf.Windows
             });
         }
 
+        private async void PdfExportImages_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_item?.FilePath) || !File.Exists(_item.FilePath)) return;
+
+            try
+            {
+                LoadingProgress.Visibility = Visibility.Visible;
+                FlyShelf.Windows.ToastWindow.ShowToast("Exporting PDF pages to PNG images...");
+
+                var images = await FlyShelf.Classes.Utils.PdfToImageExporter.ExportPagesToImagesAsync(_item.FilePath);
+
+                if (images != null && images.Count > 0)
+                {
+                    var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
+                    var vm = mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
+                    if (vm != null)
+                    {
+                        var dataObj = new System.Windows.DataObject();
+                        dataObj.SetData(System.Windows.DataFormats.FileDrop, images.ToArray());
+                        vm.HandleDrop(dataObj, true);
+                        mainWin?.ScrollClipboardToTop();
+                    }
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Exported {images.Count} page(s) to shelf! 🖼️");
+                }
+                else
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("No pages could be exported ❌");
+                }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"Export failed: {ex.Message} ❌");
+            }
+            finally
+            {
+                LoadingProgress.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private async void PdfCompress_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_item?.FilePath) || !File.Exists(_item.FilePath)) return;
+
+            try
+            {
+                LoadingProgress.Visibility = Visibility.Visible;
+                FlyShelf.Windows.ToastWindow.ShowToast("Compressing & optimizing PDF...");
+
+                var (outputPath, origSize, compSize) = await FlyShelf.Classes.Utils.PdfCompressor.CompressPdfAsync(_item.FilePath);
+
+                if (File.Exists(outputPath))
+                {
+                    var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
+                    var vm = mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
+                    if (vm != null)
+                    {
+                        var newItem = new FlyShelf.ViewModels.ClipboardItem(outputPath);
+                        vm.DroppedItems.Insert(0, newItem);
+                        FlyShelf.Classes.ClipboardHistoryManager.AppendToJournal(newItem);
+                        mainWin?.ScrollClipboardToTop();
+                    }
+
+                    double origMb = origSize / (1024.0 * 1024.0);
+                    double compMb = compSize / (1024.0 * 1024.0);
+                    int pct = origSize > 0 ? (int)Math.Round((1.0 - (double)compSize / origSize) * 100.0) : 0;
+                    FlyShelf.Windows.ToastWindow.ShowToast($"🎉 PDF Compressed: {origMb:F1}MB → {compMb:F1}MB ({pct}% smaller) ⚡");
+                }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"Compression failed: {ex.Message} ❌");
+            }
+            finally
+            {
+                LoadingProgress.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private async void PdfProtect_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_item?.FilePath) || !File.Exists(_item.FilePath)) return;
+
+            string password = PromptForPassword("Set PDF Encryption Password:");
+            if (!string.IsNullOrEmpty(password))
+            {
+                try
+                {
+                    LoadingProgress.Visibility = Visibility.Visible;
+                    FlyShelf.Windows.ToastWindow.ShowToast("Encrypting PDF with 128-bit AES...");
+
+                    string protectedPath = await FlyShelf.Classes.Utils.PdfSecurityHelper.ProtectPdfAsync(_item.FilePath, password);
+                    if (File.Exists(protectedPath))
+                    {
+                        var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
+                        var vm = mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
+                        if (vm != null)
+                        {
+                            var newItem = new FlyShelf.ViewModels.ClipboardItem(protectedPath);
+                            vm.DroppedItems.Insert(0, newItem);
+                            FlyShelf.Classes.ClipboardHistoryManager.AppendToJournal(newItem);
+                            mainWin?.ScrollClipboardToTop();
+                        }
+                        FlyShelf.Windows.ToastWindow.ShowToast($"PDF Encrypted & Locked 🔒 {Path.GetFileName(protectedPath)}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Encryption failed: {ex.Message} ❌");
+                }
+                finally
+                {
+                    LoadingProgress.Visibility = Visibility.Collapsed;
+                }
+            }
+        }
+
+        private string PromptForPassword(string title)
+        {
+            var dlg = new MicaWPF.Controls.MicaWindow
+            {
+                Title = "PDF Security",
+                Width = 360,
+                Height = 180,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStyle = WindowStyle.ToolWindow,
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x18, 0x18, 0x25))
+            };
+
+            var stack = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            stack.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = title,
+                Foreground = System.Windows.Media.Brushes.White,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 13,
+                Margin = new Thickness(0, 0, 0, 10)
+            });
+
+            var pwdBox = new System.Windows.Controls.PasswordBox
+            {
+                FontSize = 14,
+                Padding = new Thickness(8, 6, 8, 6),
+                Margin = new Thickness(0, 0, 0, 15)
+            };
+            stack.Children.Add(pwdBox);
+
+            var btnPanel = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+
+            var okBtn = new Wpf.Ui.Controls.Button
+            {
+                Content = "Protect PDF",
+                Appearance = Wpf.Ui.Controls.ControlAppearance.Primary,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            string result = null;
+            okBtn.Click += (s, e) => { result = pwdBox.Password; dlg.DialogResult = true; dlg.Close(); };
+
+            var cancelBtn = new Wpf.Ui.Controls.Button { Content = "Cancel", Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary };
+            cancelBtn.Click += (s, e) => { dlg.DialogResult = false; dlg.Close(); };
+
+            btnPanel.Children.Add(okBtn);
+            btnPanel.Children.Add(cancelBtn);
+            stack.Children.Add(btnPanel);
+            dlg.Content = stack;
+
+            dlg.Loaded += (s, e) => pwdBox.Focus();
+            pwdBox.KeyDown += (s, e) => { if (e.Key == Key.Enter) okBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); };
+
+            return dlg.ShowDialog() == true ? result : null;
+        }
+
         private async System.Threading.Tasks.Task SavePdfChangesAsync(string targetPath)
         {
             try
             {
                 LoadingProgress.Visibility = Visibility.Visible;
                 FlyShelf.Windows.ToastWindow.ShowToast("Saving PDF changes...");
+
+                bool isOverwrite = string.Equals(targetPath, _item.FilePath, StringComparison.OrdinalIgnoreCase);
+
+                // If overwriting, detach WebView2 from target file to release file locks
+                if (isOverwrite && WebPreview != null)
+                {
+                    try { WebPreview.NavigateToString("<html><body style='background:#181825'></body></html>"); } catch { }
+                    await System.Threading.Tasks.Task.Delay(100);
+                }
 
                 await System.Threading.Tasks.Task.Run(() =>
                 {
@@ -283,15 +469,20 @@ namespace FlyShelf.Windows
 
                         try
                         {
-                            foreach (var entry in _pdfPageEntries)
+                            for (int i = 0; i < _pdfPageEntries.Count; i++)
                             {
-                                if (_pdfModifiedPages.TryGetValue(_pdfPageEntries.IndexOf(entry), out var modImagePath))
+                                var entry = _pdfPageEntries[i];
+                                if (_pdfModifiedPages.TryGetValue(i, out var modImagePath))
                                 {
-                                    // Use modified image page
+                                    // Use modified doodled image page
                                     string pagePdf = ConversionUtils.ConvertImageToPdf(modImagePath);
                                     using (var tempDoc = PdfReader.Open(pagePdf, PdfDocumentOpenMode.Import))
                                     {
-                                        outDoc.AddPage(tempDoc.Pages[0]);
+                                        var p = outDoc.AddPage(tempDoc.Pages[0]);
+                                        if (entry.RotationDegrees != 0)
+                                        {
+                                            p.Rotate = (p.Rotate + entry.RotationDegrees) % 360;
+                                        }
                                     }
                                 }
                                 else
@@ -310,7 +501,6 @@ namespace FlyShelf.Windows
                                 }
                             }
 
-                            bool isOverwrite = string.Equals(targetPath, _item.FilePath, StringComparison.OrdinalIgnoreCase);
                             string finalPath = targetPath;
                             if (isOverwrite)
                             {
@@ -321,21 +511,26 @@ namespace FlyShelf.Windows
 
                             if (isOverwrite)
                             {
+                                // CRITICAL: Dispose all source documents BEFORE overwriting the original file
+                                foreach (var doc in sourceDocs.Values) doc.Dispose();
+                                sourceDocs.Clear();
+
                                 System.IO.File.Copy(finalPath, targetPath, true);
-                                System.IO.File.Delete(finalPath);
+                                try { System.IO.File.Delete(finalPath); } catch { }
                             }
                         }
                         finally
                         {
                             foreach (var doc in sourceDocs.Values) doc.Dispose();
+                            sourceDocs.Clear();
                         }
                     }
                 });
 
-                FlyShelf.Windows.ToastWindow.ShowToast("PDF saved successfully!");
+                FlyShelf.Windows.ToastWindow.ShowToast(isOverwrite ? "PDF overwritten successfully! 💾" : "PDF saved as new copy! 📄");
                 _isPdfModified = false;
+                _pdfThumbnails.Clear();
                 
-                bool isOverwrite = string.Equals(targetPath, _item.FilePath, StringComparison.OrdinalIgnoreCase);
                 if (!isOverwrite)
                 {
                     var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
@@ -349,12 +544,20 @@ namespace FlyShelf.Windows
                     }
                 }
 
+                // Return to preview mode and display updated document
+                _isPdfEditorMode = false;
+                WebPreview.Visibility = Visibility.Visible;
+                PdfEditorGrid.Visibility = Visibility.Collapsed;
+                PdfAddBtn.Visibility = Visibility.Collapsed;
+                PdfSaveBtn.Visibility = Visibility.Collapsed;
+                PdfManageBtn.Appearance = WpfUi.ControlAppearance.Secondary;
+                PdfManageBtn.ToolTip = "Manage Pages (Reorder / Rotate / Add)";
+
                 WebPreview.Source = new Uri(targetPath);
-                PdfManage_Click(null, null);
             }
             catch (Exception ex)
             {
-                FlyShelf.Windows.ToastWindow.ShowToast($"Save Failed: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Save Failed: {ex.Message} ❌");
                 FlyShelf.Classes.Logger.LogAction("PDF_SAVE_ERR", ex.ToString());
             }
             finally

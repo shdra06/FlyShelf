@@ -27,6 +27,7 @@ import { createNotesStyles } from '../../styles/notesStyles';
 import { font, component } from '../../styles/theme';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { Ionicons } from '@expo/vector-icons';
+import { fuzzyIsMatch, fuzzyScore } from '../../utils/textNormalize';
 import { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import ScreenHeader from '../../components/ScreenHeader';
 
@@ -96,11 +97,18 @@ const ensureDay = (days: NoteDay[], dateKey: string): { days: NoteDay[]; day: No
   return { days: updated, day: newDay, idx: updated.length - 1 };
 };
 
-// NOTE: showToast only works on Android. On iOS, ToastAndroid is unavailable
-// and this is a silent no-op. Consider a cross-platform toast library for iOS.
+import { toast } from '../../context/ToastContext';
+
+// Unified toast notification helper
 const showToast = (msg: string) => {
-  if (Platform.OS === 'android') {
-    ToastAndroid.show(msg, ToastAndroid.SHORT);
+  if (msg.toLowerCase().includes('deleted')) {
+    toast.info('Note Deleted', msg);
+  } else if (msg.toLowerCase().includes('applied') || msg.toLowerCase().includes('saved')) {
+    toast.success('Notes Updated', msg);
+  } else if (msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('no ')) {
+    toast.warning('Notes Notice', msg);
+  } else {
+    toast.info('Notes', msg);
   }
 };
 
@@ -324,11 +332,11 @@ function NotesScreenInner() {
     setIsSearching(false);
   }, []);
 
-  // ─── Search across all days ───
+  // ─── Search across all days (AUDIT FIX: fuzzy matching + relevance sorting) ───
   const searchResults = React.useMemo(() => {
     if (!searchQuery.trim()) return [];
-    const q = searchQuery.toLowerCase();
-    const results: { dateKey: string; displayDate: string; bullet: NoteBullet | null; freeform: FreeformSection | null }[] = [];
+    const q = searchQuery.trim();
+    const results: { dateKey: string; displayDate: string; bullet: NoteBullet | null; freeform: FreeformSection | null; score: number }[] = [];
 
     for (const day of days) {
       const dDate = parseDate(day.Date);
@@ -336,19 +344,25 @@ function NotesScreenInner() {
 
       // Search bullets
       for (const b of day.Bullets || []) {
-        const haystack = [b.Header, b.Content, ...(b.Tags || [])].join(' ').toLowerCase();
-        if (haystack.includes(q)) {
-          results.push({ dateKey: day.Date, displayDate, bullet: b, freeform: null });
+        const haystack = [b.Header, b.Content, ...(b.Tags || [])].join(' ');
+        if (fuzzyIsMatch(q, haystack)) {
+          const s = fuzzyScore(q, haystack);
+          results.push({ dateKey: day.Date, displayDate, bullet: b, freeform: null, score: s });
         }
       }
 
       // Search freeform sections
       for (const s of day.FreeformSections || []) {
-        if (s.Content && s.Content.toLowerCase().includes(q)) {
-          results.push({ dateKey: day.Date, displayDate, bullet: null, freeform: s });
+        const haystack = [s.Title || '', s.Content || ''].join(' ');
+        if (fuzzyIsMatch(q, haystack)) {
+          const sc = fuzzyScore(q, haystack);
+          results.push({ dateKey: day.Date, displayDate, bullet: null, freeform: s, score: sc });
         }
       }
     }
+
+    // Sort by relevance score descending
+    results.sort((a, b) => b.score - a.score);
     return results;
   }, [searchQuery, days]);
 

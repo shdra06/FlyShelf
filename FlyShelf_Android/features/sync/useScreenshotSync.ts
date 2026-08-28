@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Platform, AppState, AppStateStatus, ToastAndroid, NativeModules } from 'react-native';
+import { toast } from '../../context/ToastContext';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
@@ -186,7 +187,11 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
             );
             if (upRes.status === 200) {
               syncLog('SCREENSHOT', `Sent to PC via ${targetUrl.includes('trycloudflare') ? 'Cloud' : 'LAN'}: ${fileName}`);
-              if (Platform.OS === 'android') ToastAndroid.show(`Screenshot synced to PC ✨`, ToastAndroid.SHORT);
+              if (targetUrl.includes('trycloudflare')) {
+                toast.syncCloud('Screenshot Synced to PC', undefined, 'Cloud Relay');
+              } else {
+                toast.syncLan('Screenshot Synced to PC', undefined, 'Direct LAN');
+              }
             }
           } catch (e: any) {
             syncLog('SCREENSHOT', `Upload failed: ${e?.message}`);
@@ -302,9 +307,13 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
                   }
                 }
                 if (!localSuccess) {
-                  if (Platform.OS === 'android') ToastAndroid.show(`⚠️ Could not reach PC to send screenshot`, ToastAndroid.SHORT);
+                  toast.warning('Screenshot Saved Locally', 'PC unreachable — will automatically sync when reconnected');
                 } else {
-                  if (Platform.OS === 'android') ToastAndroid.show(`📸 Screenshot sent to PC!`, ToastAndroid.SHORT);
+                  if (activeUrl.includes('trycloudflare')) {
+                    toast.syncCloud('Screenshot Synced to PC', undefined, 'Cloud Relay');
+                  } else {
+                    toast.syncLan('Screenshot Synced to PC', undefined, 'Direct LAN');
+                  }
                 }
               } else {
                 syncLog('MEDIA', `Upload delegated to native SCREENSHOT handler`);

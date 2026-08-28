@@ -1129,7 +1129,7 @@ namespace FlyShelf
                     _alwaysLoadedImageIndices.Clear();
                     {
                         int imgCount = 0;
-                        int topScanLimit = Math.Min(count, 50); // Scan first 50 items to find first 6 images
+                        int topScanLimit = Math.Min(count, 50);
                         for (int i = 0; i < topScanLimit && imgCount < 6; i++)
                         {
                             var item = ShelfListView.Items[i] as ClipboardItem;
@@ -1140,37 +1140,15 @@ namespace FlyShelf
 
                             if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality)
                             {
-                                item.IsLoadingHighQuality = true;
-                                string filePath = item.FilePath;
-                                int idx = i;
-                                _ = System.Threading.Tasks.Task.Run(() =>
-                                {
-                                    try
-                                    {
-                                        var bmp = ViewModels.FlyShelfViewModel.LoadImageThumbnail(filePath, 300);
-                                        if (bmp != null)
-                                            Dispatcher.InvokeAsync(() =>
-                                            {
-                                                item.Icon = bmp;
-                                                item.IsLoadedHighQuality = true;
-                                                item.IsLoadingHighQuality = false;
-                                                _activeLoadedImages.Add(item);
-                                            }, System.Windows.Threading.DispatcherPriority.Normal);
-                                        else
-                                            Dispatcher.InvokeAsync(() => item.IsLoadingHighQuality = false);
-                                    }
-                                    catch
-                                    {
-                                        Dispatcher.InvokeAsync(() => item.IsLoadingHighQuality = false);
-                                    }
-                                });
+                                item.EnsureThumbnailLoadedAsync();
+                                _activeLoadedImages.Add(item);
                             }
-                            // First 6 images are never evicted
+                            // Top 6 images are never evicted
                             item.LeftViewportTime = null;
                         }
                     }
 
-                    // ═══ EVICTION PASS: Scan ONLY tracked active loaded images (O(active) instead of O(5000)) ═══
+                    // ═══ EVICTION PASS: Scan ONLY tracked active loaded images ═══
                     if (isEvictionPass)
                     {
                         if (_hubWindowInstance == null || !_hubWindowInstance.IsVisible)
@@ -1212,7 +1190,7 @@ namespace FlyShelf
                                     {
                                         item.LeftViewportTime = now;
                                     }
-                                    else if ((now - item.LeftViewportTime.Value).TotalMilliseconds >= 2000)
+                                    else if ((now - item.LeftViewportTime.Value).TotalMilliseconds >= 30000) // 30 seconds eviction
                                     {
                                         item.Icon = null;
                                         item.IsLoadedHighQuality = false;
@@ -1266,77 +1244,20 @@ namespace FlyShelf
                             }
                             catch { }
                         }
+                        else
+                        {
+                            // Container not realized yet but item is within scan range
+                            isVisible = true;
+                        }
 
                         if (isVisible)
                         {
                             item.LeftViewportTime = null;
 
-                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality && !onlyFirstTen && !isFastScrolling)
+                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality)
                             {
-                                int currentlyLoading = 0;
-                                int capCheckStart = Math.Max(0, i - 30);
-                                int capCheckEnd = Math.Min(count - 1, i + 30);
-                                for (int j = capCheckStart; j <= capCheckEnd && currentlyLoading < 9; j++)
-                                {
-                                    var check = ShelfListView.Items[j] as ClipboardItem;
-                                    if (check?.IsLoadingHighQuality == true)
-                                    {
-                                        var checkContainer = ShelfListView.ItemContainerGenerator.ContainerFromIndex(j);
-                                        if (checkContainer != null) currentlyLoading++;
-                                    }
-                                }
-                                if (currentlyLoading >= 8) continue;
-
-                                item.IsLoadingHighQuality = true;
-                                string filePath = item.FilePath;
-                                int currentIndex = i;
-
-                                _ = System.Threading.Tasks.Task.Run(() =>
-                                {
-                                    try
-                                    {
-                                        var bmp = ViewModels.FlyShelfViewModel.LoadImageThumbnail(filePath, 300);
-                                        if (bmp != null)
-                                        {
-                                            bool scrolling = _viewModel.IsScrolling;
-                                            Dispatcher.InvokeAsync(() =>
-                                            {
-                                                item.Icon = bmp;
-                                                item.IsLoadedHighQuality = true;
-                                                item.IsLoadingHighQuality = false;
-                                                _activeLoadedImages.Add(item);
-
-                                                if (!scrolling)
-                                                {
-                                                    var element = ShelfListView.ItemContainerGenerator.ContainerFromIndex(currentIndex) as FrameworkElement;
-                                                    if (element != null && element.IsLoaded)
-                                                    {
-                                                        var img = FindVisualChild<Image>(element, "ItemIcon");
-                                                        if (img != null)
-                                                        {
-                                                            img.BeginAnimation(UIElement.OpacityProperty, s_iconFadeIn);
-                                                        }
-                                                    }
-                                                }
-                                            }, System.Windows.Threading.DispatcherPriority.Background);
-                                        }
-                                        else
-                                        {
-                                            Dispatcher.InvokeAsync(() =>
-                                            {
-                                                item.IsLoadingHighQuality = false;
-                                            });
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Classes.Logger.LogAction("SCROLL_LOAD_FAIL", $"Failed to load 300px thumbnail: {ex.Message}");
-                                        Dispatcher.InvokeAsync(() =>
-                                        {
-                                            item.IsLoadingHighQuality = false;
-                                        });
-                                    }
-                                });
+                                item.EnsureThumbnailLoadedAsync();
+                                _activeLoadedImages.Add(item);
                             }
                         }
                     }

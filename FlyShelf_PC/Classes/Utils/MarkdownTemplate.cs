@@ -10,8 +10,584 @@ namespace FlyShelf.Classes
 
         private static readonly string _markedJs = Encoding.UTF8.GetString(Convert.FromBase64String(MarkedJsBase64));
         private static readonly string _prismJs = Encoding.UTF8.GetString(Convert.FromBase64String(PrismJsBase64));
-        private static readonly string _cssTheme = "\n:root {\n  --bg-primary: #1e1e2e;\n  --bg-card: #181825;\n  --bg-surface: #313244;\n  --text-primary: #cdd6f4;\n  --text-secondary: #a6adc8;\n  --accent: #89b4fa;\n  --accent-rgb: 137, 180, 250;\n  --border: #313244;\n  --teal: #94e2d5;\n  --pink: #f38ba8;\n  --green: #a6e3a1;\n  --yellow: #f9e2af;\n  --peach: #fab387;\n  --mauve: #cba6f7;\n}\n\n* {\n  box-sizing: border-box;\n  user-select: text !important;\n  -webkit-user-select: text !important;\n}\n\nbody {\n  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;\n  background-color: var(--bg-primary);\n  color: var(--text-primary);\n  line-height: 1.65;\n  padding: 24px 32px;\n  margin: 0;\n  -webkit-print-color-adjust: exact;\n  word-wrap: break-word;\n  overflow-wrap: break-word;\n}\n\nh1, h2, h3, h4, h5, h6 {\n  color: #cdd6f4;\n  font-weight: 600;\n  margin-top: 1.5em;\n  margin-bottom: 0.5em;\n  line-height: 1.3;\n}\n\nh1 {\n  font-size: 2.0em;\n  border-bottom: 1px solid var(--border);\n  padding-bottom: 0.35em;\n  color: #89b4fa;\n}\n\nh2 {\n  font-size: 1.5em;\n  border-bottom: 1px solid var(--border);\n  padding-bottom: 0.25em;\n  color: #b4befe;\n}\n\nh3 { font-size: 1.25em; color: #cdd6f4; }\nh4 { font-size: 1.1em; color: #a6adc8; }\nh5 { font-size: 1.0em; }\nh6 { font-size: 0.9em; color: #6c7086; }\n\np, ul, ol {\n  margin-top: 0;\n  margin-bottom: 1.1em;\n}\n\nul, ol {\n  padding-left: 28px;\n}\n\nli {\n  margin-bottom: 0.4em;\n}\n\nli > input[type=\"checkbox\"] {\n  margin-right: 8px;\n  accent-color: var(--accent);\n  vertical-align: middle;\n  transform: scale(1.15);\n}\n\na {\n  color: var(--accent);\n  text-decoration: none;\n  border-bottom: 1px dashed rgba(var(--accent-rgb), 0.4);\n  transition: color 0.15s, border-bottom-color 0.15s;\n}\n\na:hover {\n  color: #b4befe;\n  border-bottom-color: #b4befe;\n}\n\ncode {\n  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, 'Courier New', monospace;\n  font-size: 0.88em;\n  background-color: var(--bg-surface);\n  color: #f38ba8;\n  padding: 0.2em 0.45em;\n  border-radius: 4px;\n}\n\npre {\n  background-color: var(--bg-card);\n  border: 1px solid var(--border);\n  border-radius: 0 0 8px 8px;\n  padding: 16px 20px;\n  overflow-x: auto;\n  margin: 0;\n  line-height: 1.5;\n}\n\npre code {\n  background: transparent;\n  padding: 0;\n  color: var(--text-primary);\n  font-size: 0.9em;\n  display: block;\n}\n\n.code-container {\n  margin: 1.4em 0;\n  border-radius: 8px;\n  border: 1px solid var(--border);\n  overflow: hidden;\n  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);\n}\n\n.code-header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  background-color: #11111b;\n  padding: 6px 14px;\n  border-bottom: 1px solid var(--border);\n  user-select: none;\n}\n\n.code-lang-badge {\n  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n  font-size: 0.72em;\n  font-weight: 700;\n  letter-spacing: 0.08em;\n  color: #89b4fa;\n  text-transform: uppercase;\n}\n\n.copy-code-btn {\n  background: transparent;\n  border: 1px solid #45475a;\n  border-radius: 4px;\n  color: #a6adc8;\n  padding: 3px 8px;\n  font-size: 0.75em;\n  font-family: inherit;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  transition: all 0.15s ease;\n  user-select: none;\n}\n\n.copy-code-btn:hover {\n  background: #313244;\n  color: #cdd6f4;\n  border-color: #585b70;\n}\n\n.copy-code-btn.copied {\n  background: #a6e3a1;\n  color: #11111b;\n  border-color: #a6e3a1;\n}\n\n/* ═══ PRISM SYNTAX THEME (Catppuccin Mocha) ═══ */\n.token.comment, .token.prolog, .token.doctype, .token.cdata { color: #6c7086; font-style: italic; }\n.token.punctuation { color: #9399b2; }\n.token.property, .token.tag, .token.boolean, .token.number, .token.constant, .token.symbol, .token.deleted { color: #fab387; }\n.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted { color: #a6e3a1; }\n.token.operator, .token.entity, .token.url, .language-css .token.string, .style .token.string { color: #89dceb; }\n.token.atrule, .token.attr-value, .token.keyword { color: #cba6f7; }\n.token.function, .token.class-name { color: #89b4fa; }\n.token.regex, .token.important, .token.variable { color: #f9e2af; }\n.token.important, .token.bold { font-weight: bold; }\n.token.italic { font-style: italic; }\n.token.entity { cursor: help; }\n\n/* ═══ BLOCKQUOTES ═══ */\nblockquote {\n  border-left: 4px solid var(--accent);\n  margin: 1.2em 0;\n  padding: 0.6em 1.2em;\n  background-color: rgba(var(--accent-rgb), 0.07);\n  border-radius: 0 6px 6px 0;\n  color: #b4befe;\n}\n\nblockquote > p:last-child {\n  margin-bottom: 0;\n}\n\n/* ═══ TABLES ═══ */\n.table-wrapper {\n  overflow-x: auto;\n  margin: 1.4em 0;\n  border-radius: 6px;\n  border: 1px solid var(--border);\n}\n\ntable {\n  border-collapse: collapse;\n  width: 100%;\n  margin: 0;\n}\n\nth, td {\n  border: 1px solid var(--border);\n  padding: 10px 14px;\n  text-align: left;\n}\n\nth {\n  background-color: var(--bg-card);\n  font-weight: 600;\n  color: #89b4fa;\n}\n\ntr:nth-child(even) {\n  background-color: rgba(49, 50, 68, 0.3);\n}\n\ntr:hover {\n  background-color: rgba(49, 50, 68, 0.5);\n}\n\n/* ═══ IMAGES & HR ═══ */\nimg {\n  max-width: 100%;\n  border-radius: 8px;\n  border: 1px solid var(--border);\n  margin: 1em 0;\n  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);\n}\n\nhr {\n  height: 1px;\n  border: none;\n  background: var(--border);\n  margin: 2em 0;\n}\n\n/* ═══ SCROLLBAR ═══ */\n::-webkit-scrollbar {\n  width: 9px;\n  height: 9px;\n}\n::-webkit-scrollbar-track {\n  background: var(--bg-card);\n}\n::-webkit-scrollbar-thumb {\n  background: #45475a;\n  border-radius: 5px;\n}\n::-webkit-scrollbar-thumb:hover {\n  background: #585b70;\n}\n\n@media print {\n  body {\n    padding: 10px;\n    background: #ffffff !important;\n    color: #111111 !important;\n  }\n  pre, blockquote, img, figure {\n    page-break-inside: avoid;\n    break-inside: avoid;\n  }\n  h1, h2, h3, h4, h5, h6 {\n    page-break-after: avoid;\n    break-after: avoid;\n    color: #111111 !important;\n  }\n  table {\n    page-break-inside: auto;\n    break-inside: auto;\n  }\n}\n";
-        private static readonly string _htmlTemplate = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <style>\n    {CSS_THEME}\n  </style>\n  <script>\n    {MARKED_JS}\n  </script>\n  <script>\n    {PRISM_JS}\n  </script>\n</head>\n<body>\n  <div id=\"content\"></div>\n  <script type=\"text/plain\" id=\"b64-markdown\">{B64_MARKDOWN}</script>\n  <script type=\"text/plain\" id=\"md-base-dir\">{MD_BASE_DIR}</script>\n  <script>\n    function notifyHost(message) {\n      try {\n        if (window.chrome && window.chrome.webview && window.chrome.webview.postMessage) {\n          window.chrome.webview.postMessage(message);\n        }\n      } catch (e) {}\n    }\n\n    function copyCode(btn, encodedText) {\n      try {\n        const text = decodeURIComponent(encodedText);\n        navigator.clipboard.writeText(text).then(() => {\n          btn.classList.add('copied');\n          btn.innerHTML = '<span>✓</span> Copied!';\n          setTimeout(() => {\n            btn.classList.remove('copied');\n            btn.innerHTML = '<span>📋</span> Copy';\n          }, 2000);\n        }).catch(() => {\n          const pre = btn.closest('.code-container').querySelector('pre code');\n          if (pre) {\n            const range = document.createRange();\n            range.selectNodeContents(pre);\n            const sel = window.getSelection();\n            sel.removeAllRanges();\n            sel.addRange(range);\n            document.execCommand('copy');\n            btn.classList.add('copied');\n            btn.innerHTML = '<span>✓</span> Copied!';\n            setTimeout(() => {\n              btn.classList.remove('copied');\n              btn.innerHTML = '<span>📋</span> Copy';\n            }, 2000);\n          }\n        });\n      } catch (e) {}\n    }\n\n    function renderMarkdown() {\n      try {\n        const b64Elem = document.getElementById('b64-markdown');\n        if (!b64Elem) return;\n        const b64 = (b64Elem.textContent || '').trim();\n        if (!b64) return;\n\n        const binary = atob(b64);\n        const bytes = new Uint8Array(binary.length);\n        for (let i = 0; i < binary.length; i++) {\n          bytes[i] = binary.charCodeAt(i);\n        }\n        const rawMd = new TextDecoder('utf-8').decode(bytes);\n        \n        if (typeof marked !== 'undefined') {\n          if (typeof marked.setOptions === 'function') {\n            marked.setOptions({\n              gfm: true,\n              breaks: false,\n              pedantic: false\n            });\n          }\n        }\n        \n        let html = '';\n        if (typeof marked !== 'undefined') {\n          if (typeof marked.parse === 'function') {\n            html = marked.parse(rawMd);\n          } else if (typeof marked === 'function') {\n            html = marked(rawMd);\n          }\n        }\n        \n        const contentDiv = document.getElementById('content');\n        if (!contentDiv) return;\n        contentDiv.innerHTML = html;\n\n        // Enhance tables with responsive wrappers\n        document.querySelectorAll('#content table').forEach(tbl => {\n          if (!tbl.parentElement.classList.contains('table-wrapper')) {\n            const wrapper = document.createElement('div');\n            wrapper.className = 'table-wrapper';\n            tbl.parentNode.insertBefore(wrapper, tbl);\n            wrapper.appendChild(tbl);\n          }\n        });\n\n        // Enhance code blocks with copy buttons & language badges\n        document.querySelectorAll('#content pre').forEach(pre => {\n          const code = pre.querySelector('code');\n          if (!code) return;\n          \n          let lang = 'CODE';\n          const match = (code.className || '').match(/language-([a-zA-Z0-9_\\-#+]+)/i);\n          if (match) lang = match[1].toUpperCase();\n\n          const rawCode = code.textContent || '';\n          const encoded = encodeURIComponent(rawCode);\n\n          const container = document.createElement('div');\n          container.className = 'code-container';\n\n          const header = document.createElement('div');\n          header.className = 'code-header';\n          header.innerHTML = '<span class=\"code-lang-badge\">' + lang + '</span>' +\n            '<button class=\"copy-code-btn\" onclick=\"copyCode(this, \\'' + encoded + '\\')\">' +\n            '<span>📋</span> Copy' +\n            '</button>';\n\n          pre.parentNode.insertBefore(container, pre);\n          container.appendChild(header);\n          container.appendChild(pre);\n        });\n\n        // Safe syntax highlighting\n        if (typeof Prism !== 'undefined' && Prism.highlightElement) {\n          document.querySelectorAll('#content code[class*=\"language-\"]').forEach(el => {\n            try {\n              Prism.highlightElement(el);\n            } catch (e) {}\n          });\n        }\n\n        // Image path resolution\n        var baseDir = document.getElementById('md-base-dir');\n        var basePath = baseDir ? baseDir.textContent.trim() : '';\n        document.querySelectorAll('#content img').forEach(function(img) {\n          var src = img.getAttribute('src');\n          if (!src) return;\n          if (/^(https?:|data:|file:|blob:)/i.test(src)) return;\n          if (/^[A-Za-z]:[\\\\/]/.test(src)) {\n            img.src = 'file:///' + src.replace(/\\\\/g, '/');\n          } else if (basePath) {\n            var resolved = basePath.replace(/\\\\/g, '/') + '/' + src.replace(/^\\.\\//, '');\n            img.src = 'file:///' + resolved;\n          }\n        });\n\n        notifyHost(\"RENDER_COMPLETE\");\n      } catch (err) {\n        notifyHost(\"RENDER_ERROR:\" + err.message);\n      }\n    }\n\n    if (document.readyState === 'loading') {\n      document.addEventListener('DOMContentLoaded', renderMarkdown);\n    } else {\n      renderMarkdown();\n    }\n  </script>\n</body>\n</html>";
+        private static readonly string _cssTheme = @"
+:root {
+  --bg-primary: #181825;
+  --bg-card: #1e1e2e;
+  --bg-surface: #313244;
+  --text-primary: #cdd6f4;
+  --text-secondary: #a6adc8;
+  --accent: #89b4fa;
+  --accent-rgb: 137, 180, 250;
+  --border: #313244;
+  --teal: #94e2d5;
+  --pink: #f38ba8;
+  --green: #a6e3a1;
+  --yellow: #f9e2af;
+  --peach: #fab387;
+  --mauve: #cba6f7;
+}
+
+* {
+  box-sizing: border-box;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.7;
+  padding: 28px 36px;
+  margin: 0;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: #cdd6f4;
+  font-weight: 600;
+  margin-top: 1.6em;
+  margin-bottom: 0.55em;
+  line-height: 1.3;
+}
+
+h1 {
+  font-size: 2.1em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.35em;
+  color: #89b4fa;
+}
+
+h2 {
+  font-size: 1.55em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.25em;
+  color: #b4befe;
+}
+
+h3 { font-size: 1.28em; color: #cdd6f4; }
+h4 { font-size: 1.12em; color: #a6adc8; }
+h5 { font-size: 1.0em; }
+h6 { font-size: 0.9em; color: #6c7086; }
+
+p, ul, ol {
+  margin-top: 0;
+  margin-bottom: 1.15em;
+}
+
+ul, ol {
+  padding-left: 28px;
+}
+
+li {
+  margin-bottom: 0.4em;
+}
+
+li > input[type=""checkbox""] {
+  margin-right: 8px;
+  accent-color: var(--accent);
+  vertical-align: middle;
+  transform: scale(1.15);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(var(--accent-rgb), 0.4);
+  transition: color 0.15s, border-bottom-color 0.15s;
+}
+
+a:hover {
+  color: #b4befe;
+  border-bottom-color: #b4befe;
+}
+
+code {
+  font-family: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace;
+  font-size: 0.88em;
+  background-color: var(--bg-surface);
+  color: #f38ba8;
+  padding: 0.2em 0.45em;
+  border-radius: 4px;
+}
+
+kbd {
+  font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  font-size: 0.82em;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid #45475a;
+  border-bottom: 2px solid #313244;
+  border-radius: 4px;
+  padding: 2px 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+pre {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0 0 8px 8px;
+  padding: 16px 20px;
+  overflow-x: auto;
+  margin: 0;
+  line-height: 1.5;
+}
+
+pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--text-primary);
+  font-size: 0.9em;
+  display: block;
+}
+
+.code-container {
+  margin: 1.4em 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #11111b;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.code-lang-badge {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #89b4fa;
+  text-transform: uppercase;
+}
+
+.copy-code-btn {
+  background: transparent;
+  border: 1px solid #45475a;
+  border-radius: 4px;
+  color: #a6adc8;
+  padding: 3px 8px;
+  font-size: 0.75em;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.copy-code-btn:hover {
+  background: #313244;
+  color: #cdd6f4;
+  border-color: #585b70;
+}
+
+.copy-code-btn.copied {
+  background: #a6e3a1;
+  color: #11111b;
+  border-color: #a6e3a1;
+}
+
+/* ═══ PRISM SYNTAX THEME (Catppuccin Mocha) ═══ */
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: #6c7086; font-style: italic; }
+.token.punctuation { color: #9399b2; }
+.token.property, .token.tag, .token.boolean, .token.number, .token.constant, .token.symbol, .token.deleted { color: #fab387; }
+.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted { color: #a6e3a1; }
+.token.operator, .token.entity, .token.url, .language-css .token.string, .style .token.string { color: #89dceb; }
+.token.atrule, .token.attr-value, .token.keyword { color: #cba6f7; }
+.token.function, .token.class-name { color: #89b4fa; }
+.token.regex, .token.important, .token.variable { color: #f9e2af; }
+.token.important, .token.bold { font-weight: bold; }
+.token.italic { font-style: italic; }
+.token.entity { cursor: help; }
+
+/* ═══ BLOCKQUOTES & GITHUB ALERTS ═══ */
+blockquote {
+  border-left: 4px solid var(--accent);
+  margin: 1.3em 0;
+  padding: 0.7em 1.2em;
+  background-color: rgba(var(--accent-rgb), 0.08);
+  border-radius: 0 6px 6px 0;
+  color: #b4befe;
+}
+
+blockquote > p:last-child {
+  margin-bottom: 0;
+}
+
+.alert {
+  border-left: 4px solid var(--accent);
+  margin: 1.3em 0;
+  padding: 12px 16px;
+  border-radius: 0 8px 8px 0;
+  background: rgba(137, 180, 250, 0.08);
+  color: #cdd6f4;
+}
+
+.alert-title {
+  font-weight: 700;
+  font-size: 0.9em;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.alert-note { border-left-color: #89b4fa; background: rgba(137, 180, 250, 0.09); }
+.alert-note .alert-title { color: #89b4fa; }
+.alert-tip { border-left-color: #a6e3a1; background: rgba(166, 227, 161, 0.09); }
+.alert-tip .alert-title { color: #a6e3a1; }
+.alert-important { border-left-color: #cba6f7; background: rgba(203, 166, 247, 0.09); }
+.alert-important .alert-title { color: #cba6f7; }
+.alert-warning { border-left-color: #fab387; background: rgba(250, 179, 135, 0.09); }
+.alert-warning .alert-title { color: #fab387; }
+.alert-caution { border-left-color: #f38ba8; background: rgba(243, 139, 168, 0.09); }
+.alert-caution .alert-title { color: #f38ba8; }
+
+/* ═══ TABLES ═══ */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1.4em 0;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0;
+}
+
+th, td {
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  text-align: left;
+}
+
+th {
+  background-color: var(--bg-card);
+  font-weight: 600;
+  color: #89b4fa;
+}
+
+tr:nth-child(even) {
+  background-color: rgba(49, 50, 68, 0.3);
+}
+
+tr:hover {
+  background-color: rgba(49, 50, 68, 0.5);
+}
+
+/* ═══ IMAGES & HR ═══ */
+img {
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin: 1em 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+hr {
+  height: 1px;
+  border: none;
+  background: var(--border);
+  margin: 2em 0;
+}
+
+/* ═══ SCROLLBAR ═══ */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-card);
+}
+::-webkit-scrollbar-thumb {
+  background: #45475a;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #585b70;
+}
+
+/* ═══ HIGH FIDELITY PRINT / PDF STYLESHEET ═══ */
+@media print {
+  @page {
+    margin: 14mm 16mm;
+    size: A4;
+  }
+  body {
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #1a1a1a !important;
+    font-size: 10.5pt;
+    line-height: 1.6;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    color: #0f172a !important;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  h1 { font-size: 1.8em; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.3em; }
+  h2 { font-size: 1.35em; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.25em; }
+  pre, blockquote, img, figure, .code-container, .alert, .table-wrapper {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .code-container {
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+    background: #f8fafc !important;
+  }
+  .code-header {
+    background: #f1f5f9 !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+  }
+  .copy-code-btn { display: none !important; }
+  .code-lang-badge { color: #475569 !important; }
+  pre code { color: #1e293b !important; }
+  code {
+    background: #f1f5f9 !important;
+    color: #b91c1c !important;
+    border: 1px solid #e2e8f0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    page-break-inside: auto;
+    break-inside: auto;
+  }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
+  th {
+    background: #f1f5f9 !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+  td { border: 1px solid #e2e8f0 !important; }
+  tr:nth-child(even) { background: #f8fafc !important; }
+  .alert-note { background: #eff6ff !important; border-left-color: #3b82f6 !important; }
+  .alert-note .alert-title { color: #1d4ed8 !important; }
+  .alert-tip { background: #f0fdf4 !important; border-left-color: #22c55e !important; }
+  .alert-tip .alert-title { color: #15803d !important; }
+  .alert-important { background: #faf5ff !important; border-left-color: #a855f7 !important; }
+  .alert-important .alert-title { color: #7e22ce !important; }
+  .alert-warning { background: #fffbeb !important; border-left-color: #f59e0b !important; }
+  .alert-warning .alert-title { color: #b45309 !important; }
+  .alert-caution { background: #fef2f2 !important; border-left-color: #ef4444 !important; }
+  .alert-caution .alert-title { color: #b91c1c !important; }
+  a { color: #2563eb !important; border-bottom: none !important; }
+}
+";
+
+        private static readonly string _htmlTemplate = @"<!DOCTYPE html>
+<html lang=""en"">
+<head>
+  <meta charset=""utf-8"">
+  <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+  <style>
+    {CSS_THEME}
+  </style>
+  <script>
+    {MARKED_JS}
+  </script>
+  <script>
+    {PRISM_JS}
+  </script>
+</head>
+<body>
+  <div id=""content""></div>
+  <script type=""text/plain"" id=""b64-markdown"">{B64_MARKDOWN}</script>
+  <script type=""text/plain"" id=""md-base-dir"">{MD_BASE_DIR}</script>
+  <script>
+    function notifyHost(message) {
+      try {
+        if (window.chrome && window.chrome.webview && window.chrome.webview.postMessage) {
+          window.chrome.webview.postMessage(message);
+        }
+      } catch (e) {}
+    }
+
+    function copyCode(btn, encodedText) {
+      try {
+        const text = decodeURIComponent(encodedText);
+        navigator.clipboard.writeText(text).then(() => {
+          btn.classList.add('copied');
+          btn.innerHTML = '<span>✓</span> Copied!';
+          setTimeout(() => {
+            btn.classList.remove('copied');
+            btn.innerHTML = '<span>📋</span> Copy';
+          }, 2000);
+        }).catch(() => {
+          const pre = btn.closest('.code-container').querySelector('pre code');
+          if (pre) {
+            const range = document.createRange();
+            range.selectNodeContents(pre);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            document.execCommand('copy');
+            btn.classList.add('copied');
+            btn.innerHTML = '<span>✓</span> Copied!';
+            setTimeout(() => {
+              btn.classList.remove('copied');
+              btn.innerHTML = '<span>📋</span> Copy';
+            }, 2000);
+          }
+        });
+      } catch (e) {}
+    }
+
+    function renderMarkdown() {
+      try {
+        const b64Elem = document.getElementById('b64-markdown');
+        if (!b64Elem) return;
+        const b64 = (b64Elem.textContent || '').trim();
+        if (!b64) return;
+
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const rawMd = new TextDecoder('utf-8').decode(bytes);
+        
+        if (typeof marked !== 'undefined') {
+          if (typeof marked.setOptions === 'function') {
+            marked.setOptions({
+              gfm: true,
+              breaks: false,
+              pedantic: false
+            });
+          }
+        }
+        
+        let html = '';
+        if (typeof marked !== 'undefined') {
+          if (typeof marked.parse === 'function') {
+            html = marked.parse(rawMd);
+          } else if (typeof marked === 'function') {
+            html = marked(rawMd);
+          }
+        }
+        
+        const contentDiv = document.getElementById('content');
+        if (!contentDiv) return;
+        contentDiv.innerHTML = html;
+
+        // Enhance blockquotes into GitHub alert callouts: > [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]
+        document.querySelectorAll('#content blockquote').forEach(bq => {
+          const p = bq.querySelector('p');
+          if (!p) return;
+          const text = p.innerHTML || '';
+          const match = text.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(<br\s*\/?>)?\s*([\s\S]*)/i);
+          if (match) {
+            const type = match[1].toUpperCase();
+            const rest = match[3] || '';
+            p.innerHTML = rest;
+            bq.className = 'alert alert-' + type.toLowerCase();
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'alert-title';
+            let icon = 'ℹ️';
+            if (type === 'TIP') icon = '💡';
+            else if (type === 'IMPORTANT') icon = '⚡';
+            else if (type === 'WARNING') icon = '⚠️';
+            else if (type === 'CAUTION') icon = '🛑';
+            titleDiv.innerHTML = '<span>' + icon + '</span> ' + type.charAt(0) + type.slice(1).toLowerCase();
+            bq.insertBefore(titleDiv, p);
+          }
+        });
+
+        // Enhance tables with responsive wrappers
+        document.querySelectorAll('#content table').forEach(tbl => {
+          if (!tbl.parentElement.classList.contains('table-wrapper')) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'table-wrapper';
+            tbl.parentNode.insertBefore(wrapper, tbl);
+            wrapper.appendChild(tbl);
+          }
+        });
+
+        // Enhance code blocks with copy buttons & language badges
+        document.querySelectorAll('#content pre').forEach(pre => {
+          const code = pre.querySelector('code');
+          if (!code) return;
+          
+          let lang = 'CODE';
+          const match = (code.className || '').match(/language-([a-zA-Z0-9_\-#+]+)/i);
+          if (match) lang = match[1].toUpperCase();
+
+          const rawCode = code.textContent || '';
+          const encoded = encodeURIComponent(rawCode);
+
+          const container = document.createElement('div');
+          container.className = 'code-container';
+
+          const header = document.createElement('div');
+          header.className = 'code-header';
+          header.innerHTML = '<span class=\'code-lang-badge\'>' + lang + '</span>' +
+            '<button class=\'copy-code-btn\' onclick=\'copyCode(this, ' + JSON.stringify(encoded) + ')\'>' +
+            '<span>📋</span> Copy' +
+            '</button>';
+
+          pre.parentNode.insertBefore(container, pre);
+          container.appendChild(header);
+          container.appendChild(pre);
+        });
+
+        // Safe syntax highlighting
+        if (typeof Prism !== 'undefined' && Prism.highlightElement) {
+          document.querySelectorAll('#content code[class*=\'language-\']').forEach(el => {
+            try {
+              Prism.highlightElement(el);
+            } catch (e) {}
+          });
+        }
+
+        // Image path resolution
+        var baseDir = document.getElementById('md-base-dir');
+        var basePath = baseDir ? baseDir.textContent.trim() : '';
+        document.querySelectorAll('#content img').forEach(function(img) {
+          var src = img.getAttribute('src');
+          if (!src) return;
+          if (/^(https?:|data:|file:|blob:)/i.test(src)) return;
+          if (/^[A-Za-z]:[\\/]/.test(src)) {
+            img.src = 'file:///' + src.replace(/\\/g, '/');
+          } else if (basePath) {
+            var resolved = basePath.replace(/\\/g, '/') + '/' + src.replace(/^\.\//, '');
+            img.src = 'file:///' + resolved;
+          }
+        });
+
+        notifyHost('RENDER_COMPLETE');
+      } catch (err) {
+        notifyHost('RENDER_ERROR:' + err.message);
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', renderMarkdown);
+    } else {
+      renderMarkdown();
+    }
+  </script>
+</body>
+</html>";
 
         public static string GetHtml(string markdownContent)
         {

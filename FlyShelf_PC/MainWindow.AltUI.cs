@@ -182,6 +182,7 @@ namespace FlyShelf
             if (string.IsNullOrEmpty(category))
             {
                 view.Filter = null;
+                ResetFilterScrollToTop();
                 return;
             }
 
@@ -198,6 +199,8 @@ namespace FlyShelf
                 }
                 return false;
             };
+
+            ResetFilterScrollToTop();
         }
 
         private void UpdateAltSidebarSelection(string category)
@@ -405,11 +408,11 @@ namespace FlyShelf
                     // ═══ FULL-COLLECTION SCAN (mirrors MainWindow.Positioning.cs) ═══
                     int count = AltShelfListView.Items.Count;
 
-                    // Pass 1: First 5 images always loaded
+                    // Pass 1: Always ensure first 6 images are loaded
                     {
                         int imgCount = 0;
                         int topLimit = Math.Min(count, 50);
-                        for (int i = 0; i < topLimit && imgCount < 5; i++)
+                        for (int i = 0; i < topLimit && imgCount < 6; i++)
                         {
                             var item = AltShelfListView.Items[i] as ViewModels.ClipboardItem;
                             if (item == null) continue;
@@ -417,21 +420,7 @@ namespace FlyShelf
                             imgCount++;
                             if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality)
                             {
-                                item.IsLoadingHighQuality = true;
-                                string fp = item.FilePath;
-                                var ci = item;
-                                _ = System.Threading.Tasks.Task.Run(() =>
-                                {
-                                    try
-                                    {
-                                        var bmp = ViewModels.FlyShelfViewModel.LoadImageThumbnail(fp, 300);
-                                        if (bmp != null)
-                                            Dispatcher.InvokeAsync(() => { ci.Icon = bmp; ci.IsLoadedHighQuality = true; ci.IsLoadingHighQuality = false; });
-                                        else
-                                            Dispatcher.InvokeAsync(() => ci.IsLoadingHighQuality = false);
-                                    }
-                                    catch { Dispatcher.InvokeAsync(() => ci.IsLoadingHighQuality = false); }
-                                });
+                                item.EnsureThumbnailLoadedAsync();
                             }
                             item.LeftViewportTime = null;
                         }
@@ -449,23 +438,7 @@ namespace FlyShelf
 
                         if (item.IsLoadedHighQuality && item.Icon != null)
                         {
-                            // Already loaded — only process during eviction check below
-                        }
-                        else if (container != null && container.IsLoaded)
-                        {
-                            try
-                            {
-                                GeneralTransform transform = container.TransformToAncestor(sv);
-                                System.Windows.Rect bounds = transform.TransformBounds(new System.Windows.Rect(0, 0, container.ActualWidth, container.ActualHeight));
-                                isVisible = viewportRect.IntersectsWith(bounds);
-                            }
-                            catch { }
-                        }
-                        // container == null means not realized (offscreen). Skip.
-
-                        // Check actual visibility for eviction of loaded items
-                        if (item.IsLoadedHighQuality && item.Icon != null)
-                        {
+                            // Already loaded — check eviction
                             bool actuallyVisible = false;
                             if (container != null && container.IsLoaded)
                             {
@@ -479,7 +452,6 @@ namespace FlyShelf
                             }
                             else if (container == null)
                             {
-                                // Can't determine visibility — keep as-is, retry will handle
                                 actuallyVisible = true; // Don't evict if we can't check
                             }
 
@@ -489,17 +461,16 @@ namespace FlyShelf
                             }
                             else if (!item.IsPinned)
                             {
-                                // Skip eviction when Hub is visible — shared ClipboardItem objects
                                 if (_hubWindowInstance != null && _hubWindowInstance.IsVisible)
                                 {
                                     item.LeftViewportTime = null;
                                     continue;
                                 }
 
-                                // Evict after 5 seconds off-screen to free memory
+                                // Evict after 30 seconds off-screen to free memory
                                 if (item.LeftViewportTime == null)
                                     item.LeftViewportTime = DateTime.Now;
-                                else if ((DateTime.Now - item.LeftViewportTime.Value).TotalSeconds >= 5)
+                                else if ((DateTime.Now - item.LeftViewportTime.Value).TotalSeconds >= 30)
                                 {
                                     item.Icon = null;
                                     item.IsLoadedHighQuality = false;
@@ -509,64 +480,28 @@ namespace FlyShelf
                             }
                             continue;
                         }
+                        else if (container != null && container.IsLoaded)
+                        {
+                            try
+                            {
+                                GeneralTransform transform = container.TransformToAncestor(sv);
+                                System.Windows.Rect bounds = transform.TransformBounds(new System.Windows.Rect(0, 0, container.ActualWidth, container.ActualHeight));
+                                isVisible = viewportRect.IntersectsWith(bounds);
+                            }
+                            catch { }
+                        }
+                        else
+                        {
+                            // Container not realized yet but within list
+                            isVisible = (i < 30);
+                        }
 
                         if (isVisible)
                         {
                             item.LeftViewportTime = null;
                             if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality)
                             {
-                                // Safety cap: max 8 concurrent thumbnail decodes
-                                int currentlyLoading = 0;
-                                int capStart = Math.Max(0, i - 30);
-                                int capEnd = Math.Min(count - 1, i + 30);
-                                for (int j = capStart; j <= capEnd && currentlyLoading < 9; j++)
-                                {
-                                    var check = AltShelfListView.Items[j] as ViewModels.ClipboardItem;
-                                    if (check?.IsLoadingHighQuality == true) currentlyLoading++;
-                                }
-                                if (currentlyLoading >= 8) continue;
-
-                                item.IsLoadingHighQuality = true;
-                                string filePath = item.FilePath;
-                                var capturedItem = item;
-                                int capturedIdx = i;
-
-                                _ = System.Threading.Tasks.Task.Run(() =>
-                                {
-                                    try
-                                    {
-                                        var bmp = ViewModels.FlyShelfViewModel.LoadImageThumbnail(filePath, 300);
-                                        if (bmp != null)
-                                        {
-                                            Dispatcher.InvokeAsync(() =>
-                                            {
-                                                capturedItem.Icon = bmp;
-                                                capturedItem.IsLoadedHighQuality = true;
-                                                capturedItem.IsLoadingHighQuality = false;
-
-                                                // Fade-in animation
-                                                var element = AltShelfListView.ItemContainerGenerator.ContainerFromItem(capturedItem) as FrameworkElement;
-                                                if (element != null && element.IsLoaded)
-                                                {
-                                                    var img = FindVisualChild<System.Windows.Controls.Image>(element, "ItemIcon");
-                                                    if (img != null)
-                                                    {
-                                                        // [FIX ANIM-10]: Use cached frozen animation
-                                                        img.BeginAnimation(UIElement.OpacityProperty, s_iconFadeIn);
-                                                    }
-                                                }
-                                            }, System.Windows.Threading.DispatcherPriority.Normal);
-                                        }
-                                        else
-                                        {
-                                            Dispatcher.InvokeAsync(() => { capturedItem.IsLoadingHighQuality = false; });
-                                        }
-                                    }
-                                    catch
-                                    {
-                                        Dispatcher.InvokeAsync(() => { capturedItem.IsLoadingHighQuality = false; });
-                                    }
-                                });
+                                item.EnsureThumbnailLoadedAsync();
                             }
                         }
                     }

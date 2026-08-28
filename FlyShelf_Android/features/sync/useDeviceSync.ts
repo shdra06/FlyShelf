@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'; // L-2: Removed unused React default import
 import { useLatest } from '../../hooks/useLatest';
 import { Platform, NativeModules, ToastAndroid, AppState } from 'react-native';
+import { toast } from '../../context/ToastContext';
 import * as Clipboard from 'expo-clipboard';
 import * as Notifications from 'expo-notifications';
 import { database } from '../../firebaseConfig';
@@ -42,17 +43,29 @@ async function resolveFileDownloadUrl(params: {
       ...(pcLocalIp ? pcLocalIp.split(',').map(s => s.trim()).filter(Boolean).map(ip => ip.startsWith('http') ? ip.replace(/\/$/, '') : `http://${ip.includes(':') ? ip : ip + ':8999'}`) : []),
     ].filter((v, i, a) => a.indexOf(v) === i);
 
-    for (const candidate of lanCandidates) {
+    // AUDIT FIX: Probe all LAN candidates in parallel (Promise.any) instead of sequential
+    // Reduces worst-case from N*1200ms to just 1200ms
+    if (lanCandidates.length > 0) {
       try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 1200);
-        const h = await fetch(`${candidate}/api/health`, {
-          headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' },
-          signal: ctrl.signal,
-        });
-        clearTimeout(timer);
-        if (h.ok) { lanBase = candidate; break; }
-      } catch (e) { syncLog('FILE-DL', `LAN probe failed for ${candidate}: ${(e as any)?.message || e}`); }
+        const winner = await Promise.any(lanCandidates.map(async (candidate) => {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 1200);
+          try {
+            const h = await fetch(`${candidate}/api/health`, {
+              headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' },
+              signal: ctrl.signal,
+            });
+            clearTimeout(timer);
+            if (h.ok) return candidate;
+            throw new Error('not ok');
+          } catch (e) {
+            clearTimeout(timer);
+            syncLog('FILE-DL', `LAN probe failed for ${candidate}: ${(e as any)?.message || e}`);
+            throw e;
+          }
+        }));
+        lanBase = winner;
+      } catch { /* all candidates failed */ }
     }
     if (lanBase) {
       fileUrl = `${lanBase}/download${pathPart}`;
@@ -180,6 +193,8 @@ export function useDeviceSync(params: {
   const pollLockRef = useRef(false); // Prevents concurrent pollFn from timer + long-poll
   const pollRetryCountRef = useRef(0); // Exponential backoff counter for failed polls
   const shortcutSyncTimestampRef = useRef<number>(0); // Throttle: sync shortcuts every 60s
+  const lastSyncTimestampRef = useRef<number>(0); // Incremental delta sync timestamp
+  const isFirstSyncRef = useRef<boolean>(true); // Initial pairing sync tracker
   useEffect(() => {
     const pollFn = async () => {
       if (pollLockRef.current) return; // Already running — skip this invocation
@@ -206,7 +221,10 @@ export function useDeviceSync(params: {
         const syncHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion', 'Connection': 'keep-alive' };
         if (pairingKeyRef.current) syncHeaders['X-Pairing-Key'] = pairingKeyRef.current;
         const pollStart = performance.now();
-        const response = await fetchWithTimeout(`${targetUrl}/api/sync`, { headers: syncHeaders }, timeout);
+        const syncUrl = lastSyncTimestampRef.current > 0
+          ? `${targetUrl}/api/sync?since=${lastSyncTimestampRef.current}`
+          : `${targetUrl}/api/sync?limit=3`;
+        const response = await fetchWithTimeout(syncUrl, { headers: syncHeaders }, timeout);
         if (!response.ok) {
           cachedPcUrlRef.current = null;
           // Track Cloudflare failures for forced re-resolution (Issue #7)
@@ -247,26 +265,32 @@ export function useDeviceSync(params: {
           } catch (e) { syncLog('PC-POLL', `Failed to read X-Global-Url header: ${(e as any)?.message || e}`); }
           const data = await response.json();
           if (Array.isArray(data) && data.length > 0) {
-            const latest = data[0];
-
-            // Guard: skip oversized items to prevent OOM
-            if ((latest.Raw || '').length > 5_000_000) {
-              syncLog('PC-POLL', 'Skipping oversized item');
-              pollLockRef.current = false;
-              return;
+            for (const item of data) {
+              if (item.Timestamp && item.Timestamp > lastSyncTimestampRef.current) {
+                lastSyncTimestampRef.current = item.Timestamp;
+              }
             }
 
-            // ═══ DEDUP: Check EventId FIRST — before contentKey ═══
-            // When items are deleted on PC, older items shift to data[0].
-            // The EventId check must happen BEFORE contentKey comparison,
-            // otherwise the changed contentKey bypasses EventId dedup.
-            const lanEventId = latest.EventId || '';
-            if (lanEventId && processedEventsRef.current.has(lanEventId)) return;
+            const isInitialPair = isFirstSyncRef.current;
+            isFirstSyncRef.current = false;
 
-            // ═══ GUARD: Skip items from BEFORE this device paired ═══
-            if (pairingTimestampRef.current > 0 && latest.Timestamp && latest.Timestamp < (pairingTimestampRef.current - 5000)) {
-              return; // Pre-pairing item — don't sync to Android
-            }
+            // On initial pair, process all 3 initial items chronologically (oldest to newest)
+            const itemsToProcess = isInitialPair ? [...data].reverse() : data;
+
+            for (const latest of itemsToProcess) {
+              // Guard: skip oversized items to prevent OOM
+              if ((latest.Raw || '').length > 5_000_000) {
+                continue;
+              }
+
+              // ═══ DEDUP: Check EventId FIRST — before contentKey ═══
+              const lanEventId = latest.EventId || '';
+              if (lanEventId && processedEventsRef.current.has(lanEventId)) continue;
+
+              // ═══ GUARD: Skip items from BEFORE this device paired (with 2-minute clock skew tolerance) ═══
+              if (!isInitialPair && pairingTimestampRef.current > 0 && latest.Timestamp && latest.Timestamp < (pairingTimestampRef.current - 120_000)) {
+                continue;
+              }
             const contentKey = `${latest.Type}_${latest.Title}_${latest.Timestamp}`;
             if (contentKey !== lastSyncedContentRef.current) {
               lastSyncedContentRef.current = contentKey;
@@ -292,7 +316,7 @@ export function useDeviceSync(params: {
                       } else { await Clipboard.setStringAsync(latestRaw); }
                       setLastCopiedText(latestRaw);
                       lastCopiedRef.current = latestRaw;
-                      if (Platform.OS === 'android') ToastAndroid.show(`📋 ${latestRaw.substring(0, 40)}...`, ToastAndroid.SHORT);
+                      toast.clipboard(`Synced from ${latest.SourceDeviceName || 'PC'}`, latestRaw);
                       Notifications.scheduleNotificationAsync({
                         content: { title: '📋 Clipboard Synced', body: latestRaw?.substring(0, 80) || 'New content from PC' },
                         trigger: null,
@@ -346,20 +370,31 @@ export function useDeviceSync(params: {
                           ...(pcLocalIp ? pcLocalIp.split(',').map(s => s.trim()).filter(Boolean).map(ip => ip.startsWith('http') ? ip.replace(/\/$/, '') : `http://${ip.includes(':') ? ip : ip + ':8999'}`) : []),
                         ].filter((v, i, a) => a.indexOf(v) === i); // deduplicate
 
-                        for (const candidate of lanCandidates) {
+                        // AUDIT FIX: Probe all LAN candidates in parallel
+                        if (lanCandidates.length > 0) {
                           try {
-                            const ctrl = new AbortController();
-                            const timer = setTimeout(() => ctrl.abort(), 3000);
-                            const h = await fetch(`${candidate}/api/health`, {
-                              headers: { 
-                                'X-FlyShelf-Client': 'MobileCompanion',
-                                'X-Pairing-Key': pairingKeyRef.current || ''
-                              },
-                              signal: ctrl.signal,
-                            });
-                            clearTimeout(timer);
-                            if (h.ok) { lanBase = candidate; break; }
-                          } catch (e) { syncLog('FILE-DL', `LAN health probe failed for ${candidate}: ${(e as any)?.message || e}`); }
+                            const winner = await Promise.any(lanCandidates.map(async (candidate) => {
+                              const ctrl = new AbortController();
+                              const timer = setTimeout(() => ctrl.abort(), 1500);
+                              try {
+                                const h = await fetch(`${candidate}/api/health`, {
+                                  headers: { 
+                                    'X-FlyShelf-Client': 'MobileCompanion',
+                                    'X-Pairing-Key': pairingKeyRef.current || ''
+                                  },
+                                  signal: ctrl.signal,
+                                });
+                                clearTimeout(timer);
+                                if (h.ok) return candidate;
+                                throw new Error('not ok');
+                              } catch (e) {
+                                clearTimeout(timer);
+                                syncLog('FILE-DL', `LAN health probe failed for ${candidate}: ${(e as any)?.message || e}`);
+                                throw e;
+                              }
+                            }));
+                            lanBase = winner;
+                          } catch { /* all candidates failed */ }
                         }
                         if (lanBase) {
                           fileUrl = `${lanBase}/download${pathPart}`;
@@ -469,6 +504,7 @@ export function useDeviceSync(params: {
               }
             }
           }
+          }
           // ── Sweep ALL items for file downloads (not just data[0]) ──
           // The data[0] path above only handles the latest item. Files (PDFs, docs, etc.)
           // that aren't the top item would otherwise be missed entirely.
@@ -496,20 +532,31 @@ export function useDeviceSync(params: {
                           ...(pcLocalIp ? pcLocalIp.split(',').map(s => s.trim()).filter(Boolean).map(ip => ip.startsWith('http') ? ip.replace(/\/$/, '') : `http://${ip.includes(':') ? ip : ip + ':8999'}`) : []),
                 ].filter((v, i, a) => a.indexOf(v) === i);
 
-                for (const candidate of lanCandidates) {
+                // AUDIT FIX: Probe all LAN candidates in parallel
+                if (lanCandidates.length > 0) {
                   try {
-                    const ctrl = new AbortController();
-                    const timer = setTimeout(() => ctrl.abort(), 3000);
-                    const h = await fetch(`${candidate}/api/health`, {
-                      headers: { 
-                        'X-FlyShelf-Client': 'MobileCompanion',
-                        'X-Pairing-Key': pairingKeyRef.current || ''
-                      },
-                      signal: ctrl.signal,
-                    });
-                    clearTimeout(timer);
-                    if (h.ok) { lanBase = candidate; break; }
-                  } catch (e) { syncLog('FILE-DL', `LAN probe failed for ${candidate}: ${(e as any)?.message || e}`); }
+                    const winner = await Promise.any(lanCandidates.map(async (candidate) => {
+                      const ctrl = new AbortController();
+                      const timer = setTimeout(() => ctrl.abort(), 1500);
+                      try {
+                        const h = await fetch(`${candidate}/api/health`, {
+                          headers: { 
+                            'X-FlyShelf-Client': 'MobileCompanion',
+                            'X-Pairing-Key': pairingKeyRef.current || ''
+                          },
+                          signal: ctrl.signal,
+                        });
+                        clearTimeout(timer);
+                        if (h.ok) return candidate;
+                        throw new Error('not ok');
+                      } catch (e) {
+                        clearTimeout(timer);
+                        syncLog('FILE-DL', `LAN probe failed for ${candidate}: ${(e as any)?.message || e}`);
+                        throw e;
+                      }
+                    }));
+                    lanBase = winner;
+                  } catch { /* all candidates failed */ }
                 }
                 if (lanBase) {
                   fileUrl = `${lanBase}/download${pathPart}`;
@@ -681,119 +728,150 @@ export function useDeviceSync(params: {
       }
     });
 
-    // ─── Long-Poll for instant notifications ───
-    // /api/events blocks for up to 30s until clipboard changes on PC
-    // When it returns 200, immediately fetch the new data via pollFn()
-    // Guard: prevent double long-poll if effect re-runs before cleanup
-    let longPollActive = true;
+    // ─── Unified Real-Time Duplex Engine (WebSocket Primary + Fallback Pipeline) ───
+    let wsInstance: WebSocket | null = null;
+    let wsPingInterval: any = null;
+    let isTornDown = false;
+    let longPollActive = false;
     let currentLongPollController: AbortController | null = null;
-    let longPollBackoff = 0;
-    const runLongPoll = async () => {
-      if (!longPollActive) return; // Bail if already torn down
-      syncLog('LONG-POLL', 'Starting long-poll loop');
-      while (longPollActive) {
+
+    const startLongPollFallback = async () => {
+      if (longPollActive || isTornDown) return;
+      longPollActive = true;
+      syncLog('LONG-POLL', 'Engaging fallback long-poll listener');
+      while (longPollActive && !isTornDown) {
         try {
-          // Always resolve fresh URL (don't rely on potentially stale ref)
-          const url = cachedPcUrlRef.current || (await getCachedPcUrl());
+          const url = cachedPcUrlRef.current || (await getCachedPcUrl().catch(() => ''));
           if (!url) {
-            syncLog('LONG-POLL', 'No PC URL — waiting 2s');
             await new Promise(r => setTimeout(r, 2000));
             continue;
           }
-          try {
-            const pairingKey = pairingKeyRef.current;
-            const lpHeaders: any = { 'X-FlyShelf-Client': 'MobileCompanion', 'Connection': 'keep-alive' };
-            if (pairingKey) lpHeaders['X-Pairing-Key'] = pairingKey;
-            const controller = new AbortController();
-            currentLongPollController = controller;
-            const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout (server blocks 30s)
-            const res = await fetch(`${url}/api/events`, { headers: lpHeaders, signal: controller.signal });
-            clearTimeout(timeoutId);
-            longPollBackoff = 0; // Reset backoff on success
-            if (res.status === 200) {
-              // Clipboard changed! Fetch the new data immediately
-              lastActivityRef.current = NetworkClock.now();
-              syncLog('LONG-POLL', '⚡ Instant notification — fetching now');
-              await pollFn();
-            }
-            // 204 = timeout, no new events — loop again immediately
-          } catch (innerErr: any) {
-            // Normal long-poll timeout — reconnect immediately without backoff
-            if ((innerErr as any)?.name === 'AbortError') { longPollBackoff = 0; continue; }
-            if (!longPollActive) break;
-            
-            // Backoff on errors: 1s, 2s, max 4s (preserve stored URLs!)
-            longPollBackoff = Math.min(longPollBackoff + 1, 3);
-            const delay = Math.min(1000 * Math.pow(1.5, longPollBackoff), 4000);
-            syncLog('LONG-POLL', `Error: ${innerErr?.message || innerErr} — retry in ${delay}ms`);
-            await new Promise(r => setTimeout(r, delay));
+          const pairingKey = pairingKeyRef.current;
+          const lpHeaders: any = { 'X-FlyShelf-Client': 'MobileCompanion', 'Connection': 'keep-alive' };
+          if (pairingKey) lpHeaders['X-Pairing-Key'] = pairingKey;
+          const controller = new AbortController();
+          currentLongPollController = controller;
+          const timeoutId = setTimeout(() => controller.abort(), 35000);
+          const res = await fetch(`${url}/api/events`, { headers: lpHeaders, signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (res.status === 200) {
+            lastActivityRef.current = NetworkClock.now();
+            syncLog('LONG-POLL', '⚡ Instant push notification — delta sync fetching now');
+            await pollFn();
           }
-        } catch (outerErr: any) {
-          // Top-level catch — NEVER let the loop die
-          if (!longPollActive) break; // H-1 fix: prevent zombie loops on unmount
-          syncLog('LONG-POLL', `Loop crash prevented: ${outerErr?.message || outerErr}`);
-          await new Promise(r => setTimeout(r, 3000));
+        } catch (innerErr: any) {
+          if ((innerErr as any)?.name === 'AbortError') continue;
+          if (isTornDown) break;
+          await new Promise(r => setTimeout(r, 2000));
         }
       }
     };
-    runLongPoll(); // Fire and forget — runs in background
+
+    const startWebSocketEngine = async () => {
+      if (isTornDown) return;
+      try {
+        const targetUrl = cachedPcUrlRef.current || (await getCachedPcUrl().catch(() => ''));
+        if (!targetUrl || isTornDown) {
+          setTimeout(startWebSocketEngine, 3000);
+          return;
+        }
+
+        const pk = pairingKeyRef.current;
+        const devId = deviceName || 'Mobile';
+        const wsProto = targetUrl.startsWith('https') ? 'wss:' : 'ws:';
+        const hostPart = targetUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        const wsUrl = `${wsProto}//${hostPart}/ws/peer?key=${encodeURIComponent(pk || '')}&deviceId=${encodeURIComponent(devId)}`;
+
+        syncLog('WS-PEER', `⚡ Opening persistent duplex socket: ${wsUrl}`);
+        const ws = new WebSocket(wsUrl);
+        wsInstance = ws;
+
+        let wsConnected = false;
+        const connType = targetUrl.includes('trycloudflare.com') ? 'Cloud' as const : 'LAN' as const;
+
+        ws.onopen = () => {
+          if (isTornDown) { ws.close(); return; }
+          wsConnected = true;
+          longPollActive = false; // Disable fallback when WebSocket is live
+          markPcReachable();
+          resetCloudflareFailCount();
+          pollRetryCountRef.current = 0;
+          syncLog('WS-PEER', `✅ Persistent Duplex Socket ESTABLISHED to ${targetUrl} (${connType})`);
+
+          // Send initial ping and start 5s heartbeat
+          const sendPing = () => {
+            if (ws.readyState === WebSocket.OPEN) {
+              const pingPayload = JSON.stringify({ type: 'Ping', ts: Date.now() });
+              ws.send(pingPayload);
+            }
+          };
+          sendPing();
+          clearInterval(wsPingInterval);
+          wsPingInterval = setInterval(sendPing, 5000);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const raw = typeof event.data === 'string' ? event.data : '';
+            if (!raw) return;
+            if (raw === 'pong') {
+              markPcReachable();
+              return;
+            }
+
+            if (raw.startsWith('{')) {
+              const msg = JSON.parse(raw);
+              if (msg.type === 'Pong') {
+                const now = Date.now();
+                const latency = msg.ts ? Math.max(1, Math.round(now - msg.ts)) : 5;
+                setConnectionInfo({ url: targetUrl, latencyMs: latency, type: connType });
+                pairedDevicesRef.current.filter(d => d.deviceType === 'PC').forEach(d => {
+                  updateDeviceStatus(d.deviceId, { isOnline: true, connectionType: connType, latencyMs: latency, lastSeen: NetworkClock.now() });
+                });
+                markPcReachable();
+              } else if (msg.type === 'ClipboardPush' || msg.type === 'clipboard' || msg.type === 'SyncText') {
+                syncLog('WS-PEER', `⚡ Instant Push from PC via WebSocket (${msg.type})`);
+                lastActivityRef.current = NetworkClock.now();
+                pollFn().catch(() => {});
+              }
+            }
+          } catch (e: any) {
+            syncLog('WS-PEER', `Message parse error: ${e?.message || e}`);
+          }
+        };
+
+        ws.onerror = (err) => {
+          syncLog('WS-PEER', `WebSocket error: ${(err as any)?.message || 'Socket error'}`);
+        };
+
+        ws.onclose = (ev) => {
+          clearInterval(wsPingInterval);
+          if (isTornDown) return;
+          syncLog('WS-PEER', `WebSocket closed (code=${ev.code}). Engaging fallback & reconnecting.`);
+          
+          if (!wsConnected && !longPollActive) {
+            startLongPollFallback();
+          }
+          
+          setTimeout(startWebSocketEngine, 3000);
+        };
+      } catch (err: any) {
+        if (!isTornDown) setTimeout(startWebSocketEngine, 3000);
+      }
+    };
+
+    startWebSocketEngine();
 
     return () => {
+      isTornDown = true;
       appStateSub.remove();
       if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; }
-      longPollActive = false; // Stop long-poll loop
+      clearInterval(wsPingInterval);
+      if (wsInstance) {
+        try { wsInstance.close(); } catch {}
+      }
+      longPollActive = false;
       if (currentLongPollController) currentLongPollController.abort();
     };
   }, [isGlobalSyncEnabled, pcLocalIp, deviceName]);
-
-  // ─── LAN Heartbeat — detect disconnection faster than cache TTL ───
-  const heartbeatFailCountRef = useRef(0);
-  const HEARTBEAT_INTERVAL = 10_000; // 10s
-  const HEARTBEAT_MAX_FAILURES = 3;
-
-  useEffect(() => {
-    if (!isGlobalSyncEnabled) return;
-
-    const heartbeatTimer = setInterval(async () => {
-      const url = cachedPcUrlRef.current;
-      if (!url) return;
-
-      try {
-        const res = await fetchWithTimeout(`${url}/api/health`, {
-          headers: {
-            'X-FlyShelf-Client': 'MobileCompanion',
-            'X-Pairing-Key': pairingKeyRef.current || '',
-          },
-        }, 3000);
-        if (res.ok) {
-          heartbeatFailCountRef.current = 0;
-          markPcReachable();
-          // Track transport type for connection status
-          const transport = url.includes('trycloudflare.com') ? 'Cloud' : 'LAN';
-          setConnectionInfo({ url, latencyMs: 0, type: transport });
-          return;
-        }
-      } catch {}
-
-      heartbeatFailCountRef.current++;
-      syncLog('HEARTBEAT', `PC health check failed (${heartbeatFailCountRef.current}/${HEARTBEAT_MAX_FAILURES})`);
-
-      if (heartbeatFailCountRef.current >= HEARTBEAT_MAX_FAILURES) {
-        syncLog('HEARTBEAT', 'PC unreachable — invalidating cache, triggering rediscovery');
-        heartbeatFailCountRef.current = 0;
-        invalidatePcUrlCache();
-        markPcUnreachable();
-        setConnectionInfo({ url: '', latencyMs: 0, type: 'Cloud' });
-        // Force immediate re-resolution
-        getCachedPcUrl().then(newUrl => {
-          if (newUrl) {
-            syncLog('HEARTBEAT', `Rediscovered PC at: ${newUrl}`);
-            markPcReachable();
-          }
-        }).catch(() => {});
-      }
-    }, HEARTBEAT_INTERVAL);
-
-    return () => clearInterval(heartbeatTimer);
-  }, [isGlobalSyncEnabled]);
 }

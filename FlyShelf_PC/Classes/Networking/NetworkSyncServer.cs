@@ -169,9 +169,40 @@ namespace FlyShelf.Classes
             }
         }
 
+        private static readonly ConcurrentDictionary<string, System.Net.WebSockets.WebSocket> _activePeerSockets = new();
+
+        public static void RegisterPeerWebSocket(string peerDeviceId, System.Net.WebSockets.WebSocket socket)
+        {
+            _activePeerSockets[peerDeviceId] = socket;
+        }
+
+        public static void UnregisterPeerWebSocket(string peerDeviceId)
+        {
+            _activePeerSockets.TryRemove(peerDeviceId, out _);
+        }
+
+        public static void BroadcastToPeerWebSockets(string messageJson)
+        {
+            byte[] bytes = Encoding.UTF8.GetBytes(messageJson);
+            foreach (var kvp in _activePeerSockets)
+            {
+                if (kvp.Value.State == System.Net.WebSockets.WebSocketState.Open)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await kvp.Value.SendAsync(new ArraySegment<byte>(bytes), System.Net.WebSockets.WebSocketMessageType.Text, true, CancellationToken.None);
+                        }
+                        catch { }
+                    });
+                }
+            }
+        }
+
         /// <summary>
         /// Call this whenever the clipboard changes to instantly push to all connected clients.
-        /// Unblocks long-poll waiters AND broadcasts to SSE clients.
+        /// Unblocks long-poll waiters AND broadcasts to SSE and WebSocket clients.
         /// </summary>
         public void NotifyClipboardChanged(string itemType = "clipboard", string title = "")
         {
@@ -193,9 +224,10 @@ namespace FlyShelf.Classes
                 _longPollWaiters.Clear();
             }
 
-            // 2. Broadcast to SSE clients (instant push)
+            // 2. Broadcast to SSE + WebSocket peers (instant push)
             int sseCount = _sseClipboardClients.Count;
             BroadcastClipboardToSSE(payload);
+            BroadcastToPeerWebSockets(payload);
 
             // 3. Optional Silent Background Wake Signal (for Android Floating Ball background sync)
             if (SettingsManager.Current.EnableFcmSilentWake && SettingsManager.Current.EnableCloudDiscovery)
@@ -214,7 +246,7 @@ namespace FlyShelf.Classes
                 });
             }
 
-            Logger.LogAction("PUSH", $"NotifyClipboardChanged: {itemType} — {waiterCount} long-poll, {sseCount} SSE client(s)");
+            Logger.LogAction("PUSH", $"NotifyClipboardChanged: {itemType} — {waiterCount} long-poll, {sseCount} SSE, {_activePeerSockets.Count} WS client(s)");
         }
         
         public string ServerUrl { get; private set; } = "Not Running";

@@ -336,8 +336,9 @@ namespace FlyShelf
                     _viewModel.IsSearchActive = false;
                     ShelfListView.Focus();
 
-                    // Render newly visible thumbnails immediately
-                    RenderVisibleThumbnails();
+                    // Defer thumbnail rendering so collapse animation is instant and lag-free
+                    Dispatcher.InvokeAsync(() => RenderVisibleThumbnails(),
+                        System.Windows.Threading.DispatcherPriority.Background);
                 }
             }
             finally
@@ -463,6 +464,9 @@ namespace FlyShelf
                 }
             }
 
+            // Reset scroll position so filtered results start at the top
+            ResetFilterScrollToTop();
+
             // PERF: Render thumbnails at ContextIdle — let layout complete first
             Dispatcher.InvokeAsync(() => RenderVisibleThumbnails(),
                 System.Windows.Threading.DispatcherPriority.ContextIdle);
@@ -477,6 +481,8 @@ namespace FlyShelf
             {
                 if (UnifiedSearchPanel != null)
                     UnifiedSearchPanel.Visibility = Visibility.Collapsed;
+                if (ShelfListView != null)
+                    ShelfListView.Padding = new Thickness(0, 0, 0, 80);
                 return;
             }
 
@@ -571,9 +577,12 @@ namespace FlyShelf
             SearchSmartCommandsSection.Visibility = showSmartCommands ? Visibility.Visible : Visibility.Collapsed;
 
             // Show/hide the unified panel
-            UnifiedSearchPanel.Visibility = (hasAnyResult || showSmartCommands)
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+            bool showPanel = hasAnyResult || showSmartCommands;
+            UnifiedSearchPanel.Visibility = showPanel ? Visibility.Visible : Visibility.Collapsed;
+            if (ShelfListView != null)
+            {
+                ShelfListView.Padding = showPanel ? new Thickness(0, 0, 0, 220) : new Thickness(0, 0, 0, 80);
+            }
         }
 
         private static string TruncateText(string text, int maxLen)
@@ -870,6 +879,9 @@ namespace FlyShelf
                 // haven't been materialized yet, causing wasted layout passes.
                 Dispatcher.InvokeAsync(() => RenderVisibleThumbnails(),
                     System.Windows.Threading.DispatcherPriority.ContextIdle);
+
+                // Reset scroll position so the filtered view immediately displays the most recent entry
+                ResetFilterScrollToTop();
             }
         }
 
@@ -944,6 +956,56 @@ namespace FlyShelf
             // PERF: Render thumbnails at Background priority after clear
             Dispatcher.InvokeAsync(() => RenderVisibleThumbnails(),
                 System.Windows.Threading.DispatcherPriority.Background);
+
+            // Reset scroll position back to the top of all items
+            ResetFilterScrollToTop();
+        }
+
+        /// <summary>
+        /// Resets the scroll position of ShelfListView and AltShelfListView to the very top,
+        /// ensuring the most recent item is immediately visible when filters or search queries change.
+        /// </summary>
+        public void ResetFilterScrollToTop()
+        {
+            void DoScroll()
+            {
+                try
+                {
+                    var sv = GetShelfScrollViewer();
+                    if (sv != null)
+                    {
+                        Classes.SmoothScroll.ResetScrollState(sv);
+                        sv.ScrollToVerticalOffset(0);
+                        sv.ScrollToTop();
+                    }
+                    if (ShelfListView != null && ShelfListView.Items.Count > 0)
+                    {
+                        ShelfListView.ScrollIntoView(ShelfListView.Items[0]);
+                    }
+
+                    if (AltShelfListView != null)
+                    {
+                        var altSv = _altScrollViewer ?? FindVisualChild<System.Windows.Controls.ScrollViewer>(AltShelfListView);
+                        if (altSv != null)
+                        {
+                            Classes.SmoothScroll.ResetScrollState(altSv);
+                            altSv.ScrollToVerticalOffset(0);
+                            altSv.ScrollToTop();
+                        }
+                        if (AltShelfListView.Items.Count > 0)
+                        {
+                            AltShelfListView.ScrollIntoView(AltShelfListView.Items[0]);
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // 1. Immediate synchronous scroll reset
+            DoScroll();
+
+            // 2. Secondary delayed scroll reset after WPF CollectionView virtualization layout completes
+            Dispatcher.InvokeAsync(DoScroll, System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         internal void ReapplyActiveFilters()

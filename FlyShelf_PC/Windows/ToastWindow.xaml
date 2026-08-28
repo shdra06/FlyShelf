@@ -38,15 +38,22 @@
                         
                         <!-- Accent dot indicator (replaces large icon for subtlety) -->
                         <Border x:Name="AccentDot" Grid.Column="0" 
-                                Width="3" CornerRadius="2"
+                                Width="3.5" CornerRadius="2"
                                 VerticalAlignment="Stretch" Margin="0,1,12,1"
                                 Background="{DynamicResource ThemeAccentLight}"/>
                         
-                        <TextBlock x:Name="MessageText" Grid.Column="1" Text="" 
-                                   FontSize="12.5" FontWeight="Medium" 
-                                   Foreground="{DynamicResource ThemeTextPrimary}" 
-                                   VerticalAlignment="Center" TextWrapping="NoWrap" 
-                                   TextTrimming="CharacterEllipsis" MaxWidth="360"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" MaxWidth="420">
+                            <TextBlock x:Name="MessageText" Text="" 
+                                       FontSize="12.5" FontWeight="SemiBold" 
+                                       Foreground="{DynamicResource ThemeTextPrimary}" 
+                                       VerticalAlignment="Center" TextWrapping="NoWrap" 
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="SubtitleText" Text="" Visibility="Collapsed"
+                                       FontSize="11" FontWeight="Normal" 
+                                       Foreground="{DynamicResource ThemeTextMuted}" 
+                                       Margin="0,2.5,0,0" TextWrapping="Wrap" 
+                                       TextTrimming="CharacterEllipsis" MaxHeight="34"/>
+                        </StackPanel>
                     </Grid>
                     
                     <!-- ═══ PROGRESS TOAST LAYOUT (compact, sleek) ═══ -->

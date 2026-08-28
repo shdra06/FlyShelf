@@ -1,18 +1,22 @@
 // ═══════════════════════════════════════════════════════════════════════
 // QuickLookWindow.Markdown.cs — Markdown preview: WebView2 rendering,
-// zoom factor control, and Markdown-to-PDF export.
+// live editor mode, HTML export, zoom controls, and Markdown-to-PDF export.
 // Part of the QuickLookWindow partial class split.
 // ═══════════════════════════════════════════════════════════════════════
 
 using System;
 using System.IO;
+using System.Text;
 using System.Windows;
+using ICSharpCode.AvalonEdit.Highlighting;
 
 namespace FlyShelf.Windows
 {
     public partial class QuickLookWindow : Window
     {
-        // ═══ Markdown Preview: Zoom & PDF Export ═══
+        private bool _isMarkdownEditMode = false;
+
+        // ═══ Markdown Preview: Zoom & HTML / Raw Copy ═══
 
         private void MarkdownWebView_ZoomFactorChanged(object sender, EventArgs e)
         {
@@ -35,19 +39,140 @@ namespace FlyShelf.Windows
 
         private void CopyMarkdownButton_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(_markdownRawContent)) return;
+            string content = _isMarkdownEditMode ? CodePreview.Text : _markdownRawContent;
+            if (string.IsNullOrEmpty(content)) return;
 
             try
             {
-                Clipboard.SetText(_markdownRawContent);
-                FlyShelf.Windows.ToastWindow.ShowToast("Markdown copied to clipboard! 📋");
+                Clipboard.SetText(content);
+                FlyShelf.Windows.ToastWindow.ShowToast("Raw Markdown copied to clipboard! 📋");
             }
             catch { }
         }
 
+        private async void CopyHtmlButton_Click(object sender, RoutedEventArgs e)
+        {
+            string content = _isMarkdownEditMode ? CodePreview.Text : _markdownRawContent;
+            if (string.IsNullOrEmpty(content)) return;
+
+            try
+            {
+                string renderedHtml = "";
+                if (WebPreview != null && WebPreview.CoreWebView2 != null && !_isMarkdownEditMode)
+                {
+                    try
+                    {
+                        string json = await WebPreview.CoreWebView2.ExecuteScriptAsync("document.getElementById('content') ? document.getElementById('content').innerHTML : ''");
+                        if (!string.IsNullOrEmpty(json) && json != "null")
+                        {
+                            renderedHtml = System.Text.Json.JsonSerializer.Deserialize<string>(json) ?? "";
+                        }
+                    }
+                    catch { }
+                }
+
+                if (string.IsNullOrEmpty(renderedHtml))
+                {
+                    renderedHtml = FlyShelf.Classes.MarkdownTemplate.GetHtml(content);
+                }
+
+                var dataObj = new System.Windows.DataObject();
+                dataObj.SetData(DataFormats.Html, FormatHtmlForClipboard(renderedHtml));
+                dataObj.SetData(DataFormats.UnicodeText, content);
+                Clipboard.SetDataObject(dataObj, true);
+                FlyShelf.Windows.ToastWindow.ShowToast("Rendered HTML copied to clipboard! 📋");
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"Copy HTML failed: {ex.Message} ❌");
+            }
+        }
+
+        private void MarkdownEditToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_isMarkdownEditMode)
+            {
+                // Enter Markdown Source Editor Mode
+                _isMarkdownEditMode = true;
+                WebPreview.Visibility = Visibility.Collapsed;
+                CodePreview.Visibility = Visibility.Visible;
+                CodePreview.Text = _markdownRawContent ?? "";
+                CodePreview.IsReadOnly = false;
+
+                // Load Markdown / Text highlighting definition
+                try
+                {
+                    var highlighting = HighlightingManager.Instance.GetDefinition("MarkDown") 
+                                       ?? HighlightingManager.Instance.GetDefinition("HTML")
+                                       ?? HighlightingManager.Instance.GetDefinition("XML");
+                    if (highlighting != null)
+                    {
+                        ApplyModernSyntaxTheme(highlighting);
+                        CodePreview.SyntaxHighlighting = highlighting;
+                    }
+                }
+                catch { }
+
+                if (MdEditLabel != null) MdEditLabel.Text = "Preview";
+                if (MdEditIcon != null) MdEditIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Eye24;
+                if (MdSaveBtn != null) MdSaveBtn.Visibility = Visibility.Visible;
+                FlyShelf.Windows.ToastWindow.ShowToast("Markdown Editor Mode (Ctrl+S to save, Ctrl+E to preview)");
+            }
+            else
+            {
+                // Return to Rendered Markdown Preview Mode
+                _isMarkdownEditMode = false;
+                _markdownRawContent = CodePreview.Text;
+                CodePreview.Visibility = Visibility.Collapsed;
+                WebPreview.Visibility = Visibility.Visible;
+
+                string html = !string.IsNullOrEmpty(_item?.FilePath)
+                    ? FlyShelf.Classes.MarkdownTemplate.GetHtml(_markdownRawContent, _item.FilePath)
+                    : FlyShelf.Classes.MarkdownTemplate.GetHtml(_markdownRawContent);
+
+                try
+                {
+                    WebPreview.NavigateToString(html);
+                }
+                catch { }
+
+                if (MdEditLabel != null) MdEditLabel.Text = "Edit";
+                if (MdEditIcon != null) MdEditIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Edit24;
+                if (MdSaveBtn != null) MdSaveBtn.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private async void MarkdownSave_Click(object sender, RoutedEventArgs e)
+        {
+            string contentToSave = _isMarkdownEditMode ? CodePreview.Text : _markdownRawContent;
+            if (string.IsNullOrEmpty(contentToSave)) return;
+
+            try
+            {
+                _markdownRawContent = contentToSave;
+                if (_item != null) _item.RawContent = contentToSave;
+
+                if (!string.IsNullOrEmpty(_item?.FilePath) && File.Exists(_item.FilePath))
+                {
+                    await File.WriteAllTextAsync(_item.FilePath, contentToSave, Encoding.UTF8);
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Markdown saved! 💾 {Path.GetFileName(_item.FilePath)}");
+                }
+                else
+                {
+                    Clipboard.SetText(contentToSave);
+                    FlyShelf.Windows.ToastWindow.ShowToast("Markdown updated & copied to clipboard! 💾");
+                }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"Failed to save markdown: {ex.Message} ❌");
+            }
+        }
+
         private async void MarkdownToPdf_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(_markdownRawContent)) return;
+            string content = _isMarkdownEditMode ? CodePreview.Text : _markdownRawContent;
+            if (string.IsNullOrEmpty(content)) return;
 
             try
             {
@@ -61,7 +186,12 @@ namespace FlyShelf.Windows
                 string baseName = Path.GetFileNameWithoutExtension(_item?.FilePath ?? "document");
                 string outputPdf = Path.Combine(sourceDir, $"{baseName}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
 
-                bool success = await FlyShelf.Classes.WebView2Converter.ConvertMarkdownToPdfAsync(_markdownRawContent, outputPdf, _item?.FilePath);
+                bool success = await FlyShelf.Classes.WebView2Converter.ConvertMarkdownToPdfAsync(content, outputPdf, _item?.FilePath);
+                if (!success || !File.Exists(outputPdf))
+                {
+                    // Pure C# offline fallback
+                    success = FlyShelf.Classes.Utils.MarkdownToPdfConverter.ConvertContent(content, outputPdf, baseName, sourceDir);
+                }
 
                 LoadingProgress.Visibility = Visibility.Collapsed;
                 MdToPdfBtn.IsEnabled = true;
@@ -86,6 +216,27 @@ namespace FlyShelf.Windows
                 LoadingProgress.Visibility = Visibility.Collapsed;
                 MdToPdfBtn.IsEnabled = true;
             }
+        }
+
+        private static string FormatHtmlForClipboard(string html)
+        {
+            const string header = @"Version:0.9
+StartHTML:{0:D8}
+EndHTML:{1:D8}
+StartFragment:{2:D8}
+EndFragment:{3:D8}
+";
+            const string startFrag = "<!--StartFragment-->";
+            const string endFrag = "<!--EndFragment-->";
+
+            string content = $"<html><body>{startFrag}{html}{endFrag}</body></html>";
+            int headerLen = string.Format(header, 0, 0, 0, 0).Length;
+            int startHtml = headerLen;
+            int startFragment = headerLen + $"<html><body>{startFrag}".Length;
+            int endFragment = startFragment + Encoding.UTF8.GetByteCount(html);
+            int endHtml = startFragment + Encoding.UTF8.GetByteCount(html + endFrag + "</body></html>");
+
+            return string.Format(header, startHtml, endHtml, startFragment, endFragment) + content;
         }
     }
 }

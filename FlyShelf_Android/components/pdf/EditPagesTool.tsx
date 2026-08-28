@@ -6,7 +6,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { colors } from '../../styles/theme';
 import s from '../../styles/pdfToolsStyles';
 import { getPdfPageInfo } from '../../utils/pdfUtils';
-import { reorderPages, rotatePages, addImagePages } from '../../utils/pdfToolsUtils';
+import { editPdfPages, addImagePages } from '../../utils/pdfToolsUtils';
 import { SelectedFile, PageEntry } from './types';
 import ResultView from './ResultView';
 import ProcessingOverlay from './ProcessingOverlay';
@@ -92,17 +92,8 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
-      const order = pages.map(p => p.index);
-      let outPath = await reorderPages(file.uri, order);
-      
-      const rotated = pages.filter(p => p.rotation !== 0);
-      if (rotated.length > 0) {
-        for (let i = 0; i < pages.length; i++) {
-          const p = pages[i];
-          if (p.rotation === 0) continue;
-          outPath = await rotatePages(outPath, [i + 1], p.rotation as 0 | 90 | 180 | 270);
-        }
-      }
+      const pageConfigs = pages.map(p => ({ index: p.index, rotation: p.rotation }));
+      const outPath = await editPdfPages(file.uri, pageConfigs);
       
       setResultPath(outPath);
       saveRecent(file.name, outPath, pages.length, 'editPages');

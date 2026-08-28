@@ -572,12 +572,15 @@ namespace FlyShelf.Classes
 
         public static void RemoveDevice(string deviceId)
         {
+            string devName = "";
             lock (_lock)
             {
-                _pairedDevices.RemoveAll(d => d.DeviceId == deviceId);
+                var match = _pairedDevices.FirstOrDefault(d => d.DeviceId == deviceId || d.DeviceName == deviceId);
+                if (match != null) devName = match.DeviceName;
+                _pairedDevices.RemoveAll(d => d.DeviceId == deviceId || d.DeviceName == deviceId);
             }
             Save();
-            Logger.LogAction("PAIR", $"Removed device: {deviceId}");
+            Logger.LogAction("PAIR", $"Removed device: {deviceId} ({devName})");
 
             // Fix #1A: Disconnect and remove the peer from PeerManager to prevent ghost connections
             try
@@ -590,6 +593,7 @@ namespace FlyShelf.Classes
             lock (_unpairedLock)
             {
                 _recentlyUnpaired.Add(deviceId);
+                if (!string.IsNullOrEmpty(devName)) _recentlyUnpaired.Add(devName);
             }
 
             // SECURITY: Also delete the ghost entry from Firebase active_devices
@@ -601,10 +605,16 @@ namespace FlyShelf.Classes
                     string pairingKey = SettingsManager.Current.PairingKey;
                     if (!string.IsNullOrEmpty(pairingKey))
                     {
-                        string url = await AuthUrl($"active_devices/{pairingKey}/{deviceId}.json");
-                        await _httpClient.DeleteAsync(url);
+                        string urlId = await AuthUrl($"active_devices/{pairingKey}/{deviceId}.json");
+                        await _httpClient.DeleteAsync(urlId);
+                        if (!string.IsNullOrEmpty(devName) && devName != deviceId)
+                        {
+                            string urlName = await AuthUrl($"active_devices/{pairingKey}/{devName}.json");
+                            await _httpClient.DeleteAsync(urlName);
+                        }
                         Logger.LogAction("PAIR", $"Deleted ghost entry from Firebase: active_devices/{pairingKey}/{deviceId}");
                     }
+                    await CloudDiscoveryManager.CleanupStaleDevices();
                 }
                 catch (Exception ex)
                 {

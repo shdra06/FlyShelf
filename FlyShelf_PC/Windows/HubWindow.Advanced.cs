@@ -30,7 +30,11 @@ namespace FlyShelf.Windows
                 // Run the device list fetching and network classification on a background ThreadPool thread
                 var result = await System.Threading.Tasks.Task.Run(async () =>
                 {
+                    // Clean up stale/unpaired ghosts in background
+                    _ = CloudDiscoveryManager.CleanupStaleDevices();
+
                     var devices = await CloudDiscoveryManager.GetActiveDevices();
+                    string myId = SettingsManager.Current.DeviceId ?? "";
                     string myName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
 
                     var lanItems = new System.Collections.Generic.List<DeviceDisplayItem>();
@@ -40,7 +44,7 @@ namespace FlyShelf.Windows
                     string myLocalUrl = _viewModel.LocalServer?.ServerUrl ?? "";
                     string myGlobalUrl = _viewModel.LocalServer?.GlobalUrl ?? "";
 
-                    // Always add self to LAN — this device IS a LAN device
+                    // Always add self to LAN — this device IS the local host
                     lanItems.Add(new DeviceDisplayItem
                     {
                         DeviceName = myName + " (You)",
@@ -54,13 +58,19 @@ namespace FlyShelf.Windows
 
                     // ═ ═ ═ Use PeerManager's CONFIRMED connection data ═ ═ ═
                     // PeerManager has already handshaked with each peer and knows the exact transport.
-                    // This is the ground truth — no guessing needed.
                     var peerStatuses = PeerManager.Instance?.GetPeerStatuses() 
                         ?? new System.Collections.Generic.List<PeerStatusItem>();
                     var confirmedPeerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                     foreach (var peer in peerStatuses)
                     {
+                        // Skip self
+                        if (string.Equals(peer.DeviceId, myId, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(peer.DeviceName, myName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
                         confirmedPeerIds.Add(peer.DeviceId);
 
                         if (peer.IsAlive && peer.Transport == "LAN")
@@ -87,25 +97,13 @@ namespace FlyShelf.Windows
                                 LastSeen = "Cloudflare tunnel active",
                             });
                         }
-                        else
-                        {
-                            // Peer known to PeerManager but currently dead
-                            cloudItems.Add(new DeviceDisplayItem
-                            {
-                                DeviceName = peer.DeviceName,
-                                DeviceType = "PC",
-                                IsOnline = false,
-                                ConnectionType = "Cloud",
-                                LastSeen = $"Last seen: {peer.LastSeen:HH:mm:ss}",
-                            });
-                        }
                     }
 
                     // ═ ═ ═ Non-PeerManager devices (phones, other platforms from Firebase) ═ ═ ═
-                    // These are devices we don't have a direct P2P handshake with.
-                    // Classify by checking if they share our LAN subnet AND respond to a health check.
                     var pingTasks = devices
-                        .Where(d => !confirmedPeerIds.Contains(d.Id))
+                        .Where(d => !confirmedPeerIds.Contains(d.Id) &&
+                                    !string.Equals(d.Id, myId, StringComparison.OrdinalIgnoreCase) &&
+                                    !string.Equals(d.Name, myName, StringComparison.OrdinalIgnoreCase))
                         .Select(async d =>
                         {
                             bool isLan = false;
@@ -133,14 +131,14 @@ namespace FlyShelf.Windows
                     foreach (var c in classified)
                     {
                         var d = c.Device;
-                        if (c.IsLan)
+                        if (c.IsLan && d.IsOnline)
                         {
                             // Confirmed reachable on LAN — place in LAN column only
                             lanItems.Add(new DeviceDisplayItem
                             {
                                 DeviceName = d.Name,
                                 DeviceType = d.Type,
-                                IsOnline = d.IsOnline,
+                                IsOnline = true,
                                 ConnectionType = "Local",
                             });
                         }
@@ -151,7 +149,7 @@ namespace FlyShelf.Windows
                             {
                                 DeviceName = d.Name,
                                 DeviceType = d.Type,
-                                IsOnline = d.IsOnline,
+                                IsOnline = true,
                                 ConnectionType = "Cloud",
                             });
                         }

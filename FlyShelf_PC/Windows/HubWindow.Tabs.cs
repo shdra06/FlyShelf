@@ -263,21 +263,29 @@ namespace FlyShelf.Windows
             }
         }
 
-        private void RefreshPairedDevicesList()
+        private async void RefreshPairedDevicesList()
         {
             try
             {
                 var devices = DevicePairingManager.GetPairedDevices();
                 var peerStatuses = PeerManager.Instance?.GetPeerStatuses();
+                var activeCloudDevices = await CloudDiscoveryManager.GetActiveDevices();
 
-                // Build merged list with live status (checks both direct P2P connection and Firebase/HTTP heartbeat)
+                // Build merged list with live status (checks direct P2P connection + Firebase live presence)
                 var mergedList = devices.Select(d =>
                 {
-                    var peer = peerStatuses?.FirstOrDefault(p => p.DeviceId == d.DeviceId);
+                    var peer = peerStatuses?.FirstOrDefault(p =>
+                        string.Equals(p.DeviceId, d.DeviceId, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(p.DeviceName, d.DeviceName, StringComparison.OrdinalIgnoreCase));
+
+                    var cloudDev = activeCloudDevices.FirstOrDefault(cd =>
+                        string.Equals(cd.Id, d.DeviceId, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(cd.Name, d.DeviceName, StringComparison.OrdinalIgnoreCase));
+
                     bool peerAlive = peer?.IsAlive ?? false;
-                    bool recentHeartbeat = (DateTime.Now - d.LastSeen).TotalMinutes < 15;
-                    bool isAlive = peerAlive || recentHeartbeat;
-                    string transport = peerAlive ? (peer?.Transport ?? "LAN") : (recentHeartbeat ? "Cloud" : "offline");
+                    bool cloudAlive = cloudDev.IsOnline;
+                    bool isAlive = peerAlive || cloudAlive;
+                    string transport = peerAlive ? (peer?.Transport ?? "LAN") : (cloudAlive ? "Cloud" : "offline");
 
                     return new PeerStatusItem
                     {
@@ -286,10 +294,10 @@ namespace FlyShelf.Windows
                         IsAlive = isAlive,
                         Transport = isAlive ? transport : "offline",
                         IsLanActive = transport == "LAN" || (!string.IsNullOrEmpty(peer?.LanUrl) && isAlive),
-                        IsCloudActive = transport == "Cloud" || (!string.IsNullOrEmpty(peer?.CloudflareUrl) && isAlive) || (d.DeviceType == "Mobile" && isAlive),
+                        IsCloudActive = transport == "Cloud" || (!string.IsNullOrEmpty(peer?.CloudflareUrl) && isAlive) || cloudAlive,
                         // SECURITY: URL fields intentionally not populated — no URL exposure in UI
                         StatusText = isAlive
-                            ? $"Connected via {transport}  Last seen {d.LastSeen:HH:mm:ss}"
+                            ? $"Connected via {transport}"
                             : "Offline"
                     };
                 }).ToList();
@@ -340,6 +348,7 @@ namespace FlyShelf.Windows
                 }
                 DevicePairingManager.CheckForHandshakes();
                 RefreshPairedDevicesList();
+                RefreshDevices_Click(null, null);
                 Windows.ToastWindow.ShowToast("Sync complete!");
             }
             catch (Exception ex)
@@ -360,7 +369,7 @@ namespace FlyShelf.Windows
                 DevicePairingManager.RemoveDevice(deviceId);
                 RefreshPairedDevicesList();
                 RefreshDevices_Click(null, null);
-                Windows.ToastWindow.ShowToast("Device removed");
+                Windows.ToastWindow.ShowToast("Device unpaired and removed");
             }
         }
 

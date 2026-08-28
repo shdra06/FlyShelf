@@ -1,5 +1,4 @@
-// Network utility helpers for FlyShelf Android
-// Optimized for large file handling (50MB+) and direct LAN discovery
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { decrypt as aesDecrypt } from './syncCrypto';
 import { getSecureItem } from './secureStorage';
 // @ts-ignore — export names differ between type definitions and runtime API
@@ -288,47 +287,91 @@ export const resolveBestPcUrl = (pairedDevices: PairedDevice[], manualIp?: strin
 
 /**
  * Async live URL resolution that checks SecureStore global/local URLs,
- * active devices, and probes endpoints to guarantee reaching the PC across networks.
+ * active devices, and probes endpoints in parallel to guarantee reaching the PC across networks.
  */
 export const resolveLivePcUrl = async (pairedDevices?: PairedDevice[], manualIp?: string): Promise<string | null> => {
   try {
+    const lanCandidates: string[] = [];
+    const cloudCandidates: string[] = [];
+
     const storedGlobal = await getSecureItem('pairedGlobalUrl');
     const storedLocal = await getSecureItem('pairedLocalUrl');
+    const lastCf = await AsyncStorage.getItem('lastCloudflareUrl').catch(() => null);
+    const lastLan = await AsyncStorage.getItem('@flyshelf_last_lan_url').catch(() => null);
 
-    // 1. If storedGlobal is Cloudflare URL, probe it quickly
-    if (storedGlobal && storedGlobal.includes('trycloudflare.com')) {
-      try {
-        const res = await fetchWithTimeout(`${storedGlobal}/api/health`, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, 2000);
-        if (res.ok || res.status === 401) return storedGlobal.replace(/\/$/, '');
-      } catch {}
-    }
+    if (storedGlobal && storedGlobal.includes('trycloudflare.com')) cloudCandidates.push(storedGlobal.trim().replace(/\/$/, ''));
+    if (lastCf && lastCf.includes('trycloudflare.com')) cloudCandidates.push(lastCf.trim().replace(/\/$/, ''));
 
-    // 2. Probe local if available
-    if (storedLocal && storedLocal.startsWith('http')) {
-      try {
-        const res = await fetchWithTimeout(`${storedLocal}/api/health`, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, 1000);
-        if (res.ok || res.status === 401) return storedLocal.replace(/\/$/, '');
-      } catch {}
-    }
+    if (storedLocal) lanCandidates.push(...storedLocal.split(',').map((s: string) => s.trim()).filter(Boolean));
+    if (lastLan) lanCandidates.push(lastLan.trim().replace(/\/$/, ''));
 
-    // 3. Check pairedDevices
     if (pairedDevices && pairedDevices.length > 0) {
-      const pc = pairedDevices.find(d => d.deviceType === 'PC');
-      if (pc?.globalUrl) return pc.globalUrl.replace(/\/$/, '');
-      if (pc?.localUrl) return pc.localUrl.replace(/\/$/, '');
+      for (const d of pairedDevices) {
+        if (d.deviceType === 'PC') {
+          if (d.globalUrl && d.globalUrl.includes('trycloudflare.com')) cloudCandidates.push(d.globalUrl.trim().replace(/\/$/, ''));
+          if (d.localUrl) lanCandidates.push(d.localUrl.trim().replace(/\/$/, ''));
+        }
+      }
     }
 
-    // 4. Return storedGlobal or storedLocal if set
-    if (storedGlobal) return storedGlobal.replace(/\/$/, '');
-    if (storedLocal) return storedLocal.replace(/\/$/, '');
-
-    // 5. Fallback to manual IP
     if (manualIp) {
       const trimmed = manualIp.trim();
       if (trimmed) {
-        return trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
+        lanCandidates.push(trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`);
       }
     }
+
+    // Standard emulator fallbacks
+    lanCandidates.push('http://10.0.2.2:8999', 'http://10.0.2.2:8080');
+
+    const probe = async (url: string, timeoutMs = 1500): Promise<string> => {
+      let clean = url.trim().replace(/\/$/, '');
+      if (!clean.startsWith('http')) clean = `http://${clean}`;
+      const res = await fetchWithTimeout(`${clean}/api/health`, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, timeoutMs);
+      if (res.ok || res.status === 401) return clean;
+      throw new Error('unreachable');
+    };
+
+    const uniqueLan = Array.from(new Set(lanCandidates));
+    const uniqueCloud = Array.from(new Set(cloudCandidates));
+
+    // Parallel speed race: LAN (1500ms) vs Cloudflare (2500ms) with LAN priority
+    const lanRace = uniqueLan.length > 0
+      ? Promise.any(uniqueLan.map(u => probe(u, 1500)))
+      : Promise.reject(new Error('No LAN'));
+
+    const cloudRace = uniqueCloud.length > 0
+      ? Promise.any(uniqueCloud.map(u => probe(u, 2500)))
+      : Promise.reject(new Error('No Cloud'));
+
+    try {
+      const winner = await Promise.race([
+        lanRace.then(u => ({ type: 'lan' as const, url: u })),
+        cloudRace.then(async u => {
+          // Give LAN 100ms chance to win if both respond
+          const quickLan = await Promise.race([
+            lanRace.then(lanU => ({ type: 'lan' as const, url: lanU })).catch(() => null),
+            new Promise<null>(r => setTimeout(() => r(null), 100))
+          ]);
+          if (quickLan) return quickLan;
+          return { type: 'cloud' as const, url: u };
+        })
+      ]);
+
+      if (winner?.url) {
+        if (winner.type === 'lan') {
+          AsyncStorage.setItem('@flyshelf_last_lan_url', winner.url).catch(() => {});
+        } else {
+          AsyncStorage.setItem('lastCloudflareUrl', winner.url).catch(() => {});
+          AsyncStorage.setItem('pairedGlobalUrl', winner.url).catch(() => {});
+        }
+        return winner.url;
+      }
+    } catch { }
+
+    // Fallbacks
+    if (uniqueLan.length > 0 && uniqueLan[0].startsWith('http')) return uniqueLan[0];
+    if (uniqueCloud.length > 0) return uniqueCloud[0];
   } catch {}
   return null;
 };

@@ -125,6 +125,9 @@ public partial class App : Application
                 catch { }
             };
 
+        // ═══ PDF FONT ENGINE REGISTRATION ═══
+        FlyShelf.Classes.Utils.FlyShelfFontResolver.EnsureRegistered();
+
         // ═══ LOCAL AI TEST HANDLER ═══
         bool isTestAi = false;
         int consolePid = -1;

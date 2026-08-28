@@ -17,6 +17,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Platform, Alert, ToastAndroid } from 'react-native';
+import { toast } from '../../context/ToastContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -142,12 +143,12 @@ export function useArchiveSync() {
   // ═══════════════════════════════════════════════════════════
   const scanMedia = useCallback(async (startDate: Date, endDate: Date) => {
     if (hasPermission === false) {
-      if (Platform.OS === 'android') ToastAndroid.show('Permission denied — enable storage access in Settings', ToastAndroid.LONG);
+      toast.error('Permission Required', 'Enable photo and storage access in Android settings to scan files');
       return;
     }
     setIsScanning(true);
     setMediaAssets([]);
-    if (Platform.OS === 'android') ToastAndroid.show('🔍 Scanning files...', ToastAndroid.SHORT);
+    toast.info('Scanning Media...', 'Indexing documents, photos, and videos in date range');
 
     try {
       let allFound: any[] = [];
@@ -185,13 +186,13 @@ export function useArchiveSync() {
       uniqueAssets.sort((a, b) => b.creationTime - a.creationTime);
       setMediaAssets(uniqueAssets);
 
-      if (Platform.OS === 'android') {
-        const imgCount = uniqueAssets.filter(a => a.mediaType === 'photo').length;
-        const vidCount = uniqueAssets.filter(a => a.mediaType === 'video').length;
-        const docCount = uniqueAssets.filter(a => a.mediaType === 'pdf' || a.mediaType === 'doc').length;
-        ToastAndroid.show(`✅ ${imgCount} images, ${vidCount} videos, ${docCount} docs`, ToastAndroid.LONG);
-      }
-    } catch (e) { console.error(e); }
+      const imgCount = uniqueAssets.filter(a => a.mediaType === 'photo').length;
+      const vidCount = uniqueAssets.filter(a => a.mediaType === 'video').length;
+      const docCount = uniqueAssets.filter(a => a.mediaType === 'pdf' || a.mediaType === 'doc').length;
+      toast.success('Media Scan Complete', `${imgCount} photos, ${vidCount} videos, ${docCount} documents found`);
+    } catch (e: any) { 
+      toast.error('Scan Error', e?.message || 'Failed to index local storage');
+    }
     setIsScanning(false);
   }, [hasPermission]);
 

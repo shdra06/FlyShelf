@@ -1,5 +1,6 @@
 import React, { useRef, useCallback } from 'react';
 import { Platform, ToastAndroid } from 'react-native';
+import { toast } from '../../context/ToastContext';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Notifications from 'expo-notifications';
 import { ref, set, get } from 'firebase/database';
@@ -135,7 +136,7 @@ export function useDownloadQueue(params: {
           setClips(prev => prev.map(c =>
             (c.id === item.id || c.Title === item.title) ? { ...c, CachedUri: item.destPath } : c
           ));
-          if (Platform.OS === 'android') ToastAndroid.show(`✅ ${item.title} saved`, ToastAndroid.SHORT);
+          toast.success('File Downloaded', `${item.title} saved to offline storage`);
           Notifications.scheduleNotificationAsync({
             content: { title: '📁 File Downloaded', body: `${item.title} saved successfully` },
             trigger: null,
@@ -177,58 +178,14 @@ export function useDownloadQueue(params: {
   // ─── downloadedBy Tracking: Mark file as downloaded by this device ───
   const markFileDownloaded = async (entryId: string) => {
     try {
-      const pk = pairingKeyRef.current;
-      if (!pk || !entryId) return;
-      const myDeviceId = `Mobile_${(deviceName || 'phone').replace(/\s/g, '_')}`;
-
-      // Step 1: Mark this device as downloaded
-      await set(ref(database, `clipboard/${pk}/${entryId}/downloadedBy/${myDeviceId}`), NetworkClock.now());
-
-      // Step 2: Read the full entry to check targets
-      const snap = await get(ref(database, `clipboard/${pk}/${entryId}`));
-      if (!snap.exists()) return;
-      const data = snap.val();
-
-      const targets: string[] = data.targetDevices || [];
-      const downloaded = Object.keys(data.downloadedBy || {});
-
-      if (targets.length === 0) {
-        // Legacy entry or no targets — just delete
-        await set(ref(database, `clipboard/${pk}/${entryId}`), null);
-        return;
-      }
-
-      // Step 3: Check which remaining targets are offline → mark them done
-      const remaining = targets.filter((t: string) => !downloaded.includes(t));
-      if (remaining.length > 0) {
-        try {
-          const devSnap = await get(ref(database, `active_devices/${pk}`));
-          if (devSnap.exists()) {
-            const devices = devSnap.val();
-            const now = NetworkClock.now();
-            const onlineIds = new Set<string>();
-            Object.values(devices).forEach((dev: any) => {
-              if (dev.IsOnline && (now - (dev.Timestamp || 0)) < 300000) {
-                onlineIds.add(dev.DeviceId || '');
-              }
-            });
-            // Mark offline devices as done
-            for (const offId of remaining.filter((r: string) => !onlineIds.has(r))) {
-              await set(ref(database, `clipboard/${pk}/${entryId}/downloadedBy/${offId}`), -1);
-              downloaded.push(offId);
-            }
-          }
-        } catch (e) { console.warn('Firebase download tracking: error', (e as any)?.message || e); }
-      }
-
-      // Step 4: If all targets downloaded → delete entry
-      if (targets.every((t: string) => downloaded.includes(t))) {
-        await set(ref(database, `clipboard/${pk}/${entryId}`), null);
-        syncLog(`[SYNC_CLEANUP] All ${targets.length} devices done — entry deleted`);
-      } else {
-        syncLog(`[SYNC_TRACK] ${downloaded.length}/${targets.length} devices done`);
-      }
-    } catch (e) { syncLog(`[SYNC_TRACK] markFileDownloaded error: ${e}`); }
+      if (!entryId) return;
+      setDownloadedItems(prev => {
+        const next = new Set(prev);
+        next.add(entryId);
+        return next;
+      });
+      syncLog('[SYNC_TRACK]', `Marked ${entryId} as downloaded locally`);
+    } catch (e) { syncLog('[SYNC_TRACK]', `markFileDownloaded error: ${e}`); }
   };
 
   const enqueueDownload = useCallback((item: DownloadQueueItem) => {

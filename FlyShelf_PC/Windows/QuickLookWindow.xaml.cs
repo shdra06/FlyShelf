@@ -71,6 +71,7 @@ namespace FlyShelf.Windows
         private Dictionary<string, BitmapImage> _pdfThumbnails = new();
         private Dictionary<int, string> _pdfModifiedPages = new(); // index -> temp image path
         private bool _isPdfModified = false;
+        private bool _isDocxMode = false;
 
         public QuickLookWindow(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null, bool autoTriggerOcr = false)
         {
@@ -119,8 +120,214 @@ namespace FlyShelf.Windows
 
         private void ApplyTheme()
         {
-            // All visual properties now use DynamicResource bindings in XAML
-            // that auto-adapt to any theme — no manual overrides needed.
+            ConfigureCodeEditor();
+        }
+
+        private void ConfigureCodeEditor()
+        {
+            if (CodePreview == null) return;
+            bool isLight = SettingsManager.Current?.ColorScheme == 1;
+
+            // Performance optimizations: disable expensive regex parsing and drag drop
+            CodePreview.Options.EnableHyperlinks = false;
+            CodePreview.Options.EnableEmailHyperlinks = false;
+            CodePreview.Options.EnableTextDragDrop = false;
+            CodePreview.Options.ShowBoxForControlCharacters = false;
+            CodePreview.Options.HighlightCurrentLine = true;
+            CodePreview.Options.ConvertTabsToSpaces = true;
+            CodePreview.Options.IndentationSize = 4;
+            CodePreview.Options.AllowScrollBelowDocument = false;
+            CodePreview.Options.EnableVirtualSpace = false;
+
+            // Sharp typography & ClearType
+            TextOptions.SetTextFormattingMode(CodePreview, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(CodePreview, TextRenderingMode.ClearType);
+            TextOptions.SetTextHintingMode(CodePreview, TextHintingMode.Fixed);
+            RenderOptions.SetClearTypeHint(CodePreview, ClearTypeHint.Enabled);
+
+            if (isLight)
+            {
+                var bg = new SolidColorBrush(Color.FromRgb(248, 249, 250)); bg.Freeze();
+                var fg = new SolidColorBrush(Color.FromRgb(36, 41, 47)); fg.Freeze();
+                var ln = new SolidColorBrush(Color.FromRgb(140, 149, 159)); ln.Freeze();
+                CodePreview.Background = bg;
+                CodePreview.Foreground = fg;
+                CodePreview.LineNumbersForeground = ln;
+                if (TextPreviewScroll != null) TextPreviewScroll.Background = bg;
+                if (TextPreview != null) TextPreview.Foreground = fg;
+
+                var lightSel = new SolidColorBrush(Color.FromArgb(80, 9, 105, 218)); lightSel.Freeze();
+                CodePreview.TextArea.SelectionBrush = lightSel;
+                CodePreview.TextArea.SelectionForeground = null;
+                CodePreview.TextArea.SelectionBorder = null;
+
+                var lightLine = new SolidColorBrush(Color.FromArgb(16, 0, 0, 0)); lightLine.Freeze();
+                CodePreview.TextArea.TextView.CurrentLineBackground = lightLine;
+                CodePreview.TextArea.TextView.CurrentLineBorder = null;
+            }
+            else
+            {
+                var bg = new SolidColorBrush(Color.FromRgb(24, 24, 37)); bg.Freeze(); // #181825 Catppuccin Mantle
+                var fg = new SolidColorBrush(Color.FromRgb(205, 214, 244)); fg.Freeze(); // #CDD6F4
+                var ln = new SolidColorBrush(Color.FromRgb(92, 99, 112)); ln.Freeze(); // #5C6370
+                CodePreview.Background = bg;
+                CodePreview.Foreground = fg;
+                CodePreview.LineNumbersForeground = ln;
+                if (TextPreviewScroll != null) TextPreviewScroll.Background = bg;
+                if (TextPreview != null) TextPreview.Foreground = fg;
+
+                var darkSel = new SolidColorBrush(Color.FromArgb(90, 97, 175, 239)); darkSel.Freeze(); // #5A61AFEF
+                CodePreview.TextArea.SelectionBrush = darkSel;
+                CodePreview.TextArea.SelectionForeground = null;
+                CodePreview.TextArea.SelectionBorder = null;
+
+                var darkLine = new SolidColorBrush(Color.FromArgb(16, 255, 255, 255)); darkLine.Freeze(); // #10FFFFFF
+                CodePreview.TextArea.TextView.CurrentLineBackground = darkLine;
+                CodePreview.TextArea.TextView.CurrentLineBorder = null;
+            }
+        }
+
+        private static void ApplyModernSyntaxTheme(IHighlightingDefinition definition)
+        {
+            if (definition == null) return;
+            bool isLight = SettingsManager.Current?.ColorScheme == 1;
+
+            if (!isLight)
+            {
+                // High-contrast, eye-friendly modern dark palette (OneDark / Catppuccin inspired)
+                var commentBrush = new SimpleHighlightingBrush(Color.FromRgb(127, 132, 142));      // #7F848E Slate Muted
+                var stringBrush = new SimpleHighlightingBrush(Color.FromRgb(152, 195, 121));       // #98C379 Sage Green
+                var keywordBrush = new SimpleHighlightingBrush(Color.FromRgb(97, 175, 239));       // #61AFEF Sky Blue
+                var controlBrush = new SimpleHighlightingBrush(Color.FromRgb(198, 120, 221));      // #C678DD Lilac
+                var typeBrush = new SimpleHighlightingBrush(Color.FromRgb(229, 192, 123));         // #E5C07B Warm Gold
+                var numberBrush = new SimpleHighlightingBrush(Color.FromRgb(209, 154, 102));       // #D19A66 Amber Orange
+                var propertyBrush = new SimpleHighlightingBrush(Color.FromRgb(224, 108, 117));     // #E06C75 Soft Coral
+                var functionBrush = new SimpleHighlightingBrush(Color.FromRgb(97, 175, 239));      // #61AFEF Blue
+                var punctuationBrush = new SimpleHighlightingBrush(Color.FromRgb(171, 178, 191));  // #ABB2BF Light Slate
+                var preprocessorBrush = new SimpleHighlightingBrush(Color.FromRgb(229, 192, 123)); // #E5C07B Gold
+                var regexBrush = new SimpleHighlightingBrush(Color.FromRgb(86, 182, 194));         // #56B6C2 Teal
+
+                var visited = new System.Collections.Generic.HashSet<HighlightingColor>();
+
+                void TransformColor(HighlightingColor color)
+                {
+                    if (color == null || !visited.Add(color)) return;
+                    string name = color.Name ?? "";
+
+                    if (name.Contains("Comment", StringComparison.OrdinalIgnoreCase) || name.Contains("DocComment", StringComparison.OrdinalIgnoreCase))
+                    {
+                        color.Foreground = commentBrush;
+                        color.FontStyle = FontStyles.Italic;
+                    }
+                    else if (name.Contains("String", StringComparison.OrdinalIgnoreCase) || name.Contains("Char", StringComparison.OrdinalIgnoreCase) ||
+                            (name.Contains("Value", StringComparison.OrdinalIgnoreCase) && (name.Contains("Attribute", StringComparison.OrdinalIgnoreCase) || name.Contains("Css", StringComparison.OrdinalIgnoreCase) || definition.Name == "CSS")))
+                    {
+                        color.Foreground = stringBrush;
+                    }
+                    else if (name.Contains("Control", StringComparison.OrdinalIgnoreCase) || name.Contains("Statement", StringComparison.OrdinalIgnoreCase))
+                    {
+                        color.Foreground = controlBrush;
+                        color.FontWeight = FontWeights.SemiBold;
+                    }
+                    else if (name.Contains("Keyword", StringComparison.OrdinalIgnoreCase) || name.Equals("Keywords", StringComparison.OrdinalIgnoreCase))
+                    {
+                        color.Foreground = keywordBrush;
+                        color.FontWeight = FontWeights.SemiBold;
+                    }
+                    else if (name.Contains("Type", StringComparison.OrdinalIgnoreCase) || name.Contains("Class", StringComparison.OrdinalIgnoreCase) || name.Contains("Struct", StringComparison.OrdinalIgnoreCase) || name.Contains("Interface", StringComparison.OrdinalIgnoreCase) || name.Contains("ClassSelector", StringComparison.OrdinalIgnoreCase) || name.Contains("IdSelector", StringComparison.OrdinalIgnoreCase))
+                    {
+                        color.Foreground = typeBrush;
+                    }
+                    else if (name.Contains("Number", StringComparison.OrdinalIgnoreCase) || name.Contains("Digits", StringComparison.OrdinalIgnoreCase))
+                    {
+                        color.Foreground = numberBrush;
+                    }
+                    else if (name.Contains("Property", StringComparison.OrdinalIgnoreCase) || name.Contains("Tag", StringComparison.OrdinalIgnoreCase) || name.Contains("Attribute", StringComparison.OrdinalIgnoreCase))
+                    {
+                        color.Foreground = propertyBrush;
+                    }
+                    else if (name.Contains("Selector", StringComparison.OrdinalIgnoreCase) || name.Contains("Target", StringComparison.OrdinalIgnoreCase))
+                    {
+                        color.Foreground = controlBrush;
+                    }
+                    else if (name.Contains("Method", StringComparison.OrdinalIgnoreCase) || name.Contains("Function", StringComparison.OrdinalIgnoreCase) || name.Contains("Call", StringComparison.OrdinalIgnoreCase))
+                    {
+                        color.Foreground = functionBrush;
+                    }
+                    else if (name.Contains("Punctuation", StringComparison.OrdinalIgnoreCase) || name.Contains("Delimiter", StringComparison.OrdinalIgnoreCase) || name.Contains("Bracket", StringComparison.OrdinalIgnoreCase) || name.Contains("Colon", StringComparison.OrdinalIgnoreCase) || name.Contains("CurlyBrackets", StringComparison.OrdinalIgnoreCase))
+                    {
+                        color.Foreground = punctuationBrush;
+                    }
+                    else if (name.Contains("PreProcessor", StringComparison.OrdinalIgnoreCase) || name.Contains("Macro", StringComparison.OrdinalIgnoreCase) || name.Contains("Directive", StringComparison.OrdinalIgnoreCase))
+                    {
+                        color.Foreground = preprocessorBrush;
+                    }
+                    else if (name.Contains("Regex", StringComparison.OrdinalIgnoreCase))
+                    {
+                        color.Foreground = regexBrush;
+                    }
+                    else if (color.Foreground != null)
+                    {
+                        var fgColor = color.Foreground.GetColor(null);
+                        if (fgColor.HasValue)
+                        {
+                            var c = fgColor.Value;
+                            // Remap dark/harsh AvalonEdit default light colors
+                            if (c.R == 0 && c.G == 0 && c.B > 100) // Pure dark blue
+                                color.Foreground = keywordBrush;
+                            else if (c.R > 160 && c.G == 0 && c.B == 0) // Harsh pure red
+                                color.Foreground = propertyBrush;
+                            else if (c.R == 0 && c.G > 80 && c.B == 0) // Dark green
+                                color.Foreground = stringBrush;
+                            else if (c.R == 0 && c.G == 0 && c.B == 0) // Pure black
+                                color.Foreground = punctuationBrush;
+                            else
+                            {
+                                // Luminance boost if text is too dim
+                                double lum = (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255.0;
+                                if (lum < 0.45)
+                                {
+                                    byte r = (byte)Math.Min(255, c.R + (255 - c.R) * 0.55);
+                                    byte g = (byte)Math.Min(255, c.G + (255 - c.G) * 0.55);
+                                    byte b = (byte)Math.Min(255, c.B + (255 - c.B) * 0.55);
+                                    color.Foreground = new SimpleHighlightingBrush(Color.FromRgb(r, g, b));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                void ProcessRuleSet(HighlightingRuleSet ruleSet)
+                {
+                    if (ruleSet == null) return;
+                    foreach (var rule in ruleSet.Rules)
+                    {
+                        if (rule?.Color != null) TransformColor(rule.Color);
+                    }
+                    foreach (var span in ruleSet.Spans)
+                    {
+                        if (span == null) continue;
+                        if (span.SpanColor != null) TransformColor(span.SpanColor);
+                        if (span.StartColor != null) TransformColor(span.StartColor);
+                        if (span.EndColor != null) TransformColor(span.EndColor);
+                        if (span.RuleSet != null) ProcessRuleSet(span.RuleSet);
+                    }
+                }
+
+                ProcessRuleSet(definition.MainRuleSet);
+
+                // Also check named colors directly
+                string[] standardNames = { "Comment", "DocComment", "String", "Char", "Keywords", "ControlKeywords", "StatementKeywords", "ValueKeywords", "TypeKeywords", "Types", "Classes", "Structs", "Interfaces", "Number", "Digits", "Property", "Tag", "Attribute", "AttributeName", "AttributeValue", "Selector", "ClassSelector", "IdSelector", "Method", "Function", "MethodCall", "FunctionCall", "Punctuation", "Delimiter", "Bracket", "Colon", "CurlyBrackets", "PreProcessor", "Macro", "Directive", "Regex", "Heading", "List", "Link", "Code" };
+                foreach (var sName in standardNames)
+                {
+                    try
+                    {
+                        var col = definition.GetNamedColor(sName);
+                        if (col != null) TransformColor(col);
+                    }
+                    catch { }
+                }
+            }
         }
 
         private async System.Threading.Tasks.Task LoadContentAsync()
@@ -348,6 +555,8 @@ namespace FlyShelf.Windows
                     this.Height = SystemParameters.WorkArea.Height * 0.8;
                     _isImageLoaded = true;
                     if (DoodleBtn != null) DoodleBtn.Visibility = Visibility.Visible;
+                    if (PdfToImagesBtn != null) PdfToImagesBtn.Visibility = Visibility.Visible;
+                    if (PdfCompressBtn != null) PdfCompressBtn.Visibility = Visibility.Visible;
                     if (ZoomPanel != null) ZoomPanel.Visibility = Visibility.Visible;
                 }
                 else if (ext == ".html" || ext == ".htm" || ext == ".xml")
@@ -441,6 +650,8 @@ namespace FlyShelf.Windows
                             
                             // Show markdown-specific buttons
                             if (CopyMdBtn != null) CopyMdBtn.Visibility = Visibility.Visible;
+                            if (CopyHtmlBtn != null) CopyHtmlBtn.Visibility = Visibility.Visible;
+                            if (MdEditBtn != null) MdEditBtn.Visibility = Visibility.Visible;
                             MdToPdfBtn.Visibility = Visibility.Visible;
                             ZoomResetBtn.Visibility = Visibility.Visible;
                             LoadingProgress.Visibility = Visibility.Collapsed;
@@ -548,7 +759,10 @@ namespace FlyShelf.Windows
                         {
                             var highlighting = HighlightingManager.Instance.GetDefinition(highlightName);
                             if (highlighting != null)
+                            {
+                                ApplyModernSyntaxTheme(highlighting);
                                 CodePreview.SyntaxHighlighting = highlighting;
+                            }
                         }
                         CodePreview.Visibility = Visibility.Visible;
                     }
@@ -563,7 +777,80 @@ namespace FlyShelf.Windows
                     _isImageLoaded = true;
                     if (TranslateBtn != null) TranslateBtn.Visibility = Visibility.Visible;
                 }
-                else if (ext == ".docx" || ext == ".txt" || ext == ".log")
+                else if (ext == ".docx")
+                {
+                    TextPreviewScroll.Visibility = Visibility.Visible;
+                    TextPreview.IsReadOnly = false;
+                    _isDocxMode = true;
+                    if (DocxSaveBtn != null) DocxSaveBtn.Visibility = Visibility.Visible;
+
+                    string detectedFont = "Calibri";
+                    string textResult = await System.Threading.Tasks.Task.Run(() =>
+                    {
+                        try 
+                        {
+                            using (var archive = System.IO.Compression.ZipFile.OpenRead(_item.FilePath))
+                            {
+                                // Detect document font if present
+                                var fontEntry = archive.GetEntry("word/fontTable.xml");
+                                if (fontEntry != null)
+                                {
+                                    using var fStream = fontEntry.Open();
+                                    using var fReader = new System.IO.StreamReader(fStream);
+                                    string fXml = fReader.ReadToEnd();
+                                    var fMatch = System.Text.RegularExpressions.Regex.Match(fXml, @"w:name=""([^""]+)""");
+                                    if (fMatch.Success) detectedFont = fMatch.Groups[1].Value;
+                                }
+
+                                var entry = archive.GetEntry("word/document.xml");
+                                if (entry != null)
+                                {
+                                    using (var stream = entry.Open())
+                                    using (var reader = new System.IO.StreamReader(stream))
+                                    {
+                                        string xml = reader.ReadToEnd();
+                                        var paragraphs = System.Text.RegularExpressions.Regex.Matches(xml, @"<w:p(?:\s[^>]*)?>(.*?)</w:p>", System.Text.RegularExpressions.RegexOptions.Singleline);
+                                        if (paragraphs.Count > 0)
+                                        {
+                                            var sb = new System.Text.StringBuilder();
+                                            foreach (System.Text.RegularExpressions.Match p in paragraphs)
+                                            {
+                                                string pXml = p.Groups[1].Value;
+                                                string pText = System.Text.RegularExpressions.Regex.Replace(pXml, @"<[^>]+>", "");
+                                                sb.AppendLine(System.Net.WebUtility.HtmlDecode(pText).Trim());
+                                            }
+                                            return sb.ToString().TrimEnd();
+                                        }
+                                        else
+                                        {
+                                            string rawText = System.Text.RegularExpressions.Regex.Replace(xml, @"<[^>]+>", " ");
+                                            return System.Text.RegularExpressions.Regex.Replace(rawText, @"\s+", " ").Trim();
+                                        }
+                                    }
+                                }
+                            }
+                        } 
+                        catch { } // Best-effort: failure is acceptable
+                        return null;
+                    });
+
+                    if (textResult != null)
+                    {
+                        TextPreview.Text = textResult;
+                        try { TextPreview.FontFamily = new System.Windows.Media.FontFamily($"{detectedFont}, Calibri, Segoe UI, sans-serif"); } catch { }
+                        TextPreview.FontSize = 14;
+                    }
+                    else
+                    {
+                        TextPreview.Text = "[FlyShelf Codec Error: Cannot extract raw string payload from this artifact natively]";
+                    }
+
+                    this.Width = 640;
+                    this.Height = 720;
+                    _isImageLoaded = true; // allow native dragging for textual representations
+                    if (TranslateBtn != null) TranslateBtn.Visibility = Visibility.Visible;
+                }
+                else if (ext == ".txt" || ext == ".log")
                 {
                     TextPreviewScroll.Visibility = Visibility.Visible;
                     
@@ -571,27 +858,7 @@ namespace FlyShelf.Windows
                     {
                         try 
                         {
-                            if (ext == ".docx") 
-                            {
-                                using (var archive = System.IO.Compression.ZipFile.OpenRead(_item.FilePath))
-                                {
-                                    var entry = archive.GetEntry("word/document.xml");
-                                    if (entry != null)
-                                    {
-                                        using (var stream = entry.Open())
-                                        using (var reader = new System.IO.StreamReader(stream))
-                                        {
-                                            string xml = reader.ReadToEnd();
-                                            string rawText = System.Text.RegularExpressions.Regex.Replace(xml, @"<[^>]+>", " ");
-                                            return System.Text.RegularExpressions.Regex.Replace(rawText, @"\s+", " ").Trim();
-                                        }
-                                    }
-                                }
-                            }
-                            else 
-                            {
-                                return File.ReadAllText(_item.FilePath);
-                            }
+                            return File.ReadAllText(_item.FilePath);
                         } 
                         catch { } // Best-effort: failure is acceptable
                         return null;
@@ -895,7 +1162,33 @@ namespace FlyShelf.Windows
                 this.Close();
                 e.Handled = true;
             }
-            // Doodle keyboard shortcuts
+            // Markdown / DOCX / Doodle keyboard shortcuts
+            if (e.Key == Key.E && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                if (!string.IsNullOrEmpty(_markdownRawContent) || MdEditBtn.Visibility == Visibility.Visible)
+                {
+                    MarkdownEditToggle_Click(null, null);
+                    e.Handled = true;
+                }
+            }
+            else if (e.Key == Key.S && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                if (_isDoodleMode)
+                {
+                    DoodleSave_Click(null, null);
+                    e.Handled = true;
+                }
+                else if (_isDocxMode)
+                {
+                    DocxSave_Click(null, null);
+                    e.Handled = true;
+                }
+                else if (_isMarkdownEditMode || !string.IsNullOrEmpty(_markdownRawContent))
+                {
+                    MarkdownSave_Click(null, null);
+                    e.Handled = true;
+                }
+            }
             else if (_isDoodleMode)
             {
                 if (e.Key == Key.Z && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
@@ -908,11 +1201,80 @@ namespace FlyShelf.Windows
                     DoodleRedo_Click(null, null);
                     e.Handled = true;
                 }
-                else if (e.Key == Key.S && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            }
+        }
+
+        private async void DocxSave_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_item?.FilePath) || !File.Exists(_item.FilePath)) return;
+
+            try
+            {
+                if (DocxSaveBtn != null) DocxSaveBtn.IsEnabled = false;
+                string updatedText = TextPreview.Text ?? "";
+
+                bool success = await System.Threading.Tasks.Task.Run(() =>
                 {
-                    DoodleSave_Click(null, null);
-                    e.Handled = true;
+                    try
+                    {
+                        using (var archive = System.IO.Compression.ZipFile.Open(_item.FilePath, System.IO.Compression.ZipArchiveMode.Update))
+                        {
+                            var entry = archive.GetEntry("word/document.xml");
+                            if (entry != null)
+                            {
+                                string originalXml;
+                                using (var stream = entry.Open())
+                                using (var reader = new System.IO.StreamReader(stream))
+                                {
+                                    originalXml = reader.ReadToEnd();
+                                }
+
+                                var bodyMatch = System.Text.RegularExpressions.Regex.Match(originalXml, @"^(.*?<w:body>)(.*?)(</w:body>.*)$", System.Text.RegularExpressions.RegexOptions.Singleline);
+                                string prefix = bodyMatch.Success ? bodyMatch.Groups[1].Value : @"<?xml version=""1.0"" encoding=""UTF-8"" standalone=""yes""?><w:document xmlns:w=""http://schemas.openxmlformats.org/wordprocessingml/2006/main""><w:body>";
+                                string suffix = bodyMatch.Success ? bodyMatch.Groups[3].Value : @"</w:body></w:document>";
+
+                                var sb = new System.Text.StringBuilder();
+                                sb.Append(prefix);
+                                string[] lines = updatedText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+                                foreach (string line in lines)
+                                {
+                                    string escaped = System.Security.SecurityElement.Escape(line);
+                                    sb.Append($"<w:p><w:r><w:t xml:space=\"preserve\">{escaped}</w:t></w:r></w:p>");
+                                }
+                                sb.Append(suffix);
+
+                                entry.Delete();
+                                var newEntry = archive.CreateEntry("word/document.xml", System.IO.Compression.CompressionLevel.Optimal);
+                                using (var writer = new System.IO.StreamWriter(newEntry.Open(), System.Text.Encoding.UTF8))
+                                {
+                                    writer.Write(sb.ToString());
+                                }
+                                return true;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Classes.Logger.LogAction("DOCX_SAVE_ERROR", ex.Message);
+                    }
+                    return false;
+                });
+
+                if (DocxSaveBtn != null) DocxSaveBtn.IsEnabled = true;
+                if (success)
+                {
+                    _item.RawContent = updatedText;
+                    FlyShelf.Windows.ToastWindow.ShowToast($"DOCX document saved! 💾 {Path.GetFileName(_item.FilePath)}");
                 }
+                else
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("Failed to save DOCX ❌");
+                }
+            }
+            catch (Exception ex)
+            {
+                if (DocxSaveBtn != null) DocxSaveBtn.IsEnabled = true;
+                FlyShelf.Windows.ToastWindow.ShowToast($"Error saving DOCX: {ex.Message} ❌");
             }
         }
 

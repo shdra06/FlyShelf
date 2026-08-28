@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AppErrorBoundary from '../../components/AppErrorBoundary';
 import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, useWindowDimensions, Modal, Alert, ScrollView, Image, Platform, FlatList, ToastAndroid, Linking, TextInput, Pressable } from 'react-native';
+import { toast } from '../../context/ToastContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
@@ -17,6 +18,7 @@ import AnimatedPressable from '../../components/AnimatedPressable';
 import { resolveBestPcUrl } from '../../utils/networkHelpers';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { fuzzyIsMatch } from '../../utils/textNormalize';
 import * as Haptics from 'expo-haptics';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -109,7 +111,7 @@ function FilesScreenInner() {
     setEditingGroup(null);
     setNewGroupName('');
     setSelectedGroupDevices(new Set());
-    if (Platform.OS === 'android') ToastAndroid.show(`Group "${newGroupName.trim()}" saved`, ToastAndroid.SHORT);
+    toast.success(`Group "${newGroupName.trim()}" Saved`, `${deviceNames.length} device(s) added to group`);
   };
 
   const deleteGroup = (groupId: string) => {
@@ -142,7 +144,7 @@ function FilesScreenInner() {
           newFiles.forEach((f: any) => updated.add(f.id));
           return updated;
         });
-        if (Platform.OS === 'android') ToastAndroid.show(`Added ${newFiles.length} file(s)`, ToastAndroid.SHORT);
+        toast.info(`Added ${newFiles.length} File(s)`, 'Selected for transfer queue');
       }
     } catch (err) {
       Alert.alert('Browse Failed', 'Could not open file picker.');
@@ -182,7 +184,7 @@ function FilesScreenInner() {
       if (relayPC) {
         resolvedUrl = relayPC.localUrl || relayPC.globalUrl;
         useRelay = true;
-        if (Platform.OS === 'android') ToastAndroid.show(`📡 Relaying via ${relayPC.deviceName}`, ToastAndroid.SHORT);
+        toast.syncCloud(`Relaying via ${relayPC.deviceName}`, undefined, 'Cloud Relay');
       } else {
         Alert.alert('No Route Available', 'No PC with Cloudflare is online to relay files.\n\nEnsure at least one PC is running FlyShelf with internet access.');
         return;
@@ -272,7 +274,7 @@ function FilesScreenInner() {
         onLongPress={() => {
           const { localUrl, globalUrl } = getDeviceUrls();
           if (localUrl || globalUrl) setUrlPopup({ device, localUrl, globalUrl });
-          else { if (Platform.OS === 'android') ToastAndroid.show('No URLs available', ToastAndroid.SHORT); }
+          else { toast.warning('No Direct URLs', 'Device has not published local or cloud endpoints'); }
         }}
         activeOpacity={0.7}
         accessibilityLabel={`${device.DeviceName || 'Unknown'}, ${device.DeviceType}, ${type === 'local' ? 'local network' : 'cloud'}`}
@@ -555,7 +557,7 @@ function FilesScreenInner() {
       const fileUri = uri.startsWith('file://') ? uri : `file://${uri}`;
       await Sharing.shareAsync(fileUri);
     } catch (e: any) {
-      if (Platform.OS === 'android') ToastAndroid.show('Share failed: ' + (e?.message || 'unknown error'), ToastAndroid.SHORT);
+      toast.error('Share Failed', e?.message || 'Could not export file');
     }
   };
 
@@ -566,7 +568,7 @@ function FilesScreenInner() {
 
   const flatListData = useMemo(() => {
     let items = [...getFilteredAssets(), ...browserFiles];
-    if (fileSearchText) items = items.filter(a => (a.filename || '').toLowerCase().includes(fileSearchText.toLowerCase()));
+    if (fileSearchText) items = items.filter(a => fuzzyIsMatch(fileSearchText, a.filename || ''));
     return items;
   }, [mediaAssets, activeTab, sourceFilter, browserFiles, fileSearchText]);
 

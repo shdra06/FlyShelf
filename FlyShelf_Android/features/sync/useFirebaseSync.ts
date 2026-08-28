@@ -68,22 +68,10 @@ export function useFirebaseSync(params: {
     isFloatingBallEnabled,
   } = params;
 
-  // ─── Firebase Listeners (LAZY — Phase 1 Optimization) ───
-  // The clipboard listener is now LAZY: it only activates after 30s of the PC
-  // being unreachable via direct connection (LAN/Cloudflare). This eliminates
-  // the persistent WebSocket that was hitting the 200-connection Firebase limit.
-  const firebaseFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const firebaseUnsubFeedRef = useRef<(() => void) | null>(null);
-  const firebaseUnsubNodesRef = useRef<(() => void) | null>(null);
   const lastSuccessfulPollRef = useRef<number>(NetworkClock.now());
 
   // ─── Last proven-working PC URL (set by poll on successful /api/sync) ───
   const lastWorkingPcUrlRef = useRef<string | null>('');
-
-  // AC-5+AC-6: Flag to suppress Firebase listener during startup purge
-  const isPurgingRef = useRef<boolean>(false);
-  // Reconnect backoff counter for Firebase onValue errors
-  const fbReconnectAttemptsRef = useRef(0);
 
   // AC-3: Stable stringified key for pairedDevices dependency
   // M-8 FIX: Use ref-based comparison to avoid JSON.stringify on every render cycle
@@ -102,16 +90,6 @@ export function useFirebaseSync(params: {
   // Called by LAN/Cloudflare poller on every successful /api/sync response
   const markPcReachable = () => {
     lastSuccessfulPollRef.current = NetworkClock.now();
-    // PC is reachable directly — disconnect Firebase listener if active
-    if (firebaseUnsubFeedRef.current) {
-      firebaseUnsubFeedRef.current();
-      firebaseUnsubFeedRef.current = null;
-      syncLog('FIREBASE', '🔌 Disconnected Firebase listener — PC reachable directly');
-    }
-    if (firebaseFallbackTimerRef.current) {
-      clearTimeout(firebaseFallbackTimerRef.current);
-      firebaseFallbackTimerRef.current = null;
-    }
     pairedDevicesRef.current.filter(d => d.deviceType === 'PC').forEach(d => {
       updateDeviceStatus(d.deviceId, { isOnline: true, lastSeen: NetworkClock.now() });
     });
@@ -131,172 +109,6 @@ export function useFirebaseSync(params: {
         connectionType: activePcOnline ? 'Cloud' : undefined
       });
     });
-
-    if (firebaseFallbackTimerRef.current) return;
-    if (firebaseUnsubFeedRef.current) return;
-    if (!isGlobalSyncEnabled) return;
-
-    // Connect Firebase clipboard listener immediately (< 500ms) instead of 30s delay!
-    firebaseFallbackTimerRef.current = setTimeout(() => {
-      firebaseFallbackTimerRef.current = null;
-      syncLog('FIREBASE', '⚡ Activating instant Firebase clipboard fallback');
-      connectFirebaseClipboardListener(pk);
-    }, 500);
-  };
-
-  // Connects the Firebase clipboard listener (only called when PC is unreachable)
-  const connectFirebaseClipboardListener = (pk: string) => {
-    const syncLimit = autoSyncTop5 !== false ? 5 : 1;
-    const clipsRef = query(ref(database, `clipboard/${pk}`), orderByChild('Timestamp'), limitToLast(syncLimit));
-    firebaseUnsubFeedRef.current = onValue(clipsRef, async (snapshot) => {
-      fbReconnectAttemptsRef.current = 0; // Reset backoff on successful data
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        // M-6 FIX: Validate Firebase data shape before processing
-        const allRaw: ClipItem[] = Object.keys(data).map(k => {
-          const item = data[k];
-          // M-6: Skip malformed entries (must be objects with at minimum a Title or Raw)
-          if (!item || typeof item !== 'object') return null;
-          // M-6: Reject oversized payloads (>1MB per item) to prevent OOM
-          const rawStr = JSON.stringify(item);
-          if (rawStr.length > 1_000_000) {
-            syncLog('FIREBASE', `Skipped oversized entry ${k}: ${rawStr.length} bytes`);
-            return null;
-          }
-          // M-6: Sanitize URLs
-          if (item.DownloadUrl && typeof item.DownloadUrl === 'string') {
-            if (!item.DownloadUrl.startsWith('http://') && !item.DownloadUrl.startsWith('https://') && !item.DownloadUrl.includes('?path=')) {
-              item.DownloadUrl = '';
-            }
-          }
-          return { id: k, ...item } as ClipItem;
-        }).filter(Boolean) as ClipItem[];
-
-        // Strict timestamp descending sequence (top newest items first)
-        allRaw.sort((a, b) => (b.Timestamp || 0) - (a.Timestamp || 0));
-        // AES-256-GCM decryption: decrypt Encrypted items from other devices
-        const allParsed: ClipItem[] = [];
-        for (const item of allRaw) {
-          if ((item as any).Encrypted === true) {
-            try {
-              const decTitle = await aesDecrypt(item.Title || '');
-              const decRaw = await aesDecrypt(item.Raw || '');
-              if (decTitle !== null) item.Title = decTitle;
-              if (decRaw !== null) item.Raw = decRaw;
-              if ((item as any).DownloadUrl) {
-                const decDl = await aesDecrypt((item as any).DownloadUrl);
-                if (decDl !== null) (item as any).DownloadUrl = decDl;
-              }
-              if ((item as any).PreviewUrl) {
-                const decPv = await aesDecrypt((item as any).PreviewUrl);
-                if (decPv !== null) (item as any).PreviewUrl = decPv;
-              }
-            } catch (e: any) { syncLog('SYNC_CRYPTO', `Decryption failed: ${e?.message}`); }
-          }
-          allParsed.push(item);
-        }
-        // Filter out items sent by THIS device to prevent echo loops
-        // Also filter pre-pairing items to prevent initial history dump
-        const myName = deviceName || '';
-        const pairingTs = pairingTimestampRef.current;
-        const parsed = allParsed.filter(c => {
-          // Skip items from before this device paired
-          if (pairingTs > 0 && c.Timestamp && c.Timestamp < pairingTs) {
-            syncLog('FIREBASE', `Skipped pre-pairing item: ${(c.Title || '').substring(0, 40)}`);
-            return false;
-          }
-          if (c.SourceDeviceType === 'Mobile' && myName && c.SourceDeviceName === myName) {
-            syncLog('FIREBASE', `Filtered own item: ${(c.Title || '').substring(0, 40)}`);
-            return false;
-          }
-          if ((c as any).EventId && processedEventsRef.current.has((c as any).EventId)) {
-            syncLog('FIREBASE', `Filtered by EventId: ${(c as any).EventId}`);
-            return false;
-          }
-          if ((c as any).EventId) processedEventsRef.current.set((c as any).EventId, NetworkClock.now());
-          return true;
-        });
-        syncLog('FIREBASE', `Feed: ${allParsed.length} total, ${parsed.length} after self-filter`);
-        const now = NetworkClock.now();
-        recentSyncFingerprintsRef.current.forEach((ts, fp) => { if (now - ts > 30_000 && !fp.startsWith('filedl::')) recentSyncFingerprintsRef.current.delete(fp); });
-
-        // Push text/url items to floating ball overlay
-        if (Platform.OS === 'android' && AdvanceOverlay) {
-          parsed.slice(0, 5).forEach((c: any) => {
-            const fp = `${c.Type}::${(c.Raw || '').substring(0, 150)}`;
-            if (recentSyncFingerprintsRef.current.has(fp)) return;
-            if ((c.Type === 'Text' || c.Type === 'Url' || c.Type === 'Pdf' || c.Type === 'Document') && c.Raw) {
-              let rawData = c.Raw;
-              if (c.Type === 'Pdf' || c.Type === 'Document') { rawData = DOWNLOAD_BASE + c.Title.replace(/[^a-zA-Z0-9.-]/g, '_'); }
-              AdvanceOverlay.pushClipToNativeDB(rawData, c.SourceDeviceName || 'Cloud');
-              recentSyncFingerprintsRef.current.set(fp, NetworkClock.now());
-            }
-          });
-        }
-
-        // ─── Process ALL items from Firebase: dedup against ALL clips, move dup to top ───
-        if (parsed.length > 0) {
-          setClips(prev => {
-            let updated = [...prev];
-            let changed = false;
-            let hasNewItems = false;
-            for (const p of parsed) {
-              // Check ALL existing clips for duplicate by Raw content or Title
-              const dupIdx = updated.findIndex(c =>
-                (c.id && p.id && c.id === p.id) ||
-                (c.Title && p.Title && c.Title === p.Title) ||
-                (c.Raw && p.Raw && c.Raw.substring(0, 200) === p.Raw.substring(0, 200))
-              );
-              if (dupIdx >= 0) {
-                // Duplicate found — update in place, do NOT move to top
-                updated[dupIdx] = { ...updated[dupIdx], ...p };
-                changed = true;
-              } else {
-                // Genuinely new — add to top
-                updated.unshift(p);
-                changed = true;
-                hasNewItems = true;
-              }
-            }
-            // Also merge local screenshots
-            const screenshots = localScreenshotsRef.current.filter(ls =>
-              !updated.some(p => p.Title === ls.Title) && !parsed.some(p => p.Title === ls.Title)
-            );
-            if (screenshots.length > 0) {
-              updated = [...screenshots, ...updated];
-              changed = true;
-              hasNewItems = true;
-            }
-            if (!changed) return prev;
-            if (hasNewItems) scrollToTop(); // Only scroll for genuinely new items
-            return updated;
-          });
-          // Trigger background download effects for new image/rich media items
-          setImageDownloadTrigger(t => t + 1);
-          setRichMediaDownloadTrigger(t => t + 1);
-        }
-
-        // Background: File downloads happen via LAN/Cloudflare poll only.
-        // Firebase is only for critical backend info, and should not trigger downloads.
-      }
-    }, (error) => {
-      syncLog('FIREBASE', `onValue error: ${error?.message || error}`);
-      // Disconnect current listener
-      if (firebaseUnsubFeedRef.current) {
-        firebaseUnsubFeedRef.current();
-        firebaseUnsubFeedRef.current = null;
-      }
-      // Reconnect after exponential backoff
-      const delay = Math.min(5000 * Math.pow(2, fbReconnectAttemptsRef.current), 60000);
-      fbReconnectAttemptsRef.current++;
-      setTimeout(() => {
-        const currentPk = pairingKeyRef.current;
-        if (currentPk && isValidPairingKey(currentPk)) {
-          syncLog('FIREBASE', `Reconnecting Firebase listener after ${delay}ms backoff`);
-          connectFirebaseClipboardListener(currentPk);
-        }
-      }, delay);
-    });
   };
 
   useEffect(() => {
@@ -305,40 +117,12 @@ export function useFirebaseSync(params: {
     if (!pk || !isValidPairingKey(pk)) { syncLog('FIREBASE', 'No pairing key yet or invalid key format — waiting for context to load...'); return; }
     pairingKeyRef.current = pk;
 
-    // ─── Startup Cleanup: Purge stale entries older than 1 hour (batched) ───
-    (async () => {
-      try {
-        const allSnap = await get(ref(database, `clipboard/${pk}`));
-        if (allSnap.exists()) {
-          const allData = allSnap.val();
-          const now = NetworkClock.now();
-          const ONE_HOUR = 60 * 60 * 1000;
-          // AC-5: Batch all deletions into a single update() call
-          const deletions = Object.fromEntries(
-            Object.keys(allData)
-              .filter(key => allData[key].Timestamp && (now - allData[key].Timestamp) > ONE_HOUR)
-              .map(key => [`${key}`, null as any])
-          );
-          const purgeCount = Object.keys(deletions).length;
-          if (purgeCount > 0) {
-            // AC-6: Set purging flag so Firebase listener ignores intermediate events
-            isPurgingRef.current = true;
-            await update(ref(database, `clipboard/${pk}`), deletions);
-            isPurgingRef.current = false;
-            syncLog('CLEANUP', `Purged ${purgeCount} stale Firebase entries (>1hr old)`);
-          }
-        }
-      } catch (e) { isPurgingRef.current = false; syncLog('CLEANUP', `Startup cleanup error: ${e}`); }
-    })();
-
     // ─── Active Devices: REAL-TIME onValue listener ───
     // Catches PC URLs the instant they appear — critical because
     // v5 PC auto-deletes its URL from Firebase after 5 seconds.
     // The listener caches URLs locally so they survive deletion.
     const peerDevicesRef = ref(database, `active_devices/${pk}`);
     const processDevicesSnapshot = async (snapshot: any) => {
-      // AC-6: Skip processing during startup purge to avoid reacting to our own deletions
-      if (isPurgingRef.current) return;
       try {
         // Issue #6: Skip expensive LAN probing if PC is already reachable via direct polling
         const pcAlreadyReachable = lastWorkingPcUrlRef.current && (NetworkClock.now() - lastSuccessfulPollRef.current) < 10_000;
@@ -519,11 +303,6 @@ export function useFirebaseSync(params: {
             updatePairedDeviceLicensing(pcPair.deviceId, isPro, licenseKey);
           }
         }
-        // If no PC found at all, immediately try Firebase clipboard listener
-        if (!rawDevices.some(d => d.DeviceType === 'PC')) {
-          syncLog('FIREBASE', 'No PC found — activating Firebase clipboard listener immediately');
-          connectFirebaseClipboardListener(pk);
-        }
       } catch (e) { syncLog('FIREBASE', `Active devices listener error: ${e}`); }
     };
 
@@ -535,8 +314,6 @@ export function useFirebaseSync(params: {
 
     return () => {
       unsubscribeDevices();
-      if (firebaseUnsubFeedRef.current) { firebaseUnsubFeedRef.current(); firebaseUnsubFeedRef.current = null; }
-      if (firebaseFallbackTimerRef.current) { clearTimeout(firebaseFallbackTimerRef.current); firebaseFallbackTimerRef.current = null; }
     };
   // AC-3: Stabilize pairedDevices dependency with useMemo to avoid inline JSON.stringify
   }, [isGlobalSyncEnabled, contextPairingKey, pairedDeviceKeysStable]);

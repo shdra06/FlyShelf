@@ -30,6 +30,7 @@ LogBox.ignoreLogs([
 
 
 import { SettingsProvider } from '../context/SettingsContext';
+import { ToastProvider } from '../context/ToastContext';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { evictImageCache, evictConvertedPdfs } from '../components/CachedImage';
 
@@ -80,20 +81,16 @@ if (Platform.OS !== 'web') {
        const lastNotifiedStr = await AsyncStorage.getItem('lastNotifiedTimestamp');
        const lastNotified = lastNotifiedStr ? parseInt(lastNotifiedStr) : 0;
 
-       const snaps = await get(query(ref(database, `clipboard/${pk}`), limitToLast(1)));
+       const snaps = await get(ref(database, `active_devices/${pk}/wakeSignal`));
        if (snaps.exists()) {
-           const data = snaps.val();
-           const latestKey = Object.keys(data)[0];
-           const latestItem = data[latestKey];
-           const latestTs = latestItem.Timestamp || 0;
+           const latestTs = typeof snaps.val() === 'number' ? snaps.val() : (snaps.val()?.timestamp || 0);
 
            if (latestTs > lastNotified) {
                await AsyncStorage.setItem('lastNotifiedTimestamp', latestTs.toString());
-               // C-3: Use immediate trigger (trigger:null was removed in Expo SDK 54)
                await Notifications.scheduleNotificationAsync({
                   content: {
                      title: "FlyShelf Mesh Updated",
-                     body: `New payload from ${latestItem.SourceDeviceName || 'PC'}. Tap to sync!`,
+                     body: "New updates available from your PC. Tap to sync!",
                   },
                   trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1 },
                });
@@ -194,11 +191,13 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
         <ThemeProvider value={colorScheme === 'light' ? FlyShelfLightTheme : FlyShelfDarkTheme}>
           <SettingsProvider>
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="pdf-tools" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
-            </Stack>
-            <StatusBar style={colorScheme === 'light' ? 'dark' : 'light'} translucent backgroundColor="transparent" />
+            <ToastProvider>
+              <Stack>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="pdf-tools" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+              </Stack>
+              <StatusBar style={colorScheme === 'light' ? 'dark' : 'light'} translucent backgroundColor="transparent" />
+            </ToastProvider>
           </SettingsProvider>
         </ThemeProvider>
       </GestureHandlerRootView>

@@ -678,7 +678,19 @@ namespace FlyShelf.Classes
                         return;
                     }
                     File.WriteAllText(tmpPath, json);
-                    File.Move(tmpPath, _todosPath, overwrite: true);
+                    // AUDIT FIX: Retry loop for File.Move to handle transient file locks (AV, indexers)
+                    for (int attempt = 0; attempt < 3; attempt++)
+                    {
+                        try
+                        {
+                            File.Move(tmpPath, _todosPath, overwrite: true);
+                            break;
+                        }
+                        catch (IOException) when (attempt < 2)
+                        {
+                            Thread.Sleep(50);
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {

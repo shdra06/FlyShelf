@@ -107,11 +107,13 @@ namespace FlyShelf.ViewModels
             {
                 if (IsExpanded)
                 {
-                    // Cap expanded text to prevent WPF TextBlock.MeasureOverride from
-                    // processing massive strings for wrap computation (scroll jitter killer)
-                    if (_fileName.Length <= ExpandedDisplayTextLimit)
-                        return _fileName;
-                    return string.Concat(_fileName.AsSpan(0, ExpandedDisplayTextLimit), "\n\n[… Text truncated — open item to view full content]");
+                    var source = !string.IsNullOrEmpty(_fileName) ? _fileName : (RawContent ?? string.Empty);
+                    if (TotalWordCount <= PhasedWordChunkSize || _visibleWordCount >= TotalWordCount)
+                    {
+                        return source;
+                    }
+                    int charIdx = GetCharIndexForWordCount(source, _visibleWordCount);
+                    return charIdx < source.Length ? string.Concat(source.AsSpan(0, charIdx), "…") : source;
                 }
                 if (_displayText != null) return _displayText;
                 if (_fileName.Length <= DisplayTextTruncationLimit)
@@ -269,19 +271,78 @@ namespace FlyShelf.ViewModels
         }
 
         private BitmapSource? _icon;
+        private int _thumbnailLoadState = 0; // 0 = idle, 1 = loading, 2 = loaded
         
         [JsonIgnore]
         public BitmapSource? Icon
         {
-            get => _icon;
+            get
+            {
+                if (_icon == null && (ItemType == ClipboardItemType.Image || ItemType == ClipboardItemType.QRCode) && !string.IsNullOrEmpty(FilePath))
+                {
+                    EnsureThumbnailLoadedAsync();
+                }
+                return _icon;
+            }
             set
             {
                 if (_icon != value)
                 {
                     _icon = value;
+                    if (_icon == null)
+                    {
+                        Interlocked.Exchange(ref _thumbnailLoadState, 0);
+                    }
+                    else
+                    {
+                        Interlocked.Exchange(ref _thumbnailLoadState, 2);
+                    }
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Icon)));
                 }
             }
+        }
+
+        /// <summary>
+        /// Self-healing thumbnail loader: asynchronously guarantees that the thumbnail is loaded from cache/disk
+        /// and dispatched to the UI whenever requested.
+        /// </summary>
+        public void EnsureThumbnailLoadedAsync()
+        {
+            if (IsLoadedHighQuality && _icon != null) return;
+            if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath)) return;
+            if (Interlocked.CompareExchange(ref _thumbnailLoadState, 1, 0) != 0) return;
+
+            IsLoadingHighQuality = true;
+            string fp = FilePath;
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    var bmp = Classes.ImageThumbnailManager.LoadThumbnail(fp, 300);
+                    if (bmp != null)
+                    {
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        {
+                            _icon = bmp;
+                            IsLoadedHighQuality = true;
+                            IsLoadingHighQuality = false;
+                            Interlocked.Exchange(ref _thumbnailLoadState, 2);
+                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Icon)));
+                        }, System.Windows.Threading.DispatcherPriority.Background);
+                    }
+                    else
+                    {
+                        IsLoadingHighQuality = false;
+                        Interlocked.Exchange(ref _thumbnailLoadState, 0);
+                    }
+                }
+                catch
+                {
+                    IsLoadingHighQuality = false;
+                    Interlocked.Exchange(ref _thumbnailLoadState, 0);
+                }
+            });
         }
 
         private BitmapSource? _sourceAppIcon;
@@ -528,15 +589,151 @@ namespace FlyShelf.ViewModels
         /// from processing thousands of characters for wrap computation during scroll.
         /// Full text is returned when IsExpanded=true.
         /// </summary>
+        public const int PhasedWordChunkSize = 500;
+        private int _visibleWordCount = PhasedWordChunkSize;
+
+        [JsonIgnore]
+        public int VisibleWordCount
+        {
+            get => _visibleWordCount;
+            set
+            {
+                if (_visibleWordCount != value)
+                {
+                    _visibleWordCount = value;
+                    _rawContentPreview = null;
+                    _displayText = null;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(VisibleWordCount)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContentPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayText)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasPhasedExpansion)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasMorePhases)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowingWordsText)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ReadMoreButtonText)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RemainingWordsCount)));
+                }
+            }
+        }
+
+        private int? _cachedTotalWordCount;
+        [JsonIgnore]
+        public int TotalWordCount => _cachedTotalWordCount ??= ComputeWordCount(!string.IsNullOrEmpty(RawContent) ? RawContent : FileName);
+
+        private int? _cachedTotalLineCount;
+        [JsonIgnore]
+        public int TotalLineCount => _cachedTotalLineCount ??= ComputeLineCount(!string.IsNullOrEmpty(RawContent) ? RawContent : FileName);
+
+        public static int ComputeWordCount(string? text)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+            int count = 0;
+            bool inWord = false;
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (char.IsWhiteSpace(text[i]))
+                {
+                    inWord = false;
+                }
+                else if (!inWord)
+                {
+                    inWord = true;
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        public static int ComputeLineCount(string? text)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+            int count = 1;
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (text[i] == '\n') count++;
+            }
+            return count;
+        }
+
+        public static int GetCharIndexForWordCount(string text, int targetWords)
+        {
+            if (string.IsNullOrEmpty(text) || targetWords <= 0) return 0;
+            int count = 0;
+            bool inWord = false;
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (char.IsWhiteSpace(text[i]))
+                {
+                    inWord = false;
+                }
+                else if (!inWord)
+                {
+                    inWord = true;
+                    count++;
+                    if (count > targetWords)
+                    {
+                        return i;
+                    }
+                }
+            }
+            return text.Length;
+        }
+
+        public void AdvancePhase(int wordCount = PhasedWordChunkSize)
+        {
+            VisibleWordCount = Math.Min(TotalWordCount, _visibleWordCount + wordCount);
+        }
+
+        public void ShowAllPhase()
+        {
+            VisibleWordCount = Math.Max(TotalWordCount, int.MaxValue / 2);
+        }
+
+        public void CollapsePhase()
+        {
+            IsExpanded = false;
+        }
+
+        [JsonIgnore]
+        public bool HasPhasedExpansion => IsExpanded && IsLongText && TotalWordCount > PhasedWordChunkSize;
+
+        [JsonIgnore]
+        public bool HasMorePhases => IsExpanded && _visibleWordCount < TotalWordCount;
+
+        [JsonIgnore]
+        public int RemainingWordsCount => Math.Max(0, TotalWordCount - _visibleWordCount);
+
+        [JsonIgnore]
+        public string ShowingWordsText => $"Showing {Math.Min(_visibleWordCount, TotalWordCount):N0} of {TotalWordCount:N0} words ({TotalLineCount:N0} lines)";
+
+        [JsonIgnore]
+        public string ReadMoreButtonText => $"Read next 500 words (+{Math.Min(PhasedWordChunkSize, RemainingWordsCount):N0})";
+
+        /// <summary>
+        /// Truncated preview of RawContent for UI binding in scrollable lists.
+        /// Caps at 300 chars when collapsed. When expanded, yields phased ~500 word progressive chunks.
+        /// </summary>
         private string? _rawContentPreview;
         [JsonIgnore]
         public string RawContentPreview
         {
             get
             {
-                if (IsExpanded) return RawContent;
                 if (_rawContentPreview != null) return _rawContentPreview;
-                var raw = RawContent;
+                var raw = RawContent ?? string.Empty;
+                if (IsExpanded)
+                {
+                    if (TotalWordCount <= PhasedWordChunkSize || _visibleWordCount >= TotalWordCount)
+                    {
+                        _rawContentPreview = raw;
+                    }
+                    else
+                    {
+                        int charIdx = GetCharIndexForWordCount(raw, _visibleWordCount);
+                        _rawContentPreview = charIdx < raw.Length ? string.Concat(raw.AsSpan(0, charIdx), "…") : raw;
+                    }
+                    return _rawContentPreview;
+                }
+
                 if (raw.Length <= RawContentPreviewLimit)
                 {
                     _rawContentPreview = raw;
@@ -579,12 +776,23 @@ namespace FlyShelf.ViewModels
                 if (_isExpanded != value)
                 {
                     _isExpanded = value;
+                    if (!_isExpanded)
+                    {
+                        _visibleWordCount = PhasedWordChunkSize; // Reset to 500 words on collapse
+                    }
                     _rawContentPreview = null; // invalidate preview — expanded state changed
+                    _displayText = null;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsExpanded)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(VisibleWordCount)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExpandToggleText)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayText)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContentPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasPhasedExpansion)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasMorePhases)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowingWordsText)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ReadMoreButtonText)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RemainingWordsCount)));
                 }
             }
         }
@@ -617,7 +825,7 @@ namespace FlyShelf.ViewModels
         }
 
         [JsonIgnore]
-        public double CollapsedMaxHeight => IsLongText ? (IsExpanded ? ExpandedMaxHeightLimit : CollapsedMaxHeightLong) : CollapsedMaxHeightShort;
+        public double CollapsedMaxHeight => IsLongText ? (IsExpanded ? double.PositiveInfinity : CollapsedMaxHeightLong) : CollapsedMaxHeightShort;
 
         [JsonIgnore]
         public string ExpandToggleText => IsExpanded ? "▴" : "▾";
@@ -660,13 +868,14 @@ namespace FlyShelf.ViewModels
         {
             get
             {
-                if (ItemType == ClipboardItemType.Document || ItemType == ClipboardItemType.Text) return true;
+                if (IsPdfPreview || IsImagePreview) return false;
+                if (ItemType == ClipboardItemType.Document || ItemType == ClipboardItemType.Text || ItemType == ClipboardItemType.Code || IsMarkdownPreview) return true;
                 string norm = (Extension ?? "").TrimStart('.').ToUpperInvariant();
-                if (norm is "DOCX" or "DOC" or "TXT" or "MD" or "MARKDOWN" or "RTF" or "ODT" or "LOG" or "CSV" or "HTML" or "HTM" or "JSON" or "XML" or "YAML" or "YML") return true;
+                if (norm is "DOCX" or "DOC" or "TXT" or "MD" or "MARKDOWN" or "RTF" or "ODT" or "LOG" or "CSV" or "HTML" or "HTM" or "JSON" or "XML" or "YAML" or "YML" or "CS" or "JS" or "PY" or "CPP" or "JAVA") return true;
                 if (!string.IsNullOrEmpty(FilePath))
                 {
                     string ext = System.IO.Path.GetExtension(FilePath).ToUpperInvariant().TrimStart('.');
-                    if (ext is "DOCX" or "DOC" or "TXT" or "MD" or "RTF" or "ODT" or "LOG" or "CSV" or "HTML" or "HTM" or "JSON" or "XML" or "YAML" or "YML") return true;
+                    if (ext is "DOCX" or "DOC" or "TXT" or "MD" or "RTF" or "ODT" or "LOG" or "CSV" or "HTML" or "HTM" or "JSON" or "XML" or "YAML" or "YML" or "CS" or "JS" or "PY" or "CPP" or "JAVA") return true;
                 }
                 return false;
             }

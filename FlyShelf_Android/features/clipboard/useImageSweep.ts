@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { Platform, ToastAndroid, NativeModules } from 'react-native';
+import { toast } from '../../context/ToastContext';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Clipboard from 'expo-clipboard';
 import { ClipItem, SYNC_CACHE_BASE } from '../../utils/clipTypes';
@@ -156,7 +157,7 @@ export function useImageSweep(params: {
                   if (AdvanceOverlay && isFloatingBallEnabled) {
                     try { AdvanceOverlay.pushClipToNativeDB(uri, imgItem.SourceDeviceName || 'PC'); } catch (e) { console.warn('Overlay pushClip after download: error', (e as any)?.message || e); }
                   }
-                  if (Platform.OS === 'android') ToastAndroid.show(`🖼️ Screenshot synced from PC!`, ToastAndroid.SHORT);
+                  toast.clipboard(`Image Synced from ${imgItem.SourceDeviceName || 'PC'}`, "Saved and ready to paste");
                 }
                 dlSuccess = true;
               } else {

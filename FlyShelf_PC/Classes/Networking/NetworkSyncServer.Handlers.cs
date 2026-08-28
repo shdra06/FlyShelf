@@ -55,27 +55,36 @@ namespace FlyShelf.Classes
         private const int SYNC_CACHE_TTL_MS = 500; // Cache for 500ms — fast invalidation for real-time sync
 
         // [FIX H-05]: Changed from async void to async Task — async void crashes the process on exception
-        private async Task ServeClipboardData(HttpListenerResponse res)
+        private async Task ServeClipboardData(HttpListenerRequest req, HttpListenerResponse res)
         {
             try
             {
-                long now = Environment.TickCount64;
-                int currentCount = 0;
-
-                // Use cached response if still fresh — atomic reference read ensures consistency
-                var cached = _syncCache;
-                if (cached != null && (now - cached.Timestamp) < SYNC_CACHE_TTL_MS)
+                long sinceMs = 0;
+                if (!string.IsNullOrEmpty(req.QueryString["since"]))
                 {
-                    res.ContentType = "application/json; charset=utf-8";
-                    res.ContentLength64 = cached.Json.Length;
-                    try { res.OutputStream.Write(cached.Json, 0, cached.Json.Length); } catch { } // Best-effort: failure is acceptable
-                    res.Close();
-                    return;
+                    long.TryParse(req.QueryString["since"], CultureInfo.InvariantCulture, out sinceMs);
+                }
+
+                // CLOCK-SKEW GUARD: If client since timestamp is far in the future compared to PC clock
+                // (e.g. PC clock jumped backwards due to NTP or timezone adjustment), reset sinceMs to prevent starvation
+                long currentPcEpoch = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                if (sinceMs > currentPcEpoch + 60_000)
+                {
+                    sinceMs = 0; // PC clock jumped backward or client clock is ahead — fallback to fresh top items
+                }
+
+                int limit = 3; // Default: Only first 3 entries on initial pairing
+                if (!string.IsNullOrEmpty(req.QueryString["limit"]) && int.TryParse(req.QueryString["limit"], CultureInfo.InvariantCulture, out int customLimit) && customLimit > 0)
+                {
+                    limit = Math.Min(customLimit, 25);
+                }
+                else if (sinceMs > 0)
+                {
+                    // Delta sync: fetch up to 15 items newer than since timestamp
+                    limit = 15;
                 }
 
                 // PERF: Capture item count + references in a SINGLE Dispatcher.Invoke call.
-                // Previously used separate InvokeAsync().Task.Wait(2sec) just for count.
-                // All LINQ projection + JSON serialization now runs on the background HTTP listener thread.
                 List<(string? rawContent, string? fileName, string? filePath, string? extension,
                       ClipboardItemType itemType, DateTime dateCopied, bool isPassword)>? snapshot = null;
                 string deviceId = "";
@@ -83,19 +92,26 @@ namespace FlyShelf.Classes
                 if (dispatcher == null) { res.Close(); return; }
                 await dispatcher.InvokeAsync(() =>
                 {
-                    currentCount = _viewModel.DroppedItems.Count;
                     deviceId = SettingsManager.Current.DeviceId ?? "PC";
-                    snapshot = _viewModel.DroppedItems
-                        .Where(x => x.Extension != "MOBILE" && x.Extension != "DOWNLOADING" && !x.IsPassword)
-                        .Take(15)
+                    var query = _viewModel.DroppedItems
+                        .Where(x => x.Extension != "MOBILE" && x.Extension != "DOWNLOADING" && !x.IsPassword);
+
+                    if (sinceMs > 0)
+                    {
+                        query = query.Where(x => ((DateTimeOffset)x.DateCopied).ToUnixTimeMilliseconds() > sinceMs);
+                    }
+
+                    snapshot = query
+                        .Take(limit)
                         .Select(x => (x.RawContent, x.FileName, x.FilePath, x.Extension, x.ItemType, x.DateCopied, x.IsPassword))
                         .ToList();
                 }, System.Windows.Threading.DispatcherPriority.Normal);
 
-                // Build payload + serialize on the background thread (not UI thread)
-                if (snapshot != null)
+                // Build payload + serialize on background thread
+                object payloadList = Array.Empty<object>();
+                if (snapshot != null && snapshot.Count > 0)
                 {
-                    var payload = snapshot.Select(x => {
+                    var items = snapshot.Select(x => {
                         string contentKey = x.rawContent ?? x.fileName ?? x.filePath ?? "";
                         int stableHash = contentKey.GetHashCode(StringComparison.Ordinal);
                         string devName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
@@ -103,7 +119,7 @@ namespace FlyShelf.Classes
                         {
                             id = stableHash.ToString("X8", CultureInfo.InvariantCulture) + "_" + x.dateCopied.Ticks.ToString(CultureInfo.InvariantCulture),
                             EventId = $"{deviceId}_{((DateTimeOffset)x.dateCopied).ToUnixTimeMilliseconds()}_{stableHash:X8}",
-                            Title = string.IsNullOrEmpty(x.fileName) ? (x.rawContent?.Length > 20 ? string.Concat(x.rawContent.AsSpan(0, 20), "...") : x.rawContent) : x.fileName,
+                            Title = string.IsNullOrEmpty(x.fileName) ? (x.rawContent?.Length > 40 ? string.Concat(x.rawContent.AsSpan(0, 40), "...") : x.rawContent) : x.fileName,
                             Type = x.itemType.ToString(),
                             PreviewUrl = (x.itemType == ClipboardItemType.Image || x.itemType == ClipboardItemType.QRCode) ? (!string.IsNullOrEmpty(x.filePath) ? $"/download?path={Uri.EscapeDataString(x.filePath)}" : (x.rawContent ?? "")) : "",
                             DownloadUrl = !string.IsNullOrEmpty(x.filePath) ? $"/download?path={Uri.EscapeDataString(x.filePath)}" : (x.rawContent ?? ""),
@@ -118,24 +134,23 @@ namespace FlyShelf.Classes
                     .OrderByDescending(x => x.Timestamp)
                     .ToList();
 
-                    payload.RemoveAll(x => {
+                    items.RemoveAll(x => {
                         var raw = x.Raw ?? x.Title ?? "";
                         return raw.Length > 30 && !raw.Contains(' ') && _rxBase64.IsMatch(raw);
                     });
 
-                    string json = JsonSerializer.Serialize(payload);
-                    var jsonBytes = Encoding.UTF8.GetBytes(json);
-                    _syncCache = new SyncCacheEntry(jsonBytes, now, currentCount);
+                    payloadList = items;
                 }
 
-                var freshCache = _syncCache?.Json;
-                if (freshCache == null) { res.Close(); return; }
+                string json = JsonSerializer.Serialize(payloadList);
+                var jsonBytes = Encoding.UTF8.GetBytes(json);
                 res.ContentType = "application/json; charset=utf-8";
-                res.ContentLength64 = freshCache.Length;
-                try { res.OutputStream.Write(freshCache, 0, freshCache.Length); } catch { } // Best-effort: failure is acceptable
+                res.ContentLength64 = jsonBytes.Length;
+                await res.OutputStream.WriteAsync(jsonBytes, 0, jsonBytes.Length);
+                await res.OutputStream.FlushAsync();
                 res.Close();
             }
-            catch (Exception ex) { Logger.LogAction("SYNC_SERVE", $"ServeClipboardData failed: {ex.Message}"); try { res.StatusCode = 500; } catch { } /* Best-effort */ try { res.Close(); } catch { } /* Best-effort */ }
+            catch (Exception ex) { Logger.LogAction("SYNC_SERVE", $"ServeClipboardData failed: {ex.Message}"); try { res.StatusCode = 500; } catch { } try { res.Close(); } catch { } }
         }
 
         private async Task HandleTextUpload(HttpListenerRequest req, HttpListenerResponse res)
@@ -914,59 +929,10 @@ namespace FlyShelf.Classes
                         ".pdf" => "Pdf",
                         ".zip" or ".rar" or ".7z" or ".tar" or ".gz" => "Archive",
                         ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp" => "Image",
-                        ".doc" or ".docx" or ".txt" or ".rtf" => "Document",
                         ".ppt" or ".pptx" => "Presentation",
                         ".apk" or ".aab" or ".xapk" or ".apks" => "File",
                         _ => "File"
                     };
-
-                    string deviceName = SettingsManager.Current?.DeviceName ?? Environment.MachineName;
-                    var payload = new
-                    {
-                        Title = rawName,
-                        Type = fileType,
-                        Raw = downloadUrl,
-                        PreviewUrl = downloadUrl,
-                        DownloadUrl = downloadUrl,
-                        FileName = rawName,
-                        FileSize = fileInfo.Length,
-                        Time = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
-                        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                        SourceDeviceName = senderDevice,
-                        SourceDeviceType = "Mobile",
-                        RelayedVia = deviceName
-                    };
-
-                    string pairingKey = DevicePairingManager.EnsurePairingKey();
-                    if (!string.IsNullOrEmpty(pairingKey))
-                    {
-                        string json = System.Text.Json.JsonSerializer.Serialize(payload);
-                        var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-                        var fbRes = await _httpClient.PostAsync(
-                            await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/clipboard/{pairingKey}.json"), content);
-
-                        if (fbRes.IsSuccessStatusCode)
-                        {
-                            string fbBody = await fbRes.Content.ReadAsStringAsync();
-                            try
-                            {
-                                var fbObj = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(fbBody);
-                                if (fbObj != null && fbObj.TryGetValue("name", out string? entryKey) && !string.IsNullOrEmpty(entryKey))
-                                {
-                                    _ = Task.Run(async () =>
-                                    {
-                                        await Task.Delay(24 * 60 * 60_000);
-                                        try { await _httpClient.DeleteAsync(await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/clipboard/{pairingKey}/{entryKey}.json")); } catch { } // Best-effort: failure is acceptable
-                                    });
-                                }
-                            }
-                            catch (Exception ex) { Logger.LogAction("RELAY", $"Firebase response parse failed: {ex.Message}"); }
-                        }
-                    }
-                    else
-                    {
-                        Logger.LogAction("RELAY", "Cannot push relay to Firebase: pairingKey is empty.");
-                    }
                 }
 
                 string sizeStr = new FileInfo(finalPath).Length > 1_073_741_824 

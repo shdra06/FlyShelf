@@ -5,6 +5,7 @@ import {
   Alert, Platform, Modal, Animated, KeyboardAvoidingView,
   ToastAndroid, FlatList,
 } from 'react-native';
+import { toast } from '../../context/ToastContext';
 
 import { FlashList } from '@shopify/flash-list';
 const FlashListCast = FlashList as any;
@@ -28,6 +29,7 @@ import {
 import { createTodoStyles } from '../../styles/todoStyles';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { font, space } from '../../styles/theme';
+import { fuzzyIsMatch } from '../../utils/textNormalize';
 import { Ionicons } from '@expo/vector-icons';
 import RAnimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -234,12 +236,7 @@ function TodoScreenInner() {
                 parsed = parsed.map(d =>
                   d.Date === todayKey ? { ...todayDay!, LastModified: NetworkClock.now() } : d
                 );
-                if (Platform.OS === 'android') {
-                  ToastAndroid.show(
-                    `Migrated ${migratedCount} task${migratedCount > 1 ? 's' : ''} from yesterday`,
-                    ToastAndroid.SHORT
-                  );
-                }
+                toast.info('Tasks Rolled Over', `Carried over ${migratedCount} pending task${migratedCount > 1 ? 's' : ''} from yesterday`);
               }
             }
           }
@@ -408,17 +405,15 @@ function TodoScreenInner() {
     [expandedItemId, editingItemId, showColorPicker, tagInputItemId, editingSubtaskId, activeTimers]
   );
 
-  // ─── Search results ────────────────────────────────────
+  // ─── Search results (AUDIT FIX: fuzzy matching) ────────────────────────────────────
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.trim();
     const results: { day: TodoDay; item: TodoItem }[] = [];
     for (const day of days) {
       for (const item of day.Items) {
-        const matchText = item.Text.toLowerCase().includes(q);
-        const matchDesc = (item.Description || '').toLowerCase().includes(q);
-        const matchTags = item.Tags.some(t => t.toLowerCase().includes(q));
-        if (matchText || matchDesc || matchTags) {
+        const haystack = [item.Text, item.Description || '', ...item.Tags].join(' ');
+        if (fuzzyIsMatch(q, haystack)) {
           results.push({ day, item });
         }
       }
@@ -525,10 +520,8 @@ function TodoScreenInner() {
       markModified(nextDayKey, finalDays);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (Platform.OS === 'android') {
-        const label = recurrence === 1 ? 'tomorrow' : recurrence === 2 ? 'next week' : 'next month';
-        ToastAndroid.show(`🔄 Next occurrence created for ${label}`, ToastAndroid.SHORT);
-      }
+      const label = recurrence === 1 ? 'tomorrow' : recurrence === 2 ? 'next week' : 'next month';
+      toast.success('Recurring Task Created', `Next occurrence scheduled for ${label}`);
     }
   }, [selectedDayKey, markModified, animateCheckbox, getOrCreateDay]);
 
@@ -726,9 +719,7 @@ function TodoScreenInner() {
     }
     markModified(selectedDayKey, updated);
     setShowTemplateModal(false);
-    if (Platform.OS === 'android') {
-      ToastAndroid.show(`Added ${newItems.length} tasks from template`, ToastAndroid.SHORT);
-    }
+    toast.success('Template Applied', `Added ${newItems.length} tasks to ${selectedDayKey}`);
   }, [selectedDayKey, rawTodoItems, getOrCreateDay, markModified]);
 
   // ─── Sort handler ─────────────────────────────────────

@@ -1273,6 +1273,33 @@ namespace FlyShelf
             e.Handled = true;
         }
 
+        private void ReadMoreSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                item.AdvancePhase();
+            }
+            e.Handled = true;
+        }
+
+        private void ShowAllSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                item.ShowAllPhase();
+            }
+            e.Handled = true;
+        }
+
+        private void CollapseSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                item.CollapsePhase();
+            }
+            e.Handled = true;
+        }
+
 
         private void ShelfListView_KeyDown(object sender, KeyEventArgs e)
         {
@@ -1632,6 +1659,17 @@ namespace FlyShelf
                     animator?.Pause();
                 }
                 catch { } // Best-effort
+            }
+        }
+
+        private void ImagePlaceholderBorder_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item)
+            {
+                if (item.Icon == null && (item.ItemType == ViewModels.ClipboardItemType.Image || item.IsImagePreview))
+                {
+                    item.EnsureThumbnailLoadedAsync();
+                }
             }
         }
 

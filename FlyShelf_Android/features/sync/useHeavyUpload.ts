@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Platform, Alert, ToastAndroid, NativeModules } from 'react-native';
+import { toast } from '../../context/ToastContext';
 import * as FileSystem from 'expo-file-system/legacy';
 import { syncLog } from '../../utils/debugLog';
 import { fetchWithTimeout, resolveOptimalUrl } from '../../utils/networkHelpers';
@@ -134,9 +135,9 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
     fileSize: number,
     chunkSize: number,
   ): Promise<void> => {
-    if (Platform.OS === 'android') ToastAndroid.show(`📦 Chunked upload: ${Math.ceil(fileSize / chunkSize)} chunks`, ToastAndroid.SHORT);
-    const sessionId = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
     const totalChunks = Math.ceil(fileSize / chunkSize);
+    toast.info('Sending Large File', `${name} (${(fileSize / (1024 * 1024)).toFixed(1)} MB) • ${totalChunks} chunks`);
+    const sessionId = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
     const startTime = performance.now();
     setUploadProgress({ name, progress: 0 });
     let currentUrl = resolved;
@@ -187,7 +188,6 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
         }
       }
       try { await FileSystem.deleteAsync(chunkTempUri, { idempotent: true }); } catch {}
-      if (Platform.OS === 'android') ToastAndroid.show(`📤 Chunk ${i + 1}/${totalChunks} sent`, ToastAndroid.SHORT);
       const elapsedMs = performance.now() - startTime;
       const bytesTransferred = Math.min((i + 1) * chunkSize, fileSize);
       const speedMBps = elapsedMs > 0 ? (bytesTransferred / (elapsedMs / 1000) / (1024 * 1024)) : undefined;
@@ -272,7 +272,7 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
             await uploadSinglePost(resolved, hydratedPath, name, type, fileSize, startTime);
           }
         }
-        if (Platform.OS === 'android') ToastAndroid.show(`✅ ${name} sent!`, ToastAndroid.SHORT);
+        toast.success('File Sent to PC', name);
       } catch (err: any) {
         syncLog('UPLOAD', `FAILED: ${err?.message}`);
         Alert.alert('Upload Failed', err?.message || 'Unknown error');

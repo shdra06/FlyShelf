@@ -101,41 +101,25 @@ namespace FlyShelf.ViewModels
                     bool converted = false;
 
                     // ═══════════════════════════════════════════════════════
-                    // STRATEGY 1: TXT/MD — Native PDF generation (no Word needed)
+                    // ROBUST MULTI-TIER PDF CONVERSION ENGINE
                     // ═══════════════════════════════════════════════════════
                     if (ext == ".MD")
                     {
                         converted = await FlyShelf.Classes.ConversionUtils.ConvertMarkdownToPdfAsync(workFilePath, targetPdf);
                     }
-                    else if (ext == ".TXT" || ext == ".LOG" || ext == ".CSV")
+                    else if (ext == ".TXT" || ext == ".LOG" || ext == ".CSV" || ext == ".JSON" || ext == ".XML" || ext == ".CS" || ext == ".PY" || ext == ".JS" || ext == ".CPP" || ext == ".H" || ext == ".TS" || ext == ".HTML" || ext == ".CSS")
                     {
-                        converted = ConvertTextToPdfNative(workFilePath, targetPdf);
+                        converted = FlyShelf.Classes.ConversionUtils.ConvertTextToPdf(workFilePath, targetPdf);
                     }
-
-                    if (!converted)
+                    else if (ext == ".DOCX" || ext == ".DOC" || ext == ".RTF")
                     {
-                        // Update progress — trying Word COM
-                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            FlyShelf.Windows.ToastWindow.ShowProgress("Converting to PDF", 40));
-                        // ═══════════════════════════════════════════════════════
-                        // STRATEGY 2: Word COM — tried first (Windows app, everyone has Word)
-                        // ═══════════════════════════════════════════════════════
-                        if (ext == ".DOCX" || ext == ".DOC" || ext == ".RTF")
-                        {
-                            if (Type.GetTypeFromProgID("Word.Application") != null)
-                                converted = await TryWordComConvertStaAsync(workFilePath, targetPdf);
-                        }
-
-                        // ═══════════════════════════════════════════════════════
-                        // STRATEGY 3: LibreOffice — fallback if Word not installed or failed
-                        // ═══════════════════════════════════════════════════════
-                        if (!converted)
-                        {
-                            // Update progress — trying LibreOffice
-                            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                                FlyShelf.Windows.ToastWindow.ShowProgress("Converting to PDF", 60));
-                            converted = TryLibreOfficeConvert(workFilePath, targetPdf);
-                        }
+                        string res = await FlyShelf.Classes.ConversionUtils.ConvertDocToPdfAsync(workFilePath, targetPdf);
+                        converted = !string.IsNullOrEmpty(res) && File.Exists(res);
+                    }
+                    else if (ext == ".PNG" || ext == ".JPG" || ext == ".JPEG" || ext == ".WEBP" || ext == ".BMP" || ext == ".GIF" || ext == ".TIFF" || ext == ".ICO")
+                    {
+                        string res = FlyShelf.Classes.ConversionUtils.ConvertImageToPdf(workFilePath, targetPdf);
+                        converted = !string.IsNullOrEmpty(res) && File.Exists(res);
                     }
 
                     // ═══════════════════════════════════════════════════════
@@ -161,7 +145,7 @@ namespace FlyShelf.ViewModels
                     {
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                         {
-                            FlyShelf.Windows.ToastWindow.ShowToast("Conversion failed — Install LibreOffice or Microsoft Word");
+                            FlyShelf.Windows.ToastWindow.ShowToast("Document conversion failed — check document format");
                             FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ErrorMiniNotification("Failed");
                         });
                     }
@@ -179,153 +163,11 @@ namespace FlyShelf.ViewModels
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // NATIVE TXT/MD → PDF  (no external dependencies at all)
+        // NATIVE TXT/MD → PDF (delegated to robust ConversionUtils engine)
         // ═══════════════════════════════════════════════════════════════
         private static bool ConvertTextToPdfNative(string inputPath, string outputPdf)
         {
-            try
-            {
-                string text = File.ReadAllText(inputPath);
-                if (string.IsNullOrEmpty(text)) text = "(empty file)";
-
-                // PDF page constants (A4 in points)
-                double pageW = 595.28, pageH = 841.89;
-                double margin = 50;
-                double usableW = pageW - 2 * margin;
-                double fontSize = 10;
-                double lineHeight = fontSize * 1.4;
-                int charsPerLine = (int)(usableW / (fontSize * 0.52)); // approximate monospace width
-                int linesPerPage = (int)((pageH - 2 * margin) / lineHeight);
-
-                // Word-wrap and paginate
-                var allLines = new List<string>();
-                foreach (var rawLine in text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n'))
-                {
-                    if (rawLine.Length <= charsPerLine)
-                    {
-                        allLines.Add(rawLine);
-                    }
-                    else
-                    {
-                        // Wrap long lines
-                        for (int i = 0; i < rawLine.Length; i += charsPerLine)
-                        {
-                            int len = Math.Min(charsPerLine, rawLine.Length - i);
-                            allLines.Add(rawLine.Substring(i, len));
-                        }
-                    }
-                }
-
-                // Split into pages
-                var pages = new List<List<string>>();
-                for (int i = 0; i < allLines.Count; i += linesPerPage)
-                {
-                    int count = Math.Min(linesPerPage, allLines.Count - i);
-                    pages.Add(allLines.GetRange(i, count));
-                }
-                if (pages.Count == 0) pages.Add(new List<string> { "(empty)" });
-
-                // Write PDF
-                using (var fs = new FileStream(outputPdf, FileMode.Create))
-                using (var writer = new StreamWriter(fs, System.Text.Encoding.GetEncoding("ISO-8859-1")))
-                {
-                    var offsets = new List<long>();
-                    writer.Write("%PDF-1.4\n");
-                    writer.Flush();
-
-                    // Obj 1: Catalog
-                    offsets.Add(fs.Position);
-                    writer.Write("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-                    writer.Flush();
-
-                    // Obj 2: Pages
-                    offsets.Add(fs.Position);
-                    string kids = string.Join(" ", Enumerable.Range(0, pages.Count).Select(i => $"{3 + i * 2} 0 R"));
-                    writer.Write($"2 0 obj\n<< /Type /Pages /Kids [{kids}] /Count {pages.Count} >>\nendobj\n");
-                    writer.Flush();
-
-                    int nextObj = 3;
-                    // Font object (Helvetica — built-in, always available)
-                    int fontObj = nextObj + pages.Count * 2;
-                    
-                    for (int p = 0; p < pages.Count; p++)
-                    {
-                        // Page object
-                        int pageObj = nextObj + p * 2;
-                        int contentObj = pageObj + 1;
-
-                        // Build content stream
-                        var contentLines = new List<string>();
-                        contentLines.Add($"BT\n/F1 {fontSize:F0} Tf\n{margin:F2} {(pageH - margin):F2} Td\n{lineHeight:F2} TL\n");
-                        foreach (var line in pages[p])
-                        {
-                            contentLines.Add($"({EscapePdfString(line)}) '\n");
-                        }
-                        contentLines.Add("ET\n");
-                        string contentStream = string.Join("", contentLines);
-                        byte[] contentBytes = System.Text.Encoding.ASCII.GetBytes(contentStream);
-
-                        offsets.Add(fs.Position);
-                        writer.Write($"{pageObj} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {pageW:F2} {pageH:F2}] /Contents {contentObj} 0 R /Resources << /Font << /F1 {fontObj} 0 R >> >> >>\nendobj\n");
-                        writer.Flush();
-
-                        offsets.Add(fs.Position);
-                        writer.Write($"{contentObj} 0 obj\n<< /Length {contentBytes.Length} >>\nstream\n");
-                        writer.Flush();
-                        fs.Write(contentBytes, 0, contentBytes.Length);
-                        writer.Write("endstream\nendobj\n");
-                        writer.Flush();
-                    }
-
-                    // Font object
-                    offsets.Add(fs.Position);
-                    writer.Write($"{fontObj} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n");
-                    writer.Flush();
-
-                    // xref table
-                    long xrefOffset = fs.Position;
-                    int totalObjs = offsets.Count + 1;
-                    writer.Write($"xref\n0 {totalObjs}\n");
-                    writer.Write("0000000000 65535 f \n");
-                    foreach (var off in offsets)
-                        writer.Write($"{off:D10} 00000 n \n");
-                    writer.Write($"trailer\n<< /Size {totalObjs} /Root 1 0 R >>\nstartxref\n{xrefOffset}\n%%EOF\n");
-                    writer.Flush();
-                }
-
-                return File.Exists(outputPdf) && new FileInfo(outputPdf).Length > 0;
-            }
-            catch (Exception ex)
-            {
-                FlyShelf.Classes.Logger.LogAction("CONVERT", $"Native TXT->PDF failed: {ex.Message}");
-                return false;
-            }
-        }
-
-        // [FIX M-50]: Handle non-ASCII/Unicode/CJK/emoji via octal escaping for valid PDF strings
-        private static string EscapePdfString(string input)
-        {
-            if (string.IsNullOrEmpty(input)) return "";
-            var sb = new StringBuilder(input.Length + 10);
-            foreach (char c in input)
-            {
-                switch (c)
-                {
-                    case '\\': sb.Append(@"\\"); break;
-                    case '(': sb.Append(@"\("); break;
-                    case ')': sb.Append(@"\)"); break;
-                    case '\r': sb.Append(@"\r"); break;
-                    case '\n': sb.Append(@"\n"); break;
-                    case '\t': sb.Append("    "); break;
-                    default:
-                        if (c > 0x7E)
-                            sb.Append(CultureInfo.InvariantCulture, $"\\{((int)c):D3}"); // Octal-style escape for non-ASCII
-                        else
-                            sb.Append(c);
-                        break;
-                }
-            }
-            return sb.ToString();
+            return FlyShelf.Classes.ConversionUtils.ConvertTextToPdf(inputPath, outputPdf);
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -553,8 +395,8 @@ namespace FlyShelf.ViewModels
         }
 
         /// <summary>
-        /// Convert an image to a single-page PDF (A4 size). No external dependencies.
-        /// Uses raw PDF specification writing with embedded JPEG stream.
+        /// Convert an image to a PDF file using the robust ConversionUtils engine.
+        /// Handles PNG, JPG, WebP, BMP, GIF, TIFF, ICO, EXIF rotation, and non-blocking FileShare.
         /// </summary>
         public void ConvertImageToPdf()
         {
@@ -578,7 +420,7 @@ namespace FlyShelf.ViewModels
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
-                        FlyShelf.Windows.ToastWindow.ShowProgress("Converting image to PDF", 10);
+                        FlyShelf.Windows.ToastWindow.ShowProgress("Converting image to PDF", 20);
                         FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ShowConversionNotification(
                             Path.GetExtension(FilePath).TrimStart('.'), "PDF");
                     });
@@ -587,109 +429,16 @@ namespace FlyShelf.ViewModels
                         Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(),
                         Path.GetFileNameWithoutExtension(FilePath) + $"_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
 
-                    // Load image using WPF's decoder (thread-safe on background threads)
-                    byte[] jpegBytes;
-                    int imgWidth, imgHeight;
-
-                    // [FIX M-21]: Use FileStream with ReadWrite share to avoid locking the source file
-                    using var imgFs = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    var dec = System.Windows.Media.Imaging.BitmapDecoder.Create(
-                        imgFs,
-                        System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,
-                        System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
-
-                    var frame = dec.Frames[0];
-                    imgWidth = frame.PixelWidth;
-                    imgHeight = frame.PixelHeight;
-
-                    // Convert to JPEG bytes for PDF embedding
-                    // [FIX R5]: Strip alpha channel from RGBA PNGs — JPEG/DCTDecode requires DeviceRGB
-                    System.Windows.Media.Imaging.BitmapSource sourceFrame = frame;
-                    if (frame.Format == System.Windows.Media.PixelFormats.Bgra32 ||
-                        frame.Format == System.Windows.Media.PixelFormats.Pbgra32 ||
-                        frame.Format == System.Windows.Media.PixelFormats.Rgba64 ||
-                        frame.Format == System.Windows.Media.PixelFormats.Prgba64)
+                    string resultPath = FlyShelf.Classes.ConversionUtils.ConvertImageToPdf(FilePath, outputPdf);
+                    if (string.IsNullOrEmpty(resultPath) || !File.Exists(resultPath))
                     {
-                        var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap();
-                        converted.BeginInit();
-                        converted.Source = frame;
-                        converted.DestinationFormat = System.Windows.Media.PixelFormats.Bgr24;
-                        converted.EndInit();
-                        converted.Freeze();
-                        sourceFrame = converted;
-                    }
-
-                    // Update progress — encoding image
-                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        FlyShelf.Windows.ToastWindow.ShowProgress("Converting image to PDF", 50));
-
-                    using (var ms = new MemoryStream())
-                    {
-                        var enc = new System.Windows.Media.Imaging.JpegBitmapEncoder { QualityLevel = 90 };
-                        enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(sourceFrame));
-                        enc.Save(ms);
-                        jpegBytes = ms.ToArray();
-                    }
-
-                    // A4 page size in points (72 dpi): 595.28 x 841.89
-                    double pageW = 595.28, pageH = 841.89;
-                    double margin = 36; // 0.5 inch margin
-                    double usableW = pageW - 2 * margin;
-                    double usableH = pageH - 2 * margin;
-
-                    // Scale image to fit page while maintaining aspect ratio
-                    double scale = Math.Min(usableW / imgWidth, usableH / imgHeight);
-                    double drawW = imgWidth * scale;
-                    double drawH = imgHeight * scale;
-                    double drawX = margin + (usableW - drawW) / 2;
-                    // [FIX C6]: PDF uses bottom-left origin — position image correctly
-                    double drawY = pageH - margin - drawH - (usableH - drawH) / 2;
-
-                    // Write a minimal valid PDF
-                    using (var fs = new FileStream(outputPdf, FileMode.Create))
-                    using (var writer = new StreamWriter(fs, System.Text.Encoding.ASCII))
-                    {
-                        var offsets = new List<long>();
-                        writer.Write("%PDF-1.4\n");
-                        writer.Flush();
-
-                        offsets.Add(fs.Position);
-                        writer.Write("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-                        writer.Flush();
-
-                        offsets.Add(fs.Position);
-                        writer.Write("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
-                        writer.Flush();
-
-                        offsets.Add(fs.Position);
-                        writer.Write($"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {pageW:F2} {pageH:F2}] /Contents 4 0 R /Resources << /XObject << /Img1 5 0 R >> >> >>\nendobj\n");
-                        writer.Flush();
-
-                        string contentStream = $"q\n{drawW:F2} 0 0 {drawH:F2} {drawX:F2} {drawY:F2} cm\n/Img1 Do\nQ\n";
-                        offsets.Add(fs.Position);
-                        writer.Write($"4 0 obj\n<< /Length {contentStream.Length} >>\nstream\n{contentStream}endstream\nendobj\n");
-                        writer.Flush();
-
-                        offsets.Add(fs.Position);
-                        writer.Write($"5 0 obj\n<< /Type /XObject /Subtype /Image /Width {imgWidth} /Height {imgHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {jpegBytes.Length} >>\nstream\n");
-                        writer.Flush();
-                        fs.Write(jpegBytes, 0, jpegBytes.Length);
-                        writer.Write("\nendstream\nendobj\n");
-                        writer.Flush();
-
-                        long xrefOffset = fs.Position;
-                        writer.Write($"xref\n0 {offsets.Count + 1}\n");
-                        writer.Write("0000000000 65535 f \n");
-                        foreach (var off in offsets)
-                            writer.Write($"{off:D10} 00000 n \n");
-                        writer.Write($"trailer\n<< /Size {offsets.Count + 1} /Root 1 0 R >>\nstartxref\n{xrefOffset}\n%%EOF\n");
-                        writer.Flush();
+                        throw new Exception("Image conversion engine failed to produce valid PDF");
                     }
 
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
                         var dataObj = new System.Windows.DataObject();
-                        dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { outputPdf });
+                        dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { resultPath });
                         var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
                         (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
                         FlyShelf.Windows.ToastWindow.ShowProgress("Image converted to PDF", 100);

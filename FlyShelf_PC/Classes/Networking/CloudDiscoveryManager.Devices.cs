@@ -183,23 +183,34 @@ namespace FlyShelf.Classes
                         if (!string.IsNullOrWhiteSpace(json) && json != "null")
                         {
                             using var doc = JsonDocument.Parse(json);
-                            string myId = SettingsManager.Current.DeviceId;
+                            string myId = SettingsManager.Current.DeviceId ?? "";
+                            string myName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
+
                             foreach (var prop in doc.RootElement.EnumerateObject())
                             {
-                                if (prop.Name == myId) continue; // Skip self
                                 string name = prop.Value.TryGetProperty("DeviceName", out var n) ? n.GetString() ?? "" : "";
+                                string devId = prop.Value.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name;
+
+                                // Guard: Always skip self (by DeviceId, node key, or machine name)
+                                if (string.Equals(prop.Name, myId, StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(devId, myId, StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(name, myName, StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(prop.Name, myName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    continue;
+                                }
+
                                 string type = prop.Value.TryGetProperty("DeviceType", out var dt) ? dt.GetString() ?? "" : "";
                                 bool online = prop.Value.TryGetProperty("IsOnline", out var on) && on.GetBoolean();
                                 string localIp = prop.Value.TryGetProperty("LocalIp", out var lip) ? lip.GetString() ?? "" : "";
                                 string globalUrl = prop.Value.TryGetProperty("GlobalUrl", out var gurl) ? gurl.GetString() ?? "" : "";
 
-                                // TTL check: treat devices with heartbeat older than 16 minutes as offline
-                                // (matches 15-min heartbeat interval — prevents false offline during normal operation)
+                                // Real-time TTL check: treat devices with heartbeat older than 2 minutes as offline
                                 if (online && prop.Value.TryGetProperty("Timestamp", out var ts))
                                 {
                                     long deviceTs = (long)ts.GetDouble();
                                     long nowMs = NetworkClock.UtcNowMs;
-                                    if (nowMs - deviceTs > 960_000) online = false;
+                                    if (nowMs - deviceTs > 120_000) online = false;
                                 }
 
                                 devices.Add((prop.Name, name, type, online, localIp, globalUrl));
@@ -218,9 +229,9 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
-        /// Purge stale device entries from Firebase.
-        /// Removes old GUID-based entries (24h) and modern PC_/Mobile_ entries that are
-        /// offline for 48+ hours AND not in the paired devices list.
+        /// Purge stale and unpaired device entries from Firebase.
+        /// Removes old GUID-based entries, duplicate self nodes, and modern entries that are
+        /// offline or not in the paired devices list.
         /// </summary>
         public static async Task CleanupStaleDevices()
         {
@@ -237,52 +248,50 @@ namespace FlyShelf.Classes
                     {
                         using var doc = JsonDocument.Parse(json);
                         long nowMs = NetworkClock.UtcNowMs;
-                        const long STALE_THRESHOLD_MS = 24 * 60 * 60_000; // 24 hours for old-format
-                        const long MODERN_STALE_THRESHOLD_MS = 48 * 60 * 60_000; // 48 hours for modern-format
                         string myDeviceId = SettingsManager.Current.DeviceId ?? "";
+                        string myName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
+
                         var pairedIds = new HashSet<string>(
                             DevicePairingManager.GetPairedDevices().Select(d => d.DeviceId),
                             StringComparer.OrdinalIgnoreCase);
 
                         foreach (var prop in doc.RootElement.EnumerateObject())
                         {
-                            // Never delete self
-                            if (prop.Name == myDeviceId) continue;
+                            // Clean up old duplicate self entries that used machine name as key instead of DeviceId
+                            if (string.Equals(prop.Name, myName, StringComparison.OrdinalIgnoreCase) && !string.Equals(prop.Name, myDeviceId, StringComparison.OrdinalIgnoreCase))
+                            {
+                                string deleteSelfGhostUrl = (await AuthUrl($"active_devices/{pairingKey}/{prop.Name}.json"));
+                                using var _ = await _client.DeleteAsync(deleteSelfGhostUrl);
+                                Logger.LogAction("FIREBASE CLEANUP", $"Removed duplicate self entry: {prop.Name}");
+                                continue;
+                            }
+
+                            // Never delete current active self
+                            if (string.Equals(prop.Name, myDeviceId, StringComparison.OrdinalIgnoreCase)) continue;
+
+                            string name = prop.Value.TryGetProperty("DeviceName", out var n) ? n.GetString() ?? "" : "";
+                            string devId = prop.Value.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name;
 
                             long deviceTs = 0;
                             if (prop.Value.TryGetProperty("Timestamp", out var ts))
                                 deviceTs = (long)ts.GetDouble();
 
-                            bool isOldFormat = prop.Name.Contains('-') && !prop.Name.StartsWith("PC_", StringComparison.Ordinal) && !prop.Name.StartsWith("Mobile_", StringComparison.Ordinal);
-                            bool isModernFormat = prop.Name.StartsWith("PC_", StringComparison.Ordinal) || prop.Name.StartsWith("Mobile_", StringComparison.Ordinal);
+                            bool isOnline = prop.Value.TryGetProperty("IsOnline", out var onProp) && onProp.GetBoolean();
+                            bool isPaired = pairedIds.Contains(prop.Name) || pairedIds.Contains(devId) || pairedIds.Contains(name);
 
-                            if (isOldFormat)
+                            // If device is not paired AND (offline or no heartbeat for > 3 minutes): delete it from Firebase
+                            if (!isPaired && (!isOnline || (nowMs - deviceTs) > 180_000))
                             {
-                                // Old GUID-format: delete if offline 24+ hours
-                                if (deviceTs > 0 && (nowMs - deviceTs) < STALE_THRESHOLD_MS)
-                                {
-                                    Logger.LogAction("FIREBASE CLEANUP", $"Keeping active old-format device: {prop.Name}");
-                                    continue;
-                                }
                                 string deleteUrl = (await AuthUrl($"active_devices/{pairingKey}/{prop.Name}.json"));
-                                using var delResp1 = await _client.DeleteAsync(deleteUrl);
-                                Logger.LogAction("FIREBASE CLEANUP", $"Removed stale old-format device: {prop.Name}");
+                                using var delResp = await _client.DeleteAsync(deleteUrl);
+                                Logger.LogAction("FIREBASE CLEANUP", $"Purged stale unpaired ghost: {prop.Name} ({name})");
                             }
-                            else if (isModernFormat && !pairedIds.Contains(prop.Name))
+                            // If device is paired but offline for more than 7 days: delete from active_devices
+                            else if (isPaired && (nowMs - deviceTs) > 7 * 24 * 3600_000)
                             {
-                                // Modern-format NOT in paired list: delete if offline 48+ hours
-                                // This prevents ghost entries from unpaired or abandoned devices.
-                                bool isOnline = prop.Value.TryGetProperty("IsOnline", out var onProp) && onProp.GetBoolean();
-                                if (isOnline && deviceTs > 0 && (nowMs - deviceTs) < MODERN_STALE_THRESHOLD_MS)
-                                {
-                                    continue; // Still active recently — keep it
-                                }
-                                if (deviceTs > 0 && (nowMs - deviceTs) > MODERN_STALE_THRESHOLD_MS)
-                                {
-                                    string deleteUrl = (await AuthUrl($"active_devices/{pairingKey}/{prop.Name}.json"));
-                                    using var delResp2 = await _client.DeleteAsync(deleteUrl);
-                                    Logger.LogAction("FIREBASE CLEANUP", $"Removed stale unpaired device: {prop.Name} (offline {(nowMs - deviceTs) / 3_600_000}h)");
-                                }
+                                string deleteUrl = (await AuthUrl($"active_devices/{pairingKey}/{prop.Name}.json"));
+                                using var delResp = await _client.DeleteAsync(deleteUrl);
+                                Logger.LogAction("FIREBASE CLEANUP", $"Purged long-dead device from active_devices: {prop.Name}");
                             }
                         }
                     }
