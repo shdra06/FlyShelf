@@ -202,6 +202,13 @@ namespace FlyShelf.Classes
                     _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl, true, ServerUrl);
                 }
 
+                // Immediately check for new devices that paired while we were offline
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(5000); // Small delay for Firebase auth to initialize
+                    await DevicePairingManager.CheckForHandshakes();
+                });
+
                 // Heartbeat: reduced to 900s (15 min) — URL updates are now handled via
                 // P2P WebSocket directly to connected peers. Firebase writes only happen
                 // at startup and on URL change. Timer is mainly for pairing handshakes.
@@ -211,12 +218,8 @@ namespace FlyShelf.Classes
                     // forceWrite: true — always update Firebase timestamp even if URL hasn't changed,
                     // so other devices' TTL check doesn't mark us as offline between heartbeats.
                     _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl, forceWrite: true);
-                    // Check for new devices that joined via pairing code
-                    // Fix #3: Widened from 10 min to 20 min — ensures at least one check per 15-min timer cycle
-                    if ((DateTime.UtcNow - DevicePairingManager.LastPairingCodeGeneratedAt).TotalMinutes < 20)
-                    {
-                        _ = DevicePairingManager.CheckForHandshakes();
-                    }
+                    // Always check for new devices that joined via QR scan, pairing code, or Firebase handshake
+                    _ = DevicePairingManager.CheckForHandshakes();
 
                     // Clean up abandoned chunk upload sessions older than 2 hours
                     try

@@ -101,13 +101,10 @@ export function useFirebaseSync(params: {
     const pk = pairingKeyRef.current;
     if (!isValidPairingKey(pk)) return;
 
-    // If PC is registered in Firebase active_devices, keep it online via Cloud
-    const activePcOnline = (activeDevicesRef.current || []).some((d: any) => d.DeviceType === 'PC' && d.IsOnline);
+    // Don't claim "online" just because PC is registered in Firebase —
+    // we can't actually reach it, so show honest "Connecting..." status
     pairedDevicesRef.current.filter(d => d.deviceType === 'PC').forEach(d => {
-      updateDeviceStatus(d.deviceId, {
-        isOnline: activePcOnline,
-        connectionType: activePcOnline ? 'Cloud' : undefined
-      });
+      updateDeviceStatus(d.deviceId, { isOnline: false, connectionType: undefined });
     });
   };
 

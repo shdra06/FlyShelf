@@ -241,6 +241,7 @@ export function useDeviceSync(params: {
             }
           }
           markPcUnreachable();
+          setConnectionInfo(null); // Clear stale status — subtitle goes back to "Searching..."
           return;
         }
         {
@@ -709,6 +710,7 @@ export function useDeviceSync(params: {
         cachedPcUrlRef.current = null;
         recordCloudflareFailure();
         markPcUnreachable();
+        setConnectionInfo(null);
       }
       } finally { pollLockRef.current = false; }
     };

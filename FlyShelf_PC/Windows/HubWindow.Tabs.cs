@@ -296,9 +296,9 @@ namespace FlyShelf.Windows
                         IsLanActive = transport == "LAN" || (!string.IsNullOrEmpty(peer?.LanUrl) && isAlive),
                         IsCloudActive = transport == "Cloud" || (!string.IsNullOrEmpty(peer?.CloudflareUrl) && isAlive) || cloudAlive,
                         // SECURITY: URL fields intentionally not populated — no URL exposure in UI
-                        StatusText = isAlive
-                            ? $"Connected via {transport}"
-                            : "Offline"
+                        StatusText = peerAlive
+                            ? $"Connected via {peer?.Transport ?? "LAN"}"
+                            : (cloudAlive ? "Online — Cloud available" : "Offline")
                     };
                 }).ToList();
 
