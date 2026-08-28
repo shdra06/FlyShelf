@@ -101,7 +101,11 @@ namespace FlyShelf.Classes
                         query = query.Where(x => ((DateTimeOffset)x.DateCopied).ToUnixTimeMilliseconds() > sinceMs);
                     }
 
+                    // BUG FIX #2: Sort oldest-first before Take(). DroppedItems is newest-first,
+                    // so without this, Take(15) grabs the 15 newest and permanently skips
+                    // any items in the middle when there are more than 15 new items.
                     snapshot = query
+                        .OrderBy(x => x.DateCopied)
                         .Take(limit)
                         .Select(x => (x.RawContent, x.FileName, x.FilePath, x.Extension, x.ItemType, x.DateCopied, x.IsPassword))
                         .ToList();

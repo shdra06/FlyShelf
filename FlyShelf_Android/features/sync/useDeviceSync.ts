@@ -204,6 +204,9 @@ export function useDeviceSync(params: {
   useEffect(() => {
     const pollFn = async () => {
       if (pollLockRef.current) return; // Already running — skip this invocation
+      // BUG FIX #1: Skip poll if pairing key hasn't loaded from SecureStorage yet.
+      // Without this, the first poll fires with empty X-Pairing-Key → PC rejects → URL cache destroyed.
+      if (!pairingKeyRef.current) return;
       pollLockRef.current = true;
       try {
       // Gate: check if any paired device has clipboard sync enabled
@@ -270,6 +273,14 @@ export function useDeviceSync(params: {
               }
             }
           } catch (e) { syncLog('PC-POLL', `Failed to read X-Global-Url header: ${(e as any)?.message || e}`); }
+          // BUG FIX #4: Guard against captive portals (hotel WiFi) that return 200 OK with HTML.
+          // Without this, response.json() throws on HTML, outer catch destroys URL cache, loops forever.
+          const contentType = response.headers.get('content-type') || '';
+          if (!contentType.includes('application/json')) {
+            syncLog('PC-POLL', `Non-JSON response (${contentType.substring(0, 40)}) — likely captive portal, skipping`);
+            pollLockRef.current = false;
+            return;
+          }
           const data = await response.json();
           if (Array.isArray(data) && data.length > 0) {
             for (const item of data) {

@@ -226,7 +226,10 @@ export function usePcUrlResolver(
       // If Cloud connects first, give LAN a tiny 150ms window to claim local priority, else accept Cloud.
       try {
         const winner = await Promise.race([
-          lanPromise.then(url => ({ type: 'lan' as const, url })),
+          // BUG FIX #3: Catch LAN rejection so it doesn't short-circuit the race.
+          // Without this, Promise.race rejects instantly when no LAN candidates exist,
+          // completely skipping Cloudflare resolution.
+          lanPromise.then(url => ({ type: 'lan' as const, url })).catch(() => new Promise<never>(() => {})),
           cloudPromise.then(async url => {
             // Give LAN 150ms chance to answer if on local network
             const lanQuick = await Promise.race([

@@ -873,12 +873,20 @@ function SyncScreenInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [richMediaDownloadTrigger]);
 
+  // BUG FIX #5: Ref-based fingerprint to prevent concurrent duplicate uploads.
+  // Without this, native + foreground clipboard observers race and upload the same text twice.
+  const lastTransmittedFpRef = useRef<string>('');
+
   // ─── Send Text ───
   const transmitTextSecurely = async (payloadText: string) => {
     // I-6 fix: read the freshest clips via ref - the closure-captured `clips`
     // can be stale when this is called from AppState/interval callbacks.
     const isDuplicate = clipsStateRef.current.some(c => c.Raw === payloadText || c.Title === payloadText);
     if (isDuplicate) return;
+    // BUG FIX #5: Ref-based dedup — reject if same content was just transmitted
+    const fp = payloadText.substring(0, 200);
+    if (fp === lastTransmittedFpRef.current) return;
+    lastTransmittedFpRef.current = fp;
     setIsSending(true);
     try {
       let finalRaw = payloadText, finalType = 'Text';
