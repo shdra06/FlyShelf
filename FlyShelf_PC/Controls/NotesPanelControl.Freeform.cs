@@ -626,5 +626,79 @@ namespace FlyShelf.Controls
                 Windows.ToastWindow.ShowToast("↩ Undo applied");
             }
         }
+
+        // ═══════════════════════════════════════════════════════════
+        // FREEFORM SECTION MORE MENU (v2 decluttered)
+        // ═══════════════════════════════════════════════════════════
+
+        private void FreeformSectionMore_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is FreeformSection section)
+            {
+                e.Handled = true;
+                var menu = new ContextMenu();
+
+                // Add Subnote
+                var addSubnote = new MenuItem();
+                var addSubnotePanel = new StackPanel { Orientation = Orientation.Horizontal };
+                addSubnotePanel.Children.Add(new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.AddSquare24, FontSize = 14, Foreground = FrozenBrush(Color.FromRgb(0xA7, 0x8B, 0xFA)), Margin = new Thickness(0, 0, 6, 0) });
+                addSubnotePanel.Children.Add(new TextBlock { Text = "Add Subnote", Foreground = FrozenBrush(Color.FromRgb(0xE8, 0xE8, 0xF0)) });
+                addSubnote.Header = addSubnotePanel;
+                addSubnote.Click += (s, ev) =>
+                {
+                    var subNote = new FreeformSection { Title = "" };
+                    section.SubNotes.Add(subNote);
+                    NoteManager.MarkDirty();
+                };
+                menu.Items.Add(addSubnote);
+
+                menu.Items.Add(new Separator());
+
+                // Copy as Text
+                var copyItem = new MenuItem();
+                var copyPanel = new StackPanel { Orientation = Orientation.Horizontal };
+                copyPanel.Children.Add(new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Copy24, FontSize = 14, Foreground = FrozenBrush(Color.FromRgb(0x90, 0x90, 0xB0)), Margin = new Thickness(0, 0, 6, 0) });
+                copyPanel.Children.Add(new TextBlock { Text = "Copy Text", Foreground = FrozenBrush(Color.FromRgb(0xE8, 0xE8, 0xF0)) });
+                copyItem.Header = copyPanel;
+                copyItem.Click += (s, ev) =>
+                {
+                    var text = string.IsNullOrEmpty(section.Title) ? section.Content : $"{section.Title}\n{section.Content}";
+                    if (!string.IsNullOrEmpty(text))
+                        FlyShelf.Classes.ClipboardHelper.SafeSetText(text);
+                    Windows.ToastWindow.ShowToast("Copied!");
+                };
+                menu.Items.Add(copyItem);
+
+                // Move to Folder
+                var moveItem = new MenuItem();
+                var movePanel = new StackPanel { Orientation = Orientation.Horizontal };
+                movePanel.Children.Add(new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.FolderArrowRight24, FontSize = 14, Foreground = FrozenBrush(Color.FromRgb(0x90, 0x90, 0xB0)), Margin = new Thickness(0, 0, 6, 0) });
+                movePanel.Children.Add(new TextBlock { Text = "Move to Folder", Foreground = FrozenBrush(Color.FromRgb(0xE8, 0xE8, 0xF0)) });
+                moveItem.Header = movePanel;
+                moveItem.IsEnabled = NoteManager.Folders.Count > 0;
+                if (NoteManager.Folders.Count > 0 && _selectedNoteDay != null)
+                {
+                    foreach (var folder in NoteManager.Folders)
+                    {
+                        var folderItem = new MenuItem { Header = $"{folder.Icon} {folder.Name}" };
+                        var capturedFolder = folder;
+                        folderItem.Click += (s, ev) =>
+                        {
+                            if (_selectedNoteDay != null)
+                            {
+                                NoteManager.MoveNoteToFolder(_selectedNoteDay, capturedFolder.Id);
+                                Windows.ToastWindow.ShowToast($"Moved to {capturedFolder.Name}");
+                            }
+                        };
+                        moveItem.Items.Add(folderItem);
+                    }
+                }
+                menu.Items.Add(moveItem);
+
+                menu.PlacementTarget = fe;
+                menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                menu.IsOpen = true;
+            }
+        }
     }
 }

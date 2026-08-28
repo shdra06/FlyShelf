@@ -68,7 +68,7 @@ namespace FlyShelf.Controls
             {
                 NotesBulletList.Visibility = Visibility.Collapsed;
                 NotesFreeformArea.Visibility = Visibility.Visible;
-                NotesModeToggleText.Text = "● Bullets";
+                NotesModeToggleText.Text = "Bullets";
                 // Defer focus to last freeform section text box
                 Dispatcher.InvokeAsync(() =>
                 {
@@ -95,7 +95,7 @@ namespace FlyShelf.Controls
             }
 
             // Update day label
-            NotesCurrentDayLabel.Text = "Notes ·" + day.DisplayDate;
+            NotesCurrentDayLabel.Text = day.DisplayDate;
         }
 
         private void RebuildSidebar()
@@ -146,7 +146,7 @@ namespace FlyShelf.Controls
             }
 
             var monthDate = new DateTime(year, month, 1);
-            NotesCurrentDayLabel.Text = "Notes ·" + monthDate.ToString("MMMM yyyy", System.Globalization.CultureInfo.CurrentCulture);
+            NotesCurrentDayLabel.Text = monthDate.ToString("MMMM yyyy", System.Globalization.CultureInfo.CurrentCulture);
 
             UpdateSidebarSelectionVisuals();
 
@@ -344,6 +344,207 @@ namespace FlyShelf.Controls
         private void NotesBack_Click(object sender, MouseButtonEventArgs e)
         {
             CloseRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // VIEW MODE SWITCHING (Folders ↔ Journal)
+        // ═══════════════════════════════════════════════════════════
+
+        private void ViewFolders_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            SwitchToFolderView();
+        }
+
+        private void ViewJournal_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            SwitchToJournalView();
+        }
+
+        private void SwitchToFolderView()
+        {
+            _isFolderViewMode = true;
+
+            // Update view switcher visuals — use SetCurrentValue to avoid blocking Style triggers
+            ViewFoldersBtn.SetCurrentValue(Border.BackgroundProperty, FrozenBrush(Color.FromArgb(0x18, 0x8B, 0x5C, 0xF6)));
+            ViewFoldersLabel.SetCurrentValue(ForegroundProperty, FrozenBrush(Color.FromArgb(0xFF, 0xC4, 0xB5, 0xFD)));
+            ViewFoldersLabel.FontWeight = FontWeights.SemiBold;
+            ViewJournalBtn.ClearValue(Border.BackgroundProperty); // Let Style handle it (transparent + hover)
+            ViewJournalLabel.SetCurrentValue(ForegroundProperty, FrozenBrush(Color.FromArgb(0xFF, 0x8B, 0x8B, 0xA8)));
+            ViewJournalLabel.FontWeight = FontWeights.Medium;
+
+            // Switch sidebar panels
+            DaySidebarPanel.Visibility = Visibility.Collapsed;
+            FolderSidebarPanel.Visibility = Visibility.Visible;
+
+            // Widen sidebar for folder names
+            NotesSidebarColumn.Width = new GridLength(120);
+
+            // Show breadcrumb
+            NotesBreadcrumb.Visibility = Visibility.Visible;
+
+            // Load folders into sidebar
+            RefreshFolderTree();
+        }
+
+        private void SwitchToJournalView()
+        {
+            _isFolderViewMode = false;
+
+            // Update view switcher visuals — use SetCurrentValue to avoid blocking Style triggers
+            ViewJournalBtn.SetCurrentValue(Border.BackgroundProperty, FrozenBrush(Color.FromArgb(0x18, 0x8B, 0x5C, 0xF6)));
+            ViewJournalLabel.SetCurrentValue(ForegroundProperty, FrozenBrush(Color.FromArgb(0xFF, 0xC4, 0xB5, 0xFD)));
+            ViewJournalLabel.FontWeight = FontWeights.SemiBold;
+            ViewFoldersBtn.ClearValue(Border.BackgroundProperty); // Let Style handle it (transparent + hover)
+            ViewFoldersLabel.SetCurrentValue(ForegroundProperty, FrozenBrush(Color.FromArgb(0xFF, 0x8B, 0x8B, 0xA8)));
+            ViewFoldersLabel.FontWeight = FontWeights.Medium;
+
+            // Switch sidebar panels
+            FolderSidebarPanel.Visibility = Visibility.Collapsed;
+            DaySidebarPanel.Visibility = Visibility.Visible;
+
+            // Restore narrow sidebar
+            NotesSidebarColumn.Width = new GridLength(42);
+
+            // Hide breadcrumb
+            NotesBreadcrumb.Visibility = Visibility.Collapsed;
+
+            // Rebuild day sidebar
+            RebuildSidebar();
+        }
+
+        private void RefreshFolderTree()
+        {
+            var folders = NoteManager.Folders.OrderBy(f => f.SortOrder).ToList();
+            NotesFolderTree.ItemsSource = folders;
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // FOLDER TREE SIDEBAR HANDLERS
+        // ═══════════════════════════════════════════════════════════
+
+        private void FolderTreeItem_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is NoteFolder folder)
+            {
+                e.Handled = true;
+                _selectedFolder = folder;
+
+                // Update breadcrumb
+                BreadcrumbFolder.Visibility = Visibility.Visible;
+                BreadcrumbFolderName.Text = folder.Name;
+                BreadcrumbSeparator2.Visibility = Visibility.Visible;
+
+                // Show notes in this folder
+                var notesInFolder = NoteManager.GetNotesInFolder(folder.Id).ToList();
+                if (notesInFolder.Count > 0)
+                {
+                    SelectNoteDay(notesInFolder.First());
+                }
+                else
+                {
+                    // Create a new note day in this folder
+                    var today = NoteManager.EnsureToday();
+                    NoteManager.MoveNoteToFolder(today, folder.Id);
+                    SelectNoteDay(today);
+                }
+            }
+        }
+
+        private void FolderTreeItem_RightClick(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is NoteFolder folder)
+            {
+                e.Handled = true;
+                var menu = new ContextMenu();
+
+                // Rename
+                var renameItem = new MenuItem { Header = "✏️  Rename" };
+                renameItem.Click += async (s, ev) =>
+                {
+                    var inputBox = new TextBox
+                    {
+                        Text = folder.Name,
+                        FontSize = 13,
+                        Margin = new Thickness(0, 8, 0, 0),
+                        SelectionStart = 0,
+                        SelectionLength = folder.Name.Length,
+                        Background = FrozenBrush(Color.FromRgb(0x22, 0x22, 0x40)),
+                        Foreground = FrozenBrush(Color.FromRgb(0xE8, 0xE8, 0xF0)),
+                        CaretBrush = FrozenBrush(Color.FromRgb(0xE8, 0xE8, 0xF0)),
+                        Padding = new Thickness(8, 6, 8, 6),
+                        BorderThickness = new Thickness(1),
+                        BorderBrush = FrozenBrush(Color.FromRgb(0x3A, 0x3A, 0x5C))
+                    };
+                    var dialog = new Wpf.Ui.Controls.MessageBox
+                    {
+                        Title = "Rename Folder",
+                        Content = inputBox,
+                        PrimaryButtonText = "Rename",
+                        CloseButtonText = "Cancel"
+                    };
+                    var result = await dialog.ShowDialogAsync();
+                    if (result == Wpf.Ui.Controls.MessageBoxResult.Primary && !string.IsNullOrWhiteSpace(inputBox.Text))
+                    {
+                        NoteManager.RenameFolder(folder.Id, inputBox.Text.Trim());
+                        RefreshFolderTree();
+                    }
+                };
+                menu.Items.Add(renameItem);
+
+                // New Subfolder
+                var subfolderItem = new MenuItem { Header = "📁  New Subfolder" };
+                subfolderItem.Click += (s, ev) =>
+                {
+                    NoteManager.CreateFolder("New Subfolder", folder.Id);
+                    RefreshFolderTree();
+                };
+                menu.Items.Add(subfolderItem);
+
+                menu.Items.Add(new Separator());
+
+                // Delete
+                var deleteItem = new MenuItem { Header = "🗑️  Delete Folder", Foreground = FrozenBrush(Color.FromRgb(0xFF, 0x66, 0x66)) };
+                deleteItem.Click += (s, ev) =>
+                {
+                    NoteManager.DeleteFolder(folder.Id);
+                    _selectedFolder = null;
+                    BreadcrumbFolder.Visibility = Visibility.Collapsed;
+                    BreadcrumbSeparator2.Visibility = Visibility.Collapsed;
+                    RefreshFolderTree();
+                };
+                menu.Items.Add(deleteItem);
+
+                menu.PlacementTarget = fe;
+                menu.IsOpen = true;
+            }
+        }
+
+        private void NewFolder_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            NoteManager.CreateFolder("New Folder", _selectedFolder?.Id);
+            RefreshFolderTree();
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // BREADCRUMB NAVIGATION
+        // ═══════════════════════════════════════════════════════════
+
+        private void BreadcrumbRoot_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            _selectedFolder = null;
+            BreadcrumbFolder.Visibility = Visibility.Collapsed;
+            BreadcrumbSeparator2.Visibility = Visibility.Collapsed;
+            RefreshFolderTree();
+        }
+
+        private void BreadcrumbFolder_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            // Already viewing this folder, no-op
         }
     }
 }

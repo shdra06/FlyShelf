@@ -747,7 +747,7 @@ namespace FlyShelf.Controls
             {
                 NotesBulletList.Visibility = Visibility.Collapsed;
                 NotesFreeformArea.Visibility = Visibility.Visible;
-                NotesModeToggleText.Text = "● Bullets";
+                NotesModeToggleText.Text = "Bullets";
 
                 ActivateWindowRequested?.Invoke(this, EventArgs.Empty);
                 Dispatcher.InvokeAsync(() =>

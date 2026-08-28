@@ -50,6 +50,8 @@ namespace FlyShelf.Controls
         private string? _notesUndoText = null;  // Stores pre-AI text for undo
         private FreeformSection? _notesUndoSection = null; // Which section the undo applies to
         private bool _freeformBulletMode = false; // True while typing inline bullets in freeform
+        private bool _isFolderViewMode = false; // True = Folder view, False = Journal view
+        private FlyShelf.Classes.NoteFolder? _selectedFolder = null; // Currently selected folder in folder view
 
         /// <summary>Fired when the user clicks the Back button to close the notes panel.</summary>
         public event EventHandler? CloseRequested;

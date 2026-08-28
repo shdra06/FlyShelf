@@ -72,8 +72,8 @@
                             <!-- Current day label (clickable for month navigation) -->
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
                                         Cursor="Hand" MouseLeftButtonDown="CurrentDayLabel_Click" ToolTip="Toggle Day / Month View">
-                                <ui:SymbolIcon Symbol="Note24" Foreground="#8B5CF6" FontSize="13" Margin="0,0,4,0"/>
-                                <TextBlock x:Name="NotesCurrentDayLabel" Text="27, May" FontSize="11.5" FontWeight="SemiBold" 
+                                <ui:SymbolIcon Symbol="Notebook24" Foreground="#8B5CF6" FontSize="14" Margin="0,0,5,0"/>
+                                <TextBlock x:Name="NotesCurrentDayLabel" Text="28 Aug" FontSize="12" FontWeight="SemiBold" 
                                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                             </StackPanel>
 
@@ -144,8 +144,17 @@
                             <StackPanel Orientation="Horizontal">
                                 <!-- Folders view button -->
                                 <Border x:Name="ViewFoldersBtn" CornerRadius="5" Cursor="Hand" Padding="6,2" Margin="0"
-                                        MouseLeftButtonDown="ViewFolders_Click" ToolTip="Folder View"
-                                        Background="Transparent">
+                                        MouseLeftButtonDown="ViewFolders_Click" ToolTip="Folder View">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#15FFFFFF"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
                                     <StackPanel Orientation="Horizontal">
                                         <ui:SymbolIcon Symbol="Folder24" FontSize="11" Foreground="#8B8BA8" VerticalAlignment="Center" Margin="0,0,3,0"/>
                                         <TextBlock x:Name="ViewFoldersLabel" Text="Folders" FontSize="9.5" FontWeight="Medium" Foreground="#8B8BA8" VerticalAlignment="Center"/>
@@ -153,8 +162,17 @@
                                 </Border>
                                 <!-- Daily Journal view button -->
                                 <Border x:Name="ViewJournalBtn" CornerRadius="5" Cursor="Hand" Padding="6,2" Margin="0"
-                                        MouseLeftButtonDown="ViewJournal_Click" ToolTip="Daily Journal"
-                                        Background="#188B5CF6">
+                                        MouseLeftButtonDown="ViewJournal_Click" ToolTip="Daily Journal">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#188B5CF6"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#288B5CF6"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
                                     <StackPanel Orientation="Horizontal">
                                         <ui:SymbolIcon Symbol="CalendarLtr24" FontSize="11" Foreground="#A78BFA" VerticalAlignment="Center" Margin="0,0,3,0"/>
                                         <TextBlock x:Name="ViewJournalLabel" Text="Journal" FontSize="9.5" FontWeight="SemiBold" Foreground="#C4B5FD" VerticalAlignment="Center"/>
@@ -165,9 +183,25 @@
 
                         <!-- Mode toggle: Bullets ↔ Freeform -->
                         <Border Grid.Column="2" CornerRadius="6" Cursor="Hand" MouseLeftButtonDown="NotesModeToggle_Click" Padding="6,2" Margin="0,0,3,0"
-                                Background="#108B5CF6" BorderBrush="#208B5CF6" BorderThickness="1" ToolTip="Toggle Bullets / Freeform">
-                            <TextBlock x:Name="NotesModeToggleText" Text="Freeform" FontSize="9.5" FontWeight="SemiBold" 
-                                       Foreground="#C4B5FD" VerticalAlignment="Center"/>
+                                ToolTip="Toggle Bullets / Freeform">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#108B5CF6"/>
+                                    <Setter Property="BorderBrush" Value="#208B5CF6"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#208B5CF6"/>
+                                            <Setter Property="BorderBrush" Value="#408B5CF6"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon x:Name="NotesModeToggleIcon" Symbol="TextBulletListSquare24" FontSize="11" Foreground="#A78BFA" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock x:Name="NotesModeToggleText" Text="Freeform" FontSize="9.5" FontWeight="SemiBold" 
+                                           Foreground="#C4B5FD" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </Border>
 
                         <!-- Templates -->
@@ -189,41 +223,96 @@
 
                 <!-- ═══ DAY SIDEBAR (Toggle + Newest-first list of dates) ═══ -->
                 <Border x:Name="NotesSidebarBorder" Grid.Column="0" BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="0,0,1,0" Background="{DynamicResource MicaWPF.Brushes.ControlAltFillColorTertiary}">
-                    <DockPanel>
-                        <!-- Toggle button at top -->
-                        <Border DockPanel.Dock="Top" Cursor="Hand" Height="22"
-                                Background="Transparent"
-                                MouseLeftButtonDown="NotesSidebarToggle_Click" ToolTip="Collapse Sidebar">
-                            <TextBlock x:Name="NotesSidebarCollapseIcon" Text = "◂" FontSize="13" FontWeight="Bold"
-                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
-                                       VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                        </Border>
-                        <!-- Date list -->
-                        <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
-                            <ItemsControl x:Name="NotesDaySidebar" Margin="0,4,0,0">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <!-- Day badge container -->
-                                        <Border x:Name="NotesDayBorder" CornerRadius="8" Width="30" Height="30" Margin="0,0,0,4"
-                                                Cursor="Hand" MouseLeftButtonDown="NotesDayItem_Click"
-                                                BorderThickness="1" SnapsToDevicePixels="True"
-                                                Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}"
-                                                BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"
-                                                ToolTip="{Binding FullLabel}">
-                                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                                <!-- Day number -->
-                                                <TextBlock Text = "{Binding DayNumber}" FontSize="12" FontWeight="Bold" 
-                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextAlignment="Center" Margin="0,-2,0,0"/>
-                                                <!-- Abbreviated Month -->
-                                                <TextBlock Text = "{Binding MonthName}" FontSize="7" FontWeight="SemiBold" 
-                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center" Margin="0,-2,0,0" Opacity="0.8"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </DockPanel>
+                    <Grid>
+                        <!-- Day sidebar (shown in Journal mode) -->
+                        <DockPanel x:Name="DaySidebarPanel">
+                            <!-- Toggle button at top -->
+                            <Border DockPanel.Dock="Top" Cursor="Hand" Height="22"
+                                    Background="Transparent"
+                                    MouseLeftButtonDown="NotesSidebarToggle_Click" ToolTip="Collapse Sidebar">
+                                <TextBlock x:Name="NotesSidebarCollapseIcon" Text="◂" FontSize="13" FontWeight="Bold"
+                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
+                                           VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <!-- Date list -->
+                            <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl x:Name="NotesDaySidebar" Margin="0,4,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <!-- Day badge container -->
+                                            <Border x:Name="NotesDayBorder" CornerRadius="8" Width="30" Height="30" Margin="0,0,0,4"
+                                                    Cursor="Hand" MouseLeftButtonDown="NotesDayItem_Click"
+                                                    BorderThickness="1" SnapsToDevicePixels="True"
+                                                    Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}"
+                                                    BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"
+                                                    ToolTip="{Binding FullLabel}">
+                                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                    <!-- Day number -->
+                                                    <TextBlock Text="{Binding DayNumber}" FontSize="12" FontWeight="Bold" 
+                                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextAlignment="Center" Margin="0,-2,0,0"/>
+                                                    <!-- Abbreviated Month -->
+                                                    <TextBlock Text="{Binding MonthName}" FontSize="7" FontWeight="SemiBold" 
+                                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center" Margin="0,-2,0,0" Opacity="0.8"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+
+                        <!-- Folder tree sidebar (shown in Folder mode) -->
+                        <DockPanel x:Name="FolderSidebarPanel" Visibility="Collapsed">
+                            <!-- Toggle button at top -->
+                            <Border DockPanel.Dock="Top" Cursor="Hand" Height="22"
+                                    Background="Transparent"
+                                    MouseLeftButtonDown="NotesSidebarToggle_Click" ToolTip="Collapse Sidebar">
+                                <TextBlock Text="◂" FontSize="13" FontWeight="Bold"
+                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
+                                           VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <!-- New Folder button -->
+                            <Border DockPanel.Dock="Top" CornerRadius="6" Cursor="Hand" Margin="4,4,4,4" Padding="4,3"
+                                    MouseLeftButtonDown="NewFolder_Click" ToolTip="New Folder"
+                                    Background="#108B5CF6" BorderBrush="#208B5CF6" BorderThickness="1">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <ui:SymbolIcon Symbol="FolderAdd24" FontSize="11" Foreground="#A78BFA" VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                    <TextBlock Text="New" FontSize="9" FontWeight="SemiBold" Foreground="#C4B5FD" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <!-- Folder tree -->
+                            <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl x:Name="NotesFolderTree" Margin="2,2,2,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border x:Name="FolderTreeItem" CornerRadius="6" Padding="6,4" Margin="0,0,0,1"
+                                                    Cursor="Hand" MouseLeftButtonDown="FolderTreeItem_Click"
+                                                    MouseRightButtonDown="FolderTreeItem_RightClick"
+                                                    Background="Transparent" BorderThickness="0">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Style.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="Background" Value="#12FFFFFF"/>
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <!-- Folder icon -->
+                                                    <TextBlock Text="{Binding Icon}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                    <!-- Folder name -->
+                                                    <TextBlock Text="{Binding Name}" FontSize="10.5" FontWeight="Medium"
+                                                               Foreground="#C0C0D8" VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis" MaxWidth="100"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Grid>
                 </Border>
 
                 <!-- Expand arrow (visible when sidebar collapsed) -->
@@ -761,7 +850,7 @@
                                                         </TextBox.Style>
                                                     </TextBox>
                                                     <!-- Header separator line (matches bullet mode) -->
-                                                    <Border Height="1" Margin="10,0,10,2" Background="#25FFFFFF"/>
+                                                    <Border Height="1" Margin="10,0,10,2" Background="#12FFFFFF"/>
                                                     <!-- Embedded images (up to 5 for Pro, 1 for Free) -->
                                                     <ItemsControl ItemsSource="{Binding Images}" Margin="6,6,6,0">
                                                         <ItemsControl.ItemsPanel>
@@ -824,62 +913,148 @@
                                                             </Style>
                                                         </TextBox.Style>
                                                     </TextBox>
+
+                                                    <!-- ═══ STACKED SUBNOTES (v2 — Nested elevated cards) ═══ -->
+                                                    <Border Margin="8,4,8,6">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasSubNotes}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="3"/>  <!-- Accent connector -->
+                                                                <ColumnDefinition Width="*"/>  <!-- Subnote cards -->
+                                                            </Grid.ColumnDefinitions>
+                                                            <!-- Vertical accent connector line -->
+                                                            <Border Grid.Column="0" Background="#308B5CF6" CornerRadius="2" Margin="0,2,6,2"/>
+                                                            <!-- Subnote cards list -->
+                                                            <ItemsControl Grid.Column="1" ItemsSource="{Binding SubNotes}" Margin="4,0,0,0">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Border CornerRadius="8" Margin="0,0,0,4" Padding="0" ClipToBounds="True"
+                                                                                BorderThickness="1" BorderBrush="#252545"
+                                                                                Background="#1E1E38">
+                                                                            <StackPanel>
+                                                                                <!-- Subnote title -->
+                                                                                <TextBox Text="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
+                                                                                         FontSize="12" FontWeight="SemiBold"
+                                                                                         Background="Transparent" BorderThickness="0"
+                                                                                         Foreground="#C4B5FD" CaretBrush="#C4B5FD"
+                                                                                         SelectionBrush="#608B5CF6"
+                                                                                         Padding="8,5,8,1"
+                                                                                         TextChanged="NotesFreeformBox_TextChanged"
+                                                                                         AutomationProperties.Name="Subnote title">
+                                                                                    <TextBox.Style>
+                                                                                        <Style TargetType="TextBox">
+                                                                                            <Setter Property="Template">
+                                                                                                <Setter.Value>
+                                                                                                    <ControlTemplate TargetType="TextBox">
+                                                                                                        <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                                                                                            <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                                                                                        </Border>
+                                                                                                    </ControlTemplate>
+                                                                                                </Setter.Value>
+                                                                                            </Setter>
+                                                                                        </Style>
+                                                                                    </TextBox.Style>
+                                                                                </TextBox>
+                                                                                <!-- Subnote separator -->
+                                                                                <Border Height="1" Margin="8,0,8,0" Background="#18FFFFFF"/>
+                                                                                <!-- Subnote content -->
+                                                                                <TextBox Text="{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
+                                                                                         TextWrapping="Wrap" AcceptsReturn="True"
+                                                                                         FontSize="11.5" Background="Transparent" BorderThickness="0"
+                                                                                         Padding="8,4,8,6" MinHeight="32"
+                                                                                         Foreground="#C8C8E0" CaretBrush="#C8C8E0"
+                                                                                         SelectionBrush="#608B5CF6"
+                                                                                         TextChanged="NotesFreeformBox_TextChanged"
+                                                                                         AutomationProperties.Name="Subnote content">
+                                                                                    <TextBox.Style>
+                                                                                        <Style TargetType="TextBox">
+                                                                                            <Setter Property="Template">
+                                                                                                <Setter.Value>
+                                                                                                    <ControlTemplate TargetType="TextBox">
+                                                                                                        <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                                                                                            <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                                                                                        </Border>
+                                                                                                    </ControlTemplate>
+                                                                                                </Setter.Value>
+                                                                                            </Setter>
+                                                                                        </Style>
+                                                                                    </TextBox.Style>
+                                                                                </TextBox>
+                                                                            </StackPanel>
+                                                                        </Border>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </Grid>
+                                                    </Border>
                                                 </StackPanel>
 
-                                                <!-- ═══ DECLUTTERED MICRO-TOOLBAR (v2) ═══ -->
-                                                <!-- Expand button (top-right, subtle, always visible) -->
+                                                <!-- Expand button (top-right, subtle, fades in on hover) -->
                                                 <Border x:Name="FreeformSectionExpandBtn" CornerRadius="6" Cursor="Hand"
                                                         HorizontalAlignment="Right" VerticalAlignment="Top"
                                                         Padding="4,3" Margin="0,5,26,0" Panel.ZIndex="10"
-                                                        Background="Transparent" BorderThickness="0"
-                                                        Opacity="0.5" IsHitTestVisible="True"
+                                                        BorderThickness="0"
+                                                        IsHitTestVisible="True"
                                                         MouseLeftButtonDown="NotesFreeformExpand_Click" ToolTip="Expand Note (Focus Mode)">
                                                     <Border.Style>
                                                         <Style TargetType="Border">
+                                                            <Setter Property="Opacity" Value="0"/>
+                                                            <Setter Property="Background" Value="Transparent"/>
                                                             <Style.Triggers>
                                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter Property="Background" Value="#15FFFFFF"/>
+                                                                    <Setter Property="Background" Value="#20FFFFFF"/>
                                                                     <Setter Property="Opacity" Value="1"/>
                                                                 </Trigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Border.Style>
-                                                    <ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="11" Foreground="#9090B0" VerticalAlignment="Center"/>
+                                                    <ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="11" Foreground="#B0B0D0" VerticalAlignment="Center"/>
                                                 </Border>
 
-                                                <!-- More options button (top-right corner, subtle) -->
+                                                <!-- More options button (top-right corner, fades in on hover) -->
                                                 <Border x:Name="FreeformSectionMoreBtn" CornerRadius="6" Cursor="Hand"
                                                         HorizontalAlignment="Right" VerticalAlignment="Top"
                                                         Padding="4,3" Margin="0,5,4,0" Panel.ZIndex="10"
-                                                        Background="Transparent" BorderThickness="0"
-                                                        Opacity="0.5" IsHitTestVisible="True"
+                                                        BorderThickness="0"
+                                                        IsHitTestVisible="True"
                                                         MouseLeftButtonDown="FreeformSectionMore_Click" ToolTip="More options">
                                                     <Border.Style>
                                                         <Style TargetType="Border">
+                                                            <Setter Property="Opacity" Value="0"/>
+                                                            <Setter Property="Background" Value="Transparent"/>
                                                             <Style.Triggers>
                                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter Property="Background" Value="#15FFFFFF"/>
+                                                                    <Setter Property="Background" Value="#20FFFFFF"/>
                                                                     <Setter Property="Opacity" Value="1"/>
                                                                 </Trigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Border.Style>
-                                                    <ui:SymbolIcon Symbol="MoreHorizontal24" FontSize="11" Foreground="#9090B0" VerticalAlignment="Center"/>
+                                                    <ui:SymbolIcon Symbol="MoreHorizontal24" FontSize="11" Foreground="#B0B0D0" VerticalAlignment="Center"/>
                                                 </Border>
 
                                                 <!-- Hover micro-action pill (bottom-right, fades in on card hover) -->
                                                 <Border x:Name="FreeformHoverActions" CornerRadius="8" 
                                                         HorizontalAlignment="Right" VerticalAlignment="Bottom"
                                                         Padding="2,1" Margin="0,0,6,6" Panel.ZIndex="10"
-                                                        Background="#E0181830" BorderBrush="#25FFFFFF" BorderThickness="1"
+                                                        Background="#E0181830" BorderBrush="#20FFFFFF" BorderThickness="1"
                                                         Opacity="0" IsHitTestVisible="False">
                                                     <StackPanel Orientation="Horizontal">
                                                         <!-- AI button -->
                                                         <Border x:Name="FreeformSectionAIBtn" CornerRadius="5" Cursor="Hand" Padding="5,3" Margin="1"
-                                                                MouseLeftButtonDown="NotesFreeformAI_Click" ToolTip="AI Assistant"
-                                                                Background="Transparent">
+                                                                MouseLeftButtonDown="NotesFreeformAI_Click" ToolTip="AI Assistant">
                                                             <Border.Style>
                                                                 <Style TargetType="Border">
+                                                                    <Setter Property="Background" Value="Transparent"/>
                                                                     <Style.Triggers>
                                                                         <Trigger Property="IsMouseOver" Value="True">
                                                                             <Setter Property="Background" Value="#208B5CF6"/>
@@ -887,14 +1062,14 @@
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </Border.Style>
-                                                            <ui:SymbolIcon Symbol="Sparkle24" FontSize="11" Foreground="#A78BFA" VerticalAlignment="Center"/>
+                                                            <ui:SymbolIcon Symbol="Sparkle24" FontSize="11" Foreground="#9090C0" VerticalAlignment="Center"/>
                                                         </Border>
                                                         <!-- Reminder button -->
                                                         <Border x:Name="FreeformSectionReminderBtn" CornerRadius="5" Cursor="Hand" Padding="5,3" Margin="1"
-                                                                MouseLeftButtonDown="NotesFreeformReminder_Click" ToolTip="Set Reminder"
-                                                                Background="Transparent">
+                                                                MouseLeftButtonDown="NotesFreeformReminder_Click" ToolTip="Set Reminder">
                                                             <Border.Style>
                                                                 <Style TargetType="Border">
+                                                                    <Setter Property="Background" Value="Transparent"/>
                                                                     <Style.Triggers>
                                                                         <Trigger Property="IsMouseOver" Value="True">
                                                                             <Setter Property="Background" Value="#20F59E0B"/>
@@ -902,14 +1077,14 @@
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </Border.Style>
-                                                            <ui:SymbolIcon Symbol="Alert24" FontSize="11" Foreground="#D4A017" VerticalAlignment="Center"/>
+                                                            <ui:SymbolIcon Symbol="Alert24" FontSize="11" Foreground="#9090C0" VerticalAlignment="Center"/>
                                                         </Border>
                                                         <!-- Delete button -->
                                                         <Border x:Name="FreeformSectionRemoveBtn" CornerRadius="5" Cursor="Hand" Padding="5,3" Margin="1"
-                                                                MouseLeftButtonDown="FreeformSectionRemove_Click" ToolTip="Delete Section"
-                                                                Background="Transparent">
+                                                                MouseLeftButtonDown="FreeformSectionRemove_Click" ToolTip="Delete Section">
                                                             <Border.Style>
                                                                 <Style TargetType="Border">
+                                                                    <Setter Property="Background" Value="Transparent"/>
                                                                     <Style.Triggers>
                                                                         <Trigger Property="IsMouseOver" Value="True">
                                                                             <Setter Property="Background" Value="#20FF4444"/>
@@ -917,7 +1092,7 @@
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </Border.Style>
-                                                            <ui:SymbolIcon Symbol="Delete24" FontSize="11" Foreground="#CC5555" VerticalAlignment="Center"/>
+                                                            <ui:SymbolIcon Symbol="Delete24" FontSize="11" Foreground="#9090C0" VerticalAlignment="Center"/>
                                                         </Border>
                                                     </StackPanel>
                                                 </Border>
