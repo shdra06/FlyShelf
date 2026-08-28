@@ -235,8 +235,12 @@ export function useDeviceSync(params: {
         const syncUrl = lastSyncTimestampRef.current > 0
           ? `${targetUrl}/api/sync?since=${lastSyncTimestampRef.current}`
           : `${targetUrl}/api/sync?limit=3`;
+        // DEV DEBUG: Log every poll attempt
+        syncLog('PC-POLL', `→ ${syncUrl.replace(targetUrl, '')} | key=${pairingKeyRef.current?.substring(0,8)}... | timeout=${timeout}ms | retries=${pollRetryCountRef.current}`);
         const response = await fetchWithTimeout(syncUrl, { headers: syncHeaders }, timeout);
         if (!response.ok) {
+          // DEV DEBUG: Log failure details
+          syncLog('PC-POLL', `✗ FAIL: HTTP ${response.status} ${response.statusText} | url=${targetUrl} | clearing cache`);
           cachedPcUrlRef.current = null;
           // Track Cloudflare failures for forced re-resolution (Issue #7)
           if (targetUrl.includes('trycloudflare.com')) {
@@ -256,6 +260,8 @@ export function useDeviceSync(params: {
           pollRetryCountRef.current = 0; // Reset backoff on successful connection
           // H-3: Connection quality indicator
           const pollLatency = Math.round(performance.now() - pollStart);
+          // DEV DEBUG: Log every successful poll
+          syncLog('PC-POLL', `✓ OK: ${response.status} | ${targetUrl.includes('trycloudflare.com') ? 'Cloud' : 'LAN'} | latency=${pollLatency}ms | url=${targetUrl.substring(0, 50)}`);
           setConnectionInfo({ url: targetUrl, latencyMs: pollLatency, type: targetUrl.includes('trycloudflare.com') ? 'Cloud' : 'LAN' });
           // Read PC identity from response headers — PC sends name, ID, and transport status
           const pcDeviceName = response.headers.get('X-PC-DeviceName') || '';

@@ -1261,9 +1261,8 @@ namespace FlyShelf
                                         if (!hasColorThemeWp)
                                         {
                                             // Re-apply color theme wallpaper if a color theme is active
-                                            string activeColorTheme = Classes.SettingsManager.Current.ColorThemeName ?? "";
-                                            if (!string.IsNullOrEmpty(activeColorTheme) && !activeColorTheme.Equals("Default", System.StringComparison.OrdinalIgnoreCase)
-                                                && !activeColorTheme.Equals("ArcticSnow", System.StringComparison.OrdinalIgnoreCase))
+                                            string activeColorTheme = Classes.SettingsManager.Current.ColorThemeName ?? "Default";
+                                            if (!string.IsNullOrEmpty(activeColorTheme) && !activeColorTheme.Equals("ArcticSnow", System.StringComparison.OrdinalIgnoreCase))
                                             {
                                                 Classes.ThemeManager.Instance.ApplyColorTheme(activeColorTheme);
                                                 colorThemeWp = Classes.SettingsManager.Current.ClipboardWallpaperPath ?? "";
@@ -1397,10 +1396,9 @@ namespace FlyShelf
                         else
                         {
                             // Check for active color theme wallpaper
-                            string activeColorTheme = Classes.SettingsManager.Current.ColorThemeName ?? "";
+                            string activeColorTheme = Classes.SettingsManager.Current.ColorThemeName ?? "Default";
                             bool hasColorThemeWp = false;
-                            if (!string.IsNullOrEmpty(activeColorTheme) && !activeColorTheme.Equals("Default", System.StringComparison.OrdinalIgnoreCase)
-                                && !activeColorTheme.Equals("ArcticSnow", System.StringComparison.OrdinalIgnoreCase))
+                            if (!string.IsNullOrEmpty(activeColorTheme) && !activeColorTheme.Equals("ArcticSnow", System.StringComparison.OrdinalIgnoreCase))
                             {
                                 // Apply the color theme (which sets ClipboardWallpaperPath to theme wallpaper)
                                 Classes.ThemeManager.Instance.ApplyColorTheme(activeColorTheme);

@@ -296,7 +296,7 @@ namespace FlyShelf.Classes
         /// <summary>
         /// Controls clipboard background mode: "mica" (system blur), "desktop" (Windows wallpaper), or "theme" (custom theme).
         /// </summary>
-        private string _themeDisplayMode = "mica";
+        private string _themeDisplayMode = "desktop";
         public string ThemeDisplayMode { get => _themeDisplayMode; set => SetProperty(ref _themeDisplayMode, value); }
 
         // ═══ Color Theme System (Midnight/Ocean/Sunset/Emerald/Lavender/Light) ═══

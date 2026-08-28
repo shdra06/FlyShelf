@@ -240,6 +240,79 @@ namespace FlyShelf.Windows
             ApplyTheme();
         }
 
+        // ═══ Cloud Status + QR Timer ═══
+        private System.Windows.Threading.DispatcherTimer? _cloudStatusTimer;
+
+        /// <summary>Start a 2-second timer that refreshes cloud URL status and auto-regenerates QR when Cloudflare URL becomes available.</summary>
+        private void StartCloudStatusTimer()
+        {
+            if (_cloudStatusTimer != null) return;
+            _cloudStatusTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _cloudStatusTimer.Tick += (_, _) =>
+            {
+                RefreshCloudStatus();
+                // Auto-refresh QR once the global URL appears
+                var globalUrl = CloudDiscoveryManager.CachedGlobalUrl;
+                if (!string.IsNullOrEmpty(globalUrl))
+                {
+                    RefreshQRCode();
+                }
+            };
+            _cloudStatusTimer.Start();
+            Logger.LogAction("CLOUD-TIMER", "Cloud status auto-refresh started (2s interval)");
+        }
+
+        /// <summary>Update the Cloud URL text, status indicator dot, and disabled row visibility.</summary>
+        private void RefreshCloudStatus()
+        {
+            try
+            {
+                if (CloudUrlText == null || CloudStatusText == null) return;
+                bool cloudEnabled = SettingsManager.Current.EnableGlobalCloudflare;
+                string globalUrl = CloudDiscoveryManager.CachedGlobalUrl ?? "";
+
+                // Show/hide disabled row
+                if (CloudDisabledRow != null)
+                    CloudDisabledRow.Visibility = cloudEnabled ? Visibility.Collapsed : Visibility.Visible;
+
+                if (cloudEnabled && !string.IsNullOrEmpty(globalUrl))
+                {
+                    // Tunnel active with URL
+                    CloudUrlText.Text = globalUrl;
+                    CloudUrlText.Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#10B981"));
+                    if (CopyCloudUrlBtn != null) CopyCloudUrlBtn.Visibility = Visibility.Visible;
+                    if (CloudStatusDot != null) CloudStatusDot.Background = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#10B981"));
+                    CloudStatusText.Text = "Tunnel Active";
+                    CloudStatusText.Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#10B981"));
+                }
+                else if (cloudEnabled)
+                {
+                    // Cloudflare enabled but URL not yet ready
+                    CloudUrlText.Text = "Starting tunnel...";
+                    CloudUrlText.Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#F59E0B"));
+                    if (CopyCloudUrlBtn != null) CopyCloudUrlBtn.Visibility = Visibility.Collapsed;
+                    if (CloudStatusDot != null) CloudStatusDot.Background = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#F59E0B"));
+                    CloudStatusText.Text = "Starting tunnel...";
+                    CloudStatusText.Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#F59E0B"));
+                }
+            }
+            catch (Exception ex) { Logger.LogAction("CLOUD-STATUS", $"Refresh failed: {ex.Message}"); }
+        }
+
+        private void CopyCloudUrl_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string url = CloudDiscoveryManager.CachedGlobalUrl ?? "";
+                if (!string.IsNullOrEmpty(url))
+                {
+                    Clipboard.SetText(url);
+                    Logger.LogAction("COPY", $"Cloud URL copied: {url}");
+                }
+            }
+            catch (Exception ex) { Logger.LogAction("COPY", $"Cloud URL copy failed: {ex.Message}"); }
+        }
+
         // ═══ QR Code Pairing Handlers ═══
 
         private void RefreshQRCode()
@@ -250,6 +323,29 @@ namespace FlyShelf.Windows
                 string localUrl = _viewModel.LocalServer?.DisplayUrl ?? "";
                 string globalUrl = _viewModel.LocalServer?.GlobalUrl ?? "";
                 string pin = SettingsManager.Current.WebClientPinToken;
+
+                bool hasLan = !string.IsNullOrEmpty(localUrl);
+                bool hasCloud = !string.IsNullOrEmpty(globalUrl);
+                bool cloudEnabled = SettingsManager.Current.EnableGlobalCloudflare;
+
+                Logger.LogAction("QR", $"Refresh: LAN={hasLan} ({localUrl}), Cloud={hasCloud} ({globalUrl}), CloudEnabled={cloudEnabled}");
+
+                if (!hasLan && !hasCloud)
+                {
+                    // No URLs at all — show status overlay
+                    if (QrStatusOverlay != null)
+                    {
+                        QrStatusOverlay.Visibility = Visibility.Visible;
+                        if (cloudEnabled)
+                            QrStatusText.Text = "⏳ Generating public URL...\nWaiting for Cloudflare tunnel";
+                        else
+                            QrStatusText.Text = "⚠ No network\nConnect to Wi-Fi or enable Cloudflare";
+                    }
+                    return;
+                }
+
+                // We have at least one URL — generate QR
+                if (QrStatusOverlay != null) QrStatusOverlay.Visibility = Visibility.Collapsed;
 
                 var qr = DevicePairingManager.GenerateQRCode(localUrl, globalUrl, pin, 250);
                 if (qr != null)

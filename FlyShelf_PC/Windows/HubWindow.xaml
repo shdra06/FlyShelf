@@ -1396,15 +1396,27 @@
                                                 <Button Grid.Column="2" Content="Copy" Margin="12,0,0,0" Padding="8,2" FontSize="{StaticResource TypeSmall}" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Cursor="Hand" Click="CopyUrl_Click" Tag="{Binding LocalServer.DisplayUrl}" MinWidth="55" AutomationProperties.Name="Copy Wi-Fi URL" />
                                             </Grid>
                                             
-                                            <Grid x:Name="CloudflareStatusGrid" HorizontalAlignment="Center" Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalCloudflare, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                    <TextBlock Text="Cloud:" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeSubtitle}" VerticalAlignment="Center" Width="80"/>
-                                                    <Border CornerRadius="4" Padding="8,2" Background="#1510B981">
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <Border Width="6" Height="6" CornerRadius="3" Background="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="Secure Tunnel Active" FontSize="{StaticResource TypeSmall}" FontWeight="SemiBold" Foreground="#10B981" VerticalAlignment="Center"/>
-                                                        </StackPanel>
-                                                    </Border>
+                                            <Grid x:Name="CloudflareStatusGrid" HorizontalAlignment="Center" Margin="0,0,0,4">
+                                                <StackPanel>
+                                                    <!-- Cloud URL row (visible when Cloudflare enabled) -->
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                                                                Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalCloudflare, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                        <TextBlock Text="Cloud:" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeSubtitle}" VerticalAlignment="Center" Width="80"/>
+                                                        <TextBlock x:Name="CloudUrlText" Text="Starting tunnel..." FontSize="13" FontWeight="SemiBold" Foreground="#F59E0B" VerticalAlignment="Center" MaxWidth="280" TextTrimming="CharacterEllipsis"/>
+                                                        <Button x:Name="CopyCloudUrlBtn" Content="Copy" Margin="12,0,0,0" Padding="8,2" FontSize="{StaticResource TypeSmall}" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Cursor="Hand" Click="CopyCloudUrl_Click" Visibility="Collapsed" MinWidth="55" AutomationProperties.Name="Copy Cloud URL" />
+                                                    </StackPanel>
+                                                    <!-- Cloud status indicator -->
+                                                    <StackPanel x:Name="CloudStatusIndicator" Orientation="Horizontal" HorizontalAlignment="Center" Margin="80,2,0,0"
+                                                                Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalCloudflare, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                        <Border x:Name="CloudStatusDot" Width="6" Height="6" CornerRadius="3" Background="#F59E0B" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                        <TextBlock x:Name="CloudStatusText" Text="Starting tunnel..." FontSize="{StaticResource TypeSmall}" FontWeight="SemiBold" Foreground="#F59E0B" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <!-- Cloud disabled row (visible when Cloudflare OFF) -->
+                                                    <StackPanel x:Name="CloudDisabledRow" Orientation="Horizontal" HorizontalAlignment="Center"
+                                                                Visibility="Collapsed">
+                                                        <TextBlock Text="Cloud:" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeSubtitle}" VerticalAlignment="Center" Width="80"/>
+                                                        <TextBlock Text="⚪ Disabled — enable in Settings" FontSize="{StaticResource TypeSmall}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
                                                 </StackPanel>
                                             </Grid>
                                         </StackPanel>
@@ -1428,9 +1440,15 @@
                                             <TextBlock Text="Scan this QR code with FlyShelf Mobile or enter the pairing code below." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="{StaticResource TypeBody}" Margin="0,0,0,12" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" />
 
                                             <!-- QR Code Display -->
-                                            <Border Background="White" CornerRadius="{StaticResource RadiusMD}" Padding="10" HorizontalAlignment="Center" Margin="0,0,0,12">
-                                                <Image x:Name="PairingQRImage" Width="160" Height="160" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
-                                            </Border>
+                                            <Grid HorizontalAlignment="Center" Margin="0,0,0,12">
+                                                <Border Background="White" CornerRadius="{StaticResource RadiusMD}" Padding="10">
+                                                    <Image x:Name="PairingQRImage" Width="160" Height="160" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                                                </Border>
+                                                <!-- QR status overlay — shown when QR cannot be generated -->
+                                                <Border x:Name="QrStatusOverlay" Background="#E01C1C2E" CornerRadius="{StaticResource RadiusMD}" Padding="16" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                    <TextBlock x:Name="QrStatusText" Text="⏳ Generating QR..." FontSize="{StaticResource TypeBody}" FontWeight="SemiBold" Foreground="#F59E0B" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="150"/>
+                                                </Border>
+                                            </Grid>
 
                                             <!-- Action Buttons -->
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12">

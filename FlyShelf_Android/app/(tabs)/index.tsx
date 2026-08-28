@@ -1925,10 +1925,11 @@ function SyncScreenInner() {
                       </View>
                     );
                   } else if (totalPaired > 0) {
+                    const pcName = pairedDevices.find(d => d.deviceType === 'PC')?.deviceName || 'PC';
                     return (
                       <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
-                        <View style={{width: 7, height: 7, borderRadius: 4, backgroundColor: colors.text.tertiary}} />
-                        <Text style={{fontSize: 11, fontFamily: font.medium, color: colors.text.tertiary}}>Connecting...</Text>
+                        <View style={{width: 7, height: 7, borderRadius: 4, backgroundColor: '#F59E0B'}} />
+                        <Text style={{fontSize: 11, fontFamily: font.medium, color: '#F59E0B'}}>⏳ Searching for {pcName}...</Text>
                       </View>
                     );
                   }

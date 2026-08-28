@@ -87,7 +87,7 @@
 
     <SolidColorBrush x:Key="ThemeSeparator"       Color="#20FFFFFF"/>
     <SolidColorBrush x:Key="ThemeShadow"          Color="#000000"/>
-    <SolidColorBrush x:Key="ThemeWindowFallback"   Color="#1C1C1C"/>
+    <SolidColorBrush x:Key="ThemeWindowFallback"   Color="#16162A"/>
     <SolidColorBrush x:Key="ThemeCodePreviewBg"   Color="#FF1E1E1E"/>
 
     <!-- Chevron button (expand/collapse on cards) -->

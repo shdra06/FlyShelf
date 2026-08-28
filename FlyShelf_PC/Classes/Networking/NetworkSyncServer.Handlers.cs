@@ -59,11 +59,15 @@ namespace FlyShelf.Classes
         {
             try
             {
+                // DEV DEBUG: Log every sync request
+                string reqDevice = req.Headers["X-Source-Device"] ?? req.RemoteEndPoint?.Address?.ToString() ?? "unknown";
+                string reqIp = req.RemoteEndPoint?.Address?.ToString() ?? "";
                 long sinceMs = 0;
                 if (!string.IsNullOrEmpty(req.QueryString["since"]))
                 {
                     long.TryParse(req.QueryString["since"], CultureInfo.InvariantCulture, out sinceMs);
                 }
+                Logger.LogAction("SYNC-GET", $"device={reqDevice} ip={reqIp} since={sinceMs} limit={req.QueryString["limit"] ?? "default"}");
 
                 // CLOCK-SKEW GUARD: If client since timestamp is far in the future compared to PC clock
                 // (e.g. PC clock jumped backwards due to NTP or timezone adjustment), reset sinceMs to prevent starvation
@@ -157,6 +161,8 @@ namespace FlyShelf.Classes
                 res.AddHeader("X-PC-Cloud-Active", (!string.IsNullOrEmpty(CloudDiscoveryManager.CachedGlobalUrl)).ToString());
                 await res.OutputStream.WriteAsync(jsonBytes, 0, jsonBytes.Length);
                 await res.OutputStream.FlushAsync();
+                // DEV DEBUG: Log items served
+                Logger.LogAction("SYNC-RESP", $"device={reqDevice} items={snapshot?.Count ?? 0} bytes={jsonBytes.Length} cloud={!string.IsNullOrEmpty(CloudDiscoveryManager.CachedGlobalUrl)}");
                 res.Close();
             }
             catch (Exception ex) { Logger.LogAction("SYNC_SERVE", $"ServeClipboardData failed: {ex.Message}"); try { res.StatusCode = 500; } catch { } try { res.Close(); } catch { } }

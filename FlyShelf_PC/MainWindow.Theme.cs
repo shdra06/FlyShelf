@@ -265,16 +265,16 @@ namespace FlyShelf
             // [FIX BTN-1]: Outer try/catch — async void must not throw unhandled exceptions.
             try
             {
-            // Read the theme-aware fallback color; defaults to neutral dark grey (#242424)
+            // Read the theme-aware fallback color; defaults to signature FlyShelf dark navy (#16162A)
             SolidColorBrush fallback;
             try
             {
                 fallback = Application.Current?.Resources["ThemeWindowFallback"] as SolidColorBrush
-                           ?? new SolidColorBrush(Color.FromRgb(36, 36, 36));
+                           ?? new SolidColorBrush(Color.FromRgb(0x16, 0x16, 0x2A));
             }
             catch
             {
-                fallback = new SolidColorBrush(Color.FromRgb(36, 36, 36));
+                fallback = new SolidColorBrush(Color.FromRgb(0x16, 0x16, 0x2A));
             }
 
             var bg = new SolidColorBrush(fallback.Color);

@@ -547,7 +547,7 @@ namespace FlyShelf.Classes
         // ═══════════════════════════════════════════════════════════════
 
         private const string ColorThemePrefix = "pack://application:,,,/Resources/Themes/Theme.";
-        private static readonly string[] ValidColorThemes = { "Midnight", "Ocean", "Sunset", "Emerald", "Lavender", "ArcticSnow" };
+        private static readonly string[] ValidColorThemes = { "Default", "Midnight", "Ocean", "Sunset", "Emerald", "Lavender", "ArcticSnow" };
         private System.Windows.ResourceDictionary? _activeColorThemeDict;
 
         /// <summary>
@@ -567,27 +567,11 @@ namespace FlyShelf.Classes
         {
             try
             {
-                // Validate theme name
-                if (string.IsNullOrEmpty(themeName) || !Array.Exists(ValidColorThemes, t => t.Equals(themeName, StringComparison.OrdinalIgnoreCase)))
-                {
-                    // "Default" means remove the theme overlay — don't fall back to Midnight
-                    if (!string.IsNullOrEmpty(themeName) && themeName.Equals("Default", StringComparison.OrdinalIgnoreCase))
-                    {
-                        RemoveColorTheme();
-                        return;
-                    }
-                    Logger.LogAction("COLOR_THEME", $"Invalid color theme: '{themeName}', falling back to Default");
-                    RemoveColorTheme();
-                    return;
-                }
+                if (string.IsNullOrEmpty(themeName))
+                    themeName = "Default";
 
                 // Normalize casing
                 themeName = Array.Find(ValidColorThemes, t => t.Equals(themeName, StringComparison.OrdinalIgnoreCase)) ?? "Default";
-                if (themeName.Equals("Default", StringComparison.OrdinalIgnoreCase))
-                {
-                    RemoveColorTheme();
-                    return;
-                }
 
                 var app = System.Windows.Application.Current;
                 if (app == null) return;
@@ -595,8 +579,9 @@ namespace FlyShelf.Classes
                 // Remove the existing color theme dictionary
                 RemoveColorThemeDict(app);
 
-                // Build the new theme source URI
-                string themeSource = $"{ColorThemePrefix}{themeName}.xaml";
+                // For "Default", load the signature FlyShelf theme (Midnight)
+                string themeFile = themeName.Equals("Default", StringComparison.OrdinalIgnoreCase) ? "Midnight" : themeName;
+                string themeSource = $"{ColorThemePrefix}{themeFile}.xaml";
 
                 // Load and add the new theme dictionary
                 var dict = new System.Windows.ResourceDictionary
@@ -609,18 +594,10 @@ namespace FlyShelf.Classes
                 // Persist the choice
                 SettingsManager.Current.ColorThemeName = themeName;
 
-                // ═══ v3.7.0: System theme mode ═══
-                // Hub is ALWAYS dark — color themes only affect the clipboard popup
-                // via AltClipboard token overrides and the Arctic frost overlay.
-                // Do NOT switch the global MicaWPF/WPF-UI base theme to Light.
-                // ArcticSnow's light look is self-contained in its theme dictionary
-                // and the ApplyAeroThemeOverrides() brush injection.
-
-                // Auto-apply matching wallpaper for dark themes
-                // ArcticSnow and Default use desktop wallpaper (handled by clearing path)
+                // Auto-apply matching wallpaper for the theme
                 ApplyColorThemeWallpaper(themeName);
 
-                Logger.LogAction("COLOR_THEME", $"Applied color theme: '{themeName}'");
+                Logger.LogAction("COLOR_THEME", $"Applied color theme: '{themeName}' (source={themeFile})");
 
                 // Update Aero UI resources to match the active color theme
                 ApplyAeroThemeOverrides(themeName);
@@ -631,14 +608,17 @@ namespace FlyShelf.Classes
             }
         }
 
-        // ═══ Color Theme Wallpaper ═══
+        // ═══════════════════════════════════════════════════════════════
+        // COLOR THEME WALLPAPER
+        // ═══════════════════════════════════════════════════════════════
 
         /// <summary>
         /// Map of color theme names to their embedded wallpaper resource names.
-        /// ArcticSnow and Default have no wallpaper (use desktop).
+        /// Default and Midnight both use the signature FlyShelf dark Midnight wallpaper.
         /// </summary>
         private static readonly Dictionary<string, string> ThemeWallpaperMap = new(StringComparer.OrdinalIgnoreCase)
         {
+            { "Default",  "Resources/Wallpapers/Theme_Midnight.png" },
             { "Midnight", "Resources/Wallpapers/Theme_Midnight.png" },
             { "Ocean",    "Resources/Wallpapers/Theme_Ocean.png" },
             { "Sunset",   "Resources/Wallpapers/Theme_Sunset.png" },
@@ -864,42 +844,28 @@ namespace FlyShelf.Classes
 
         /// <summary>
         /// Restore the saved color theme on startup. Call after Initialize().
+        /// Defaults to the FlyShelf signature theme (Midnight).
         /// </summary>
         public void RestoreColorTheme()
         {
             string savedTheme = SettingsManager.Current.ColorThemeName ?? "Default";
-            if (savedTheme.Equals("Default", StringComparison.OrdinalIgnoreCase))
-            {
-                RemoveColorTheme();
-                return;
-            }
             ApplyColorTheme(savedTheme);
         }
 
         /// <summary>
-        /// Removes the current color theme dictionary, restoring the app to palette defaults
-        /// with the user's desktop wallpaper applied.
+        /// Resets the color theme to FlyShelf default (Midnight), ensuring all FlyShelf
+        /// theme resources and wallpapers are cleanly applied.
         /// </summary>
         public void RemoveColorTheme()
         {
             try
             {
-                var app = System.Windows.Application.Current;
-                if (app == null) return;
-                RemoveColorThemeDict(app);
-                SettingsManager.Current.ColorThemeName = "Default";
-
-                // v3.7.0: Restore Dark system theme when switching away from ArcticSnow
-                SwitchSystemThemeMode(app, false);
-
-                // Reset Aero UI resources to light defaults
-                ApplyAeroThemeOverrides("Default");
-
-                Logger.LogAction("COLOR_THEME", "Color theme removed — using Windows native palette defaults");
+                ApplyColorTheme("Default");
+                Logger.LogAction("COLOR_THEME", "Color theme reset to FlyShelf default (Midnight)");
             }
             catch (Exception ex)
             {
-                Logger.LogAction("COLOR_THEME", $"Error removing color theme: {ex.Message}");
+                Logger.LogAction("COLOR_THEME", $"Error resetting color theme: {ex.Message}");
             }
         }
 
@@ -919,26 +885,8 @@ namespace FlyShelf.Classes
             var app = System.Windows.Application.Current;
             if (app == null) return;
 
-            // Default / ArcticSnow — light mode defaults from AltClipboardStyles.xaml
-            if (string.IsNullOrEmpty(themeName) || themeName.Equals("Default", StringComparison.OrdinalIgnoreCase)
-                || themeName.Equals("ArcticSnow", StringComparison.OrdinalIgnoreCase))
-            {
-                SetAeroResource(app, "AltCardBg", "#B8FFFFFF");
-                SetAeroResource(app, "AltCardBgHover", "#E0FFFFFF");
-                SetAeroResource(app, "AltCardBorder", "#18000000");
-                SetAeroResource(app, "AltCardBorderHover", "#28000000");
-                SetAeroResource(app, "AltTextPrimary", "#1E293B");
-                SetAeroResource(app, "AltTextSecondary", "#475569");
-                SetAeroResource(app, "AltTextTertiary", "#94A3B8");
-                SetAeroResource(app, "AltSearchBg", "#90FFFFFF");
-                SetAeroResource(app, "AltSearchBorder", "#20000000");
-                SetAeroResource(app, "AltSearchFg", "#64748B");
-                SetAeroResource(app, "AltBottomBarBg", "#D8F0F4F8");
-                SetAeroResource(app, "AltBottomBarBorder", "#20000000");
-                SetAeroResource(app, "AltSidebarHover", "#18000000");
-                SetAeroResource(app, "AltTimestampFg", "#64748B");
-                SetAeroResource(app, "AltSubtitleFg", "#64748B");
-            }
+            if (string.IsNullOrEmpty(themeName))
+                themeName = "Default";
 
             // Themed modes — vibrant tinted backgrounds with dark text for each theme
             switch (themeName)
@@ -962,6 +910,8 @@ namespace FlyShelf.Classes
                     SetAeroResource(app, "AltSubtitleFg", "#7A6A5A");
                     break;
                 case "Midnight":
+                case "Default":
+                default:
                     // Vibrant indigo-tinted — luminous periwinkle cards
                     SetAeroResource(app, "AltCardBg", "#C0E8ECFF");
                     SetAeroResource(app, "AltCardBgHover", "#E8F0F4FF");
@@ -1070,9 +1020,6 @@ namespace FlyShelf.Classes
                     SetAeroResource(app, "AltTimestampFg", "#70FFFFFF");
                     SetAeroResource(app, "AltSubtitleFg", "#70FFFFFF");
                     break;
-                default:
-                    // Unrecognized theme — treat as light
-                    break;
             }
 
             // Update background gradients and overlay programmatically
@@ -1083,7 +1030,7 @@ namespace FlyShelf.Classes
 
                 // Find the AltArcticOverlay and toggle its visibility based on theme
                 var arcticOverlay = mainWin.FindName("AltArcticOverlay") as System.Windows.Controls.Border;
-                bool isLight = string.IsNullOrEmpty(themeName) || themeName == "Default" || themeName == "ArcticSnow";
+                bool isLight = themeName == "ArcticSnow";
                 bool isGlass = themeName == "__glass__";
 
                 if (arcticOverlay != null)

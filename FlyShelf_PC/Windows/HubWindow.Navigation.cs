@@ -126,7 +126,9 @@ namespace FlyShelf.Windows
             {
                 RefreshDevices_Click(null, null);
                 RefreshQRCode();
+                RefreshCloudStatus();
                 RefreshPairedDevicesList();
+                StartCloudStatusTimer();
 #if !MSIX_STORE
                 if (ServerDiagnosticsLog != null)
                 {
