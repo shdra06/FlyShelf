@@ -1,7 +1,8 @@
-import React from 'react';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import React, { useMemo } from 'react';
 import { Modal, View, Text, ActivityIndicator } from 'react-native';
-import { colors } from '../../styles/theme';
-import s from '../../styles/pdfToolsStyles';
+
+import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 
 interface ProcessingOverlayProps {
   visible: boolean;
@@ -10,6 +11,9 @@ interface ProcessingOverlayProps {
 
 /** Full-screen translucent overlay with animated spinner + operation text */
 export default function ProcessingOverlay({ visible, text }: ProcessingOverlayProps) {
+  const { colors, shadows } = useAppTheme();
+  const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
+
   return (
     <Modal transparent visible={visible} animationType="fade" statusBarTranslucent>
       <View style={s.loadingOverlay}>

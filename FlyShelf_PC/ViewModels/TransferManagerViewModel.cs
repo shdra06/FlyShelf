@@ -285,6 +285,18 @@ namespace FlyShelf.ViewModels
         // ═══ Collection management ═══
         private void OnSourceCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null && !dispatcher.CheckAccess())
+            {
+                dispatcher.InvokeAsync(() =>
+                {
+                    RebuildAllTransfers();
+                    RebuildFilteredTransfers();
+                    OnPropertyChanged(nameof(IsEmpty));
+                });
+                return;
+            }
+
             RebuildAllTransfers();
             RebuildFilteredTransfers();
             OnPropertyChanged(nameof(IsEmpty));

@@ -35,6 +35,9 @@ namespace FlyShelf.Classes
             {
                 using var pdfDoc = PdfDocument.Open(pdfPath);
 
+                string? outDir = Path.GetDirectoryName(outputDocxPath);
+                if (!string.IsNullOrEmpty(outDir)) Directory.CreateDirectory(outDir);
+
                 using var wordDoc = WordprocessingDocument.Create(
                     outputDocxPath, WordprocessingDocumentType.Document);
 
@@ -507,6 +510,8 @@ namespace FlyShelf.Classes
             return table;
         }
 
+        private static int _drawingIdCounter = 0;
+
         private static void AddImageToBody(MainDocumentPart mainPart, Body body,
             byte[] imageBytes, string contentType)
         {
@@ -532,16 +537,19 @@ namespace FlyShelf.Classes
                     imgMs, System.Windows.Media.Imaging.BitmapCreateOptions.DelayCreation,
                     System.Windows.Media.Imaging.BitmapCacheOption.None);
 
-                double aspectRatio = (double)bitmapFrame.PixelWidth / bitmapFrame.PixelHeight;
+                int pw = bitmapFrame.PixelWidth > 0 ? bitmapFrame.PixelWidth : 100;
+                int ph = bitmapFrame.PixelHeight > 0 ? bitmapFrame.PixelHeight : 100;
+                double aspectRatio = (double)pw / ph;
                 heightEmu = (long)(widthEmu / aspectRatio);
             }
             catch { /* Use default dimensions */ }
 
+            uint imageId = (uint)System.Threading.Interlocked.Increment(ref _drawingIdCounter);
             var drawing = new Drawing(
                 new DW.Inline(
                     new DW.Extent { Cx = widthEmu, Cy = heightEmu },
                     new DW.EffectExtent { LeftEdge = 0L, TopEdge = 0L, RightEdge = 0L, BottomEdge = 0L },
-                    new DW.DocProperties { Id = 1U, Name = "Image" },
+                    new DW.DocProperties { Id = imageId, Name = $"Image {imageId}" },
                     new DW.NonVisualGraphicFrameDrawingProperties(
                         new A.GraphicFrameLocks { NoChangeAspect = true }),
                     new A.Graphic(

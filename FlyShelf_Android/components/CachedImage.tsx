@@ -209,11 +209,15 @@ export async function evictImageCache(): Promise<void> {
     }
 
     // Phase 1: Delete files older than 7 days
-    const now = Date.now() / 1000; // modificationTime is in seconds
+    const nowSec = Date.now() / 1000; // work in seconds
+    // Normalize mtime: some expo-file-system versions return ms, others return seconds
+    for (const f of fileInfos) {
+      if (f.mtime > 1e12) f.mtime = f.mtime / 1000; // milliseconds → seconds
+    }
     let totalSize = 0;
     const remaining: typeof fileInfos = [];
     for (const f of fileInfos) {
-      if (f.mtime > 0 && (now - f.mtime) > MAX_CACHE_AGE_MS / 1000) {
+      if (f.mtime > 0 && (nowSec - f.mtime) > MAX_CACHE_AGE_MS / 1000) {
         await FileSystem.deleteAsync(`${cacheDir}${f.name}`, { idempotent: true }).catch(() => {});
       } else {
         remaining.push(f);

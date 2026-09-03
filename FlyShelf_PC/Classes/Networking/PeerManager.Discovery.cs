@@ -68,6 +68,18 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
+        /// M-9: Restarts UDP multicast listeners to rebind after network changes
+        /// (Wi-Fi reconnect, VPN toggle, Ethernet plug/unplug).
+        /// Should be called from network change event handlers.
+        /// </summary>
+        public void RestartMulticastListeners()
+        {
+            Logger.LogAction("PEER_UDP", "Restarting multicast listeners due to network change...");
+            StopUdpDiscovery();
+            StartUdpDiscovery();
+        }
+
+        /// <summary>
         /// Broadcasts our local connection info to the multicast group periodically.
         /// </summary>
         private async Task BroadcastMulticastLoop(CancellationToken ct)

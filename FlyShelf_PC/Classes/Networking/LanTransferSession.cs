@@ -165,8 +165,8 @@ namespace FlyShelf.Classes
         /// </summary>
         private int _completedChunkCount;
         public int _hashVerificationStarted; // Used by Interlocked.CompareExchange in engine
-        public int CompletedChunkCount => _completedChunkCount;
-        public bool AllChunksCompleted => _completedChunkCount >= NumChunks;
+        public int CompletedChunkCount => Volatile.Read(ref _completedChunkCount);
+        public bool AllChunksCompleted => Volatile.Read(ref _completedChunkCount) >= NumChunks;
         public void MarkChunkCompleted(int chunkIndex)
         {
             // Guard: only increment if this chunk wasn't already completed

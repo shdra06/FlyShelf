@@ -119,26 +119,26 @@ export const isValidDeviceUrl = (urlStr: string | null | undefined): boolean => 
 };
 
 /** Decrypt device URLs if they were encrypted by the PC */
-export const decryptDevice = async (device: ActiveDeviceInfo): Promise<ActiveDeviceInfo> => {
+export const decryptDevice = async (device: ActiveDeviceInfo, specificPairingKey?: string): Promise<ActiveDeviceInfo> => {
   if (!device) return device;
   if (device.DeviceType === 'PC' && device.UrlsEncrypted) {
     const decrypted = { ...device };
     try {
       if (decrypted.LocalIp) {
-        const dec = await aesDecrypt(decrypted.LocalIp);
-        if (dec) decrypted.LocalIp = dec;
+        const dec = await aesDecrypt(decrypted.LocalIp, specificPairingKey);
+        decrypted.LocalIp = dec || '';
       }
       if (decrypted.GlobalUrl) {
-        const dec = await aesDecrypt(decrypted.GlobalUrl);
-        if (dec) decrypted.GlobalUrl = dec;
+        const dec = await aesDecrypt(decrypted.GlobalUrl, specificPairingKey);
+        decrypted.GlobalUrl = dec || '';
       }
       if (decrypted.Url) {
-        const dec = await aesDecrypt(decrypted.Url);
-        if (dec) decrypted.Url = dec;
+        const dec = await aesDecrypt(decrypted.Url, specificPairingKey);
+        decrypted.Url = dec || '';
       }
       if (decrypted.TlsUrl) {
-        const dec = await aesDecrypt(decrypted.TlsUrl);
-        if (dec) decrypted.TlsUrl = dec;
+        const dec = await aesDecrypt(decrypted.TlsUrl, specificPairingKey);
+        decrypted.TlsUrl = dec || '';
       }
       decrypted.UrlsEncrypted = false;
     } catch (err) {
@@ -153,11 +153,11 @@ export const decryptDevice = async (device: ActiveDeviceInfo): Promise<ActiveDev
 };
 
 /** Decrypt a list/array of devices */
-export const decryptDeviceList = async (devices: ActiveDeviceInfo[]): Promise<ActiveDeviceInfo[]> => {
+export const decryptDeviceList = async (devices: ActiveDeviceInfo[], specificPairingKey?: string): Promise<ActiveDeviceInfo[]> => {
   if (!devices || !Array.isArray(devices)) return devices || [];
   const decryptedList: ActiveDeviceInfo[] = [];
   for (const d of devices) {
-    decryptedList.push(await decryptDevice(d));
+    decryptedList.push(await decryptDevice(d, specificPairingKey));
   }
   return decryptedList;
 };
@@ -395,7 +395,7 @@ export const resolveLivePcUrl = async (pairedDevices?: PairedDevice[], manualIp?
 
     try {
       const winner = await Promise.race([
-        lanRace.then(u => ({ type: 'lan' as const, url: u })),
+        lanRace.then(u => ({ type: 'lan' as const, url: u })).catch(() => new Promise<never>(() => {})),
         cloudRace.then(async u => {
           // Give LAN 100ms chance to win if both respond
           const quickLan = await Promise.race([
@@ -495,7 +495,11 @@ async function withConcurrencyLimit<T>(tasks: (() => Promise<T>)[], limit: numbe
       }
       if (running === 0 && idx >= tasks.length && !settled) {
         settled = true;
-        reject(new AggregateError([], 'All tasks failed'));
+        if (typeof AggregateError !== 'undefined') {
+          reject(new (AggregateError as any)([], 'All tasks failed'));
+        } else {
+          reject(new Error('All tasks failed'));
+        }
       }
     };
     next();

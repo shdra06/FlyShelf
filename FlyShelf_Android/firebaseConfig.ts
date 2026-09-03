@@ -5,6 +5,7 @@ import { initializeAuth, getAuth, signInAnonymously, onAuthStateChanged } from "
 // @ts-ignore — getReactNativePersistence location varies by Firebase version
 import { getReactNativePersistence } from "firebase/auth";
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+import { syncLog } from './utils/debugLog';
 
 // ═══ XOR Obfuscation Key (matching PC) ═══
 const XOR_KEY = "FlyShelf_2026_Desktop";
@@ -110,27 +111,34 @@ let _restIdToken: string | null = null;
  */
 export async function ensureFirebaseAuth(): Promise<void> {
   return new Promise((resolve, reject) => {
+    syncLog('AUTH', '[STEP 1/6: AUTH] Checking Firebase anonymous authentication state...');
     // Check if already signed in
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       unsubscribe();
       if (user) {
         // Already authenticated
+        syncLog('AUTH', `[STEP 1/6: AUTH] ✅ Already authenticated (UID: ${user.uid.substring(0, 8)}...)`);
         resolve();
       } else {
         // Need to sign in
         try {
+          syncLog('AUTH', '[STEP 1/6: AUTH] Signing in anonymously via Firebase SDK...');
           await signInAnonymously(auth);
+          syncLog('AUTH', `[STEP 1/6: AUTH] ✅ SDK Anonymous sign-in success (UID: ${auth?.currentUser?.uid?.substring(0, 8)}...)`);
           resolve();
         } catch (error: any) {
+          syncLog('AUTH', `[STEP 1/6: AUTH ERROR] ⚠️ SDK Anonymous sign-in failed: ${error?.message || error}`);
           console.error('[FirebaseAuth] SDK Anonymous sign-in failed:', error);
           
           // ─── FALLBACK: Try REST API if SDK fails (Robustness for Android) ───
           if (error.code === 'auth/network-request-failed' || error.message?.toLowerCase().includes('network')) {
-            console.log('[FirebaseAuth] Attempting REST API fallback...');
+            syncLog('AUTH', '[STEP 1/6: AUTH] Attempting REST API auth fallback...');
             try {
               await signInAnonymouslyRest();
+              syncLog('AUTH', '[STEP 1/6: AUTH] ✅ REST fallback sign-in success');
               resolve();
-            } catch (restError) {
+            } catch (restError: any) {
+              syncLog('AUTH', `[STEP 1/6: AUTH ERROR] ❌ REST fallback also failed: ${restError?.message || restError}`);
               console.error('[FirebaseAuth] REST fallback also failed:', restError);
               reject(restError);
             }
@@ -206,21 +214,21 @@ async function signInAnonymouslyRest(): Promise<void> {
     if (data.idToken) {
       _restIdToken = data.idToken;
       _restRefreshCount++;
-      console.log('[FirebaseAuth] REST sign-in successful, token cached');
+      if (__DEV__) console.log('[FirebaseAuth] REST sign-in successful, token cached');
       
       // AC-11: Auto-refresh token after 50 minutes instead of just clearing it
       // Firebase tokens last 1 hour — proactively re-authenticate before expiry
       // C-6 FIX: Cap max refreshes to prevent infinite refresh chain
       if (_restRefreshCount < MAX_REST_REFRESHES) {
         setTimeout(() => {
-          console.log('[FirebaseAuth] REST token expiring — refreshing...');
+          if (__DEV__) console.log('[FirebaseAuth] REST token expiring — refreshing...');
           signInAnonymouslyRest().catch(e => {
             console.warn('[FirebaseAuth] REST token refresh failed:', e);
             _restIdToken = null;
           });
         }, 50 * 60 * 1000);
       } else {
-        console.log('[FirebaseAuth] REST token refresh limit reached — will re-auth on next request');
+        if (__DEV__) console.log('[FirebaseAuth] REST token refresh limit reached — will re-auth on next request');
       }
     }
   } catch (error) {

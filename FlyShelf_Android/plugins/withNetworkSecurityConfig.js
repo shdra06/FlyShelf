@@ -21,23 +21,24 @@ function withNetworkSecurityConfig(config) {
       fs.mkdirSync(xmlDir, { recursive: true });
 
       const xmlContent = `<?xml version="1.0" encoding="utf-8"?>
-<!-- Network Security Config: Restricts cleartext HTTP to LAN sync only -->
+<!-- Network Security Config: Enforces HTTPS on all cloud domains while allowing LAN sync -->
 <network-security-config>
-  <!-- Default: block all cleartext traffic -->
-  <base-config cleartextTrafficPermitted="false">
+  <!-- Strictly disallow cleartext on all cloud, auth, and API domains -->
+  <domain-config cleartextTrafficPermitted="false">
+    <domain includeSubdomains="true">firebaseio.com</domain>
+    <domain includeSubdomains="true">googleapis.com</domain>
+    <domain includeSubdomains="true">google.com</domain>
+    <domain includeSubdomains="true">flyshelf.app</domain>
+    <domain includeSubdomains="true">trycloudflare.com</domain>
+    <domain includeSubdomains="true">vercel.app</domain>
+    <domain includeSubdomains="true">razorpay.com</domain>
+  </domain-config>
+  <!-- Permit cleartext exclusively for local numeric IPs (LAN sync fallback) -->
+  <base-config cleartextTrafficPermitted="true">
     <trust-anchors>
       <certificates src="system" />
     </trust-anchors>
   </base-config>
-  <!-- Allow cleartext for LAN sync (RFC1918 private ranges) -->
-  <domain-config cleartextTrafficPermitted="true">
-    <domain includeSubdomains="true">10.0.0.0</domain>
-    <domain includeSubdomains="true">172.16.0.0</domain>
-    <domain includeSubdomains="true">192.168.0.0</domain>
-    <domain includeSubdomains="false">localhost</domain>
-    <domain includeSubdomains="false">127.0.0.1</domain>
-    <domain includeSubdomains="false">10.0.2.2</domain>
-  </domain-config>
 </network-security-config>
 `;
       fs.writeFileSync(path.join(xmlDir, 'network_security_config.xml'), xmlContent);

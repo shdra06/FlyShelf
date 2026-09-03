@@ -1,10 +1,11 @@
-import React from 'react';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
-import { colors } from '../../styles/theme';
-import s from '../../styles/pdfToolsStyles';
+
+import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 
 interface ResultViewProps {
   path?: string | null;
@@ -14,6 +15,9 @@ interface ResultViewProps {
 }
 
 export default function ResultView({ path, paths, onDone, onSendToPc }: ResultViewProps) {
+  const { colors, shadows } = useAppTheme();
+  const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
+
   const sharePdf = async (filePath: string) => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

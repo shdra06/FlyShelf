@@ -281,6 +281,67 @@ namespace FlyShelf.Classes
             }
         }
 
+        /// <summary>
+        /// Registers or updates a mobile companion peer that has opened an active WebSocket to this PC.
+        /// </summary>
+        public void RegisterMobilePeerWebSocket(string deviceId, System.Net.WebSockets.WebSocket socket, string remoteIp)
+        {
+            if (string.IsNullOrEmpty(deviceId) || deviceId == _myDeviceId) return;
+
+            var peer = _peers.GetOrAdd(deviceId, _ => new PeerConnection
+            {
+                DeviceId = deviceId,
+                DeviceName = deviceId.StartsWith("Mobile_") ? deviceId.Substring(7).Replace("_", " ") : deviceId,
+                DeviceType = "Mobile"
+            });
+
+            lock (peer.StateLock)
+            {
+                peer.LiveSocket = socket;
+                peer.IsAlive = true;
+                peer.Transport = (!string.IsNullOrEmpty(remoteIp) && remoteIp.Contains("trycloudflare")) ? "Cloudflare" : "LAN";
+                peer.LastSeen = DateTime.UtcNow;
+                peer.ConsecutiveFailures = 0;
+                peer.DeviceType = "Mobile";
+            }
+
+            Logger.LogAction("PEER", $"✅ Mobile peer WebSocket registered: {peer.DeviceName} ({peer.Transport})");
+            PeerConnected?.Invoke(peer.DeviceId, peer.Transport);
+        }
+
+        /// <summary>
+        /// Touches a mobile peer upon incoming HTTP requests (like /api/sync or /api/pair).
+        /// </summary>
+        public void TouchMobilePeer(string deviceId, string deviceName, string remoteIp, string transport = "LAN")
+        {
+            if (string.IsNullOrEmpty(deviceId) || deviceId == _myDeviceId) return;
+
+            var peer = _peers.GetOrAdd(deviceId, _ => new PeerConnection
+            {
+                DeviceId = deviceId,
+                DeviceName = !string.IsNullOrEmpty(deviceName) ? deviceName : (deviceId.StartsWith("Mobile_") ? deviceId.Substring(7).Replace("_", " ") : deviceId),
+                DeviceType = "Mobile"
+            });
+
+            if (!string.IsNullOrEmpty(deviceName)) peer.DeviceName = deviceName;
+            peer.DeviceType = "Mobile";
+
+            lock (peer.StateLock)
+            {
+                bool wasAlive = peer.IsAlive;
+                peer.IsAlive = true;
+                peer.Transport = transport;
+                peer.LastSeen = DateTime.UtcNow;
+                peer.ConsecutiveFailures = 0;
+
+                if (!wasAlive)
+                {
+                    Logger.LogAction("PEER", $"✅ Mobile peer active via HTTP: {peer.DeviceName} ({transport})");
+                    PeerConnected?.Invoke(peer.DeviceId, transport);
+                }
+            }
+        }
+
         public void Stop()
         {
             _cts.Cancel();
@@ -329,7 +390,7 @@ namespace FlyShelf.Classes
                 {
                     if (!pairedDeviceIds.Contains(pId))
                     {
-                        _peers.TryRemove(pId, out _);
+                        DisconnectPeer(pId);
                     }
                 }
 

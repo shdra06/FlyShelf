@@ -170,7 +170,11 @@ namespace FlyShelf.ViewModels
                     }
                     else if (!string.IsNullOrEmpty(RawContent) && RawContent.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                     {
-                        sourceUri = new Uri(RawContent);
+                        if (Uri.TryCreate(RawContent, UriKind.Absolute, out var parsedUri) &&
+                            (parsedUri.Scheme == Uri.UriSchemeHttp || parsedUri.Scheme == Uri.UriSchemeHttps))
+                        {
+                            sourceUri = parsedUri;
+                        }
                     }
 
                     if (sourceUri == null)
@@ -228,6 +232,13 @@ namespace FlyShelf.ViewModels
         {
             try
             {
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher != null && !dispatcher.CheckAccess())
+                {
+                    dispatcher.InvokeAsync(() => StopActivePlayback());
+                    return;
+                }
+
                 _playbackTimer?.Stop();
                 SharedPlayer.Stop();
                 SharedPlayer.Close();

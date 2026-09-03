@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AppErrorBoundary from '../../components/AppErrorBoundary';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, AppState, AppStateStatus, Modal, ToastAndroid, NativeModules, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, AppState, Modal, NativeModules, ScrollView, Share, RefreshControl, Animated, StyleSheet } from 'react-native';
 // SafeAreaView removed — ScreenHeader handles safe area
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 const FlashListCast = FlashList as React.ComponentType<any>;
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,38 +10,36 @@ import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { useSettings } from '../../context/SettingsContext';
 import { Ionicons } from '@expo/vector-icons';
-import { database, auth, ensureFirebaseAuth, getFirebaseIdToken, firebaseDatabaseUrl } from '../../firebaseConfig';
+import { database, auth, ensureFirebaseAuth } from '../../firebaseConfig';
 import { syncLog } from '../../utils/debugLog';
-import { ref, push, set, get, onValue, query, limitToLast, orderByChild, update, remove } from 'firebase/database';
+import { ref, set, get, onValue, query, update } from 'firebase/database';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
-import { getSecureItem, setSecureItem, removeSecureItem } from '../../utils/secureStorage';
+import { getSecureItem } from '../../utils/secureStorage';
 import * as MediaLibrary from 'expo-media-library';
 import { Image } from 'expo-image';
 
-import * as Crypto from 'expo-crypto';
 
 import * as Linking from 'expo-linking';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EncryptedStorage from '../../utils/EncryptedStorage';
-import * as Notifications from 'expo-notifications';
 import NetInfo from '@react-native-community/netinfo';
-import { toast, useToast } from '../../context/ToastContext';
+import { toast } from '../../context/ToastContext';
 
 
 // ═══ Extracted Modules ═══
-import { ClipItem, DOWNLOAD_BASE, SYNC_CACHE_BASE, CONVERTED_BASE, IMAGE_CACHE_BASE, getDownloadPath } from '../../utils/clipTypes';
-import { fetchWithTimeout, getConnectionType, connectionColors, resolveOptimalUrl, getDeviceUrls, getMediaUrl, decryptDevice, decryptDeviceList, isValidPairingKey, isValidDeviceUrl } from '../../utils/networkHelpers';
-import { encrypt as aesEncrypt, decrypt as aesDecrypt } from '../../utils/syncCrypto';
+import { ClipItem, DOWNLOAD_BASE, SYNC_CACHE_BASE, CONVERTED_BASE } from '../../utils/clipTypes';
+import { fetchWithTimeout, getConnectionType, connectionColors, resolveOptimalUrl, getMediaUrl, decryptDeviceList, isValidPairingKey } from '../../utils/networkHelpers';
+import { DirectMesh } from '../../utils/directMesh';
 import { NetworkClock } from '../../utils/networkClock';
 import { createSyncStyles } from '../../styles/syncStyles';
-import { font, radius, space, component } from '../../styles/theme';
+import { font, radius, space } from '../../styles/theme';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import AnimatedCard from '../../components/AnimatedCard';
-import RAnimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import ScreenHeader from '../../components/ScreenHeader';
 
 import CachedImage from '../../components/CachedImage';
@@ -53,7 +52,7 @@ import { usePcUrlResolver } from '../../hooks/usePcUrlResolver';
 import OnboardingWizard from '../../components/OnboardingWizard';
 import { ActiveDevice } from '../../components/DeviceHub';
 import { mergePdfs as localMergePdfs, convertImageToPdf as localConvertImageToPdf } from '../../utils/pdfUtils';
-import { useDownloadQueue, DownloadQueueItem } from '../../features/clipboard/useDownloadQueue';
+import { useDownloadQueue } from '../../features/clipboard/useDownloadQueue';
 import { useImageSweep } from '../../features/clipboard/useImageSweep';
 import NetworkDashboard from '../../components/NetworkDashboard';
 import { useFirebaseSync } from '../../features/sync/useFirebaseSync';
@@ -62,8 +61,17 @@ import { useHeavyUpload } from '../../features/sync/useHeavyUpload';
 import { usePairingFlow } from '../../features/sync/usePairingFlow';
 import { useScreenshotSync } from '../../features/sync/useScreenshotSync';
 import { useIsFocused } from '@react-navigation/native';
-import { createTimeoutSignal, clearTimeoutSignal } from '../../utils/timeoutSignal';
 import { normalizeTextForFingerprint, fuzzyIsMatch } from '../../utils/textNormalize';
+import { router } from 'expo-router';
+
+// ═══ Home Dashboard Components ═══
+import MaterialSearchBar from '../../components/MaterialSearchBar';
+import CategoryTile from '../../components/home/CategoryTile';
+import QuickActionChips from '../../components/home/QuickActionChips';
+import RecentActivityFeed, { ActivityItem } from '../../components/home/RecentActivityFeed';
+import HomeFab from '../../components/home/HomeFab';
+import SendTextModal from '../../components/home/SendTextModal';
+import { createHomeStyles } from '../../styles/homeStyles';
 
 
 const { AdvanceOverlay } = NativeModules;
@@ -71,30 +79,71 @@ const { AdvanceOverlay } = NativeModules;
 // Audit Task 1: normalizeTextForFingerprint and createTimeoutSignal/clearTimeoutSignal
 // are now imported from canonical utils (see imports above)
 
+const SkeletonLoader = () => {
+  const { colors } = useAppTheme();
+  const opacity = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true })
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <View style={{ padding: 16 }}>
+      {[1, 2, 3, 4, 5].map(i => (
+        <Animated.View key={i} style={{ 
+          height: 80, 
+          backgroundColor: colors.border.subtle, 
+          borderRadius: 12, 
+          marginBottom: 12, 
+          opacity 
+        }} />
+      ))}
+    </View>
+  );
+};
+
 // ════════════════════════════════════════════════════════
 // MAIN SCREEN
 // ════════════════════════════════════════════════════════
 function SyncScreenInner() {
-  const { colors, shadows } = useAppTheme();
+  const { colors, shadows, isDark } = useAppTheme();
   const styles = useMemo(() => createSyncStyles(colors, shadows), [colors, shadows]);
-  const { pcLocalIp, deviceName, setDeviceName, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, addPairedDevice, pairedDevices, updatePairedDeviceLicensing, updateDeviceStatus, pairingKey: contextPairingKey, regeneratePairingKey, getSyncPrefsForDevice, autoSyncTop5 } = useSettings();
+  const homeStyles = useMemo(() => createHomeStyles(colors, shadows), [colors, shadows]);
+  const { pcLocalIp, deviceName, setDeviceName, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, addPairedDevice, pairedDevices, updatePairedDeviceLicensing, updateDeviceStatus, pairingKey: contextPairingKey, regeneratePairingKey, getSyncPrefsForDevice, autoSyncTop5, isOfflineOutboxEnabled } = useSettings();
 
   const isPairedPcPro = pairedDevices.some(d => d.deviceType === 'PC' && d.isPro);
+
+  // ── View Mode: Home Dashboard vs Clipboard Feed ──
+  type ViewMode = 'home' | 'clipboard';
+  const [viewMode, setViewMode] = useState<ViewMode>('home');
+  const insets = useSafeAreaInsets();
 
   // A-10 fix: detect when this tab is not focused to skip screenshot polling
   const isFocused = useIsFocused();
 
   useEffect(() => {
-    if (Platform.OS === 'android' && AdvanceOverlay && isFloatingBallEnabled) {
+    if (Platform.OS === 'android' && AdvanceOverlay) {
       AdvanceOverlay.startOverlay();
+      try { AdvanceOverlay.setBallVisible?.(isFloatingBallEnabled); } catch (e) {}
     }
   }, [isFloatingBallEnabled]);
+
+  // ─── Sync Offline Outbox setting to DirectMesh module ───
+  useEffect(() => {
+    DirectMesh.setOfflineOutboxEnabled(isOfflineOutboxEnabled);
+  }, [isOfflineOutboxEnabled]);
 
   // ─── Ghost Wipe Filter State ───
   const [localWipeTimestamp, setLocalWipeTimestamp] = useState<number>(0);
   const [localDeletedIds, setLocalDeletedIds] = useState<Set<string>>(new Set());
 
   // ─── Core State ───
+  const [isStorageLoaded, setIsStorageLoaded] = useState(false);
   const [clips, setClips] = useState<ClipItem[]>([]);
   // ─── Ref mirror for clips state — used by effects that must READ clips without DEPENDING on clips ───
   const clipsStateRef = useRef<ClipItem[]>([]);
@@ -127,7 +176,7 @@ function SyncScreenInner() {
   // Cloudflare failure tracking — delegated to usePcUrlResolver hook
   const lastSyncedContentRef = useRef<string>('');
   const lastSyncedImageTsRef = useRef<number>(0);
-  const sentContentFingerprintsRef = useRef<Set<string>>(new Set());
+  const sentContentFingerprintsRef = useRef<Map<string, number>>(new Map());
   const recentSyncFingerprintsRef = useRef<Map<string, number>>(new Map());
   // EventId-based dedup: deterministic IDs prevent echo loops without content collisions
   const processedEventsRef = useRef<Map<string, number>>(new Map());
@@ -255,6 +304,7 @@ function SyncScreenInner() {
       if (mounted) {
         clipsInitializedRef.current = true;
         hasLoadedOnceRef.current = true;
+        setIsStorageLoaded(true);
       }
     })();
     return () => { mounted = false; }; // A-13: Cleanup
@@ -280,14 +330,7 @@ function SyncScreenInner() {
       if (Platform.OS === 'android' && AdvanceOverlay?.setPairingKey) AdvanceOverlay.setPairingKey(contextPairingKey);
     }
   }, [contextPairingKey]);
-  /** Returns the Firebase path scoped to the pairing key, e.g. `clipboard/abc123` */
-  const clipboardPath = () => {
-    const pk = pairingKeyRef.current;
-    if (!isValidPairingKey(pk)) {
-      throw new Error("Invalid or missing pairing key room scope");
-    }
-    return `clipboard/${pk}`;
-  };
+  // ZERO-TRUST: clipboardPath() removed — Firebase stores zero clipboard data.
 
   // Extracted to usePcUrlResolver hook (C1 decomposition)
   // NOTE: Hook call is below after activeDevicesRef declaration (~line 525)
@@ -367,7 +410,7 @@ function SyncScreenInner() {
         const copiedText = await AdvanceOverlay.getLastCopiedFromOverlay();
         if (copiedText && copiedText.trim().length > 0) {
           // Fingerprint to prevent echo back from Firebase
-          sentContentFingerprintsRef.current.add(copiedText.substring(0, 200));
+          sentContentFingerprintsRef.current.set(copiedText.substring(0, 200), Date.now());
           const overlayEventId = generateEventId();
           processedEventsRef.current.set(overlayEventId, NetworkClock.now());
           const newItem: ClipItem = {
@@ -402,11 +445,61 @@ function SyncScreenInner() {
   const localScreenshotsRef = useRef<ClipItem[]>([]);
 
   // ─── UI State ───
-  // [REMOVED] isRefreshing — was dead state (never read)
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    if (getCachedPcUrl) {
+      await getCachedPcUrl();
+    }
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 1500);
+  }, [getCachedPcUrl]);
+
+  const renderConnectionBanner = () => {
+    if (connectionInfo) {
+      if (connectionInfo.type === 'LAN') {
+        return (
+          <View style={{ height: 28, width: '100%', backgroundColor: 'rgba(76, 175, 80, 0.1)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4CAF50', marginRight: 6 }} />
+            <Text style={{ fontSize: 11, color: colors.text.secondary }}>Connected via LAN</Text>
+          </View>
+        );
+      } else {
+        return (
+          <View style={{ height: 28, width: '100%', backgroundColor: 'rgba(255, 152, 0, 0.1)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF9800', marginRight: 6 }} />
+            <Text style={{ fontSize: 11, color: colors.text.secondary }}>Connected via Cloud</Text>
+          </View>
+        );
+      }
+    }
+    
+    const isPaired = pairedDevices.length > 0;
+    if (isPaired) {
+      if (isRefreshing) {
+        return (
+          <View style={{ height: 28, width: '100%', backgroundColor: 'rgba(158, 158, 158, 0.1)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size={10} color={colors.text.secondary} style={{ marginRight: 6 }} />
+            <Text style={{ fontSize: 11, color: colors.text.secondary }}>Connecting...</Text>
+          </View>
+        );
+      }
+      return (
+        <TouchableOpacity onPress={onRefresh} style={{ height: 28, width: '100%', backgroundColor: 'rgba(244, 67, 54, 0.1)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#F44336', marginRight: 6 }} />
+          <Text style={{ fontSize: 11, color: colors.text.secondary }}>PC Offline • Tap to retry</Text>
+        </TouchableOpacity>
+      );
+    }
+    return null;
+  };
+
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [lastCopiedText, setLastCopiedText] = useState('');
   const [setupName, setSetupName] = useState('');
+  const [isSendTextModalVisible, setIsSendTextModalVisible] = useState(false);
   const { isTargetModalVisible, setIsTargetModalVisible, isCameraOptionsVisible, setIsCameraOptionsVisible, isQRScannerActive, setIsQRScannerActive, expandedImage, setExpandedImage, isMergeModalVisible, setIsMergeModalVisible, mergeQueue, setMergeQueue, isForceSyncModalVisible, setIsForceSyncModalVisible, forceSyncDevices, setForceSyncDevices, isConnectModalVisible, setIsConnectModalVisible } = useModals();
   const [connectionInfo, setConnectionInfo] = useState<{ url: string; latencyMs: number; type: 'LAN' | 'Cloud' } | null>(null);
   const [showNetworkDashboard, setShowNetworkDashboard] = useState(false);
@@ -422,6 +515,7 @@ function SyncScreenInner() {
   // [REMOVED] downloadProgress — was dead state (never read)
   const [incomingTransferProgress, setIncomingTransferProgress] = useState<{[key: string]: number}>({});
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [isTorchOn, setIsTorchOn] = useState(false);
   const [latestIngestedId, setLatestIngestedId] = useState<string | null>(null);
   const [activeOptionsId, setActiveOptionsId] = useState<string | null>(null);
   const { isMultiSelectMode, selectedItemIds, toggleSelectItem, exitMultiSelect, enterMultiSelect } = useMultiSelect();
@@ -444,49 +538,7 @@ function SyncScreenInner() {
     })();
   }, []);
 
-  // ─── Peer Relay ───
-  useEffect(() => {
-    if (!deviceName) return;
-    const safeDeviceName = (deviceName || 'Phone').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const peerRef = query(ref(database, `peer_transfers/${safeDeviceName}`));
-    const unsubscribePeer = onValue(peerRef, async (snapshot) => {
-      if (snapshot.exists() && Platform.OS !== 'web') {
-        const data = snapshot.val();
-        const updates: any = {};
-        for (const key of Object.keys(data)) {
-          const batch = data[key];
-          if (batch.urls && Array.isArray(batch.urls)) {
-            toast.info(`Incoming Batch (${batch.urls.length} items)`, `Receiving from ${batch.sender || 'peer device'}...`);
-            try {
-              const perm = await MediaLibrary.requestPermissionsAsync();
-              if (perm.status === 'granted') {
-                await Promise.all(batch.urls.map(async (url: string, idx: number) => {
-                  const localUri = `${SYNC_CACHE_BASE}relayed_${NetworkClock.now()}_${idx}.jpg`;
-                  const dl = await Promise.race([
-                    FileSystem.downloadAsync(url, localUri, {
-                      headers: {
-                        'X-FlyShelf-Client': 'MobileCompanion',
-                        'X-Pairing-Key': pairingKeyRef.current
-                      }
-                    }),
-                    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Peer download timeout')), 60000))
-                  ]);
-                  const asset = await MediaLibrary.createAssetAsync(dl.uri);
-                  await MediaLibrary.createAlbumAsync("FlyShelf Extractions", asset, false);
-                }));
-                toast.success("Saved to Gallery", `${batch.urls.length} images saved to 'FlyShelf Extractions' album`);
-              }
-            } catch (e: any) { 
-              toast.error("Batch Transfer Incomplete", e?.message || "Storage permission denied or download timed out");
-            }
-            updates[key] = null;
-          }
-        }
-        if (Object.keys(updates).length > 0) await update(ref(database, `peer_transfers/${safeDeviceName}`), updates);
-      }
-    });
-    return () => unsubscribePeer();
-  }, [deviceName]);
+  // ─── Peer Relay: REMOVED for Zero-Trust policy (Firebase must never relay files or execute commands) ───
 
   // Helper: wrap getMediaUrl with current state (M-4: memoized to fix renderClipItem deps)
   const getMediaUrlForItem = useCallback((item: any) => getMediaUrl(item, activeDevices, pcLocalIp), [activeDevices, pcLocalIp]);
@@ -572,17 +624,54 @@ function SyncScreenInner() {
     const appStateSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         registerSelf();
+        // Returning to foreground — stop native sync and merge any clips received while backgrounded
+        if (Platform.OS === 'android' && AdvanceOverlay?.setSyncEnabled) {
+          AdvanceOverlay.setSyncEnabled(false);
+          AdvanceOverlay.getPendingClips?.()
+            .then((json: string) => {
+              try {
+                const pending = JSON.parse(json || '[]') as Array<{ Raw?: string; Title?: string; Type?: string; SourceDeviceName?: string }>;
+                if (pending.length > 0) {
+                  setClips(prev => {
+                    const newItems: ClipItem[] = pending
+                      .filter(p => p.Raw && p.Raw.trim().length > 0)
+                      .map(p => ({
+                        Title: (p.Title || (p.Raw || '').substring(0, 80)),
+                        Type: p.Type || 'Text',
+                        Raw: p.Raw!,
+                        Time: new Date().toLocaleString(),
+                        SourceDeviceName: p.SourceDeviceName || 'PC',
+                        SourceDeviceType: 'Desktop' as const,
+                        Timestamp: NetworkClock.now(),
+                        _receivedVia: 'LAN' as const,
+                      }));
+                    // Dedup: skip items whose Raw already exists at the top of the feed
+                    const existingRaws = new Set(prev.slice(0, 20).map(c => c.Raw));
+                    const unique = newItems.filter(n => !existingRaws.has(n.Raw));
+                    if (unique.length === 0) return prev;
+                    return [...unique, ...prev];
+                  });
+                }
+              } catch (_) {}
+            })
+            .catch(() => {});
+        }
+      } else if (state === 'background') {
+        // Going to background — enable native sync so the foreground service keeps syncing
+        if (Platform.OS === 'android' && AdvanceOverlay?.setSyncEnabled) {
+          AdvanceOverlay.setSyncEnabled(true);
+        }
       }
     });
 
     return () => {
       appStateSub.remove();
       clearInterval(heartbeat);
-      if (!isFloatingBallEnabled) {
+      if (!isGlobalSyncEnabled) {
         set(ref(database, `active_devices/${pk}/${myDeviceId}/IsOnline`), false).catch(() => {});
       }
     };
-  }, [deviceName, isFloatingBallEnabled, contextPairingKey]);
+  }, [deviceName, isGlobalSyncEnabled, contextPairingKey]);
 
 
   // ─── Periodic dedup cleanup (every 60s) ───
@@ -591,11 +680,18 @@ function SyncScreenInner() {
       const now = NetworkClock.now();
       // processedEventsRef cleanup handled by dedicated interval at L106-114 (5min/10min TTL)
       // Clean sentContentFingerprintsRef — TTL eviction, NOT full clear (prevents echo loops)
-      // Legacy fingerprints don't have timestamps, so cap by size instead
-      if (sentContentFingerprintsRef.current.size > 500) {
-        const arr = Array.from(sentContentFingerprintsRef.current);
-        sentContentFingerprintsRef.current = new Set(arr.slice(-200));
-        syncLog('CLEANUP', 'Trimmed sentContentFingerprints to 200 (was >500)');
+      // Prune entries older than 1 hour
+      const ONE_HOUR = 3600000;
+      if (sentContentFingerprintsRef.current.size > 200) {
+        for (const [key, timestamp] of sentContentFingerprintsRef.current.entries()) {
+          if (now - timestamp > ONE_HOUR) sentContentFingerprintsRef.current.delete(key);
+        }
+        if (sentContentFingerprintsRef.current.size > 500) {
+          // Hard cap: keep only the 200 most recent entries
+          const sorted = [...sentContentFingerprintsRef.current.entries()].sort((a, b) => b[1] - a[1]).slice(0, 200);
+          sentContentFingerprintsRef.current = new Map(sorted);
+        }
+        syncLog('CLEANUP', `Pruned sentContentFingerprints to ${sentContentFingerprintsRef.current.size}`);
       }
       // Clean recentSyncFingerprintsRef — remove entries older than 60s
       recentSyncFingerprintsRef.current.forEach((ts, fp) => {
@@ -904,78 +1000,29 @@ function SyncScreenInner() {
           }
         }
       }
-      sentContentFingerprintsRef.current.add(finalRaw.substring(0, 200));
+      sentContentFingerprintsRef.current.set(finalRaw.substring(0, 200), Date.now());
       const txEventId = generateEventId();
       processedEventsRef.current.set(txEventId, NetworkClock.now());
-      let localSuccess = false;
       let activeUrl = targetUrl;
       if (!activeUrl || !activeUrl.startsWith('http')) {
         activeUrl = await getCachedPcUrl().catch(() => '');
       }
 
-      if (activeUrl && activeUrl.startsWith('http')) {
-        try {
-          const pairingKey = await getSecureItem('pairingKey');
-          const hdrs: any = { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion', 'X-Source-Device': deviceName || 'Mobile' };
-          if (pairingKey) hdrs['X-Pairing-Key'] = pairingKey;
-          const jsonBody = JSON.stringify({
-            type: finalType,
-            title: payloadText.length > 40 ? payloadText.substring(0, 40) + '...' : payloadText,
-            data: finalRaw,
-            sourceDeviceName: deviceName || 'Mobile',
-            sourceDeviceId: `Mobile_${(deviceName || 'Phone').replace(/[^a-zA-Z0-9_]/g, '_')}`,
-            timestamp: NetworkClock.now(),
-          });
-          const sendTimeout = activeUrl.includes('trycloudflare.com') ? 8000 : 3000;
-          const response = await fetchWithTimeout(`${activeUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body: jsonBody }, sendTimeout);
-          localSuccess = response.ok;
+      const dispatchResult = await DirectMesh.sendClip({
+        type: finalType,
+        title: payloadText.length > 40 ? payloadText.substring(0, 40) + '...' : payloadText,
+        data: finalRaw,
+        deviceName: deviceName || 'Mobile',
+        activeUrl: activeUrl,
+      });
 
-          // If direct send failed with stale URL, invalidate cache, re-resolve and retry once
-          if (!localSuccess) {
-            invalidatePcUrlCache();
-            const freshUrl = await getCachedPcUrl().catch(() => '');
-            if (freshUrl && freshUrl !== activeUrl && freshUrl.startsWith('http')) {
-              const retryTimeout = freshUrl.includes('trycloudflare.com') ? 8000 : 3000;
-              const retryRes = await fetchWithTimeout(`${freshUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body: jsonBody }, retryTimeout);
-              localSuccess = retryRes.ok;
-            }
-          }
-
-          if (localSuccess) {
-            if (activeUrl.includes('trycloudflare.com')) {
-              toast.syncCloud('✓ Delivered to PC', undefined, '☁️ Cloud');
-            } else {
-              toast.syncLan('✓ Delivered to PC', undefined, '⚡ LAN');
-            }
-          }
-        } catch(e) {
-          // Retry once with freshly resolved URL
-          try {
-            invalidatePcUrlCache();
-            const freshUrl = await getCachedPcUrl().catch(() => '');
-            if (freshUrl && freshUrl.startsWith('http')) {
-              const pairingKey = await getSecureItem('pairingKey');
-              const hdrs: any = { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion', 'X-Source-Device': deviceName || 'Mobile' };
-              if (pairingKey) hdrs['X-Pairing-Key'] = pairingKey;
-              const jsonBody = JSON.stringify({
-                type: finalType,
-                title: payloadText.length > 40 ? payloadText.substring(0, 40) + '...' : payloadText,
-                data: finalRaw,
-                sourceDeviceName: deviceName || 'Mobile',
-                sourceDeviceId: `Mobile_${(deviceName || 'Phone').replace(/[^a-zA-Z0-9_]/g, '_')}`,
-                timestamp: NetworkClock.now(),
-              });
-              const retryRes = await fetchWithTimeout(`${freshUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body: jsonBody }, 5000);
-              localSuccess = retryRes.ok;
-              if (localSuccess) {
-                if (freshUrl.includes('trycloudflare.com')) {
-                  toast.syncCloud('✓ Delivered to PC', undefined, '☁️ Cloud');
-                } else {
-                  toast.syncLan('✓ Delivered to PC', undefined, '⚡ LAN');
-                }
-              }
-            }
-          } catch {}
+      if (dispatchResult.success) {
+        if (dispatchResult.transport === 'ws') {
+          toast.syncLan('✓ Delivered via Direct WebSocket', undefined, '⚡ Real-time');
+        } else if (dispatchResult.transport === 'cloud') {
+          toast.syncCloud('✓ Delivered to PC', undefined, '☁️ Cloud');
+        } else {
+          toast.syncLan('✓ Delivered to PC', undefined, '⚡ LAN');
         }
       }
 
@@ -999,8 +1046,12 @@ function SyncScreenInner() {
         return next.length > MAX_CLIPS_IN_MEMORY ? [...next.filter(c => c.IsPinned), ...next.filter(c => !c.IsPinned)].slice(0, MAX_CLIPS_IN_MEMORY) : next;
       });
 
-      if (!localSuccess) {
-        toast.warning('PC Offline — Saved Locally', 'Clip saved to feed. Will sync automatically when PC connects.');
+      if (!dispatchResult.success) {
+        if (dispatchResult.transport === 'outbox') {
+          toast.warning('PC Offline — Queued', 'Clip saved to outbox. Will sync automatically when PC reconnects.');
+        } else {
+          toast.warning('PC Offline — Saved Locally', 'Clip saved to feed only. Enable "Offline Queue" in Settings to auto-sync when PC reconnects.');
+        }
       }
     } catch (e) { syncLog('SYNC', `Text transmit error: ${(e as any)?.message || e}`); }
     setIsSending(false);
@@ -1250,7 +1301,7 @@ function SyncScreenInner() {
         if (snapshot.exists()) {
           const data = snapshot.val();
           const rawDevs = Object.keys(data).map(k => ({ key: k, ...data[k], DeviceId: k }));
-          const decryptedDevs = await decryptDeviceList(rawDevs);
+          const decryptedDevs = await decryptDeviceList(rawDevs, pk);
           setForceSyncDevices(decryptedDevs.filter(d => d.DeviceName !== deviceName));
         } else setForceSyncDevices([]);
       }
@@ -1276,7 +1327,16 @@ function SyncScreenInner() {
             }
             if (url) {
               for (const item of selected) {
-                await fetchWithTimeout(`${url}/api/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion' }, body: JSON.stringify({ title: item.Title, content: item.Raw, type: item.Type, sourceDevice: deviceName }) }, 5000).catch(() => {});
+                await fetchWithTimeout(`${url}/api/sync`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-FlyShelf-Client': 'MobileCompanion',
+                    'X-Pairing-Key': pairingKeyRef.current || '',
+                    'X-Source-Device': deviceName || 'Mobile',
+                  },
+                  body: JSON.stringify({ title: item.Title, content: item.Raw, type: item.Type, sourceDevice: deviceName })
+                }, 5000).catch(() => {});
               }
             }
           } catch (e) { console.warn('Force sync to device: error', (e as any)?.message || e); }
@@ -1348,6 +1408,9 @@ function SyncScreenInner() {
                 },
               });
               p2pSuccess = true;
+            } else {
+              toast.error('File not cached locally', 'Please wait for the file to download or check your connection');
+              return;
             }
           }
         } catch (p2pErr: any) {
@@ -1375,6 +1438,7 @@ function SyncScreenInner() {
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: '*/*' });
       if (result.canceled) return;
+      if (!result.assets?.length) return;
       const file = result.assets[0];
       const ext = file.name.split('.').pop()?.toLowerCase() || '';
       const mime = (file as any).mimeType || '';
@@ -1388,13 +1452,9 @@ function SyncScreenInner() {
       else if (mime.includes('word') || mime.includes('document') || ['doc','docx','txt','rtf'].includes(ext)) assignedType = 'Document';
       const payload = { uri: file.uri, name: file.name, size: file.size, type: assignedType };
       setPendingUploadPayload(payload);
-      // Auto-send to PC via LAN/Cloudflare if available, skip Firebase
+      // Auto-send to PC via LAN/Cloudflare with fallback chain
       const pc = activeDevices.find((d: any) => d.DeviceType === 'PC');
-      if (pc) {
-        executeHeavyUpload(pc, payload);
-      } else {
-        setIsTargetModalVisible(true);
-      }
+      executeHeavyUpload(pc || 'Global', payload);
     } catch (err) { Alert.alert('Upload Failed'); }
   };
   const launchDirectCamera = async () => {
@@ -1402,6 +1462,7 @@ function SyncScreenInner() {
     try {
       const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.8 });
       if (!result.canceled) {
+        if (!result.assets?.length) return;
         const file = result.assets[0];
         try { 
           const b64 = await FileSystem.readAsStringAsync(file.uri, { encoding: (FileSystem as any).EncodingType.Base64 }); 
@@ -1411,7 +1472,7 @@ function SyncScreenInner() {
         const payload = { uri: file.uri, name: file.fileName || `camera_${NetworkClock.now()}.jpg`, size: file.fileSize, type: 'Image' };
         const pc = activeDevices.find((d: any) => d.DeviceType === 'PC');
         setPendingUploadPayload(payload);
-        if (pc) { executeHeavyUpload(pc, payload); } else { setIsTargetModalVisible(true); }
+        executeHeavyUpload(pc || 'Global', payload);
       }
     } catch (camErr: any) {
       Alert.alert('Camera Error', camErr?.message || 'Failed to launch camera');
@@ -1421,12 +1482,13 @@ function SyncScreenInner() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], allowsEditing: false, quality: 0.8 });
       if (!result.canceled) {
+        if (!result.assets?.length) return;
         const file = result.assets[0];
         try { if (file.type === 'image') { const b64 = await FileSystem.readAsStringAsync(file.uri, { encoding: (FileSystem as any).EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } } catch (e) { console.warn('Image picker clipboard copy: error', (e as any)?.message || e); }
         const payload = { uri: file.uri, name: file.fileName || `media_${NetworkClock.now()}`, size: file.fileSize, type: file.type === 'video' ? 'Video' : 'Image' };
         const pc = activeDevices.find((d: any) => d.DeviceType === 'PC');
         setPendingUploadPayload(payload);
-        if (pc) { executeHeavyUpload(pc, payload); } else { setIsTargetModalVisible(true); }
+        executeHeavyUpload(pc || 'Global', payload);
       }
     } catch (pickErr: any) {
       Alert.alert('Image Picker Error', pickErr?.message || 'Failed to open image library');
@@ -1699,18 +1761,12 @@ function SyncScreenInner() {
               </TouchableOpacity>
             )}
 
-            {/* ═══ PIN — universal ═══ */}
+            {/* ═══ PIN — local-only ═══ */}
             <TouchableOpacity onPress={async () => {
               try {
-                if (!item.id) {
-                  // For local-only items, toggle pin in state
-                  setClips(prev => prev.map(c => (c.Title === item.Title && c.Raw === item.Raw) ? {...c, IsPinned: !c.IsPinned} : c));
-                  toast.success(item.IsPinned ? "Unpinned" : "Pinned to Top", item.Title || "Clipboard Item");
-                } else {
-                  await update(ref(database, `${clipboardPath()}/${item.id}`), { IsPinned: !item.IsPinned });
-                  setClips(prev => prev.map(c => c.id === item.id ? {...c, IsPinned: !c.IsPinned} : c));
-                  toast.success(item.IsPinned ? "Unpinned" : "Pinned to Top", item.Title || "Clipboard Item");
-                }
+                // ZERO-TRUST: Toggle pin in local state only (no Firebase clipboard write)
+                setClips(prev => prev.map(c => ((item.id && c.id === item.id) || (c.Title === item.Title && c.Raw === item.Raw)) ? {...c, IsPinned: !c.IsPinned} : c));
+                toast.success(item.IsPinned ? "Unpinned" : "Pinned to Top", item.Title || "Clipboard Item");
               } catch(e: any) { syncLog('PIN', `Pin/unpin failed: ${e?.message || e}`); }
               setActiveOptionsId(null);
             }} style={[styles.actionBtnIcon, {backgroundColor: item.IsPinned ? '#F59E0B33' : '#2A2F3A'}]}>
@@ -1731,7 +1787,15 @@ function SyncScreenInner() {
               }
               // Add to localDeletedIds for sync dedup
               if (item.id) {
-                setLocalDeletedIds(prev => { const n = new Set(prev); n.add(item.id!); AsyncStorage.setItem('localDeletedIds', JSON.stringify([...n])).catch(() => {}); return n; });
+                setLocalDeletedIds(prev => { const n = new Set(prev); n.add(item.id!); return n; });
+                // Persist outside state updater to avoid side-effects in concurrent rendering
+                AsyncStorage.getItem('localDeletedIds').then(raw => {
+                  const ids: string[] = raw ? JSON.parse(raw) : [];
+                  if (!ids.includes(item.id!)) {
+                    ids.push(item.id!);
+                    AsyncStorage.setItem('localDeletedIds', JSON.stringify(ids)).catch(() => {});
+                  }
+                }).catch(() => {});
               }
               // Remove from clips array entirely
               setClips(prev => prev.filter(c => {
@@ -1754,8 +1818,131 @@ function SyncScreenInner() {
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({ onScroll: (e) => { scrollY.value = e.contentOffset.y; } });
 
+  // ── Connection status for search bar ──
+  const connectionStatus = useMemo((): 'online' | 'cloud' | 'offline' => {
+    const onlinePcs = pairedDevices.filter(d => d.deviceType === 'PC' && d.isOnline);
+    if (onlinePcs.length > 0) {
+      const connType = onlinePcs[0]?.connectionType;
+      return connType === 'LAN' ? 'online' : 'cloud';
+    }
+    return 'offline';
+  }, [pairedDevices]);
+
+  // ── Recent activity items from clips ──
+  const recentActivityItems = useMemo((): ActivityItem[] => {
+    return clips.slice(0, 15).map((clip, i) => {
+      let icon: string = 'clipboard-outline';
+      let iconColor: string = colors.accent.primary;
+      const t = clip.Type || 'Text';
+
+      if (t === 'Image' || t === 'ImageLink') { icon = 'image-outline'; iconColor = colors.type.image; }
+      else if (t === 'Pdf' || t === 'Document') { icon = 'document-outline'; iconColor = colors.type.pdf; }
+      else if (t === 'URL') { icon = 'link-outline'; iconColor = colors.type.url; }
+      else if (t === 'Code') { icon = 'code-slash-outline'; iconColor = colors.type.code; }
+      else if (t === 'File' || t === 'Archive') { icon = 'folder-outline'; iconColor = colors.accent.warning; }
+      else { icon = 'clipboard-outline'; iconColor = colors.accent.primary; }
+
+      return {
+        id: clip.id || `clip-${i}`,
+        type: 'clipboard' as const,
+        title: clip.Title || (clip.Raw || '').substring(0, 60) || 'Clipboard item',
+        timestamp: clip.Timestamp || Date.now(),
+        icon,
+        iconColor,
+      };
+    });
+  }, [clips, colors]);
+
+  // ── Render Home Dashboard ──
+  const renderHomeDashboard = () => (
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        style={homeStyles.container}
+        contentContainerStyle={[homeStyles.scrollContent, { paddingTop: insets.top + 12 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Greeting Header */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 6 }}>
+          <Text style={{ fontSize: 26, fontFamily: font.bold, color: colors.text.primary }}>
+            {new Date().getHours() < 12 ? 'Good Morning' : new Date().getHours() < 17 ? 'Good Afternoon' : 'Good Evening'}
+          </Text>
+          <Text style={{ fontSize: 13, fontFamily: font.medium, color: colors.text.tertiary, marginTop: 2 }}>
+            {deviceName || 'FlyShelf'}
+            {connectionStatus === 'online' ? ' • 🟢 Connected' : connectionStatus === 'cloud' ? ' • 🟡 Cloud' : ' • Offline'}
+          </Text>
+        </View>
+
+        {/* Category Tiles FIRST — 2×2 Grid */}
+        <View style={homeStyles.tilesGrid}>
+          <CategoryTile
+            icon="clipboard-outline"
+            label="Clipboard"
+            subtitle={`${clips.length} item${clips.length !== 1 ? 's' : ''}`}
+            iconColor={colors.accent.primary}
+            onPress={() => setViewMode('clipboard')}
+          />
+          <CategoryTile
+            icon="folder-outline"
+            label="Files"
+            subtitle="Browse files"
+            iconColor={colors.type.image}
+            onPress={() => router.push('/(tabs)/archive')}
+          />
+          <CategoryTile
+            icon="document-text-outline"
+            label="Notes"
+            subtitle="Daily notes"
+            iconColor={colors.accent.success}
+            onPress={() => router.push('/(tabs)/notes')}
+          />
+          <CategoryTile
+            icon="checkbox-outline"
+            label="Tasks"
+            subtitle="Manage tasks"
+            iconColor={colors.accent.warning}
+            onPress={() => router.push('/(tabs)/todo')}
+          />
+        </View>
+
+        {/* Material Search Bar — BELOW tiles */}
+        <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
+          <MaterialSearchBar
+            connectionStatus={connectionStatus}
+            onSearch={(q) => { setFeedSearch(q); setViewMode('clipboard'); }}
+            onSettingsPress={() => router.push('/settings-modal' as any)}
+            onConnectionPress={() => setShowNetworkDashboard(true)}
+          />
+        </View>
+
+        {/* Quick Action Chips */}
+        <QuickActionChips
+          onScanDocument={() => router.push('/pdf-tools')}
+          onSendFile={pickFileAndSend}
+          onPdfTools={() => router.push('/pdf-tools')}
+        />
+
+        {/* Recent Activity Feed */}
+        <RecentActivityFeed
+          items={recentActivityItems}
+          onItemPress={(item) => { setViewMode('clipboard'); }}
+          onSeeAll={() => setViewMode('clipboard')}
+        />
+      </ScrollView>
+
+      {/* FAB */}
+      <HomeFab
+        onSendText={() => setIsSendTextModalVisible(true)}
+        onCamera={launchDirectCamera}
+        onSendPhoto={pickImageAndSend}
+        onSendFile={pickFileAndSend}
+        onScanQr={launchQRScanner}
+      />
+    </View>
+  );
+
   // RENDER
   // ════════════════════════════════════════════════════════
+
   return (
     <LinearGradient colors={[colors.bg.base, colors.bg.baseEnd]} style={{ flex: 1 }}>
     <View style={[styles.container, { backgroundColor: 'transparent' }]}>
@@ -1886,73 +2073,131 @@ function SyncScreenInner() {
         </View></View>
       </Modal>
 
-      {/* QR Scanner — A-17: own error boundary so camera crash doesn't take down entire screen */}
+      {/* QR Scanner — Enhanced with High-Tech Viewfinder & Torch Control */}
       {isQRScannerActive && (
-        <Modal visible={isQRScannerActive} animationType="fade" transparent={false}>
+        <Modal visible={isQRScannerActive} animationType="fade" transparent={false} onRequestClose={() => setIsQRScannerActive(false)}>
           <View style={{flex: 1, backgroundColor: '#000'}}>
             <AppErrorBoundary fallbackTitle="Camera error">
-              <CameraView style={{flex: 1}} facing="back" barcodeScannerSettings={{ barcodeTypes: ["qr"] }} onBarcodeScanned={handleBarcodeScanned} />
+              <CameraView
+                style={StyleSheet.absoluteFill}
+                facing="back"
+                enableTorch={isTorchOn}
+                barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                onBarcodeScanned={handleBarcodeScanned}
+              />
             </AppErrorBoundary>
-            <TouchableOpacity style={{position: 'absolute', bottom: 50, alignSelf: 'center', backgroundColor: '#EF4444', padding: 15, borderRadius: 30}} onPress={() => { setIsQRScannerActive(false); }} accessibilityLabel="Close QR scanner" accessibilityRole="button">
-              <Text style={{color: '#fff', fontWeight: 'bold', fontSize: 16}}>Cancel Scan</Text>
-            </TouchableOpacity>
+
+            {/* Viewfinder Reticle Overlay */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)' }} />
+              <View style={{ height: 260, flexDirection: 'row' }}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)' }} />
+                <View style={{
+                  width: 260,
+                  height: 260,
+                  borderRadius: 24,
+                  borderWidth: 2,
+                  borderColor: colors.accent.primary,
+                  backgroundColor: 'transparent',
+                  overflow: 'hidden',
+                }}>
+                  {/* Corner Reticle Marks */}
+                  <View style={{ position: 'absolute', top: 10, left: 10, width: 22, height: 22, borderTopWidth: 4, borderLeftWidth: 4, borderColor: '#FFF' }} />
+                  <View style={{ position: 'absolute', top: 10, right: 10, width: 22, height: 22, borderTopWidth: 4, borderRightWidth: 4, borderColor: '#FFF' }} />
+                  <View style={{ position: 'absolute', bottom: 10, left: 10, width: 22, height: 22, borderBottomWidth: 4, borderLeftWidth: 4, borderColor: '#FFF' }} />
+                  <View style={{ position: 'absolute', bottom: 10, right: 10, width: 22, height: 22, borderBottomWidth: 4, borderRightWidth: 4, borderColor: '#FFF' }} />
+                </View>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)' }} />
+              </View>
+              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', paddingTop: 24 }}>
+                <Text style={{ color: '#FFF', fontSize: 16, fontFamily: font.bold, textAlign: 'center' }}>
+                  Scan PC Pairing QR Code
+                </Text>
+                <Text style={{ color: colors.text.secondary, fontSize: 13, fontFamily: font.medium, textAlign: 'center', marginTop: 6, paddingHorizontal: 40 }}>
+                  Align the QR code shown on your PC screen within the frame
+                </Text>
+              </View>
+            </View>
+
+            {/* Top Controls: Close & Torch */}
+            <View style={{ position: 'absolute', top: insets.top + 16, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 10 }}>
+              <TouchableOpacity
+                style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }}
+                onPress={() => setIsQRScannerActive(false)}
+                accessibilityLabel="Close QR scanner"
+                accessibilityRole="button"
+              >
+                <Ionicons name="close" size={24} color="#FFF" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: isTorchOn ? colors.accent.warning : 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }}
+                onPress={() => setIsTorchOn(!isTorchOn)}
+                accessibilityLabel={isTorchOn ? 'Turn flashlight off' : 'Turn flashlight on'}
+                accessibilityRole="button"
+              >
+                <Ionicons name={isTorchOn ? "flashlight" : "flashlight-outline"} size={22} color={isTorchOn ? '#000' : '#FFF'} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Bottom Cancel Pill */}
+            <View style={{ position: 'absolute', bottom: insets.bottom + 32, left: 0, right: 0, alignItems: 'center', zIndex: 10 }}>
+              <TouchableOpacity
+                style={{ backgroundColor: 'rgba(255,255,255,0.18)', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                onPress={() => setIsQRScannerActive(false)}
+                accessibilityLabel="Cancel scanner"
+                accessibilityRole="button"
+              >
+                <Text style={{ color: '#FFF', fontFamily: font.bold, fontSize: 15 }}>Cancel Scan</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </Modal>
       )}
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{flex: 1}}>
-        {/* Header */}
-        <ScreenHeader
-          title="FlyShelf"
-          subtitle={pairingKeyRef.current ? (connectionInfo ? `${pairedPcName || 'PC'}${isPairedPcPro ? ' (Pro)' : ''} ${connectionInfo.type === 'LAN' ? '🟢' : '🟡'} ${connectionInfo.type === 'LAN' ? `LAN${(() => { try { const m = connectionInfo.url.match(/:\/\/([^:/]+)/); return m ? ' ' + m[1] : ''; } catch { return ''; } })()} • ` : 'Cloud • '}${connectionInfo.latencyMs}ms` : (pairedPcName ? `${pairedPcName} — ⏳ Searching...` : '⏳ Searching for PC...')) : '⚠ Not Paired'}
-          scrollY={scrollY}
-          statusBadge={
-            pairedDevices.length > 0 ? (
-              <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 3, gap: 6}}>
-                {(() => {
-                  const onlinePcs = pairedDevices.filter(d => d.deviceType === 'PC' && d.isOnline);
-                  const onlineCount = onlinePcs.length;
-                  const totalPaired = pairedDevices.filter(d => d.deviceType === 'PC').length;
-                  if (onlineCount > 0) {
-                    const connType = onlinePcs[0]?.connectionType;
-                    const latency = onlinePcs[0]?.latencyMs;
-                    return (
-                      <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
-                        <View style={{width: 7, height: 7, borderRadius: 4, backgroundColor: connType === 'LAN' ? '#10B981' : '#F59E0B'}} />
-                        <Text style={{fontSize: 11, fontFamily: font.semibold, color: connType === 'LAN' ? '#10B981' : '#F59E0B'}}>
-                          {onlineCount} online{connType ? ` • ${connType}` : ''}{latency ? ` • ${latency}ms` : ''}
-                        </Text>
-                      </View>
-                    );
-                  } else if (totalPaired > 0) {
-                    const pcName = pairedDevices.find(d => d.deviceType === 'PC')?.deviceName || 'PC';
-                    return (
-                      <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
-                        <View style={{width: 7, height: 7, borderRadius: 4, backgroundColor: '#F59E0B'}} />
-                        <Text style={{fontSize: 11, fontFamily: font.medium, color: '#F59E0B'}}>⏳ Searching for {pcName}...</Text>
-                      </View>
-                    );
-                  }
-                  return null;
-                })()}
-              </View>
-            ) : undefined
-          }
-          rightActions={
-            <View style={{flexDirection: 'row', gap: 10}}>
-              <TouchableOpacity onPress={() => setShowNetworkDashboard(true)} style={{padding: 10, backgroundColor: colors.accent.primaryDim, borderRadius: 10}} accessibilityLabel="Network dashboard" accessibilityRole="button">
-                <Ionicons name="pulse-outline" size={20} color={colors.accent.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setIsConnectModalVisible(true)} style={{padding: 10, backgroundColor: colors.type.image + '22', borderRadius: 10}} accessibilityLabel="Connect devices" accessibilityRole="button">
-                <Ionicons name="link" size={20} color={colors.type.image} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setGlobalSyncEnabled(!isGlobalSyncEnabled)} style={{padding: 10, backgroundColor: isGlobalSyncEnabled ? colors.accent.successDim : colors.bg.cardHover, borderRadius: 10, borderWidth: 1, borderColor: isGlobalSyncEnabled ? colors.accent.success + '55' : 'transparent'}} accessibilityLabel={isGlobalSyncEnabled ? 'Disable cloud sync' : 'Enable cloud sync'} accessibilityRole="button">
-                <Ionicons name={isGlobalSyncEnabled ? 'cloud' : 'cloud-outline'} size={20} color={isGlobalSyncEnabled ? colors.accent.success : colors.text.tertiary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={clearAllClips} style={{padding: 10, backgroundColor: colors.bg.cardHover, borderRadius: 10}} accessibilityLabel="Clear all clips" accessibilityRole="button"><Ionicons name="trash-outline" size={20} color={colors.accent.error} /></TouchableOpacity>
+      {/* Send Text to PC Modal */}
+      <SendTextModal
+        visible={isSendTextModalVisible}
+        onClose={() => setIsSendTextModalVisible(false)}
+        onSend={transmitTextSecurely}
+        targetDeviceName={String(activeDevices.find((d: any) => d.DeviceType === 'PC')?.DeviceName || 'PC')}
+        isSending={isSending}
+      />
+
+      {/* Main Content: Home Dashboard vs Clipboard Feed */}
+      {viewMode === 'home' ? (
+        renderHomeDashboard()
+      ) : (
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{flex: 1}}>
+        {/* Clipboard Sub-Screen Header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: insets.top + 8, paddingBottom: 12 }}>
+          <TouchableOpacity
+            onPress={() => setViewMode('home')}
+            style={{ padding: 8, marginRight: 8, backgroundColor: colors.bg.cardHover, borderRadius: 10 }}
+            accessibilityLabel="Back to Home"
+            accessibilityRole="button"
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 20, fontFamily: font.bold, color: colors.text.primary }}>Clipboard</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <View style={{
+                width: 7, height: 7, borderRadius: 4,
+                backgroundColor: connectionStatus === 'online' ? '#34D399' : connectionStatus === 'cloud' ? '#FBBF24' : '#F87171'
+              }} />
+              <Text style={{ fontSize: 11, fontFamily: font.medium, color: colors.text.tertiary }}>
+                {clips.length} item{clips.length !== 1 ? 's' : ''} • {connectionStatus === 'online' ? 'LAN' : connectionStatus === 'cloud' ? 'Cloud' : 'Offline'}
+              </Text>
             </View>
-          }
-        />
+          </View>
+          <TouchableOpacity onPress={() => setGlobalSyncEnabled(!isGlobalSyncEnabled)} style={{ padding: 10, backgroundColor: isGlobalSyncEnabled ? colors.accent.successDim : colors.bg.cardHover, borderRadius: 10, marginRight: 8 }} accessibilityLabel={isGlobalSyncEnabled ? 'Disable cloud sync' : 'Enable cloud sync'} accessibilityRole="button">
+            <Ionicons name={isGlobalSyncEnabled ? 'cloud' : 'cloud-outline'} size={20} color={isGlobalSyncEnabled ? colors.accent.success : colors.text.tertiary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={clearAllClips} style={{ padding: 10, backgroundColor: colors.bg.cardHover, borderRadius: 10 }} accessibilityLabel="Clear all clips" accessibilityRole="button">
+            <Ionicons name="trash-outline" size={20} color={colors.accent.error} />
+          </TouchableOpacity>
+        </View>
 
         {/* ── Search + Category Filter Bar ── */}
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8, gap: 6 }}>
@@ -2047,12 +2292,26 @@ function SyncScreenInner() {
 
         {/* Clip Feed */}
         <View style={styles.feedContainer}>
-          {filteredClips.length === 0 && hasLoadedOnceRef.current ? (
-            <Text style={styles.emptyText}>{feedSearch ? `No results for "${feedSearch}"` : feedCategory !== 'All' ? `No ${feedCategory.toLowerCase()} items yet.` : 'No clips synced yet.'}</Text>
+          {renderConnectionBanner()}
+          {!isStorageLoaded && clips.length === 0 && <SkeletonLoader />}
+          {filteredClips.length === 0 && isStorageLoaded ? (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, marginTop: 60 }}>
+              <Text style={{ fontSize: 48, marginBottom: 16 }}>📋</Text>
+              <Text style={{ fontSize: 18, fontFamily: font.bold, color: colors.text.primary, marginBottom: 8 }}>No clips synced yet</Text>
+              <Text style={{ fontSize: 14, fontFamily: font.medium, color: colors.text.secondary, textAlign: 'center', marginBottom: 16 }}>
+                Copy something on your PC to see it appear here
+              </Text>
+              {pairedDevices.length === 0 && (
+                <Text style={{ fontSize: 13, fontFamily: font.medium, color: colors.accent.primary, textAlign: 'center' }}>
+                  Tap the connect button above to get started
+                </Text>
+              )}
+            </View>
           ) : filteredClips.length === 0 ? null : (
             // @ts-ignore
             <FlashListCast
               ref={feedListRef}
+              refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#6384FF" colors={['#6384FF']} />}
               data={filteredClips}
               keyExtractor={(item: any, index: number) => item.id ? item.id : index.toString()}
               showsVerticalScrollIndicator={false}
@@ -2106,7 +2365,7 @@ function SyncScreenInner() {
             <TouchableOpacity style={{backgroundColor: colors.accent.success, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4}} onPress={async () => {
               try { 
                 const selected = clips.filter(c => selectedItemIds.has(c.id || '')); 
-                if (selected.length === 0) return; 
+                if (!selected.length) return; 
                 const item = selected[0]; 
                 const mUrl = getMediaUrlForItem(item);
                 if (mUrl.startsWith('http')) { 
@@ -2122,7 +2381,7 @@ function SyncScreenInner() {
                   await Sharing.shareAsync(uri, { dialogTitle: `Share ${safeName}` }); 
                 } else { 
                   const text = item.Raw || item.Title || ''; 
-                  await Sharing.shareAsync(text, { dialogTitle: 'Share' }).catch(() => { 
+                  await Share.share({ message: text }).catch(() => { 
                     Clipboard.setStringAsync(text); 
                     toast.clipboard('Copied to Clipboard', text); 
                   }); 
@@ -2206,17 +2465,8 @@ function SyncScreenInner() {
           </View></View>
         </Modal>
 
-        {/* Input Area */}
-        <View style={styles.inputArea}>
-          <TouchableOpacity style={styles.attachButton} onPress={pickImageAndSend} disabled={isSending} accessibilityLabel="Attach image" accessibilityRole="button"><Ionicons name="image-outline" size={24} color={colors.text.tertiary} /></TouchableOpacity>
-          <TouchableOpacity style={styles.attachButton} onPress={pickFileAndSend} disabled={isSending} accessibilityLabel="Attach file" accessibilityRole="button"><Ionicons name="attach-outline" size={24} color={colors.text.tertiary} /></TouchableOpacity>
-          <TouchableOpacity style={styles.attachButton} onPress={() => setIsCameraOptionsVisible(true)} disabled={isSending} accessibilityLabel="Camera options" accessibilityRole="button"><Ionicons name="camera-outline" size={24} color={colors.text.tertiary} /></TouchableOpacity>
-          <TextInput style={styles.textInput} placeholder="Type or paste to send to PC..." placeholderTextColor="#4C5361" value={inputText} onChangeText={setInputText} multiline accessibilityLabel="Message to send to PC" accessibilityRole="text" />
-          <TouchableOpacity style={styles.sendButton} onPress={sendTextToPc} disabled={isSending || !inputText} accessibilityLabel="Send message" accessibilityRole="button">
-            {isSending ? <ActivityIndicator color="#fff" /> : <Ionicons name="arrow-up-circle" size={36} color={inputText ? colors.accent.primary : colors.bg.cardHover} />}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      )}
 
       {/* Expanded Image Modal */}
       <Modal visible={!!expandedImage} transparent={true} animationType="fade" onRequestClose={() => setExpandedImage(null)}>
@@ -2258,7 +2508,13 @@ function SyncScreenInner() {
           )}
         </View>
       </Modal>
-      <NetworkDashboard visible={showNetworkDashboard} onClose={() => setShowNetworkDashboard(false)} pcUrl={cachedPcUrlRef.current} pairingKey={pairingKeyRef.current || null} />
+      <NetworkDashboard
+        visible={showNetworkDashboard}
+        onClose={() => setShowNetworkDashboard(false)}
+        pcUrl={cachedPcUrlRef.current}
+        pairingKey={pairingKeyRef.current || null}
+        onPairPress={() => { setShowNetworkDashboard(false); setIsConnectModalVisible(true); }}
+      />
       <OnboardingWizard visible={showOnboarding} onComplete={() => { setShowOnboarding(false); AsyncStorage.setItem('@flyshelf_onboarding_done', 'true'); }} />
     </View>
     </LinearGradient>

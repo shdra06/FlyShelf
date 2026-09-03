@@ -60,8 +60,8 @@ namespace FlyShelf.Classes
         public string DeviceType { get; set; } = "";
 
         // WebSocket for instant liveness detection — thread-safe via StateLock
-        private ClientWebSocket? _liveSocket;
-        public ClientWebSocket? LiveSocket
+        private System.Net.WebSockets.WebSocket? _liveSocket;
+        public System.Net.WebSockets.WebSocket? LiveSocket
         {
             get { lock (StateLock) return _liveSocket; }
             set { lock (StateLock) _liveSocket = value; }
@@ -69,17 +69,14 @@ namespace FlyShelf.Classes
         private CancellationTokenSource? _wsCts;
         public CancellationTokenSource? WsCts
         {
-            get { lock (StateLock) return _wsCts; }
+            get => Volatile.Read(ref _wsCts);
             set
             {
-                lock (StateLock)
+                var old = Interlocked.Exchange(ref _wsCts, value);
+                if (old != null && old != value)
                 {
-                    // Dispose old CTS to prevent resource leak on replacement
-                    if (_wsCts != null && _wsCts != value)
-                    {
-                        try { _wsCts.Dispose(); } catch { /* Best-effort cleanup */ }
-                    }
-                    _wsCts = value;
+                    try { old.Cancel(); } catch { /* Best-effort cleanup */ }
+                    try { old.Dispose(); } catch { /* Best-effort cleanup */ }
                 }
             }
         }

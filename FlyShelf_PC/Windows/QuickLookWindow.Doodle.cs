@@ -349,7 +349,35 @@ namespace FlyShelf.Windows
                 _hasUnsavedDoodle = false;
                 UpdateDoodleButtonStates();
 
-                FlyShelf.Windows.ToastWindow.ShowToast("Annotated image saved!");
+                // ── Auto-copy edited image to system clipboard ──
+                try
+                {
+                    if (freshBmp != null)
+                    {
+                        Clipboard.SetImage(freshBmp);
+                    }
+                    else if (rtb2 != null)
+                    {
+                        // Fallback: use the rendered bitmap if disk reload failed
+                        Clipboard.SetImage(rtb2);
+                    }
+                }
+                catch (Exception copyEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[DOODLE] Clipboard copy failed: {copyEx.Message}");
+                }
+
+                // ── Force-refresh thumbnail in clipboard list ──
+                try
+                {
+                    _item?.ForceRefreshThumbnail();
+                }
+                catch (Exception thumbEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[DOODLE] Thumbnail refresh failed: {thumbEx.Message}");
+                }
+
+                FlyShelf.Windows.ToastWindow.ShowToast("Annotated image saved & copied!");
                 FlyShelf.Classes.Logger.LogAction("DOODLE", $"Saved annotated image: {Path.GetFileName(filePath)}");
             }
             catch (Exception ex)

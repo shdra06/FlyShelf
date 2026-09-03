@@ -11,62 +11,62 @@
 // ═══════════════════════════════════════════
 
 export const colors = {
-  // Background layers (subtle blue undertone gradient)
+  // Background layers (deep obsidian slate with subtle elevation)
   bg: {
-    base:      '#0B0D12',   // deepest background
-    baseEnd:   '#0F1219',   // gradient end (slight blue shift)
-    card:      '#161922',   // card surfaces
-    cardHover: '#1C2029',   // card hover/active
-    elevated:  '#1E222D',   // floating elements, modals
-    input:     '#0E1017',   // input fields (recessed)
+    base:      '#0A0C10',   // deepest background (rich obsidian)
+    baseEnd:   '#0E1117',   // gradient end (slight slate shift)
+    card:      '#141721',   // card surfaces (elevated slate)
+    cardHover: '#1A1E2B',   // card hover/active
+    elevated:  '#1C202E',   // floating elements, modals, sheets
+    input:     '#0F1219',   // input fields (recessed)
   },
 
-  // Borders (semi-transparent for depth)
+  // Borders (semi-transparent for micro-depth)
   border: {
-    subtle:    'rgba(255,255,255,0.06)',  // default card border
-    medium:    'rgba(255,255,255,0.10)',  // hover/focus border
-    strong:    'rgba(255,255,255,0.15)',  // active/selected
-    accent:    'rgba(99,132,255,0.25)',   // accent glow border
+    subtle:    'rgba(255,255,255,0.07)',  // default card border
+    medium:    'rgba(255,255,255,0.12)',  // hover/focus border
+    strong:    'rgba(255,255,255,0.18)',  // active/selected
+    accent:    'rgba(79,107,255,0.30)',   // accent glow border
   },
 
-  // Text hierarchy
+  // Text hierarchy (high contrast, warm off-white to balanced slate)
   text: {
-    primary:   '#F0F2F5',   // titles, important
-    secondary: '#8B92A0',   // body, labels
-    tertiary:  '#555C6B',   // helper, placeholder
-    disabled:  '#3A3F4A',   // disabled state
+    primary:   '#F1F5F9',   // titles, important headers
+    secondary: '#94A3B8',   // body text, readable labels
+    tertiary:  '#64748B',   // helper, metadata, placeholder
+    disabled:  '#334155',   // disabled state
   },
 
-  // Accent palette
+  // Accent palette (vibrant, modern Electric Indigo & semantic accents)
   accent: {
-    primary:   '#6384FF',   // main brand — refined blue-violet
-    primaryDim:'rgba(99,132,255,0.12)',
-    success:   '#34D399',   // online, complete
-    successDim:'rgba(52,211,153,0.12)',
-    warning:   '#FBBF24',   // amber
-    warningDim:'rgba(251,191,36,0.12)',
-    error:     '#F87171',   // delete, error
-    errorDim:  'rgba(248,113,113,0.12)',
-    info:      '#60A5FA',   // links, info
-    infoDim:   'rgba(96,165,250,0.12)',
+    primary:   '#4F6BFF',   // main brand — modern Electric Indigo
+    primaryDim:'rgba(79,107,255,0.14)',
+    success:   '#10B981',   // emerald
+    successDim:'rgba(16,185,129,0.14)',
+    warning:   '#F59E0B',   // amber
+    warningDim:'rgba(245,158,11,0.14)',
+    error:     '#F43F5E',   // rose/red
+    errorDim:  'rgba(244,63,94,0.14)',
+    info:      '#06B6D4',   // cyan
+    infoDim:   'rgba(6,182,212,0.14)',
   },
 
   // Semantic type colors
   type: {
-    text:      '#8B92A0',
+    text:      '#94A3B8',
     url:       '#38BDF8',   // sky
-    code:      '#34D399',   // emerald
-    image:     '#A78BFA',   // violet
-    pdf:       '#F87171',   // red
-    doc:       '#60A5FA',   // blue
-    archive:   '#FBBF24',   // amber
-    video:     '#A78BFA',   // violet
-    audio:     '#F472B6',   // pink
+    code:      '#10B981',   // emerald
+    image:     '#8B5CF6',   // violet
+    pdf:       '#F43F5E',   // rose red
+    doc:       '#3B82F6',   // blue
+    archive:   '#F59E0B',   // amber
+    video:     '#8B5CF6',   // violet
+    audio:     '#EC4899',   // pink
     ppt:       '#FB923C',   // orange
   },
 
-  // Inner highlight (top edge light)
-  innerHighlight: 'rgba(255,255,255,0.04)',
+  // Inner highlight (top edge micro-glow)
+  innerHighlight: 'rgba(255,255,255,0.06)',
 } as const;
 
 // ═══════════════════════════════════════════
@@ -303,58 +303,58 @@ export const motion = {
 // ═══════════════════════════════════════════
 
 export const lightColors = {
-  // Background layers (warm neutral gray — NOT pure white)
+  // Background layers (warm creamy texture — Apple-like finish)
   bg: {
-    base:      '#F5F6FA',   // warm gray base (reduces glare)
-    baseEnd:   '#ECEEF5',   // subtle blue-tinted gradient end
-    card:      '#FFFFFF',   // crisp white cards float above base
-    cardHover: '#F0F1F6',   // subtle hover/press tint
+    base:      '#FAF9F6',   // warm creamy off-white
+    baseEnd:   '#F4F2EC',   // slightly deeper warm gradient end
+    card:      '#FFFFFF',   // clean white card
+    cardHover: '#F7F6F2',   // subtle hover/press tint
     elevated:  '#FFFFFF',   // modals, sheets
-    input:     '#EDEEF3',   // recessed input fields
+    input:     '#F0EFE9',   // warm gray input bg
   },
 
-  // Borders (opacity-based black for natural blending)
+  // Borders (very subtle warm gray)
   border: {
-    subtle:    'rgba(0,0,0,0.07)',   // soft card borders
-    medium:    'rgba(0,0,0,0.12)',   // hover/focus
-    strong:    'rgba(0,0,0,0.18)',   // active/selected
-    accent:    'rgba(85,112,232,0.20)', // accent glow
+    subtle:    'rgba(0,0,0,0.05)',   // soft card borders
+    medium:    'rgba(0,0,0,0.10)',   // hover/focus
+    strong:    'rgba(0,0,0,0.16)',   // active/selected
+    accent:    'rgba(77,104,223,0.20)', // accent glow
   },
 
-  // Text hierarchy (high-contrast charcoals)
+  // Text hierarchy (dark, warm but not pure black)
   text: {
-    primary:   '#1A1D26',   // near-black, titles
-    secondary: '#5B6178',   // medium gray, body text
-    tertiary:  '#9CA3B4',   // light gray, helpers
-    disabled:  '#C8CCD6',   // very light, disabled
+    primary:   '#1A1A1A',   // near-black, titles
+    secondary: '#605E5C',   // medium warm gray, body text
+    tertiary:  '#8A8A8E',   // light warm gray, helpers
+    disabled:  '#C6C5C1',   // very light, disabled
   },
 
-  // Accent palette (deepened 15-20% for WCAG AA on white)
+  // Accent palette (deepened for WCAG AA on white)
   accent: {
-    primary:   '#5570E8',   // deeper blue for light BG contrast
-    primaryDim:'rgba(85,112,232,0.10)',
-    success:   '#22B07A',   // darker green
-    successDim:'rgba(34,176,122,0.10)',
-    warning:   '#E5A100',   // deeper amber
-    warningDim:'rgba(229,161,0,0.10)',
-    error:     '#E25555',   // deeper red
-    errorDim:  'rgba(226,85,85,0.10)',
-    info:      '#4A8FE7',   // deeper blue
-    infoDim:   'rgba(74,143,231,0.10)',
+    primary:   '#4D68DF',   // deeper blue for light BG contrast
+    primaryDim:'rgba(77,104,223,0.10)',
+    success:   '#1E9D6D',   // darker green
+    successDim:'rgba(30,157,109,0.10)',
+    warning:   '#D89700',   // deeper amber
+    warningDim:'rgba(216,151,0,0.10)',
+    error:     '#D64C4C',   // deeper red
+    errorDim:  'rgba(214,76,76,0.10)',
+    info:      '#4283DB',   // deeper blue
+    infoDim:   'rgba(66,131,219,0.10)',
   },
 
   // Semantic type colors (deepened for readability on light)
   type: {
-    text:      '#5B6178',
-    url:       '#2598D5',   // deeper sky
-    code:      '#1A9A6A',   // deeper emerald
-    image:     '#8B6AD6',   // deeper violet
-    pdf:       '#D84C4C',   // deeper red
-    doc:       '#4A8FE7',   // deeper blue
-    archive:   '#C99000',   // deeper amber
-    video:     '#8B6AD6',   // deeper violet
-    audio:     '#D95B98',   // deeper pink
-    ppt:       '#D47520',   // deeper orange
+    text:      '#605E5C',
+    url:       '#1E88C2',   // deeper sky
+    code:      '#168F60',   // deeper emerald
+    image:     '#7C5BCE',   // deeper violet
+    pdf:       '#CE4242',   // deeper red
+    doc:       '#4283DB',   // deeper blue
+    archive:   '#B88300',   // deeper amber
+    video:     '#7C5BCE',   // deeper violet
+    audio:     '#CD4D8C',   // deeper pink
+    ppt:       '#C4681A',   // deeper orange
   },
 
   // Inner highlight (subtle white edge on cards)
@@ -367,13 +367,13 @@ export const lightColors = {
 
 export const lightSurface = {
   /** Semi-transparent card background for glassmorphic overlays */
-  glass: 'rgba(255, 255, 255, 0.82)',
+  glass: 'rgba(255, 255, 255, 0.85)',
   /** Backdrop for modals/sheets */
-  backdrop: 'rgba(15, 20, 30, 0.25)',
+  backdrop: 'rgba(20, 18, 16, 0.25)',
   /** Frosted sheet background */
-  sheet: 'rgba(245, 246, 250, 0.96)',
+  sheet: 'rgba(250, 249, 246, 0.95)',
   /** Elevated overlay — tab bar, floating elements */
-  overlay: 'rgba(245, 246, 250, 0.95)',
+  overlay: 'rgba(250, 249, 246, 0.95)',
 } as const;
 
 // ═══════════════════════════════════════════
@@ -382,17 +382,17 @@ export const lightSurface = {
 
 export const lightShadows = {
   card: {
-    shadowColor: '#4A5568',   // gray-tinted shadow for natural depth
-    shadowOffset: { width: 0, height: 1 },
+    shadowColor: '#9B8B7B',   // warm shadow color for natural depth
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
-    shadowRadius: 6,
+    shadowRadius: 8,
     elevation: 2,
   },
   elevated: {
-    shadowColor: '#4A5568',
-    shadowOffset: { width: 0, height: 3 },
+    shadowColor: '#9B8B7B',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
-    shadowRadius: 12,
+    shadowRadius: 16,
     elevation: 4,
   },
   glow: (color: string) => ({

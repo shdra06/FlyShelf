@@ -68,7 +68,11 @@ namespace FlyShelf.ViewModels
             {
                 if (IsUrlPreview && !string.IsNullOrEmpty(RawContent))
                 {
-                    _ = Task.Run(() => { try { Process.Start(new ProcessStartInfo { FileName = RawContent, UseShellExecute = true }); } catch { } });
+                    if (Uri.TryCreate(RawContent, UriKind.Absolute, out var uri) &&
+                        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+                    {
+                        _ = Task.Run(() => { try { Process.Start(new ProcessStartInfo { FileName = RawContent, UseShellExecute = true }); } catch { } });
+                    }
                 }
             }
             catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("DEBUG", $"Browser Hook Failed: {ex.Message}"); }

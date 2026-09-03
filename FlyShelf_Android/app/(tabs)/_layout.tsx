@@ -1,14 +1,15 @@
 import { Tabs } from 'expo-router';
-import React, { useMemo } from 'react';
-import { Platform, View, StyleSheet, ViewStyle } from 'react-native';
+import React, { useMemo, useEffect } from 'react';
+import { View, StyleSheet, ViewStyle, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { font, component } from '../../styles/theme';
 
 // ═══════════════════════════════════════════
-// TAB ICON WITH PILL INDICATOR + ANIMATION
+// TAB ICON WITH PILL INDICATOR
 // ═══════════════════════════════════════════
 
 function TabIcon({ focused, iconOutline, iconFilled, color, pillColor }: {
@@ -45,11 +46,29 @@ const iconStyles = StyleSheet.create({
 });
 
 // ═══════════════════════════════════════════
-// TAB LAYOUT
+// TAB LAYOUT — 5 Tabs (Home, Files, Notes, Tasks, Vault)
+// Settings moved to Home header
 // ═══════════════════════════════════════════
 
 export default function TabLayout() {
   const { colors, surface } = useAppTheme();
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      Notifications.setNotificationChannelAsync('sync_clips', {
+        name: 'Clip Sync',
+        importance: Notifications.AndroidImportance.DEFAULT,
+      });
+      Notifications.setNotificationChannelAsync('sync_files', {
+        name: 'File Sync',
+        importance: Notifications.AndroidImportance.HIGH,
+      });
+      Notifications.setNotificationChannelAsync('sync_status', {
+        name: 'Sync Status',
+        importance: Notifications.AndroidImportance.LOW,
+      });
+    }
+  }, []);
 
   const tabBarStyle: ViewStyle = useMemo(() => ({
     position: 'absolute',
@@ -90,10 +109,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Sync',
-          tabBarAccessibilityLabel: 'Sync tab',
+          title: 'Home',
+          tabBarAccessibilityLabel: 'Home tab',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon focused={focused} iconOutline="sync-outline" iconFilled="sync" color={color} pillColor={colors.accent.primaryDim} />
+            <TabIcon focused={focused} iconOutline="home-outline" iconFilled="home" color={color} pillColor={colors.accent.primaryDim} />
           ),
         }}
       />
@@ -120,21 +139,29 @@ export default function TabLayout() {
       <Tabs.Screen
         name="todo"
         options={{
-          title: 'Todo',
-          tabBarAccessibilityLabel: 'Todo tab',
+          title: 'Tasks',
+          tabBarAccessibilityLabel: 'Tasks tab',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} iconOutline="checkbox-outline" iconFilled="checkbox" color={color} pillColor={colors.accent.primaryDim} />
           ),
         }}
       />
       <Tabs.Screen
+        name="vault"
+        options={{
+          title: 'Vault',
+          tabBarAccessibilityLabel: 'Vault tab',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon focused={focused} iconOutline="lock-closed-outline" iconFilled="lock-closed" color={color} pillColor={colors.accent.primaryDim} />
+          ),
+        }}
+      />
+      {/* Settings is hidden from tabs — accessible via Home header gear icon */}
+      <Tabs.Screen
         name="settings"
         options={{
+          href: null, // Hidden from tab bar
           title: 'Settings',
-          tabBarAccessibilityLabel: 'Settings tab',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon focused={focused} iconOutline="settings-outline" iconFilled="settings" color={color} pillColor={colors.accent.primaryDim} />
-          ),
         }}
       />
     </Tabs>

@@ -56,8 +56,8 @@ namespace FlyShelf.Windows
                                 {
                                     if (SettingsManager.Current.ClipboardWallpaperPath == wallpaperPath)
                                     {
-                                        WallpaperPreviewImg.Source = null;
-                                        NoWallpaperText.Visibility = Visibility.Visible;
+                                        if (WallpaperPreviewImg != null) WallpaperPreviewImg.Source = null;
+                                        if (NoWallpaperText != null) NoWallpaperText.Visibility = Visibility.Visible;
                                     }
                                 });
                                 return;
@@ -75,8 +75,8 @@ namespace FlyShelf.Windows
                             {
                                 if (SettingsManager.Current.ClipboardWallpaperPath == wallpaperPath)
                                 {
-                                    WallpaperPreviewImg.Source = bmp;
-                                    NoWallpaperText.Visibility = Visibility.Collapsed;
+                                    if (WallpaperPreviewImg != null) WallpaperPreviewImg.Source = bmp;
+                                    if (NoWallpaperText != null) NoWallpaperText.Visibility = Visibility.Collapsed;
                                 }
                             });
                         }
@@ -84,20 +84,20 @@ namespace FlyShelf.Windows
                         {
                             Dispatcher.InvokeAsync(() =>
                             {
-                                WallpaperPreviewImg.Source = null;
-                                NoWallpaperText.Visibility = Visibility.Visible;
+                                if (WallpaperPreviewImg != null) WallpaperPreviewImg.Source = null;
+                                if (NoWallpaperText != null) NoWallpaperText.Visibility = Visibility.Visible;
                             });
                         }
                     });
                 }
                 else
                 {
-                    WallpaperPreviewImg.Source = null;
-                    NoWallpaperText.Visibility = Visibility.Visible;
+                    if (WallpaperPreviewImg != null) WallpaperPreviewImg.Source = null;
+                    if (NoWallpaperText != null) NoWallpaperText.Visibility = Visibility.Visible;
                 }
 
                 // Blur + dark fallback based on ThemeDisplayMode and EnableBlurBehind
-                string mode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                string mode = SettingsManager.Current.ThemeDisplayMode ?? "desktop";
                 bool blurEnabled = SettingsManager.Current.EnableBlurBehind && NativeMethods.ShouldUseBlur();
 
                 if (blurEnabled)
@@ -201,7 +201,7 @@ namespace FlyShelf.Windows
                 // FIX: Auto-switch to FlyShelf (desktop) mode when user picks a wallpaper.
                 // Mica and Acrylic modes explicitly clear ClipboardWallpaperPath, so a custom
                 // wallpaper would never display unless the mode is "desktop" or "theme".
-                string currentMode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                string currentMode = SettingsManager.Current.ThemeDisplayMode ?? "desktop";
                 if (currentMode == "mica" || currentMode == "glass")
                 {
                     // Clean up Glass theme if switching away from glass
@@ -306,7 +306,7 @@ namespace FlyShelf.Windows
                 string url = CloudDiscoveryManager.CachedGlobalUrl ?? "";
                 if (!string.IsNullOrEmpty(url))
                 {
-                    Clipboard.SetText(url);
+                    ClipboardHelper.SafeSetText(url);
                     Logger.LogAction("COPY", $"Cloud URL copied: {url}");
                 }
             }
@@ -336,10 +336,13 @@ namespace FlyShelf.Windows
                     if (QrStatusOverlay != null)
                     {
                         QrStatusOverlay.Visibility = Visibility.Visible;
-                        if (cloudEnabled)
-                            QrStatusText.Text = "⏳ Generating public URL...\nWaiting for Cloudflare tunnel";
-                        else
-                            QrStatusText.Text = "⚠ No network\nConnect to Wi-Fi or enable Cloudflare";
+                        if (QrStatusText != null)
+                        {
+                            if (cloudEnabled)
+                                QrStatusText.Text = "⏳ Generating public URL...\nWaiting for Cloudflare tunnel";
+                            else
+                                QrStatusText.Text = "⚠ No network\nConnect to Wi-Fi or enable Cloudflare";
+                        }
                     }
                     return;
                 }
@@ -398,11 +401,11 @@ namespace FlyShelf.Windows
                     };
                 }).ToList();
 
-                PeerStatusPanel.ItemsSource = mergedList;
-                NoPairedDevicesText.Visibility = mergedList.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                if (PeerStatusPanel != null) PeerStatusPanel.ItemsSource = mergedList;
+                if (NoPairedDevicesText != null) NoPairedDevicesText.Visibility = mergedList.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
                 int onlineCount = mergedList.Count(p => p.IsAlive);
-                PeerCountBadge.Text = $"{onlineCount} online";
+                if (PeerCountBadge != null) PeerCountBadge.Text = $"{onlineCount} online";
             }
             catch (Exception ex)
             {
@@ -611,7 +614,7 @@ namespace FlyShelf.Windows
                 // Only mascot theme packs — display modes (Mica/Acrylic/FlyShelf) are now in Background Style cards
                 var themes = ThemeManager.Instance.GetInstalledThemes();
                 int selectedIdx = 0; // Default to "None (Default)"
-                string savedMode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                string savedMode = SettingsManager.Current.ThemeDisplayMode ?? "desktop";
                 string activeTheme = SettingsManager.Current.ActiveThemeName ?? "";
 
                 // Blocklisted themes — removed from the product
@@ -623,7 +626,7 @@ namespace FlyShelf.Windows
                     if (blockedThemes.Contains(theme.Name)) continue;
 
                     // Skip themes with no resolved animation files (e.g. "FlyShelf Default" template)
-                    bool hasRealSprites = theme.Animations.Values.Any(a => 
+                    bool hasRealSprites = theme.Animations != null && theme.Animations.Values.Any(a => 
                         !string.IsNullOrEmpty(a.ResolvedFilePath) && System.IO.File.Exists(a.ResolvedFilePath));
                     if (!hasRealSprites) continue;
 
@@ -656,6 +659,7 @@ namespace FlyShelf.Windows
 
         private void RevertThemeComboSelection()
         {
+            if (ThemeCombo == null) return;
             ThemeCombo.SelectionChanged -= ThemeCombo_SelectionChanged;
             try
             {
@@ -681,7 +685,7 @@ namespace FlyShelf.Windows
 
         private void ThemeCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            if (ThemeCombo.SelectedItem is System.Windows.Controls.ComboBoxItem selected)
+            if (ThemeCombo?.SelectedItem is System.Windows.Controls.ComboBoxItem selected)
             {
                 string tag = selected.Tag?.ToString() ?? "";
 
@@ -756,8 +760,8 @@ namespace FlyShelf.Windows
                 string wp = SettingsManager.Current.ClipboardWallpaperPath;
                 if (string.IsNullOrEmpty(wp) || !System.IO.File.Exists(wp))
                 {
-                    WallpaperPreviewImg.Source = null;
-                    NoWallpaperText.Visibility = Visibility.Visible;
+                    if (WallpaperPreviewImg != null) WallpaperPreviewImg.Source = null;
+                    if (NoWallpaperText != null) NoWallpaperText.Visibility = Visibility.Visible;
                 }
                 else
                 {
@@ -776,16 +780,16 @@ namespace FlyShelf.Windows
 
                             Dispatcher.InvokeAsync(() =>
                             {
-                                WallpaperPreviewImg.Source = bmp;
-                                NoWallpaperText.Visibility = Visibility.Collapsed;
+                                if (WallpaperPreviewImg != null) WallpaperPreviewImg.Source = bmp;
+                                if (NoWallpaperText != null) NoWallpaperText.Visibility = Visibility.Collapsed;
                             });
                         }
                         catch
                         {
                             Dispatcher.InvokeAsync(() =>
                             {
-                                WallpaperPreviewImg.Source = null;
-                                NoWallpaperText.Visibility = Visibility.Visible;
+                                if (WallpaperPreviewImg != null) WallpaperPreviewImg.Source = null;
+                                if (NoWallpaperText != null) NoWallpaperText.Visibility = Visibility.Visible;
                             });
                         }
                     });
@@ -962,7 +966,7 @@ namespace FlyShelf.Windows
         {
             try
             {
-                string mode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                string mode = SettingsManager.Current.ThemeDisplayMode ?? "desktop";
                 var defaultBrush = Application.Current.FindResource("MicaWPF.Brushes.ControlStrokeColorDefault") as Brush
                                    ?? new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
 
@@ -1049,7 +1053,7 @@ namespace FlyShelf.Windows
 
                     // FIX: Color themes with bundled wallpapers only display in "desktop" mode.
                     // Auto-switch from mica/glass to desktop so the user sees the theme wallpaper.
-                    string currentMode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                    string currentMode = SettingsManager.Current.ThemeDisplayMode ?? "desktop";
                     if (currentMode == "mica" || currentMode == "glass")
                     {
                         if (currentMode == "glass")

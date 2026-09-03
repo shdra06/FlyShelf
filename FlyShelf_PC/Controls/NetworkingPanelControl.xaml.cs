@@ -35,6 +35,19 @@ namespace FlyShelf.Controls
         public NetworkingPanelControl()
         {
             InitializeComponent();
+
+            DevicePairingManager.OnDevicePaired += _ => Dispatcher.InvokeAsync(() => RefreshDevices());
+
+            Loaded += (s, e) =>
+            {
+                if (PeerManager.Instance != null)
+                {
+                    PeerManager.Instance.PeerConnected += (id, t) => Dispatcher.InvokeAsync(() => RefreshDevices());
+                    PeerManager.Instance.PeerDisconnected += (id) => Dispatcher.InvokeAsync(() => RefreshDevices());
+                    PeerManager.Instance.TransportSwitched += (id, t) => Dispatcher.InvokeAsync(() => RefreshDevices());
+                }
+                RefreshDevices();
+            };
         }
 
         // ═══════════════════════════════════════════════════════════
@@ -49,11 +62,45 @@ namespace FlyShelf.Controls
                 if (NetPanelDeviceList == null) return;
                 NetPanelDeviceList.Children.Clear();
 
-                var peers = PeerManager.Instance?.ConnectedPeers?.Values
-                    .Where(p => p.IsAlive)
-                    .ToList();
+                var displayPeers = new Dictionary<string, PeerConnection>(StringComparer.OrdinalIgnoreCase);
 
-                if (peers == null || peers.Count == 0)
+                // 1. Add active PeerManager peers
+                if (PeerManager.Instance?.ConnectedPeers != null)
+                {
+                    foreach (var p in PeerManager.Instance.ConnectedPeers.Values.Where(p => p.IsAlive))
+                    {
+                        if (!string.IsNullOrEmpty(p.DeviceId)) displayPeers[p.DeviceId] = p;
+                    }
+                }
+
+                // 2. Add recently active or paired devices
+                var paired = DevicePairingManager.GetPairedDevices();
+                foreach (var d in paired)
+                {
+                    if (string.IsNullOrEmpty(d.DeviceId)) continue;
+                    if (!displayPeers.ContainsKey(d.DeviceId))
+                    {
+                        bool isRecentlyActive = (DateTime.Now - d.LastSeen).TotalMinutes < 5;
+                        bool hasOpenWs = NetworkSyncServer.ActivePeerWebSocketCount > 0 && d.DeviceType == "Mobile";
+                        bool isOnline = isRecentlyActive || hasOpenWs;
+
+                        if (isOnline)
+                        {
+                            displayPeers[d.DeviceId] = new PeerConnection
+                            {
+                                DeviceId = d.DeviceId,
+                                DeviceName = d.DeviceName,
+                                DeviceType = d.DeviceType,
+                                IsAlive = true,
+                                Transport = (!string.IsNullOrEmpty(d.LastKnownIP) && d.LastKnownIP.Contains("cloud")) ? "Cloud" : "LAN"
+                            };
+                        }
+                    }
+                }
+
+                var peers = displayPeers.Values.ToList();
+
+                if (peers.Count == 0)
                 {
                     NetPanelPeerCount.Text = "0 devices";
                     var emptyChip = new Border

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using FlyShelf.Classes.Utils;
@@ -87,12 +88,34 @@ namespace FlyShelf.Classes
                     sourceFrame = rotated;
                 }
 
-                // 4. Convert incompatible color formats (Bgra32, Pbgra32, etc.) to clean Bgr24
+                // 4. H1 fix: Composite alpha images onto white background before converting to Bgr24
                 if (sourceFrame.Format == System.Windows.Media.PixelFormats.Bgra32 ||
                     sourceFrame.Format == System.Windows.Media.PixelFormats.Pbgra32 ||
                     sourceFrame.Format == System.Windows.Media.PixelFormats.Rgba64 ||
-                    sourceFrame.Format == System.Windows.Media.PixelFormats.Prgba64 ||
-                    sourceFrame.Format == System.Windows.Media.PixelFormats.Indexed8 ||
+                    sourceFrame.Format == System.Windows.Media.PixelFormats.Prgba64)
+                {
+                    var dv = new System.Windows.Media.DrawingVisual();
+                    using (var dc = dv.RenderOpen())
+                    {
+                        dc.DrawRectangle(System.Windows.Media.Brushes.White, null,
+                            new System.Windows.Rect(0, 0, sourceFrame.PixelWidth, sourceFrame.PixelHeight));
+                        dc.DrawImage(sourceFrame,
+                            new System.Windows.Rect(0, 0, sourceFrame.PixelWidth, sourceFrame.PixelHeight));
+                    }
+                    var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                        sourceFrame.PixelWidth, sourceFrame.PixelHeight, 96, 96,
+                        System.Windows.Media.PixelFormats.Pbgra32);
+                    rtb.Render(dv);
+                    rtb.Freeze();
+                    var composited = new FormatConvertedBitmap();
+                    composited.BeginInit();
+                    composited.Source = rtb;
+                    composited.DestinationFormat = System.Windows.Media.PixelFormats.Bgr24;
+                    composited.EndInit();
+                    composited.Freeze();
+                    sourceFrame = composited;
+                }
+                else if (sourceFrame.Format == System.Windows.Media.PixelFormats.Indexed8 ||
                     sourceFrame.Format == System.Windows.Media.PixelFormats.Indexed4 ||
                     sourceFrame.Format == System.Windows.Media.PixelFormats.Indexed2 ||
                     sourceFrame.Format == System.Windows.Media.PixelFormats.Indexed1)
@@ -176,10 +199,13 @@ namespace FlyShelf.Classes
         // ═══════════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// Converts a DOC/DOCX/RTF file to PDF.
-        /// Tier 1: Word COM (if installed).
-        /// Tier 2: LibreOffice (if installed).
-        /// Tier 3: Pure C# OpenXml Native Engine (100% offline, zero dependencies).
+        /// Converts a DOC/DOCX/RTF/ODT file to PDF with fail-proof multi-tier fallback.
+        /// Fully handles files that are currently OPEN in Word or other editors by creating
+        /// an isolated, non-locking shadow copy in %TEMP%.
+        /// Tier 1: Word COM (isolated STA thread with strict 6s timeout & full dialog suppression).
+        /// Tier 2: LibreOffice Headless (if installed).
+        /// Tier 3: Pure C# OpenXml Native Engine (100% offline, zero external dependencies).
+        /// Tier 4: Pure C# Text / Structure Fallback Engine.
         /// </summary>
         public static async Task<string> ConvertDocToPdfAsync(string docPath, string outputPath = null)
         {
@@ -198,88 +224,263 @@ namespace FlyShelf.Classes
 
             string ext = Path.GetExtension(docPath).ToLowerInvariant();
 
-            // ── Tier 1: Try Word COM if available ──
-            if (ext == ".docx" || ext == ".doc" || ext == ".rtf")
-            {
-                if (Type.GetTypeFromProgID("Word.Application") != null)
-                {
-                    try
-                    {
-                        string[] results = await ConvertDocsToPdfsAsync(new[] { docPath });
-                        if (results.Length > 0 && File.Exists(results[0]) && new FileInfo(results[0]).Length > 0)
-                        {
-                            return results[0];
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogAction("DOC2PDF_WORD_FAIL", $"Word COM failed: {ex.Message}");
-                    }
-                }
-            }
+            // 1. Create a safe shadow copy to completely isolate from file locks / active Word editing
+            string shadowDocPath = CreateSafeShadowCopy(docPath);
+            string workingDocPath = shadowDocPath ?? docPath;
 
-            // ── Tier 2: Try LibreOffice if installed ──
             try
             {
-                bool libreSuccess = TryLibreOfficeConvert(docPath, outputPath);
-                if (libreSuccess && File.Exists(outputPath) && new FileInfo(outputPath).Length > 0)
+                // ── Tier 1: Try Word COM on isolated STA thread with strict 6s timeout ──
+                if (ext == ".docx" || ext == ".doc" || ext == ".rtf")
                 {
-                    return outputPath;
+                    if (Type.GetTypeFromProgID("Word.Application") != null)
+                    {
+                        try
+                        {
+                            bool wordSuccess = await TryWordComConvertAsync(workingDocPath, outputPath);
+                            if (wordSuccess && File.Exists(outputPath) && new FileInfo(outputPath).Length > 0)
+                            {
+                                Logger.LogAction("DOC2PDF_WORD", $"Word COM converted {Path.GetFileName(docPath)} successfully.");
+                                return outputPath;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogAction("DOC2PDF_WORD_FAIL", $"Word COM failed for {Path.GetFileName(docPath)}: {ex.Message}");
+                        }
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("DOC2PDF_LIBRE_FAIL", $"LibreOffice failed: {ex.Message}");
-            }
 
-            // ── Tier 3: Pure C# Native DOCX Engine (Zero external dependencies) ──
-            if (ext == ".docx")
-            {
+                // ── Tier 2: Try LibreOffice Headless if installed ──
                 try
                 {
-                    Logger.LogAction("DOC2PDF_NATIVE", $"Converting {Path.GetFileName(docPath)} using Native OpenXml Engine...");
-                    bool nativeSuccess = DocxToPdfConverter.Convert(docPath, outputPath);
-                    if (nativeSuccess && File.Exists(outputPath) && new FileInfo(outputPath).Length > 0)
+                    bool libreSuccess = TryLibreOfficeConvert(workingDocPath, outputPath);
+                    if (libreSuccess && File.Exists(outputPath) && new FileInfo(outputPath).Length > 0)
                     {
+                        Logger.LogAction("DOC2PDF_LIBRE", $"LibreOffice converted {Path.GetFileName(docPath)} successfully.");
                         return outputPath;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Logger.LogAction("DOC2PDF_NATIVE_FAIL", $"Native OpenXml engine error: {ex.Message}");
-                }
-            }
-
-            // ── Tier 4: Text fallback for .doc / .rtf if Office is absent ──
-            try
-            {
-                string txtContent = null;
-                if (ext == ".rtf")
-                {
-                    txtContent = ExtractTextFromRtf(docPath);
-                }
-                else if (ext == ".doc")
-                {
-                    txtContent = ExtractTextFromDoc(docPath);
+                    Logger.LogAction("DOC2PDF_LIBRE_FAIL", $"LibreOffice failed: {ex.Message}");
                 }
 
-                if (!string.IsNullOrEmpty(txtContent))
+                // ── Tier 3: Pure C# Native DOCX Engine (Zero external dependencies) ──
+                if (ext == ".docx")
                 {
-                    bool txtSuccess = ConvertTextToPdf(txtContent, outputPath, Path.GetFileNameWithoutExtension(docPath));
-                    if (txtSuccess && File.Exists(outputPath))
+                    try
                     {
-                        return outputPath;
+                        Logger.LogAction("DOC2PDF_NATIVE", $"Converting {Path.GetFileName(docPath)} using Native OpenXml Engine...");
+                        bool nativeSuccess = DocxToPdfConverter.Convert(workingDocPath, outputPath);
+                        if (nativeSuccess && File.Exists(outputPath) && new FileInfo(outputPath).Length > 0)
+                        {
+                            Logger.LogAction("DOC2PDF_NATIVE_OK", $"Native OpenXml converted {Path.GetFileName(docPath)} successfully.");
+                            return outputPath;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("DOC2PDF_NATIVE_FAIL", $"Native OpenXml engine error: {ex.Message}");
                     }
                 }
+
+                // ── Tier 4: Text fallback for .docx / .doc / .rtf / .odt if Office/OpenXml fails ──
+                try
+                {
+                    string txtContent = null;
+                    if (ext == ".docx")
+                    {
+                        txtContent = DocxToPdfConverter.ExtractTextFallback(workingDocPath);
+                    }
+                    else if (ext == ".rtf")
+                    {
+                        txtContent = ExtractTextFromRtf(workingDocPath);
+                    }
+                    else if (ext == ".doc" || ext == ".odt")
+                    {
+                        txtContent = ExtractTextFromDoc(workingDocPath);
+                    }
+
+                    if (!string.IsNullOrEmpty(txtContent))
+                    {
+                        Logger.LogAction("DOC2PDF_TEXT_FALLBACK", $"Using text fallback engine for {Path.GetFileName(docPath)}...");
+                        bool txtSuccess = ConvertTextToPdf(txtContent, outputPath, Path.GetFileNameWithoutExtension(docPath));
+                        if (txtSuccess && File.Exists(outputPath) && new FileInfo(outputPath).Length > 0)
+                        {
+                            return outputPath;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("DOC2PDF_FALLBACK_FAIL", $"Text fallback failed: {ex.Message}");
+                }
             }
-            catch { }
+            finally
+            {
+                // Clean up shadow copy
+                if (!string.IsNullOrEmpty(shadowDocPath) && File.Exists(shadowDocPath))
+                {
+                    try { File.Delete(shadowDocPath); } catch { }
+                }
+            }
 
             return null;
         }
 
         /// <summary>
-        /// Batch converts multiple DOC/DOCX files to PDF. Reuses Word instance when available,
-        /// falling back gracefully to Native OpenXml for any that fail.
+        /// Attempts Word COM conversion on an STA thread with a strict 6-second timeout
+        /// and complete dialog suppression to avoid blocking or hanging on open Word instances.
+        /// </summary>
+        private static Task<bool> TryWordComConvertAsync(string inputPath, string outputPdf)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            var staThread = new System.Threading.Thread(() =>
+            {
+                object wordAppObj = null;
+                dynamic wordApp = null;
+                dynamic doc = null;
+                try
+                {
+                    var wordType = Type.GetTypeFromProgID("Word.Application");
+                    if (wordType == null)
+                    {
+                        tcs.TrySetResult(false);
+                        return;
+                    }
+
+                    wordAppObj = Activator.CreateInstance(wordType);
+                    if (wordAppObj == null)
+                    {
+                        tcs.TrySetResult(false);
+                        return;
+                    }
+
+                    wordApp = wordAppObj;
+
+                    // ── SUPPRESS ALL DIALOGS, MACROS, POPUPS & AUTO-UPDATES ──
+                    wordApp.Visible = false;
+                    wordApp.DisplayAlerts = 0;              // wdAlertsNone
+                    wordApp.AutomationSecurity = 3;          // msoAutomationSecurityForceDisable
+                    wordApp.Options.DoNotPromptForConvert = true;
+                    try { wordApp.Options.WarnBeforeSavingPrintOrMailMerge = false; } catch { }
+                    try { wordApp.FeatureInstall = 0; } catch { }
+
+                    // Open document with full automation flags
+                    doc = wordApp.Documents.Open(
+                        inputPath,              // FileName
+                        false,                  // ConfirmConversions
+                        true,                   // ReadOnly
+                        false,                  // AddToRecentFiles
+                        "",                     // PasswordDocument
+                        "",                     // PasswordTemplate
+                        true,                   // Revert
+                        "",                     // WritePasswordDocument
+                        "",                     // WritePasswordTemplate
+                        Type.Missing,           // Format
+                        Type.Missing,           // Encoding
+                        false,                  // Visible
+                        false,                  // OpenAndRepair
+                        Type.Missing,           // DocumentDirection
+                        true,                   // NoEncodingDialog
+                        Type.Missing            // XMLTransform
+                    );
+
+                    if (doc == null)
+                    {
+                        tcs.TrySetResult(false);
+                        return;
+                    }
+
+                    string dir = Path.GetDirectoryName(outputPdf);
+                    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+                    // Export to PDF (wdExportFormatPDF = 17)
+                    doc.ExportAsFixedFormat(
+                        outputPdf,              // OutputFileName
+                        17,                     // wdExportFormatPDF
+                        false,                  // OpenAfterExport
+                        0,                      // OptimizeFor: wdExportOptimizeForPrint
+                        0,                      // Range: wdExportAllDocument
+                        1,                      // From
+                        1,                      // To
+                        0,                      // Item: wdExportDocumentContent
+                        true,                   // IncludeDocProps
+                        true,                   // KeepIRM
+                        0,                      // CreateBookmarks: wdExportCreateNoBookmarks
+                        true,                   // DocStructureTags
+                        true,                   // BitmapMissingFonts
+                        false                   // UseISO19005_1
+                    );
+
+                    bool success = File.Exists(outputPdf) && new FileInfo(outputPdf).Length > 0;
+                    tcs.TrySetResult(success);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("WORD_COM_ERR", $"Word COM exception: {ex.Message}");
+                    tcs.TrySetResult(false);
+                }
+                finally
+                {
+                    if (doc != null)
+                    {
+                        try { doc.Close(0 /* wdDoNotSaveChanges */); } catch { }
+                        try { System.Runtime.InteropServices.Marshal.ReleaseComObject(doc); } catch { }
+                    }
+                    if (wordApp != null)
+                    {
+                        try { wordApp.Quit(0); } catch { }
+                    }
+                    if (wordAppObj != null)
+                    {
+                        try { System.Runtime.InteropServices.Marshal.ReleaseComObject(wordAppObj); } catch { }
+                    }
+                }
+            });
+
+            staThread.SetApartmentState(System.Threading.ApartmentState.STA);
+            staThread.IsBackground = true;
+            staThread.Start();
+
+            // Strict 6-second timeout — fail fast to Pure C# Native DOCX engine
+            // H3 fix: Also kill orphaned Word COM processes on timeout
+            Task.Run(async () =>
+            {
+                await Task.Delay(6000);
+                if (!tcs.Task.IsCompleted)
+                {
+                    Logger.LogAction("WORD_COM_TIMEOUT", "Word COM timed out after 6s — falling back immediately.");
+                    tcs.TrySetResult(false);
+
+                    // Give the STA thread 2 more seconds to clean up, then force-kill any orphaned Word
+                    await Task.Delay(2000);
+                    try
+                    {
+                        foreach (var proc in Process.GetProcessesByName("WINWORD"))
+                        {
+                            try
+                            {
+                                if (proc.MainWindowHandle == IntPtr.Zero) // Invisible/automation instance
+                                {
+                                    proc.Kill();
+                                    Logger.LogAction("WORD_COM_KILLED", $"Killed orphaned WINWORD.EXE (PID {proc.Id}).");
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                    catch { }
+                }
+            });
+
+            return tcs.Task;
+        }
+
+        /// <summary>
+        /// Batch converts multiple DOC/DOCX files to PDF linearly.
+        /// Completely avoids recursion while ensuring each file benefits from the full multi-tier fallback pipeline.
         /// </summary>
         public static async Task<string[]> ConvertDocsToPdfsAsync(string[] docPaths)
         {
@@ -291,111 +492,18 @@ namespace FlyShelf.Classes
             Directory.CreateDirectory(outputDir);
 
             var convertedPaths = new List<string>();
-            var failedPaths = new List<string>();
 
-            // Try Word COM batch first if installed
-            Type wordType = Type.GetTypeFromProgID("Word.Application");
-            if (wordType != null)
+            foreach (string docPath in docPaths)
             {
-                var tcs = new TaskCompletionSource<bool>();
-                var staThread = new System.Threading.Thread(() =>
-                {
-                    object word = null;
-                    try
-                    {
-                        word = Activator.CreateInstance(wordType);
-                        dynamic dynamicWord = word;
-
-                        dynamicWord.Visible = false;
-                        dynamicWord.DisplayAlerts = 0;              // wdAlertsNone
-                        dynamicWord.AutomationSecurity = 3;          // msoAutomationSecurityForceDisable
-                        dynamicWord.Options.DoNotPromptForConvert = true;
-                        try { dynamicWord.Options.WarnBeforeSavingPrintOrMailMerge = false; } catch { }
-
-                        foreach (string docPath in docPaths)
-                        {
-                            if (!File.Exists(docPath)) continue;
-
-                            dynamic doc = null;
-                            try
-                            {
-                                string pdfPath = Path.Combine(outputDir,
-                                    Path.GetFileNameWithoutExtension(docPath) + "_" + Guid.NewGuid().ToString()[..4] + ".pdf");
-
-                                doc = dynamicWord.Documents.Open(
-                                    docPath, false, true, false, "", "", true, "", "",
-                                    Type.Missing, Type.Missing, false, false, Type.Missing, true, Type.Missing
-                                );
-
-                                doc.ExportAsFixedFormat(
-                                    pdfPath, 17, false, 0, 0, 1, 1, 0, true, true, 0, true, true, false);
-
-                                doc.Close(0);
-                                doc = null;
-
-                                if (File.Exists(pdfPath) && new FileInfo(pdfPath).Length > 0)
-                                    convertedPaths.Add(pdfPath);
-                                else
-                                    failedPaths.Add(docPath);
-                            }
-                            catch
-                            {
-                                failedPaths.Add(docPath);
-                            }
-                            finally
-                            {
-                                if (doc != null)
-                                {
-                                    try { doc.Close(0); } catch { }
-                                    try { System.Runtime.InteropServices.Marshal.ReleaseComObject(doc); } catch { }
-                                }
-                            }
-                        }
-
-                        try { dynamicWord.Quit(0); } catch { }
-                    }
-                    catch
-                    {
-                        failedPaths.AddRange(docPaths.Except(convertedPaths));
-                    }
-                    finally
-                    {
-                        if (word != null)
-                        {
-                            try { System.Runtime.InteropServices.Marshal.ReleaseComObject(word); } catch { }
-                        }
-                        tcs.TrySetResult(true);
-                    }
-                });
-
-                staThread.SetApartmentState(System.Threading.ApartmentState.STA);
-                staThread.IsBackground = true;
-                staThread.Start();
-
-                var timeoutTask = Task.Delay(30000);
-                if (await Task.WhenAny(tcs.Task, timeoutTask) == timeoutTask)
-                {
-                    Logger.LogAction("DOC2PDF_TIMEOUT", "Word COM batch timed out after 30s.");
-                }
-            }
-            else
-            {
-                failedPaths.AddRange(docPaths);
-            }
-
-            // For any files that failed or if Word wasn't installed, use Native OpenXml / LibreOffice fallback
-            foreach (var failed in failedPaths)
-            {
-                if (convertedPaths.Any(p => Path.GetFileNameWithoutExtension(p).StartsWith(Path.GetFileNameWithoutExtension(failed))))
-                    continue;
+                if (string.IsNullOrEmpty(docPath) || !File.Exists(docPath)) continue;
 
                 string pdfPath = Path.Combine(outputDir,
-                    Path.GetFileNameWithoutExtension(failed) + "_" + Guid.NewGuid().ToString()[..4] + ".pdf");
+                    Path.GetFileNameWithoutExtension(docPath) + "_" + Guid.NewGuid().ToString()[..4] + ".pdf");
 
-                string res = await ConvertDocToPdfAsync(failed, pdfPath);
-                if (!string.IsNullOrEmpty(res) && File.Exists(res))
+                string result = await ConvertDocToPdfAsync(docPath, pdfPath);
+                if (!string.IsNullOrEmpty(result) && File.Exists(result))
                 {
-                    convertedPaths.Add(res);
+                    convertedPaths.Add(result);
                 }
             }
 
@@ -417,17 +525,17 @@ namespace FlyShelf.Classes
             var psi = new ProcessStartInfo
             {
                 FileName = sofficePath,
-                Arguments = $"--headless --convert-to pdf --outdir \"{outDir}\" \"{docPath}\"",
+                Arguments = $"--headless --norestore --nofirststartwizard --convert-to pdf --outdir \"{outDir}\" \"{docPath}\"",
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
+                RedirectStandardOutput = false,
+                RedirectStandardError = false
             };
 
             using var proc = Process.Start(psi);
             if (proc == null) return false;
 
-            bool exited = proc.WaitForExit(30000);
+            bool exited = proc.WaitForExit(15000);
             if (!exited)
             {
                 try { proc.Kill(); } catch { }
@@ -440,11 +548,83 @@ namespace FlyShelf.Classes
                 if (expectedPdf != outputPdf)
                 {
                     try { File.Copy(expectedPdf, outputPdf, true); } catch { }
+                    // M3 fix: Clean up intermediate PDF to prevent temp file leak
+                    try { File.Delete(expectedPdf); } catch { }
                 }
                 return true;
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Creates an isolated temporary shadow copy in %TEMP% using non-blocking FileShare.ReadWrite.
+        /// Guarantees that converters never fail from locks held by active Word/Excel/IDE processes.
+        /// </summary>
+        public static string CreateSafeShadowCopy(string sourcePath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath)) return null;
+
+                string ext = Path.GetExtension(sourcePath);
+                string tempCopy = Path.Combine(Path.GetTempPath(), $"FlyShelf_Shadow_{Guid.NewGuid():N}{ext}");
+
+                for (int attempt = 0; attempt < 3; attempt++)
+                {
+                    try
+                    {
+                        using (var src = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                        using (var dst = new FileStream(tempCopy, FileMode.Create, FileAccess.Write))
+                        {
+                            src.CopyTo(dst);
+                        }
+                        if (File.Exists(tempCopy) && new FileInfo(tempCopy).Length > 0)
+                        {
+                            return tempCopy;
+                        }
+                    }
+                    catch (IOException)
+                    {
+                        System.Threading.Thread.Sleep(50 * (1 << attempt));
+                    }
+                }
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static byte[] ReadFileBytesSafe(string filePath)
+        {
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                try
+                {
+                    using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                    using var ms = new MemoryStream();
+                    fs.CopyTo(ms);
+                    return ms.ToArray();
+                }
+                catch (IOException)
+                {
+                    System.Threading.Thread.Sleep(50 * (1 << attempt));
+                }
+                catch
+                {
+                    break;
+                }
+            }
+            return null;
+        }
+
+        private static string ReadFileTextSafe(string filePath)
+        {
+            byte[] bytes = ReadFileBytesSafe(filePath);
+            if (bytes == null || bytes.Length == 0) return string.Empty;
+            return Encoding.UTF8.GetString(bytes);
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -460,8 +640,11 @@ namespace FlyShelf.Classes
         {
             if (!File.Exists(mdPath)) return false;
 
-            string mdContent = "";
-            try { mdContent = File.ReadAllText(mdPath); } catch { return false; }
+            string mdContent = ReadFileTextSafe(mdPath);
+            if (string.IsNullOrEmpty(mdContent))
+            {
+                try { mdContent = File.ReadAllText(mdPath); } catch { return false; }
+            }
 
             // ── Tier 1: Try WebView2 Converter ──
             try
@@ -492,7 +675,12 @@ namespace FlyShelf.Classes
                 Logger.LogAction("MD2PDF_NATIVE_ERR", $"Native Markdown converter error: {ex.Message}");
             }
 
-            return false;
+            // ── Tier 3: Native Text Fallback ──
+            try
+            {
+                return ConvertTextToPdf(mdContent, outputPdf, Path.GetFileName(mdPath));
+            }
+            catch { return false; }
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -512,7 +700,11 @@ namespace FlyShelf.Classes
                 if (File.Exists(textOrPath))
                 {
                     if (string.IsNullOrEmpty(documentTitle)) documentTitle = Path.GetFileName(textOrPath);
-                    text = File.ReadAllText(textOrPath);
+                    text = ReadFileTextSafe(textOrPath);
+                    if (string.IsNullOrEmpty(text))
+                    {
+                        try { text = File.ReadAllText(textOrPath); } catch { }
+                    }
                 }
 
                 if (string.IsNullOrEmpty(text)) text = "(empty document)";
@@ -554,6 +746,10 @@ namespace FlyShelf.Classes
                 string dir = Path.GetDirectoryName(outputPdf);
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
+                if (pdfDoc.PageCount == 0)
+                {
+                    pdfDoc.AddPage();
+                }
                 pdfDoc.Save(outputPdf);
                 return File.Exists(outputPdf) && new FileInfo(outputPdf).Length > 0;
             }
@@ -733,7 +929,11 @@ namespace FlyShelf.Classes
         {
             try
             {
-                string rtf = File.ReadAllText(rtfPath);
+                string rtf = ReadFileTextSafe(rtfPath);
+                if (string.IsNullOrEmpty(rtf))
+                {
+                    try { rtf = File.ReadAllText(rtfPath); } catch { return null; }
+                }
                 return System.Text.RegularExpressions.Regex.Replace(rtf, @"\\[a-zA-Z0-9\-]+ ?|[{}]", "");
             }
             catch { return null; }
@@ -743,7 +943,12 @@ namespace FlyShelf.Classes
         {
             try
             {
-                byte[] bytes = File.ReadAllBytes(docPath);
+                byte[] bytes = ReadFileBytesSafe(docPath);
+                if (bytes == null || bytes.Length == 0)
+                {
+                    try { bytes = File.ReadAllBytes(docPath); } catch { return null; }
+                }
+                if (bytes == null || bytes.Length == 0) return null;
                 // Extract printable ASCII/Unicode runs
                 var sb = new System.Text.StringBuilder();
                 foreach (byte b in bytes)

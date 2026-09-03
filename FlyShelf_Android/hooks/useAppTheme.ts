@@ -23,6 +23,8 @@ export function useAppTheme() {
     pageTitle: { ...typography.pageTitle, color: colors.text.primary },
     sectionTitle: { ...typography.sectionTitle, color: colors.text.primary },
     cardTitle: { ...typography.cardTitle, color: colors.text.primary },
+    compactTitle: { ...typography.compactTitle, color: colors.text.primary },
+    subtitle: { ...typography.subtitle, color: colors.text.secondary },
     body: { ...typography.body, color: colors.text.primary },
     caption: { ...typography.caption, color: colors.text.tertiary },
     overline: { ...typography.overline, color: colors.text.tertiary },

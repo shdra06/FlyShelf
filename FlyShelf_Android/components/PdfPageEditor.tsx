@@ -46,6 +46,7 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
       loadPdfInfo();
     }
     return () => {
+      cachedBytesRef.current = null; // Release potentially large PDF byte array
       setSelectedPages([]);
       setMode('select');
       setLoading(true);

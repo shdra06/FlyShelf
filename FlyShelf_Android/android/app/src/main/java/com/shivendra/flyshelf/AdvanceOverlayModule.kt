@@ -19,15 +19,18 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
     @ReactMethod
     fun startOverlay() {
         val context = reactApplicationContext
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
-            return
-        }
         val intent = Intent(context, OverlayService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent)
         } else {
             context.startService(intent)
         }
+    }
+
+    @ReactMethod
+    fun setBallVisible(visible: Boolean) {
+        OverlayService.isBallVisible = visible
+        OverlayService.instance?.setBallVisibility(visible)
     }
 
     @ReactMethod
@@ -135,5 +138,28 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
             OverlayService.lastCopiedText = text
             cm.setPrimaryClip(android.content.ClipData.newPlainText("FlyShelf", text))
         } catch (e: Exception) {}
+    }
+
+    @ReactMethod
+    fun setSyncEnabled(enabled: Boolean) {
+        val svc = OverlayService.instance ?: return
+        if (enabled) svc.startNativeSync() else svc.stopNativeSync()
+    }
+
+    @ReactMethod
+    fun getSyncStatus(promise: Promise) {
+        promise.resolve(OverlayService.instance?.syncEnabled ?: false)
+    }
+
+    @ReactMethod
+    fun getPendingClips(promise: Promise) {
+        val svc = OverlayService.instance
+        if (svc == null) { promise.resolve("[]"); return }
+        val arr = org.json.JSONArray()
+        while (true) {
+            val clip = svc.pendingClips.poll() ?: break
+            try { arr.put(org.json.JSONObject(clip)) } catch (e: Exception) {}
+        }
+        promise.resolve(arr.toString())
     }
 }

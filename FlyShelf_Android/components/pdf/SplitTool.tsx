@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { colors } from '../../styles/theme';
-import s from '../../styles/pdfToolsStyles';
+
+import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { getPdfPageInfo } from '../../utils/pdfUtils';
 import { splitPdf } from '../../utils/pdfToolsUtils';
 import { SelectedFile } from './types';
@@ -17,6 +18,9 @@ interface SplitToolProps {
 }
 
 export default function SplitTool({ onBack, onPickFile, saveRecent }: SplitToolProps) {
+  const { colors, shadows } = useAppTheme();
+  const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
+
   const [file, setFile] = useState<SelectedFile | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [ranges, setRanges] = useState('');

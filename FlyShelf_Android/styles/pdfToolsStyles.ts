@@ -6,8 +6,8 @@ type ThemeColors = Record<string, any>;
 type ThemeShadows = Record<string, any>;
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const CARD_GAP = space.md;
-const CARD_W = (SCREEN_W - space.xl * 2 - CARD_GAP * 2) / 3;
+const CARD_GAP = 12;
+const CARD_W = (SCREEN_W - space.xl * 2 - CARD_GAP) / 2;
 
 export const createPdfToolsStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.create({
   // ── Layout ──
@@ -24,7 +24,7 @@ export const createPdfToolsStyles = (colors: ThemeColors, shadows: ThemeShadows)
     backgroundColor: colors.bg.base,
   },
   backBtn: { padding: space.sm, marginRight: space.sm, borderRadius: radius.sm },
-  headerTitle: { fontFamily: font.bold, fontSize: 22, color: colors.text.primary, letterSpacing: -0.5 },
+  headerTitle: { fontFamily: font.bold, fontSize: 24, color: colors.text.primary, letterSpacing: -0.5 },
   headerRight: { marginLeft: 'auto' as any, flexDirection: 'row' as any, gap: space.sm },
 
   // ── Tool Grid ──
@@ -33,18 +33,25 @@ export const createPdfToolsStyles = (colors: ThemeColors, shadows: ThemeShadows)
     gap: CARD_GAP, marginBottom: space['2xl'],
   },
   toolCard: {
-    width: CARD_W, paddingVertical: space.lg, paddingHorizontal: space.sm,
-    backgroundColor: colors.bg.card, borderRadius: radius.lg,
-    borderWidth: 1, borderColor: colors.border.subtle,
-    alignItems: 'center', ...shadows.card,
+    width: CARD_W,
+    paddingVertical: 18,
+    paddingHorizontal: 14,
+    backgroundColor: colors.bg.card,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 130,
+    ...shadows.card,
   },
-  toolCardActive: { borderColor: colors.accent.primary, backgroundColor: colors.bg.elevated },
+  toolCardActive: { borderColor: colors.accent.primary, backgroundColor: colors.bg.cardHover },
   toolIconWrap: {
-    width: 44, height: 44, borderRadius: radius.md,
-    alignItems: 'center', justifyContent: 'center', marginBottom: space.sm,
+    width: 48, height: 48, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
   },
-  toolLabel: { fontFamily: font.semibold, fontSize: 12, color: colors.text.primary, textAlign: 'center' },
-  toolDesc: { fontFamily: font.regular, fontSize: 10, color: colors.text.tertiary, textAlign: 'center', marginTop: 2 },
+  toolLabel: { fontFamily: font.bold, fontSize: 14, color: colors.text.primary, textAlign: 'center', letterSpacing: -0.2 },
+  toolDesc: { fontFamily: font.medium, fontSize: 11, color: colors.text.tertiary, textAlign: 'center', marginTop: 3 },
 
   // ── Modal ──
   modalOverlay: {

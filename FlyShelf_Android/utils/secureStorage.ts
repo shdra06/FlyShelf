@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
+import { Buffer } from 'buffer';
 
 // 100k iterations — still OWASP-compliant minimum for PBKDF2-SHA256.
 // Reduced from 600k because pbkdf2Sync blocks the JS thread/UI.
@@ -54,7 +55,8 @@ const getCryptoInstance = () => {
  */
 const getMasterPassword = (): string => {
   try {
-    let stored = SecureStore.getItem(MASTER_KEY_ALIAS);
+    // @ts-ignore
+    let stored = SecureStore.getItemSync(MASTER_KEY_ALIAS);
     if (stored) return stored;
 
     // First run: generate a random master password
@@ -62,7 +64,8 @@ const getMasterPassword = (): string => {
     const newPassword = Array.from(randomBytes)
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
-    SecureStore.setItem(MASTER_KEY_ALIAS, newPassword);
+    // @ts-ignore
+    SecureStore.setItemSync(MASTER_KEY_ALIAS, newPassword);
     return newPassword;
   } catch (e) {
     console.warn('[SecureStorage] SecureStore unavailable, using legacy password', e);
@@ -82,14 +85,16 @@ const DEVICE_SALT_ALIAS = 'flyshelf_device_salt_id';
  */
 const getStableDeviceSalt = (): string => {
   try {
-    let saltId = SecureStore.getItem(DEVICE_SALT_ALIAS);
+    // @ts-ignore
+    let saltId = SecureStore.getItemSync(DEVICE_SALT_ALIAS);
     if (saltId) return saltId;
     // First run: generate and persist a random salt identifier
     const randomBytes = Crypto.getRandomBytes(16);
     saltId = Array.from(randomBytes)
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
-    SecureStore.setItem(DEVICE_SALT_ALIAS, saltId);
+    // @ts-ignore
+    SecureStore.setItemSync(DEVICE_SALT_ALIAS, saltId);
     return saltId;
   } catch {
     // Fallback: use a fixed string (less ideal but stable)

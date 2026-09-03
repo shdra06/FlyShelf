@@ -4,20 +4,17 @@
       "$pairingKey": {
         "$uid": {
           ".read": "auth != null && (auth.uid == $uid || root.child('members/' + $pairingKey + '/' + auth.uid).exists())",
-          ".write": "auth != null && auth.uid == $uid"
+          ".write": "auth != null && auth.uid == $uid && (!data.parent().exists() || root.child('members/' + $pairingKey + '/' + auth.uid).exists() || root.child('pairing_handshake/' + $pairingKey + '/' + auth.uid).exists())"
         }
       },
       ".read": false,
       ".write": false
     },
     "clipboard": {
-      "$pairingKey": {
-        ".read": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
-        ".write": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
-        "$entryId": {
-          ".validate": "newData.hasChildren(['Type', 'Timestamp']) && newData.child('Type').isString() && newData.child('Timestamp').isNumber() && newData.val().toString().length < 1048576"
-        }
-      },
+      ".read": false,
+      ".write": false
+    },
+    "peer_transfers": {
       ".read": false,
       ".write": false
     },
@@ -26,7 +23,7 @@
         ".read": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
         ".write": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
         "$deviceId": {
-          ".validate": "newData.hasChildren(['DeviceId', 'DeviceType']) && newData.child('DeviceType').isString()"
+          ".validate": "newData.hasChildren(['DeviceId', 'DeviceType']) && newData.child('DeviceType').isString() && !newData.hasChild('Raw') && !newData.hasChild('FileContent')"
         }
       },
       ".read": false,
@@ -35,11 +32,11 @@
     "pairing_codes": {
       "$code": {
         ".read": "auth != null",
-        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)",
-        ".validate": "newData.hasChildren(['deviceId', 'pairingKey', 'uid'])",
+        ".write": "auth != null && (!data.exists() || !data.child('uid').exists() || data.child('uid').val() == auth.uid)",
+        ".validate": "newData.hasChildren(['deviceId', 'uid'])",
         "response": {
           ".write": "auth != null",
-          ".validate": "newData.hasChildren(['deviceId', 'deviceName', 'pairingKey'])"
+          ".validate": "newData.hasChildren(['deviceId', 'deviceName'])"
         }
       },
       ".read": false,
@@ -47,8 +44,12 @@
     },
     "pairing_handshake": {
       "$pairingKey": {
+        "$uid": {
+          ".read": "auth != null && (auth.uid == $uid || root.child('members/' + $pairingKey + '/' + auth.uid).exists())",
+          ".write": "auth != null && auth.uid == $uid"
+        },
         ".read": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
-        ".write": "auth != null"
+        ".write": false
       },
       ".read": false,
       ".write": false

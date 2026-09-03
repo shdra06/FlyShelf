@@ -11,17 +11,15 @@ import EncryptedStorage from '../../utils/EncryptedStorage';
 import { DOWNLOAD_BASE, SYNC_CACHE_BASE, IMAGE_CACHE_BASE, CONVERTED_BASE } from '../../utils/clipTypes';
 import { useSettings, DeviceSyncPrefs } from '../../context/SettingsContext';
 
-import { getSecureItem } from '../../utils/secureStorage';
 
 import Constants from 'expo-constants';
-import { font, radius, shadows, space, component } from '../../styles/theme';
+import { font, radius, shadows, space } from '../../styles/theme';
 import { useAppTheme } from '../../hooks/useAppTheme';
 
 import DeviceHub from '../../components/DeviceHub';
 import ScreenHeader from '../../components/ScreenHeader';
 import StepSlider from '../../components/StepSlider';
 
-import * as Clipboard from 'expo-clipboard';
 
 const APP_VERSION = Constants.expoConfig?.version || '1.0.0';
 const VERSION_URL = 'https://raw.githubusercontent.com/shdra06/FlyShelf/main/version.json';
@@ -31,7 +29,7 @@ const VERSION_URL = 'https://raw.githubusercontent.com/shdra06/FlyShelf/main/ver
 function SettingsScreenInner() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { pcLocalIp, setPcLocalIp, isGlobalSyncEnabled, setGlobalSyncEnabled, deviceName, setDeviceName, isFloatingBallEnabled, setFloatingBallEnabled, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, syncPreferences, setSyncPreference, getSyncPrefsForDevice, autoSyncTop5, setAutoSyncTop5, isFcmSilentWakeEnabled, setIsFcmSilentWakeEnabled } = useSettings();
+  const { pcLocalIp, setPcLocalIp, isGlobalSyncEnabled, setGlobalSyncEnabled, deviceName, setDeviceName, isFloatingBallEnabled, setFloatingBallEnabled, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, syncPreferences, setSyncPreference, getSyncPrefsForDevice, autoSyncTop5, setAutoSyncTop5, isOfflineOutboxEnabled, setIsOfflineOutboxEnabled, isFcmSilentWakeEnabled, setIsFcmSilentWakeEnabled } = useSettings();
   const [localIpInput, setLocalIpInput] = useState(pcLocalIp);
   const [deviceNameInput, setDeviceNameInput] = useState(deviceName);
 
@@ -76,11 +74,20 @@ function SettingsScreenInner() {
               return;
             } else {
               try { AdvanceOverlay.startOverlay(); } catch (e) { console.warn('Overlay module error:', e); }
+              try { AdvanceOverlay.setBallVisible?.(true); } catch (e) {}
               try { AdvanceOverlay.setOverlayConfig(floatingBallSize, floatingBallAutoHide); } catch (e) { console.warn('Overlay module error:', e); }
             }
           } catch (e) { console.warn('Overlay module error:', e); }
         } else {
-          try { AdvanceOverlay.stopOverlay(); } catch (e) { console.warn('Overlay module error:', e); }
+          // Hide floating ball UI, but keep foreground service running for background sync if sync is enabled
+          try {
+            AdvanceOverlay.setBallVisible?.(false);
+            if (!isGlobalSyncEnabled) {
+              AdvanceOverlay.stopOverlay();
+            } else {
+              AdvanceOverlay.startOverlay();
+            }
+          } catch (e) { console.warn('Overlay module error:', e); }
         }
       }
 
@@ -94,8 +101,14 @@ function SettingsScreenInner() {
   const checkForUpdate = useCallback(async () => {
     try {
       setUpdateStatus('checking');
-      const _ctrl = new AbortController(); setTimeout(() => _ctrl.abort(), 10000);
-      const res = await fetch(`${VERSION_URL}?t=${Date.now()}`, { signal: _ctrl.signal });
+      const _ctrl = new AbortController();
+      const _timeout = setTimeout(() => _ctrl.abort(), 10000);
+      let res;
+      try {
+        res = await fetch(`${VERSION_URL}?t=${Date.now()}`, { signal: _ctrl.signal });
+      } finally {
+        clearTimeout(_timeout);
+      }
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       const latest = data.android_version || '1.0.0';
@@ -282,6 +295,36 @@ function SettingsScreenInner() {
                 {autoSyncTop5
                   ? 'Automatically fetches and syncs the top 5 recent clipboard items in sequence when connecting.'
                   : 'Single-item mode: only syncs the latest incoming item upon connection.'}
+              </Text>
+            </View>
+
+            <View style={[styles.inputContainer, { marginTop: 20 }]}>
+              <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+                  <View style={styles.inputHeaderRow}>
+                    <Ionicons name="cloud-offline-outline" size={20} color={colors.accent.primary} />
+                    <Text style={styles.inputLabel}>Offline Outbox Queue</Text>
+                    {/* PRO badge — uncomment when Pro licensing is enforced:
+                    <View style={{backgroundColor: 'rgba(255,165,0,0.15)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 6}}>
+                      <Text style={{color: '#FFA500', fontSize: 10, fontWeight: '700'}}>PRO</Text>
+                    </View>
+                    */}
+                  </View>
+                  <Switch 
+                    value={isOfflineOutboxEnabled} 
+                    onValueChange={(val) => { 
+                      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); } catch {}
+                      setIsOfflineOutboxEnabled(val); 
+                    }} 
+                    trackColor={{ false: colors.text.disabled, true: "rgba(99,132,255,0.4)" }} 
+                    thumbColor="#FFF"
+                    accessibilityLabel={isOfflineOutboxEnabled ? 'Offline outbox queue enabled' : 'Offline outbox queue disabled'}
+                    accessibilityRole="switch"
+                  />
+              </View>
+              <Text style={styles.helperText}>
+                {isOfflineOutboxEnabled
+                  ? 'Items copied while offline will be queued and automatically synced when a direct connection is re-established.'
+                  : 'Disabled: only new items arriving after a live connection is established will sync. No offline queuing.'}
               </Text>
             </View>
 
@@ -656,7 +699,7 @@ function SettingsScreenInner() {
                           try {
                             await EncryptedStorage.removeItem('@flyshelf_clips');
                             await AsyncStorage.removeItem('@flyshelf_clips');
-                            Alert.alert('Success', 'All saved clips removed from local storage.');
+                            Alert.alert('Success', 'All saved clips removed from local storage. Please restart the app to clear the view.');
                           } catch (e: any) {
                             Alert.alert('Error', e?.message || 'Failed to clear clips.');
                           }
@@ -703,6 +746,7 @@ function SettingsScreenInner() {
                               try {
                                 const info = await FileSystem.getInfoAsync(dir);
                                 if (info.exists) await FileSystem.deleteAsync(dir, { idempotent: true });
+                                await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
                               } catch {}
                             }
                             Alert.alert('Success', 'Media and file cache cleared successfully.');
@@ -748,12 +792,13 @@ function SettingsScreenInner() {
                             const raw = await EncryptedStorage.getItem('@flyshelf_clips') || await AsyncStorage.getItem('@flyshelf_clips');
                             if (raw) {
                               const list = JSON.parse(raw);
+                              if (!Array.isArray(list)) return;
                               const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
                               const filtered = list.filter((item: any) => (item.Timestamp || 0) > cutoff || item.IsPinned);
                               const json = JSON.stringify(filtered);
                               await EncryptedStorage.setItem('@flyshelf_clips', json);
                               await AsyncStorage.setItem('@flyshelf_clips', json);
-                              Alert.alert('Success', `Cleaned up old items. ${filtered.length} recent items kept.`);
+                              Alert.alert('Success', `Cleaned up old items. ${filtered.length} recent items kept. Please restart the app to clear the view.`);
                             } else {
                               Alert.alert('Info', 'No items found to clean.');
                             }

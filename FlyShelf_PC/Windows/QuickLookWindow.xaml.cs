@@ -1392,7 +1392,8 @@ namespace FlyShelf.Windows
             }
             // Cleanup WebView2 temp user data folders asynchronously
             try {
-                string[] tempDirs = System.IO.Directory.GetDirectories(System.IO.Path.GetTempPath(), "FlyShelf_QL_*");
+                var tempDirs = System.IO.Directory.GetDirectories(System.IO.Path.GetTempPath(), "FlyShelf_QL_*")
+                    .Concat(System.IO.Directory.GetDirectories(System.IO.Path.GetTempPath(), "FlyShelf_PdfQL_*"));
                 foreach (var dir in tempDirs)
                 {
                     _ = System.Threading.Tasks.Task.Run(() => { try { System.IO.Directory.Delete(dir, true); } catch {} });

@@ -345,6 +345,26 @@ namespace FlyShelf.ViewModels
             });
         }
 
+        /// <summary>
+        /// Forces the thumbnail to be reloaded from disk by invalidating
+        /// the in-memory cache and resetting the load state.
+        /// Call this after modifying the underlying image file (e.g., annotation save).
+        /// </summary>
+        public void ForceRefreshThumbnail()
+        {
+            // 1. Evict from the static thumbnail cache
+            Classes.ImageThumbnailManager.InvalidateCache(FilePath);
+
+            // 2. Reset the load state so EnsureThumbnailLoadedAsync will re-run
+            _icon = null;
+            IsLoadedHighQuality = false;
+            Interlocked.Exchange(ref _thumbnailLoadState, 0);
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Icon)));
+
+            // 3. Trigger fresh async reload
+            EnsureThumbnailLoadedAsync();
+        }
+
         private BitmapSource? _sourceAppIcon;
         
         /// <summary>
@@ -918,10 +938,31 @@ namespace FlyShelf.ViewModels
         public bool IsGroupPreview => ItemType == ClipboardItemType.Group;
         public bool IsShareablePreview => true;
         
-        // Context Menu Discriminators
-        public bool IsTerminalPreview => Extension == ".BAT" || Extension == ".CMD" || Extension == ".PS1";
-        public bool IsCPlusPlusPreview => Extension == ".CPP" || Extension == ".C";
-        public bool IsCsvPreview => Extension == ".CSV";
+        // Context Menu Discriminators — normalize Extension (may or may not have leading dot)
+        public bool IsTerminalPreview
+        {
+            get
+            {
+                string norm = (Extension ?? "").TrimStart('.').ToUpperInvariant();
+                return norm is "BAT" or "CMD" or "PS1";
+            }
+        }
+        public bool IsCPlusPlusPreview
+        {
+            get
+            {
+                string norm = (Extension ?? "").TrimStart('.').ToUpperInvariant();
+                return norm is "CPP" or "C" or "H" or "HPP" or "CXX" or "CC";
+            }
+        }
+        public bool IsCsvPreview
+        {
+            get
+            {
+                string norm = (Extension ?? "").TrimStart('.').ToUpperInvariant();
+                return norm is "CSV";
+            }
+        }
         private string? _cachedFormatIdentifier;
         public string FormatIdentifier => _cachedFormatIdentifier ??= ComputeFormatIdentifier();
 

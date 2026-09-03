@@ -1,4 +1,4 @@
-﻿// Copyright © 2024-2026 The FlyShelf Authors
+// Copyright © 2024-2026 The FlyShelf Authors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 using FlyShelf.Classes;
@@ -27,6 +27,7 @@ public static class MonitorUtil
     public static MonitorInfo GetSelectedMonitor(int index = 0)
     {
         var monitors = GetMonitors();
+        if (monitors.Count == 0) return default;
         return monitors[Math.Clamp(index, 0, monitors.Count - 1)];
     }
 

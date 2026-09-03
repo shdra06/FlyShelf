@@ -25,10 +25,10 @@ namespace FlyShelf.Classes
         private static readonly Dictionary<string, List<SpeedTestResult>> _history = new();
         private static readonly object _lock = new();
 
-        // Reusable HttpClient with 5-second timeout
+        // Reusable HttpClient with 15-second timeout (5s was too aggressive for slow Wi-Fi)
         private static readonly HttpClient _httpClient = new()
         {
-            Timeout = TimeSpan.FromSeconds(5)
+            Timeout = TimeSpan.FromSeconds(15)
         };
 
         // 1MB random payload — generated once and reused

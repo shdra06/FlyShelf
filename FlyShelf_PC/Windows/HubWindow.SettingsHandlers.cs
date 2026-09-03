@@ -319,13 +319,25 @@ namespace FlyShelf.Windows
             {
                 MergePdfFloatingBar.Visibility = Visibility.Visible;
                 if (checkedImages.Count > 0 && checkedPdfs.Count == 0 && checkedDocs.Count == 0)
-                { MergeBarText.Text = $"{checkedImages.Count} Images selected"; MergeBarBtn.Content ="Merge Images"; MergeBarBtn.ToolTip = $"Merge {checkedImages.Count} images into a single PDF"; }
+                {
+                    if (MergeBarText != null) MergeBarText.Text = $"{checkedImages.Count} Images selected";
+                    if (MergeBarBtn != null) { MergeBarBtn.Content = "Merge Images"; MergeBarBtn.ToolTip = $"Merge {checkedImages.Count} images into a single PDF"; }
+                }
                 else if (checkedDocs.Count > 0 && checkedPdfs.Count == 0 && checkedImages.Count == 0 && checkedDocs.Count == 1)
-                { MergeBarText.Text = "1 DOC selected"; MergeBarBtn.Content ="Convert to PDF"; MergeBarBtn.ToolTip ="Convert DOC/DOCX to PDF"; }
+                {
+                    if (MergeBarText != null) MergeBarText.Text = "1 DOC selected";
+                    if (MergeBarBtn != null) { MergeBarBtn.Content = "Convert to PDF"; MergeBarBtn.ToolTip = "Convert DOC/DOCX to PDF"; }
+                }
                 else if (checkedDocs.Count > 0 && checkedPdfs.Count == 0 && checkedImages.Count == 0)
-                { MergeBarText.Text = $"{checkedDocs.Count} DOCs selected"; MergeBarBtn.Content ="Convert DOCs"; MergeBarBtn.ToolTip = $"Convert {checkedDocs.Count} DOC files to PDF"; }
+                {
+                    if (MergeBarText != null) MergeBarText.Text = $"{checkedDocs.Count} DOCs selected";
+                    if (MergeBarBtn != null) { MergeBarBtn.Content = "Convert DOCs"; MergeBarBtn.ToolTip = $"Convert {checkedDocs.Count} DOC files to PDF"; }
+                }
                 else
-                { MergeBarText.Text = $"{totalChecked} Files selected"; MergeBarBtn.Content ="Merge Files"; MergeBarBtn.ToolTip = $"Convert & merge all {totalChecked} files"; }
+                {
+                    if (MergeBarText != null) MergeBarText.Text = $"{totalChecked} Files selected";
+                    if (MergeBarBtn != null) { MergeBarBtn.Content = "Merge Files"; MergeBarBtn.ToolTip = $"Convert & merge all {totalChecked} files"; }
+                }
             }
             else { MergePdfFloatingBar.Visibility = Visibility.Collapsed; }
         }

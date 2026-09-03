@@ -77,7 +77,6 @@ namespace FlyShelf.Classes
                 expr = expr.Trim();
                 // [FIX M-34]: Sanitize before DataTable.Compute — only allow safe math characters
                 if (!_rxSafeMathExpr.IsMatch(expr)) return "Error";
-                expr = expr.Replace("^", "**");
                 using var dt = new DataTable();
                 var result = dt.Compute(expr, null);
                 return result?.ToString() ?? "Error";

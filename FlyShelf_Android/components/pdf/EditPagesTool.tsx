@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { colors } from '../../styles/theme';
-import s from '../../styles/pdfToolsStyles';
+
+import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { getPdfPageInfo } from '../../utils/pdfUtils';
 import { editPdfPages, addImagePages } from '../../utils/pdfToolsUtils';
 import { SelectedFile, PageEntry } from './types';
@@ -19,6 +20,9 @@ interface EditPagesToolProps {
 }
 
 export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRecent }: EditPagesToolProps) {
+  const { colors, shadows } = useAppTheme();
+  const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
+
   const [file, setFile] = useState<SelectedFile | null>(null);
   const [pages, setPages] = useState<PageEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -32,7 +36,7 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
       setLoading(true);
       try {
         const info = await getPdfPageInfo(files[0].uri);
-        setPages(info.pages.map((p, i) => ({ index: i, width: p.width, height: p.height, rotation: 0 })));
+        setPages(info.pages.map((p, i) => ({ index: i, originalIndex: i, width: p.width, height: p.height, rotation: 0, source: 'original' as const })));
       } catch (e: any) {
         Alert.alert('Error', 'Failed to load PDF pages');
       } finally {
@@ -79,7 +83,7 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
       const outPath = await addImagePages(file.uri, pages.length, imgs.map(i => i.uri));
       setFile({ ...file, uri: outPath });
       const info = await getPdfPageInfo(outPath);
-      setPages(info.pages.map((p, i) => ({ index: i, width: p.width, height: p.height, rotation: 0 })));
+      setPages(info.pages.map((p, i) => ({ index: i, originalIndex: i, width: p.width, height: p.height, rotation: 0, source: 'original' as const })));
     } catch (e: any) {
       Alert.alert('Error', 'Failed to add images');
     } finally {

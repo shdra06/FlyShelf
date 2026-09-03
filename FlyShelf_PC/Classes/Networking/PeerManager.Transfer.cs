@@ -557,10 +557,10 @@ namespace FlyShelf.Classes
                                 var chunkData = System.Buffers.ArrayPool<byte>.Shared.Rent(length);
                                 try
                                 {
+                                int readBytes = 0;
                                 using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.Asynchronous))
                                 {
                                     fs.Seek(offset, SeekOrigin.Begin);
-                                    int readBytes = 0;
                                     while (readBytes < length)
                                     {
                                         int r = await fs.ReadAsync(chunkData, readBytes, length - readBytes, ct);
@@ -569,7 +569,7 @@ namespace FlyShelf.Classes
                                     }
                                 }
 
-                                req.Content = new ByteArrayContent(chunkData, 0, length);
+                                req.Content = new ByteArrayContent(chunkData, 0, readBytes);
                                 req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
                                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);

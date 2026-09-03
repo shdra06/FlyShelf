@@ -159,14 +159,14 @@ namespace FlyShelf.Windows
                 });
 
                 // Update UI on dispatcher
-                LanDevicesPanel.ItemsSource = result.LanItems;
-                CloudDevicesPanel.ItemsSource = result.CloudItems;
+                if (LanDevicesPanel != null) LanDevicesPanel.ItemsSource = result.LanItems;
+                if (CloudDevicesPanel != null) CloudDevicesPanel.ItemsSource = result.CloudItems;
 
                 // Show/hide empty text — lanItems always has self, so "No LAN devices" means no OTHER LAN peers
-                LanEmptyText.Visibility = result.LanItems.Count <= 1 ? Visibility.Visible : Visibility.Collapsed;
-                CloudEmptyText.Visibility = result.CloudItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                if (LanEmptyText != null) LanEmptyText.Visibility = result.LanItems.Count <= 1 ? Visibility.Visible : Visibility.Collapsed;
+                if (CloudEmptyText != null) CloudEmptyText.Visibility = result.CloudItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-                NoDevicesPanel.Visibility = (result.LanItems.Count <= 1 && result.CloudItems.Count == 0) ? Visibility.Visible : Visibility.Collapsed;
+                if (NoDevicesPanel != null) NoDevicesPanel.Visibility = (result.LanItems.Count <= 1 && result.CloudItems.Count == 0) ? Visibility.Visible : Visibility.Collapsed;
 
                 // Also refresh groups
                 RefreshGroups();
@@ -226,8 +226,8 @@ namespace FlyShelf.Windows
                     DeviceList = string.Join(", ", g.DeviceNames ?? new List<string>())
                 }).ToList();
                 
-                GroupsPanel.ItemsSource = displayItems;
-                NoGroupsText.Visibility = displayItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                if (GroupsPanel != null) GroupsPanel.ItemsSource = displayItems;
+                if (NoGroupsText != null) NoGroupsText.Visibility = displayItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             }
             catch (Exception ex)
             {

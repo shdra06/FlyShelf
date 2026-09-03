@@ -71,6 +71,10 @@ namespace FlyShelf.Classes.Utils
             }
 
             string fontsDir = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+            // M6 fix: Also check per-user font directory (Windows 10 1809+)
+            string userFontsDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Microsoft", "Windows", "Fonts");
 
             string fileName = lowerFace switch
             {
@@ -97,12 +101,47 @@ namespace FlyShelf.Classes.Utils
                 _ => "segoeui.ttf"
             };
 
+            // Try both system and user font directories
             string fullPath = Path.Combine(fontsDir, fileName);
             if (!File.Exists(fullPath))
             {
-                // Fallbacks in order: Arial -> Segoe UI
-                fullPath = Path.Combine(fontsDir, "arial.ttf");
-                if (!File.Exists(fullPath)) fullPath = Path.Combine(fontsDir, "segoeui.ttf");
+                string userPath = Path.Combine(userFontsDir, fileName);
+                if (File.Exists(userPath)) fullPath = userPath;
+            }
+
+            if (!File.Exists(fullPath))
+            {
+                // M4 fix: Try the base (regular) variant of the same family before generic fallback
+                string baseFontFile = null;
+                if (lowerFace.StartsWith("consolas")) baseFontFile = "consola.ttf";
+                else if (lowerFace.StartsWith("calibri")) baseFontFile = "calibri.ttf";
+                else if (lowerFace.StartsWith("times")) baseFontFile = "times.ttf";
+                else if (lowerFace.StartsWith("arial")) baseFontFile = "arial.ttf";
+                else if (lowerFace.StartsWith("segoe")) baseFontFile = "segoeui.ttf";
+
+                if (baseFontFile != null)
+                {
+                    var basePath = Path.Combine(fontsDir, baseFontFile);
+                    if (File.Exists(basePath)) fullPath = basePath;
+                    else
+                    {
+                        basePath = Path.Combine(userFontsDir, baseFontFile);
+                        if (File.Exists(basePath)) fullPath = basePath;
+                    }
+                }
+            }
+
+            if (!File.Exists(fullPath))
+            {
+                // Generic fallback chain
+                string[] fallbacks = { "segoeui.ttf", "arial.ttf", "tahoma.ttf", "times.ttf", "calibri.ttf" };
+                foreach (var fb in fallbacks)
+                {
+                    string fbPath = Path.Combine(fontsDir, fb);
+                    if (File.Exists(fbPath)) { fullPath = fbPath; break; }
+                    fbPath = Path.Combine(userFontsDir, fb);
+                    if (File.Exists(fbPath)) { fullPath = fbPath; break; }
+                }
             }
 
             if (File.Exists(fullPath))
@@ -110,13 +149,40 @@ namespace FlyShelf.Classes.Utils
                 try
                 {
                     byte[] bytes = File.ReadAllBytes(fullPath);
-                    _fontCache[lowerFace] = bytes;
-                    return bytes;
+                    if (bytes.Length > 0)
+                    {
+                        _fontCache[lowerFace] = bytes;
+                        return bytes;
+                    }
                 }
                 catch { }
             }
 
-            return null;
+            // Ultimate fallback: Find ANY valid .ttf font in Windows Fonts directory
+            foreach (var dir in new[] { fontsDir, userFontsDir })
+            {
+                try
+                {
+                    if (Directory.Exists(dir))
+                    {
+                        var anyFont = Directory.EnumerateFiles(dir, "*.ttf").FirstOrDefault();
+                        if (anyFont != null)
+                        {
+                            byte[] bytes = File.ReadAllBytes(anyFont);
+                            if (bytes.Length > 0)
+                            {
+                                _fontCache[lowerFace] = bytes;
+                                return bytes;
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // C3 fix: Throw instead of returning empty byte[] which crashes PDFsharp font parser
+            Logger.LogAction("FONT_RESOLVE_FAIL", $"Could not resolve font '{faceName}' — no TTF fonts found.");
+            throw new InvalidOperationException($"FlyShelf FontResolver: Cannot resolve font '{faceName}'. No TrueType fonts found in system or user font directories.");
         }
     }
 }

@@ -72,8 +72,14 @@ export async function convertPdfToDocx(
 
   // 2. Standalone Client-Side OpenXML DOCX Generation
   const fileUri = pdfUri.startsWith('file://') ? pdfUri : `file://${pdfUri}`;
-  const b64 = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
-  const bytes = base64ToUint8Array(b64);
+  // Pre-flight size check to prevent OOM on large files
+  const fileInfo = await FileSystem.getInfoAsync(fileUri);
+  if (fileInfo.exists && 'size' in fileInfo && typeof fileInfo.size === 'number' && fileInfo.size > 20 * 1024 * 1024) {
+    throw new Error('PDF is too large for on-device conversion (max 20MB). Please use PC conversion.');
+  }
+  let b64: string | null = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+  const bytes = base64ToUint8Array(b64!);
+  b64 = null; // Release base64 string for GC
   const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
   const pageCount = pdfDoc.getPageCount();
 

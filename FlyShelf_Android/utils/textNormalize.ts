@@ -207,26 +207,3 @@ export function fuzzyScore(query: string, text: string): number {
   return 0.0;
 }
 
-/**
- * Returns true if query matches any of the provided texts.
- */
-export function fuzzyIsMatchAny(query: string, ...texts: (string | null | undefined)[]): boolean {
-  for (const t of texts) {
-    if (t && fuzzyIsMatch(query, t)) return true;
-  }
-  return false;
-}
-
-/**
- * Returns the best (highest) score across all provided texts.
- */
-export function fuzzyScoreBest(query: string, ...texts: (string | null | undefined)[]): number {
-  let best = 0;
-  for (const t of texts) {
-    if (t) {
-      const s = fuzzyScore(query, t);
-      if (s > best) best = s;
-    }
-  }
-  return best;
-}

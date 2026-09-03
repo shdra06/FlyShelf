@@ -63,6 +63,9 @@ type SettingsContextType = {
   // ── Auto Sync Mode ──
   autoSyncTop5: boolean;
   setAutoSyncTop5: (val: boolean) => Promise<void>;
+  // ── Offline Outbox Queue (Pro Feature — currently free) ──
+  isOfflineOutboxEnabled: boolean;
+  setIsOfflineOutboxEnabled: (val: boolean) => Promise<void>;
   // ── FCM Silent Wake ──
   isFcmSilentWakeEnabled: boolean;
   setIsFcmSilentWakeEnabled: (val: boolean) => Promise<void>;
@@ -99,6 +102,8 @@ const SettingsContext = createContext<SettingsContextType>({
   regeneratePairingKey: async () => '',
   autoSyncTop5: true,
   setAutoSyncTop5: async () => {},
+  isOfflineOutboxEnabled: false,
+  setIsOfflineOutboxEnabled: async () => {},
   isFcmSilentWakeEnabled: false,
   setIsFcmSilentWakeEnabled: async () => {},
   syncPreferences: {},
@@ -127,6 +132,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [floatingBallSize, setFloatingBallSizeState] = useState(48);
   const [floatingBallAutoHide, setFloatingBallAutoHideState] = useState(3000);
   const [autoSyncTop5, setAutoSyncTop5State] = useState(true);
+  const [isOfflineOutboxEnabled, setIsOfflineOutboxEnabledState] = useState(false);
   const [isFcmSilentWakeEnabled, setIsFcmSilentWakeEnabledState] = useState(false);
   const [pairedDevices, setPairedDevicesState] = useState<PairedDevice[]>([]);
   const [pairingKey, setPairingKeyState] = useState('');
@@ -139,6 +145,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await AsyncStorage.setItem('@autoSyncTop5', String(val)).catch(() => {});
   }, []);
 
+  const setIsOfflineOutboxEnabled = useCallback(async (val: boolean) => {
+    setIsOfflineOutboxEnabledState(val);
+    // PRO FEATURE GATE — uncomment when Pro licensing is enforced:
+    // if (!isPro) { setIsOfflineOutboxEnabledState(false); return; }
+    await AsyncStorage.setItem('@isOfflineOutboxEnabled', String(val)).catch(() => {});
+  }, []);
+
   const setIsFcmSilentWakeEnabled = useCallback(async (val: boolean) => {
     setIsFcmSilentWakeEnabledState(val);
     await AsyncStorage.setItem('@isFcmSilentWakeEnabled', String(val)).catch(() => {});
@@ -149,6 +162,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         const autoSyncStored = await AsyncStorage.getItem('@autoSyncTop5');
         if (autoSyncStored !== null) setAutoSyncTop5State(autoSyncStored === 'true');
+
+        const offlineOutboxStored = await AsyncStorage.getItem('@isOfflineOutboxEnabled');
+        if (offlineOutboxStored !== null) setIsOfflineOutboxEnabledState(offlineOutboxStored === 'true');
 
         const fcmStored = await AsyncStorage.getItem('@isFcmSilentWakeEnabled');
         if (fcmStored !== null) setIsFcmSilentWakeEnabledState(fcmStored === 'true');
@@ -406,6 +422,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, addPairedDevice, removePairedDevice,
     updatePairedDeviceLicensing, updateDeviceStatus, pairingKey, regeneratePairingKey,
     autoSyncTop5, setAutoSyncTop5,
+    isOfflineOutboxEnabled, setIsOfflineOutboxEnabled,
     isFcmSilentWakeEnabled, setIsFcmSilentWakeEnabled,
     syncPreferences, setSyncPreference, getSyncPrefsForDevice, setAllSyncPrefsForDevice,
   }), [
@@ -415,6 +432,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, addPairedDevice, removePairedDevice,
     updatePairedDeviceLicensing, updateDeviceStatus, pairingKey, regeneratePairingKey,
     autoSyncTop5, setAutoSyncTop5,
+    isOfflineOutboxEnabled, setIsOfflineOutboxEnabled,
     isFcmSilentWakeEnabled, setIsFcmSilentWakeEnabled,
     syncPreferences, setSyncPreference, getSyncPrefsForDevice, setAllSyncPrefsForDevice,
   ]);

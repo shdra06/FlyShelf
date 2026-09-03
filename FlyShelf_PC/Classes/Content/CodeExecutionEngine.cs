@@ -39,7 +39,7 @@ namespace FlyShelf.Classes
         private static readonly Regex _rxCppFeatures = new(@"\b(std::|using\s+namespace\s+std|cout\s*<<|cin\s*>>|template\s*<|nullptr|constexpr|class\s+[A-Z]\w*)\b", RegexOptions.Compiled);
         private static readonly Regex _rxCInclude = new(@"#include\s*<(stdio\.h|stdlib\.h|string\.h|math\.h|time\.h|stdbool\.h|stdint\.h|assert\.h)>", RegexOptions.Compiled);
         private static readonly Regex _rxCFeatures = new(@"\b(printf\s*\(|scanf\s*\(|malloc\s*\(|free\s*\(|puts\s*\()\b", RegexOptions.Compiled);
-        private static readonly Regex _rxPython = new(@"\b(def\s+\w+\s*\(|import\s+[a-zA-Z0-9_.]+|from\s+[a-zA-Z0-9_.]+\s+import|if\s+__name__\s*==\s*['""]__main__['""]|elif\s+|print\s*\(|lambda\s+)\b", RegexOptions.Compiled);
+        private static readonly Regex _rxPython = new(@"\b(def\s+\w+\s*\(|import\s+[a-zA-Z0-9_.]+|from\s+[a-zA-Z0-9_.]+\s+import|if\s+__name__\s*==\s*['""]+__main__['""]+|elif\s+|print\s*\(|lambda\s+)\b", RegexOptions.Compiled);
         private static readonly Regex _rxJavaClass = new(@"\b(public\s+)?class\s+([A-Za-z0-9_]+)", RegexOptions.Compiled);
         private static readonly Regex _rxJavaFeatures = new(@"\b(public\s+static\s+void\s+main\s*\(|System\.out\.print(ln)?\s*\(|@Override)\b", RegexOptions.Compiled);
         private static readonly Regex _rxCSharp = new(@"\b(using\s+System(\.[a-zA-Z0-9_]+)?;|Console\.(Write(Line)?|Read(Line)?)\s*\(|namespace\s+[A-Za-z0-9_.]+|public\s+class\s+Program|static\s+void\s+Main\s*\()\b", RegexOptions.Compiled);
@@ -72,7 +72,6 @@ namespace FlyShelf.Classes
                 case ".cpp" or ".cc" or ".cxx" or ".hpp" or ".hxx" or ".c++":
                     return CodeLanguage.Cpp;
                 case ".c" or ".h":
-                    // If header or .c has C++ keywords, treat as C++
                     if (!string.IsNullOrEmpty(item.RawContent) && (_rxCppInclude.IsMatch(item.RawContent) || _rxCppFeatures.IsMatch(item.RawContent)))
                         return CodeLanguage.Cpp;
                     return CodeLanguage.C;
@@ -102,43 +101,26 @@ namespace FlyShelf.Classes
 
             string sample = content.Length > 8000 ? content[..8000] : content;
 
-            // C++ vs C
             if (_rxCppInclude.IsMatch(sample) || _rxCppFeatures.IsMatch(sample))
                 return CodeLanguage.Cpp;
             if (_rxCInclude.IsMatch(sample) || (_rxCFeatures.IsMatch(sample) && sample.Contains("int main", StringComparison.Ordinal)))
                 return CodeLanguage.C;
-
-            // C#
             if (_rxCSharp.IsMatch(sample))
                 return CodeLanguage.CSharp;
-
-            // Java
             if (_rxJavaFeatures.IsMatch(sample) || (_rxJavaClass.IsMatch(sample) && sample.Contains("class ", StringComparison.Ordinal)))
                 return CodeLanguage.Java;
-
-            // Python
             if (_rxPython.IsMatch(sample))
                 return CodeLanguage.Python;
-
-            // Rust
             if (_rxRust.IsMatch(sample))
                 return CodeLanguage.Rust;
-
-            // Go
             if (_rxGo.IsMatch(sample))
                 return CodeLanguage.Go;
-
-            // TypeScript / JavaScript
             if (ext == ".ts" || ext == ".tsx" || sample.Contains(": string", StringComparison.Ordinal) || sample.Contains(": number", StringComparison.Ordinal) || sample.Contains("interface ", StringComparison.Ordinal))
                 return CodeLanguage.TypeScript;
             if (_rxJsTs.IsMatch(sample))
                 return CodeLanguage.JavaScript;
-
-            // PowerShell
             if (_rxPowerShell.IsMatch(sample))
                 return CodeLanguage.PowerShell;
-
-            // Batch
             if (_rxBatch.IsMatch(sample))
                 return CodeLanguage.Batch;
 
@@ -196,6 +178,10 @@ namespace FlyShelf.Classes
 #endif
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // RUNNER DISPATCH
+        // ═══════════════════════════════════════════════════════════════
+
         private static string GenerateRunnerScript(CodeLanguage lang, ClipboardItem item, string runnerDir)
         {
             string rawContent = item.RawContent ?? "";
@@ -205,34 +191,24 @@ namespace FlyShelf.Classes
             {
                 case CodeLanguage.Cpp:
                     return GenerateCppRunner(item, runnerDir, isPhysicalFile, rawContent);
-
                 case CodeLanguage.C:
                     return GenerateCRunner(item, runnerDir, isPhysicalFile, rawContent);
-
                 case CodeLanguage.Python:
                     return GeneratePythonRunner(item, runnerDir, isPhysicalFile, rawContent);
-
                 case CodeLanguage.Java:
                     return GenerateJavaRunner(item, runnerDir, isPhysicalFile, rawContent);
-
                 case CodeLanguage.CSharp:
                     return GenerateCSharpRunner(item, runnerDir, isPhysicalFile, rawContent);
-
                 case CodeLanguage.Rust:
                     return GenerateRustRunner(item, runnerDir, isPhysicalFile, rawContent);
-
                 case CodeLanguage.Go:
                     return GenerateGoRunner(item, runnerDir, isPhysicalFile, rawContent);
-
                 case CodeLanguage.JavaScript:
                     return GenerateJsRunner(item, runnerDir, isPhysicalFile, rawContent);
-
                 case CodeLanguage.TypeScript:
                     return GenerateTsRunner(item, runnerDir, isPhysicalFile, rawContent);
-
                 case CodeLanguage.PowerShell:
                     return GeneratePowerShellRunner(item, runnerDir, isPhysicalFile, rawContent);
-
                 case CodeLanguage.Batch:
                 case CodeLanguage.ShellCommand:
                 default:
@@ -240,275 +216,213 @@ namespace FlyShelf.Classes
             }
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // C++ RUNNER
+        // ═══════════════════════════════════════════════════════════════
+
         private static string GenerateCppRunner(ClipboardItem item, string runnerDir, bool isPhysicalFile, string rawContent)
         {
-            string sourcePath = isPhysicalFile
-                ? item.FilePath
-                : Path.Combine(runnerDir, "main.cpp");
-
-            if (!isPhysicalFile)
-            {
-                File.WriteAllText(sourcePath, rawContent);
-            }
-
+            string sourcePath = isPhysicalFile ? item.FilePath : Path.Combine(runnerDir, "main.cpp");
+            if (!isPhysicalFile) File.WriteAllText(sourcePath, rawContent);
             string exePath = Path.Combine(runnerDir, "main.exe");
 
+            string dispSource = sourcePath;
+
             return $@"@echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 cls
-title FlyShelf — Compiling & Running C++
-echo ================================================================
-echo   FlyShelf Developer Engine — C++ Runner
-echo ================================================================
+title FlyShelf - C++
 echo.
-
-:: 1. Check for g++ (MinGW / GCC)
+echo    FlyShelf Code Runner - C++
+echo    ----------------------------------------
+echo    {dispSource}
+echo.
 where g++ >nul 2>&1
-if not errorlevel 1 (
-    echo [Compiler] Using g++ (MinGW / GCC)
-    echo [Compiling] g++ -O2 -std=c++17 ""{sourcePath}"" -o ""{exePath}""
-    echo.
-    g++ -O2 -std=c++17 ""{sourcePath}"" -o ""{exePath}""
-    if errorlevel 1 (
-        echo.
-        echo [FlyShelf Error] Compilation failed! See errors above.
-        goto :finish
-    )
-    goto :run_program
-)
-
-:: 2. Check for clang++ (LLVM)
+if errorlevel 1 goto :try_clangpp
+echo    Compiler: g++ [MinGW/GCC]
+echo    Compiling...
+echo.
+g++ -O2 -std=c++17 ""{sourcePath}"" -o ""{exePath}""
+if errorlevel 1 goto :compile_fail
+goto :run_exe
+:try_clangpp
 where clang++ >nul 2>&1
-if not errorlevel 1 (
-    echo [Compiler] Using clang++ (LLVM)
-    echo [Compiling] clang++ -O2 -std=c++17 ""{sourcePath}"" -o ""{exePath}""
-    echo.
-    clang++ -O2 -std=c++17 ""{sourcePath}"" -o ""{exePath}""
-    if errorlevel 1 (
-        echo.
-        echo [FlyShelf Error] Compilation failed! See errors above.
-        goto :finish
-    )
-    goto :run_program
-)
-
-:: 3. Check for cl.exe (MSVC)
+if errorlevel 1 goto :try_cl
+echo    Compiler: clang++ [LLVM]
+echo    Compiling...
+echo.
+clang++ -O2 -std=c++17 ""{sourcePath}"" -o ""{exePath}""
+if errorlevel 1 goto :compile_fail
+goto :run_exe
+:try_cl
 where cl >nul 2>&1
-if not errorlevel 1 (
-    echo [Compiler] Using cl.exe (MSVC)
-    echo [Compiling] cl.exe /nologo /EHsc /std:c++17 ""{sourcePath}"" /Fe:""{exePath}""
-    echo.
-    cl.exe /nologo /EHsc /std:c++17 ""{sourcePath}"" /Fe:""{exePath}""
-    if errorlevel 1 (
-        echo.
-        echo [FlyShelf Error] Compilation failed! See errors above.
-        goto :finish
-    )
-    goto :run_program
-)
-
-:: 4. Check for gcc
-where gcc >nul 2>&1
-if not errorlevel 1 (
-    echo [Compiler] Using gcc
-    echo [Compiling] gcc -O2 -std=c++17 ""{sourcePath}"" -o ""{exePath}"" -lstdc++
-    echo.
-    gcc -O2 -std=c++17 ""{sourcePath}"" -o ""{exePath}"" -lstdc++
-    if errorlevel 1 (
-        echo.
-        echo [FlyShelf Error] Compilation failed! See errors above.
-        goto :finish
-    )
-    goto :run_program
-)
-
-echo [FlyShelf Error] No C++ compiler (g++, clang++, or cl.exe) was found in system PATH.
+if errorlevel 1 goto :no_compiler
+echo    Compiler: cl.exe [MSVC]
+echo    Compiling...
 echo.
-echo To run and compile C++ code on Windows, install MinGW or LLVM:
-echo   Option 1: winget install -e --id MSYS2.MSYS2 (MinGW)
-echo   Option 2: winget install -e --id LLVM.LLVM (Clang)
-echo   Option 3: Install Visual Studio with 'Desktop development with C++'
+cl.exe /nologo /EHsc /std:c++17 ""{sourcePath}"" /Fe:""{exePath}""
+if errorlevel 1 goto :compile_fail
+goto :run_exe
+:no_compiler
 echo.
-goto :finish
-
-:run_program
+echo    [Error] No C++ compiler found in PATH (g++, clang++, cl.exe)
+echo    Install: winget install -e --id MSYS2.MSYS2
 echo.
-echo ================================================================
-echo   Program Output:
-echo ================================================================
+pause
+goto :eof
+:compile_fail
+echo.
+echo    [Error] Compilation failed.
+echo.
+pause
+goto :eof
+:run_exe
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
 echo.
 ""{exePath}""
-echo.
-echo ================================================================
-echo   Process exited with return code %errorlevel%.
-echo ================================================================
-
-:finish
 echo.
 pause
 ";
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // C RUNNER
+        // ═══════════════════════════════════════════════════════════════
 
         private static string GenerateCRunner(ClipboardItem item, string runnerDir, bool isPhysicalFile, string rawContent)
         {
-            string sourcePath = isPhysicalFile
-                ? item.FilePath
-                : Path.Combine(runnerDir, "main.c");
-
-            if (!isPhysicalFile)
-            {
-                File.WriteAllText(sourcePath, rawContent);
-            }
-
+            string sourcePath = isPhysicalFile ? item.FilePath : Path.Combine(runnerDir, "main.c");
+            if (!isPhysicalFile) File.WriteAllText(sourcePath, rawContent);
             string exePath = Path.Combine(runnerDir, "main.exe");
+            string dispSource = sourcePath;
 
             return $@"@echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 cls
-title FlyShelf — Compiling & Running C
-echo ================================================================
-echo   FlyShelf Developer Engine — C Runner
-echo ================================================================
+title FlyShelf - C
 echo.
-
-:: 1. Check for gcc
+echo    FlyShelf Code Runner - C
+echo    ----------------------------------------
+echo    {dispSource}
+echo.
 where gcc >nul 2>&1
-if not errorlevel 1 (
-    echo [Compiler] Using gcc
-    echo [Compiling] gcc -O2 ""{sourcePath}"" -o ""{exePath}""
-    echo.
-    gcc -O2 ""{sourcePath}"" -o ""{exePath}""
-    if errorlevel 1 (
-        echo.
-        echo [FlyShelf Error] Compilation failed! See errors above.
-        goto :finish
-    )
-    goto :run_program
-)
-
-:: 2. Check for clang
-where clang >nul 2>&1
-if not errorlevel 1 (
-    echo [Compiler] Using clang
-    echo [Compiling] clang -O2 ""{sourcePath}"" -o ""{exePath}""
-    echo.
-    clang -O2 ""{sourcePath}"" -o ""{exePath}""
-    if errorlevel 1 (
-        echo.
-        echo [FlyShelf Error] Compilation failed! See errors above.
-        goto :finish
-    )
-    goto :run_program
-)
-
-:: 3. Check for cl.exe
-where cl >nul 2>&1
-if not errorlevel 1 (
-    echo [Compiler] Using cl.exe (MSVC)
-    echo [Compiling] cl.exe /nologo ""{sourcePath}"" /Fe:""{exePath}""
-    echo.
-    cl.exe /nologo ""{sourcePath}"" /Fe:""{exePath}""
-    if errorlevel 1 (
-        echo.
-        echo [FlyShelf Error] Compilation failed! See errors above.
-        goto :finish
-    )
-    goto :run_program
-)
-
-echo [FlyShelf Error] No C compiler (gcc, clang, or cl.exe) was found in system PATH.
-echo Install via: winget install -e --id MSYS2.MSYS2 or winget install -e --id LLVM.LLVM
-goto :finish
-
-:run_program
+if errorlevel 1 goto :try_clang
+echo    Compiler: gcc
+echo    Compiling...
 echo.
-echo ================================================================
-echo   Program Output:
-echo ================================================================
+gcc -O2 ""{sourcePath}"" -o ""{exePath}""
+if errorlevel 1 goto :compile_fail
+goto :run_exe
+:try_clang
+where clang >nul 2>&1
+if errorlevel 1 goto :try_cl
+echo    Compiler: clang
+echo    Compiling...
+echo.
+clang -O2 ""{sourcePath}"" -o ""{exePath}""
+if errorlevel 1 goto :compile_fail
+goto :run_exe
+:try_cl
+where cl >nul 2>&1
+if errorlevel 1 goto :no_compiler
+echo    Compiler: cl.exe [MSVC]
+echo    Compiling...
+echo.
+cl.exe /nologo ""{sourcePath}"" /Fe:""{exePath}""
+if errorlevel 1 goto :compile_fail
+goto :run_exe
+:no_compiler
+echo.
+echo    [Error] No C compiler found in PATH (gcc, clang, cl.exe)
+echo    Install: winget install -e --id MSYS2.MSYS2
+echo.
+pause
+goto :eof
+:compile_fail
+echo.
+echo    [Error] Compilation failed.
+echo.
+pause
+goto :eof
+:run_exe
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
 echo.
 ""{exePath}""
 echo.
-echo ================================================================
-echo   Process exited with return code %errorlevel%.
-echo ================================================================
-
-:finish
-echo.
 pause
 ";
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // PYTHON RUNNER
+        // ═══════════════════════════════════════════════════════════════
 
         private static string GeneratePythonRunner(ClipboardItem item, string runnerDir, bool isPhysicalFile, string rawContent)
         {
-            string sourcePath = isPhysicalFile
-                ? item.FilePath
-                : Path.Combine(runnerDir, "script.py");
-
-            if (!isPhysicalFile)
-            {
-                File.WriteAllText(sourcePath, rawContent);
-            }
+            string sourcePath = isPhysicalFile ? item.FilePath : Path.Combine(runnerDir, "script.py");
+            if (!isPhysicalFile) File.WriteAllText(sourcePath, rawContent);
+            string dispSource = sourcePath;
 
             return $@"@echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 cls
-title FlyShelf — Running Python
-echo ================================================================
-echo   FlyShelf Developer Engine — Python Runner
-echo ================================================================
+title FlyShelf - Python
 echo.
-
+echo    FlyShelf Code Runner - Python
+echo    ----------------------------------------
+echo    {dispSource}
+echo.
 where python >nul 2>&1
-if not errorlevel 1 (
-    echo [Interpreter] python ""{sourcePath}""
-    echo.
-    echo ================================================================
-    echo   Program Output:
-    echo ================================================================
-    echo.
-    python ""{sourcePath}""
-    goto :after_run
-)
-
-where py >nul 2>&1
-if not errorlevel 1 (
-    echo [Interpreter] py ""{sourcePath}""
-    echo.
-    echo ================================================================
-    echo   Program Output:
-    echo ================================================================
-    echo.
-    py ""{sourcePath}""
-    goto :after_run
-)
-
-where python3 >nul 2>&1
-if not errorlevel 1 (
-    echo [Interpreter] python3 ""{sourcePath}""
-    echo.
-    echo ================================================================
-    echo   Program Output:
-    echo ================================================================
-    echo.
-    python3 ""{sourcePath}""
-    goto :after_run
-)
-
-echo [FlyShelf Error] Python was not found in system PATH.
-echo Install Python via: winget install -e --id Python.Python.3.12
-goto :finish
-
-:after_run
+if errorlevel 1 goto :try_py
+echo    Interpreter: python
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
 echo.
-echo ================================================================
-echo   Process exited with return code %errorlevel%.
-echo ================================================================
-
-:finish
+python ""{sourcePath}""
+echo.
+pause
+goto :eof
+:try_py
+where py >nul 2>&1
+if errorlevel 1 goto :try_python3
+echo    Interpreter: py
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
+echo.
+py ""{sourcePath}""
+echo.
+pause
+goto :eof
+:try_python3
+where python3 >nul 2>&1
+if errorlevel 1 goto :no_python
+echo    Interpreter: python3
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
+echo.
+python3 ""{sourcePath}""
+echo.
+pause
+goto :eof
+:no_python
+echo.
+echo    [Error] Python was not found in PATH
+echo    Install: winget install -e --id Python.Python.3.12
 echo.
 pause
 ";
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // JAVA RUNNER
+        // ═══════════════════════════════════════════════════════════════
 
         private static string GenerateJavaRunner(ClipboardItem item, string runnerDir, bool isPhysicalFile, string rawContent)
         {
@@ -517,468 +431,422 @@ pause
             {
                 var match = _rxJavaClass.Match(rawContent);
                 if (match.Success && match.Groups.Count >= 3 && !string.IsNullOrWhiteSpace(match.Groups[2].Value))
-                {
                     className = match.Groups[2].Value.Trim();
-                }
             }
 
-            string sourcePath = isPhysicalFile
-                ? item.FilePath
-                : Path.Combine(runnerDir, className + ".java");
-
-            if (!isPhysicalFile)
-            {
-                File.WriteAllText(sourcePath, rawContent);
-            }
+            string sourcePath = isPhysicalFile ? item.FilePath : Path.Combine(runnerDir, className + ".java");
+            if (!isPhysicalFile) File.WriteAllText(sourcePath, rawContent);
+            string dispSource = sourcePath;
 
             return $@"@echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 cls
-title FlyShelf — Compiling & Running Java
-echo ================================================================
-echo   FlyShelf Developer Engine — Java Runner
-echo ================================================================
+title FlyShelf - Java
 echo.
-
+echo    FlyShelf Code Runner - Java
+echo    ----------------------------------------
+echo    {dispSource}
+echo.
 where java >nul 2>&1
-if errorlevel 1 (
-    echo [FlyShelf Error] Java runtime (java) was not found in system PATH.
-    echo Install Java via: winget install -e --id Oracle.JDK.21
-    goto :finish
-)
-
-:: Try Java 11+ single file direct execution
-echo [Executing] java ""{sourcePath}""
+if errorlevel 1 goto :no_java
+echo    Engine: java (single-file mode)
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
 echo.
-echo ================================================================
-echo   Program Output:
-echo ================================================================
+java ""{sourcePath}"" 2>nul
+if not errorlevel 1 goto :done
 echo.
-java ""{sourcePath}""
-if not errorlevel 1 goto :after_run
-
-:: If direct execution failed, attempt javac compile + java execution
+echo    Fallback: javac compile + java run
 echo.
-echo [Direct execution returned %errorlevel%, trying javac compile...]
 where javac >nul 2>&1
-if not errorlevel 1 (
-    javac ""{sourcePath}""
-    if not errorlevel 1 (
-        echo [Running compiled class] java -cp ""{runnerDir}"" {className}
-        java -cp ""{runnerDir}"" {className}
-    )
-)
-
-:after_run
+if errorlevel 1 goto :done
+javac ""{sourcePath}""
+if errorlevel 1 goto :compile_fail
+java -cp ""{runnerDir}"" {className}
+goto :done
+:no_java
 echo.
-echo ================================================================
-echo   Process exited with return code %errorlevel%.
-echo ================================================================
-
-:finish
+echo    [Error] Java was not found in PATH
+echo    Install: winget install -e --id Oracle.JDK.21
+echo.
+pause
+goto :eof
+:compile_fail
+echo.
+echo    [Error] Compilation failed.
+echo.
+pause
+goto :eof
+:done
 echo.
 pause
 ";
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // C# RUNNER
+        // ═══════════════════════════════════════════════════════════════
 
         private static string GenerateCSharpRunner(ClipboardItem item, string runnerDir, bool isPhysicalFile, string rawContent)
         {
-            string sourcePath = isPhysicalFile
-                ? item.FilePath
-                : Path.Combine(runnerDir, "Program.cs");
-
-            if (!isPhysicalFile)
-            {
-                File.WriteAllText(sourcePath, rawContent);
-            }
-
+            string sourcePath = isPhysicalFile ? item.FilePath : Path.Combine(runnerDir, "Program.cs");
+            if (!isPhysicalFile) File.WriteAllText(sourcePath, rawContent);
             string exePath = Path.Combine(runnerDir, "Program.exe");
+            string dispSource = sourcePath;
 
             return $@"@echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 cls
-title FlyShelf — Compiling & Running C#
-echo ================================================================
-echo   FlyShelf Developer Engine — C# / .NET Runner
-echo ================================================================
+title FlyShelf - C#
 echo.
-
-:: 1. Check for csc (C# Compiler) in PATH or Microsoft.NET Framework
-set CSC_PATH=
+echo    FlyShelf Code Runner - C# / .NET
+echo    ----------------------------------------
+echo    {dispSource}
+echo.
+set ""CSC_PATH=""
 where csc >nul 2>&1
 if not errorlevel 1 (
-    set CSC_PATH=csc
-) else if exist ""%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\csc.exe"" (
+    set ""CSC_PATH=csc""
+    goto :found_csc
+)
+if exist ""%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\csc.exe"" (
     set ""CSC_PATH=%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\csc.exe""
+    goto :found_csc
 )
-
-if not ""%CSC_PATH%""=="""" (
-    echo [Compiler] Using %CSC_PATH%
-    echo [Compiling] ""%CSC_PATH%"" /nologo /out:""{exePath}"" ""{sourcePath}""
-    echo.
-    ""%CSC_PATH%"" /nologo /out:""{exePath}"" ""{sourcePath}""
-    if errorlevel 1 (
-        echo.
-        echo [FlyShelf Error] Compilation failed! See errors above.
-        goto :finish
-    )
-    goto :run_program
-)
-
-:: 2. Check for dotnet-script
 where dotnet-script >nul 2>&1
-if not errorlevel 1 (
-    echo [Runner] Using dotnet-script
-    echo.
-    dotnet-script ""{sourcePath}""
-    goto :finish
-)
-
-echo [FlyShelf Error] No C# compiler (csc.exe or dotnet SDK) was found.
-echo Install .NET SDK via: winget install -e --id Microsoft.DotNet.SDK.8
-goto :finish
-
-:run_program
+if errorlevel 1 goto :no_csharp
+echo    Engine: dotnet-script
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
 echo.
-echo ================================================================
-echo   Program Output:
-echo ================================================================
+dotnet-script ""{sourcePath}""
+echo.
+pause
+goto :eof
+:found_csc
+echo    Compiler: %CSC_PATH%
+echo    Compiling...
+echo.
+""%CSC_PATH%"" /nologo /out:""{exePath}"" ""{sourcePath}""
+if errorlevel 1 goto :compile_fail
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
 echo.
 ""{exePath}""
 echo.
-echo ================================================================
-echo   Process exited with return code %errorlevel%.
-echo ================================================================
-
-:finish
+pause
+goto :eof
+:no_csharp
+echo.
+echo    [Error] No C# compiler found (csc.exe or dotnet SDK)
+echo    Install: winget install -e --id Microsoft.DotNet.SDK.8
+echo.
+pause
+goto :eof
+:compile_fail
+echo.
+echo    [Error] Compilation failed.
 echo.
 pause
 ";
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // RUST RUNNER
+        // ═══════════════════════════════════════════════════════════════
 
         private static string GenerateRustRunner(ClipboardItem item, string runnerDir, bool isPhysicalFile, string rawContent)
         {
-            string sourcePath = isPhysicalFile
-                ? item.FilePath
-                : Path.Combine(runnerDir, "main.rs");
-
-            if (!isPhysicalFile)
-            {
-                File.WriteAllText(sourcePath, rawContent);
-            }
-
+            string sourcePath = isPhysicalFile ? item.FilePath : Path.Combine(runnerDir, "main.rs");
+            if (!isPhysicalFile) File.WriteAllText(sourcePath, rawContent);
             string exePath = Path.Combine(runnerDir, "main.exe");
+            string dispSource = sourcePath;
 
             return $@"@echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 cls
-title FlyShelf — Compiling & Running Rust
-echo ================================================================
-echo   FlyShelf Developer Engine — Rust Runner
-echo ================================================================
+title FlyShelf - Rust
 echo.
-
+echo    FlyShelf Code Runner - Rust
+echo    ----------------------------------------
+echo    {dispSource}
+echo.
 where rustc >nul 2>&1
-if errorlevel 1 (
-    echo [FlyShelf Error] rustc compiler was not found in system PATH.
-    echo Install Rust via: winget install -e --id Rustlang.Rustup
-    goto :finish
-)
-
-echo [Compiling] rustc ""{sourcePath}"" -o ""{exePath}""
+if errorlevel 1 goto :no_rustc
+echo    Compiler: rustc
+echo    Compiling...
 echo.
 rustc ""{sourcePath}"" -o ""{exePath}""
-if errorlevel 1 (
-    echo.
-    echo [FlyShelf Error] Rust compilation failed! See errors above.
-    goto :finish
-)
-
-echo.
-echo ================================================================
-echo   Program Output:
-echo ================================================================
+if errorlevel 1 goto :compile_fail
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
 echo.
 ""{exePath}""
 echo.
-echo ================================================================
-echo   Process exited with return code %errorlevel%.
-echo ================================================================
-
-:finish
+pause
+goto :eof
+:no_rustc
+echo.
+echo    [Error] rustc was not found in PATH
+echo    Install: winget install -e --id Rustlang.Rustup
+echo.
+pause
+goto :eof
+:compile_fail
+echo.
+echo    [Error] Compilation failed.
 echo.
 pause
 ";
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // GO RUNNER
+        // ═══════════════════════════════════════════════════════════════
 
         private static string GenerateGoRunner(ClipboardItem item, string runnerDir, bool isPhysicalFile, string rawContent)
         {
-            string sourcePath = isPhysicalFile
-                ? item.FilePath
-                : Path.Combine(runnerDir, "main.go");
-
-            if (!isPhysicalFile)
-            {
-                File.WriteAllText(sourcePath, rawContent);
-            }
+            string sourcePath = isPhysicalFile ? item.FilePath : Path.Combine(runnerDir, "main.go");
+            if (!isPhysicalFile) File.WriteAllText(sourcePath, rawContent);
+            string dispSource = sourcePath;
 
             return $@"@echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 cls
-title FlyShelf — Running Go
-echo ================================================================
-echo   FlyShelf Developer Engine — Go Runner
-echo ================================================================
+title FlyShelf - Go
 echo.
-
+echo    FlyShelf Code Runner - Go
+echo    ----------------------------------------
+echo    {dispSource}
+echo.
 where go >nul 2>&1
-if errorlevel 1 (
-    echo [FlyShelf Error] Go compiler was not found in system PATH.
-    echo Install Go via: winget install -e --id GoLang.Go
-    goto :finish
-)
-
-echo [Running] go run ""{sourcePath}""
-echo.
-echo ================================================================
-echo   Program Output:
-echo ================================================================
+if errorlevel 1 goto :no_go
+echo    Engine: go run
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
 echo.
 go run ""{sourcePath}""
 echo.
-echo ================================================================
-echo   Process exited with return code %errorlevel%.
-echo ================================================================
-
-:finish
+pause
+goto :eof
+:no_go
+echo.
+echo    [Error] Go was not found in PATH
+echo    Install: winget install -e --id GoLang.Go
 echo.
 pause
 ";
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // JAVASCRIPT RUNNER
+        // ═══════════════════════════════════════════════════════════════
 
         private static string GenerateJsRunner(ClipboardItem item, string runnerDir, bool isPhysicalFile, string rawContent)
         {
-            string sourcePath = isPhysicalFile
-                ? item.FilePath
-                : Path.Combine(runnerDir, "script.js");
-
-            if (!isPhysicalFile)
-            {
-                File.WriteAllText(sourcePath, rawContent);
-            }
+            string sourcePath = isPhysicalFile ? item.FilePath : Path.Combine(runnerDir, "script.js");
+            if (!isPhysicalFile) File.WriteAllText(sourcePath, rawContent);
+            string dispSource = sourcePath;
 
             return $@"@echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 cls
-title FlyShelf — Running JavaScript
-echo ================================================================
-echo   FlyShelf Developer Engine — Node.js / JavaScript Runner
-echo ================================================================
+title FlyShelf - JavaScript
 echo.
-
+echo    FlyShelf Code Runner - JavaScript
+echo    ----------------------------------------
+echo    {dispSource}
+echo.
 where node >nul 2>&1
-if not errorlevel 1 (
-    echo [Engine] Node.js
-    echo.
-    echo ================================================================
-    echo   Program Output:
-    echo ================================================================
-    echo.
-    node ""{sourcePath}""
-    goto :after_run
-)
-
-where bun >nul 2>&1
-if not errorlevel 1 (
-    echo [Engine] Bun
-    echo.
-    echo ================================================================
-    echo   Program Output:
-    echo ================================================================
-    echo.
-    bun ""{sourcePath}""
-    goto :after_run
-)
-
-where deno >nul 2>&1
-if not errorlevel 1 (
-    echo [Engine] Deno
-    echo.
-    echo ================================================================
-    echo   Program Output:
-    echo ================================================================
-    echo.
-    deno run ""{sourcePath}""
-    goto :after_run
-)
-
-echo [FlyShelf Error] Node.js, Bun, or Deno not found in system PATH.
-echo Install Node.js via: winget install -e --id OpenJS.NodeJS
-goto :finish
-
-:after_run
+if errorlevel 1 goto :try_bun
+echo    Engine: Node.js
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
 echo.
-echo ================================================================
-echo   Process exited with return code %errorlevel%.
-echo ================================================================
-
-:finish
+node ""{sourcePath}""
+echo.
+pause
+goto :eof
+:try_bun
+where bun >nul 2>&1
+if errorlevel 1 goto :try_deno
+echo    Engine: Bun
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
+echo.
+bun ""{sourcePath}""
+echo.
+pause
+goto :eof
+:try_deno
+where deno >nul 2>&1
+if errorlevel 1 goto :no_js
+echo    Engine: Deno
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
+echo.
+deno run ""{sourcePath}""
+echo.
+pause
+goto :eof
+:no_js
+echo.
+echo    [Error] No JS engine found (node, bun, deno)
+echo    Install: winget install -e --id OpenJS.NodeJS
 echo.
 pause
 ";
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // TYPESCRIPT RUNNER
+        // ═══════════════════════════════════════════════════════════════
 
         private static string GenerateTsRunner(ClipboardItem item, string runnerDir, bool isPhysicalFile, string rawContent)
         {
-            string sourcePath = isPhysicalFile
-                ? item.FilePath
-                : Path.Combine(runnerDir, "script.ts");
-
-            if (!isPhysicalFile)
-            {
-                File.WriteAllText(sourcePath, rawContent);
-            }
+            string sourcePath = isPhysicalFile ? item.FilePath : Path.Combine(runnerDir, "script.ts");
+            if (!isPhysicalFile) File.WriteAllText(sourcePath, rawContent);
+            string dispSource = sourcePath;
 
             return $@"@echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 cls
-title FlyShelf — Running TypeScript
-echo ================================================================
-echo   FlyShelf Developer Engine — TypeScript Runner
-echo ================================================================
+title FlyShelf - TypeScript
 echo.
-
+echo    FlyShelf Code Runner - TypeScript
+echo    ----------------------------------------
+echo    {dispSource}
+echo.
 where tsx >nul 2>&1
-if not errorlevel 1 (
-    echo [Engine] tsx
-    echo.
-    echo ================================================================
-    echo   Program Output:
-    echo ================================================================
-    echo.
-    tsx ""{sourcePath}""
-    goto :after_run
-)
-
-where bun >nul 2>&1
-if not errorlevel 1 (
-    echo [Engine] Bun
-    echo.
-    echo ================================================================
-    echo   Program Output:
-    echo ================================================================
-    echo.
-    bun ""{sourcePath}""
-    goto :after_run
-)
-
-where deno >nul 2>&1
-if not errorlevel 1 (
-    echo [Engine] Deno
-    echo.
-    echo ================================================================
-    echo   Program Output:
-    echo ================================================================
-    echo.
-    deno run ""{sourcePath}""
-    goto :after_run
-)
-
-where ts-node >nul 2>&1
-if not errorlevel 1 (
-    echo [Engine] ts-node
-    echo.
-    echo ================================================================
-    echo   Program Output:
-    echo ================================================================
-    echo.
-    ts-node ""{sourcePath}""
-    goto :after_run
-)
-
-where npx >nul 2>&1
-if not errorlevel 1 (
-    echo [Engine] npx tsx
-    echo.
-    echo ================================================================
-    echo   Program Output:
-    echo ================================================================
-    echo.
-    npx tsx ""{sourcePath}""
-    goto :after_run
-)
-
-echo [FlyShelf Error] TypeScript runner (tsx, bun, deno, or ts-node) not found in system PATH.
-echo Install tsx via: npm install -g tsx
-goto :finish
-
-:after_run
+if errorlevel 1 goto :try_bun
+echo    Engine: tsx
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
 echo.
-echo ================================================================
-echo   Process exited with return code %errorlevel%.
-echo ================================================================
-
-:finish
+tsx ""{sourcePath}""
+echo.
+pause
+goto :eof
+:try_bun
+where bun >nul 2>&1
+if errorlevel 1 goto :try_deno
+echo    Engine: Bun
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
+echo.
+bun ""{sourcePath}""
+echo.
+pause
+goto :eof
+:try_deno
+where deno >nul 2>&1
+if errorlevel 1 goto :try_tsnode
+echo    Engine: Deno
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
+echo.
+deno run ""{sourcePath}""
+echo.
+pause
+goto :eof
+:try_tsnode
+where ts-node >nul 2>&1
+if errorlevel 1 goto :try_npx
+echo    Engine: ts-node
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
+echo.
+ts-node ""{sourcePath}""
+echo.
+pause
+goto :eof
+:try_npx
+where npx >nul 2>&1
+if errorlevel 1 goto :no_ts
+echo    Engine: npx tsx
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
+echo.
+npx tsx ""{sourcePath}""
+echo.
+pause
+goto :eof
+:no_ts
+echo.
+echo    [Error] No TS runner found (tsx, bun, deno, ts-node)
+echo    Install: npm install -g tsx
 echo.
 pause
 ";
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // POWERSHELL RUNNER
+        // ═══════════════════════════════════════════════════════════════
 
         private static string GeneratePowerShellRunner(ClipboardItem item, string runnerDir, bool isPhysicalFile, string rawContent)
         {
-            string sourcePath = isPhysicalFile
-                ? item.FilePath
-                : Path.Combine(runnerDir, "script.ps1");
-
-            if (!isPhysicalFile)
-            {
-                File.WriteAllText(sourcePath, rawContent);
-            }
+            string sourcePath = isPhysicalFile ? item.FilePath : Path.Combine(runnerDir, "script.ps1");
+            if (!isPhysicalFile) File.WriteAllText(sourcePath, rawContent);
+            string dispSource = sourcePath;
 
             return $@"@echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 cls
-title FlyShelf — Running PowerShell Script
-echo ================================================================
-echo   FlyShelf Developer Engine — PowerShell Runner
-echo ================================================================
+title FlyShelf - PowerShell
 echo.
-
+echo    FlyShelf Code Runner - PowerShell
+echo    ----------------------------------------
+echo    {dispSource}
+echo.
+echo    Engine: powershell.exe
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
+echo.
 powershell.exe -NoLogo -ExecutionPolicy Bypass -File ""{sourcePath}""
-echo.
-echo ================================================================
-echo   Process exited with return code %errorlevel%.
-echo ================================================================
 echo.
 pause
 ";
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // BATCH / SHELL COMMAND RUNNER
+        // ═══════════════════════════════════════════════════════════════
+
         private static string GenerateBatchRunner(ClipboardItem item, string runnerDir, bool isPhysicalFile, string rawContent)
         {
-            string sourcePath = isPhysicalFile
-                ? item.FilePath
-                : Path.Combine(runnerDir, "script.bat");
-
-            if (!isPhysicalFile)
-            {
-                File.WriteAllText(sourcePath, rawContent);
-            }
+            string sourcePath = isPhysicalFile ? item.FilePath : Path.Combine(runnerDir, "script.bat");
+            if (!isPhysicalFile) File.WriteAllText(sourcePath, rawContent);
+            string dispSource = sourcePath;
 
             return $@"@echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 cls
-title FlyShelf — Running Script
-echo ================================================================
-echo   FlyShelf Developer Engine — Command Prompt
-echo ================================================================
+title FlyShelf - Command Prompt
 echo.
-
+echo    FlyShelf Code Runner - Command Prompt
+echo    ----------------------------------------
+echo    {dispSource}
+echo.
+echo    ----------------------------------------
+echo    Output:
+echo    ----------------------------------------
+echo.
 call ""{sourcePath}""
-echo.
-echo ================================================================
-echo   Process exited with return code %errorlevel%.
-echo ================================================================
 echo.
 pause
 ";

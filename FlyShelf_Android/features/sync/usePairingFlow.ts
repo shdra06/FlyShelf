@@ -12,6 +12,7 @@ import { getSecureItem, setSecureItem } from '../../utils/secureStorage';
 import { NetworkClock } from '../../utils/networkClock';
 import { auth, ensureFirebaseAuth, getFirebaseIdToken, firebaseDatabaseUrl, database } from '../../firebaseConfig';
 import { ref, set } from 'firebase/database';
+import { encrypt, decrypt, clearKeyCache } from '../../utils/syncCrypto';
 
 const { AdvanceOverlay } = NativeModules;
 
@@ -107,6 +108,7 @@ export function usePairingFlow(params: UsePairingFlowParams) {
 
   const connectionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // A-12 fix: ref for isGlobalSyncEnabled to avoid stale closure in pairing poll
   const isGlobalSyncEnabledRef = useRef(isGlobalSyncEnabled);
@@ -118,6 +120,7 @@ export function usePairingFlow(params: UsePairingFlowParams) {
     return () => {
       if (connectionPollRef.current) clearInterval(connectionPollRef.current);
       if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+      abortControllerRef.current?.abort();
     };
   }, []);
 
@@ -198,6 +201,7 @@ export function usePairingFlow(params: UsePairingFlowParams) {
     }
 
     const pairingTs = NetworkClock.now().toString();
+    clearKeyCache();
     await Promise.all([
       setSecureItem('pairingKey', key || ''),
       setSecureItem('pairedPcName', pcName || ''),
@@ -211,10 +215,11 @@ export function usePairingFlow(params: UsePairingFlowParams) {
     ]);
     pairingKeyRef.current = key || '';
     if (Platform.OS === 'android' && AdvanceOverlay?.setPairingKey && key) AdvanceOverlay.setPairingKey(key);
-    pairingTimestampRef.current = parseInt(pairingTs);
     if (workingUrl) {
       cachedPcUrlRef.current = workingUrl;
       cachedPcUrlTimestampRef.current = NetworkClock.now();
+      await AsyncStorage.setItem('@flyshelf_last_lan_url', workingUrl).catch(() => {});
+      await setSecureItem('pairedLocalUrl', workingUrl).catch(() => {});
     }
     setPairedPcName(pcName || 'Device');
     if (!isGlobalSyncEnabled) setGlobalSyncEnabled(true);
@@ -254,6 +259,7 @@ export function usePairingFlow(params: UsePairingFlowParams) {
     }
     setIsPairing(true);
     toast.info('Validating Code...', `Looking up 6-character PIN ${code.toUpperCase()}`);
+    syncLog('PAIR', `[STEP 4/6: PAIR JOIN 1/2] Looking up code ${code.toUpperCase()} in Firebase...`);
     try {
       await ensureFirebaseAuth();
       const _authToken = await getFirebaseIdToken();
@@ -269,23 +275,56 @@ export function usePairingFlow(params: UsePairingFlowParams) {
       const data = await res.json();
       if (!data) {
         setIsPairing(false);
+        syncLog('PAIR', `[STEP 4/6: PAIR JOIN ERROR] ❌ Code ${code.toUpperCase()} not found in Firebase`);
         Alert.alert('Code Not Found', 'No device found with this code.\nMake sure the code is correct and the other device is online.');
         return;
       }
       if (data.timestamp && Math.abs(NetworkClock.now() - data.timestamp) > 15 * 60 * 1000) {
         setIsPairing(false);
+        syncLog('PAIR', `[STEP 4/6: PAIR JOIN ERROR] ❌ Code ${code.toUpperCase()} expired`);
         Alert.alert('Code Expired', 'This code has expired. Generate a new one on the other device.');
         return;
       }
+
+      const upperCode = code.toUpperCase().trim();
+      let pairingKey = data.pairingKey;
+      let localUrl = data.localUrl;
+      let globalUrl = data.globalUrl;
+      let pin = data.pin;
+
+      // ZERO-TRUST DECRYPTION: If encryptedData is present, decrypt using the 6-character code
+      if (data.encryptedData) {
+        try {
+          const decrypted = await decrypt(data.encryptedData, upperCode);
+          if (decrypted) {
+            const parsed = JSON.parse(decrypted);
+            pairingKey = parsed.pairingKey || pairingKey;
+            localUrl = parsed.localUrl || localUrl;
+            globalUrl = parsed.globalUrl || globalUrl;
+            pin = parsed.pin || pin;
+          }
+        } catch (decErr) {
+          syncLog('PAIR', `Decryption failed for code ${upperCode}: ${decErr}`);
+        }
+      }
+
+      if (!pairingKey) {
+        setIsPairing(false);
+        Alert.alert('Pairing Failed', 'Could not read pairing credentials. Please verify the code and try again.');
+        return;
+      }
+
+      syncLog('PAIR', `[STEP 4/6: PAIR JOIN 2/2] ✅ Found device '${data.deviceName}' (Key: ${pairingKey.substring(0, 8)}...) — executing pairing...`);
       await executePairing({
-        key: data.pairingKey, local: data.localUrl, global: data.globalUrl,
-        pin: data.pin, name: data.deviceName, id: data.deviceId,
+        key: pairingKey, local: localUrl, global: globalUrl,
+        pin, name: data.deviceName, id: data.deviceId,
       });
       setIsConnectModalVisible(false);
       setPairingCodeInput('');
     } catch (err: any) {
       setIsPairing(false);
       const msg = err?.message || String(err);
+      syncLog('PAIR', `[STEP 4/6: PAIR JOIN ERROR] ❌ Connection error: ${msg}`);
       if (msg.includes('timeout') || msg.includes('AbortError')) {
         Alert.alert('Timeout', 'The request timed out. Make sure you have an active internet connection and try again.');
       } else if (msg.toLowerCase().includes('network') || msg.toLowerCase().includes('fetch')) {
@@ -298,6 +337,7 @@ export function usePairingFlow(params: UsePairingFlowParams) {
 
   // ─── Generate pairing code ───
   const generateMyPairingCode = useCallback(async () => {
+    abortControllerRef.current = new AbortController();
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
     const randomBytes = Crypto.getRandomBytes(6);
@@ -310,14 +350,20 @@ export function usePairingFlow(params: UsePairingFlowParams) {
         currentKey = await regeneratePairingKey();
         pairingKeyRef.current = currentKey;
       }
-      const payload = {
-        deviceId: myDeviceId,
-        deviceName: deviceName || 'Phone',
-        deviceType: 'Mobile',
+      // ZERO-TRUST: Encrypt pairingKey with the 6-character code so Firebase stores zero secrets
+      const sensitivePayload = JSON.stringify({
         pairingKey: currentKey,
         localUrl: '',
         globalUrl: '',
         pin: '',
+      });
+      const encryptedData = await encrypt(sensitivePayload, code);
+
+      const payload = {
+        deviceId: myDeviceId,
+        deviceName: deviceName || 'Phone',
+        deviceType: 'Mobile',
+        encryptedData,
         uid: auth.currentUser?.uid || '',
         timestamp: { '.sv': 'timestamp' },
       };
@@ -342,7 +388,7 @@ export function usePairingFlow(params: UsePairingFlowParams) {
       const verifyRes = await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_pubToken ? `?auth=${_pubToken}` : ''}`, { signal: verifySignal });
       clearSignalTimeout(verifySignal);
       const verifyData = await verifyRes.json();
-      if (!verifyData || !verifyData.pairingKey) {
+      if (!verifyData || (!verifyData.encryptedData && !verifyData.pairingKey)) {
         Alert.alert('Pairing Error', 'Code was written but could not be verified. Please try again.');
         return;
       }
@@ -366,7 +412,27 @@ export function usePairingFlow(params: UsePairingFlowParams) {
           const codeData = await codeRes.json();
           if (!codeData || !codeData.response) return;
           const resp = codeData.response;
-          if (!resp.deviceId || !resp.deviceName || !resp.pairingKey) return;
+          if (!resp.deviceId || !resp.deviceName) return;
+
+          let respPairingKey = resp.pairingKey;
+          let respLocalUrl = resp.localUrl;
+          let respGlobalUrl = resp.globalUrl;
+
+          // ZERO-TRUST: Decrypt response if encryptedData is present
+          if (resp.encryptedData) {
+            try {
+              const decryptedResp = await decrypt(resp.encryptedData, code);
+              if (decryptedResp) {
+                const parsedResp = JSON.parse(decryptedResp);
+                respPairingKey = parsedResp.pairingKey || respPairingKey;
+                respLocalUrl = parsedResp.localUrl || respLocalUrl;
+                respGlobalUrl = parsedResp.globalUrl || respGlobalUrl;
+              }
+            } catch (decRespErr) {
+              syncLog('PAIR', `Response decryption error: ${decRespErr}`);
+            }
+          }
+          if (!respPairingKey) return;
 
           const alreadyPaired = (await AsyncStorage.getItem('@pairedDevices') || '[]');
           let pairedList: any[] = [];
@@ -388,10 +454,23 @@ export function usePairingFlow(params: UsePairingFlowParams) {
             licenseKey: '',
           });
 
-          if (resp.localUrl) await setSecureItem('pairedLocalUrl', resp.localUrl.startsWith('http') ? resp.localUrl : `http://${resp.localUrl}`);
-          if (resp.globalUrl) await setSecureItem('pairedGlobalUrl', resp.globalUrl);
-          if (resp.pairingKey && resp.pairingKey !== pairingKeyRef.current) {
-            pairingKeyRef.current = resp.pairingKey;
+          if (respLocalUrl) {
+            const normLocal = respLocalUrl.startsWith('http') ? respLocalUrl : `http://${respLocalUrl}`;
+            await setSecureItem('pairedLocalUrl', normLocal);
+            await AsyncStorage.setItem('@flyshelf_last_lan_url', normLocal).catch(() => {});
+            cachedPcUrlRef.current = normLocal;
+            cachedPcUrlTimestampRef.current = NetworkClock.now();
+          }
+          if (respGlobalUrl) await setSecureItem('pairedGlobalUrl', respGlobalUrl);
+          const effectiveKey = respPairingKey || currentKey;
+          if (effectiveKey) {
+            clearKeyCache();
+            pairingKeyRef.current = effectiveKey;
+            await setSecureItem('pairingKey', effectiveKey);
+            const uid = auth.currentUser?.uid;
+            if (uid) {
+              await set(ref(database, `members/${effectiveKey}/${uid}`), true).catch(() => {});
+            }
           }
 
           setPairedPcName(resp.deviceName);

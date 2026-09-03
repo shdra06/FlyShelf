@@ -71,8 +71,11 @@ namespace FlyShelf.Windows
 
             // Show reset button only if not default
             var s = SettingsManager.Current;
-            ResetHotkeyBtn.Visibility = (s.HotkeyModifier == 0x0001 && s.HotkeyKey == 0x43)
-                ? Visibility.Collapsed : Visibility.Visible;
+            if (ResetHotkeyBtn != null)
+            {
+                ResetHotkeyBtn.Visibility = (s.HotkeyModifier == 0x0001 && s.HotkeyKey == 0x43)
+                    ? Visibility.Collapsed : Visibility.Visible;
+            }
 
             // Update dynamic labels elsewhere
             if (SummonHotkeyLabel != null)
@@ -1221,8 +1224,7 @@ namespace FlyShelf.Windows
                 // 1. Correct Theme display mode and active mascot theme
                 if (FlyShelf.Classes.SettingsManager.Current.ThemeDisplayMode == "glass")
                 {
-                    FlyShelf.Classes.SettingsManager.Current.ThemeDisplayMode = "mica";
-                    FlyShelf.Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                    FlyShelf.Classes.SettingsManager.Current.ThemeDisplayMode = "desktop";
                     FlyShelf.Classes.ThemeManager.Instance.RemoveGlassTheme();
                     settingsChanged = true;
                 }
@@ -1233,8 +1235,7 @@ namespace FlyShelf.Windows
                     FlyShelf.Classes.SettingsManager.Current.ActiveThemeName = "";
                     if (FlyShelf.Classes.SettingsManager.Current.ThemeDisplayMode == "theme")
                     {
-                        FlyShelf.Classes.SettingsManager.Current.ThemeDisplayMode = "mica";
-                        FlyShelf.Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                        FlyShelf.Classes.SettingsManager.Current.ThemeDisplayMode = "desktop";
                     }
                     FlyShelf.Classes.ThemeManager.Instance.SetActiveTheme(null);
                     settingsChanged = true;
@@ -1560,30 +1561,45 @@ namespace FlyShelf.Windows
             if (!string.IsNullOrEmpty(settings.AiApiKey))
             {
                 string key = settings.AiApiKey;
-                HubAiApiKeyBox.Text = key.Length > 8 ? string.Concat(key.AsSpan(0, 4), "...", key.AsSpan(key.Length - 4)) : "";
-                HubAiApiKeyBox.Tag = "masked";
-                HubAiApiKeyStatus.Text ="API key configured";
-                HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
+                if (HubAiApiKeyBox != null)
+                {
+                    HubAiApiKeyBox.Text = key.Length > 8 ? string.Concat(key.AsSpan(0, 4), "...", key.AsSpan(key.Length - 4)) : "";
+                    HubAiApiKeyBox.Tag = "masked";
+                }
+                if (HubAiApiKeyStatus != null)
+                {
+                    HubAiApiKeyStatus.Text = "API key configured";
+                    HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
+                }
             }
             else
             {
-                HubAiApiKeyBox.Text = "";
-                HubAiApiKeyBox.Tag = null;
-                HubAiApiKeyStatus.Text ="No API key set  paste one above to enable cloud AI";
-                HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B"));
+                if (HubAiApiKeyBox != null)
+                {
+                    HubAiApiKeyBox.Text = "";
+                    HubAiApiKeyBox.Tag = null;
+                }
+                if (HubAiApiKeyStatus != null)
+                {
+                    HubAiApiKeyStatus.Text = "No API key set  paste one above to enable cloud AI";
+                    HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B"));
+                }
             }
 
             // Show detected provider
             UpdateHubProviderStatus();
 
             // Method combo
-            var method = settings.DefaultAiMethod?.ToLowerInvariant() ?? "auto";
-            for (int i = 0; i < HubAiMethodCombo.Items.Count; i++)
+            if (HubAiMethodCombo != null)
             {
-                if (HubAiMethodCombo.Items[i] is ComboBoxItem ci && ci.Tag as string == method)
+                var method = settings.DefaultAiMethod?.ToLowerInvariant() ?? "auto";
+                for (int i = 0; i < HubAiMethodCombo.Items.Count; i++)
                 {
-                    HubAiMethodCombo.SelectedIndex = i;
-                    break;
+                    if (HubAiMethodCombo.Items[i] is ComboBoxItem ci && ci.Tag as string == method)
+                    {
+                        HubAiMethodCombo.SelectedIndex = i;
+                        break;
+                    }
                 }
             }
 
@@ -1594,18 +1610,21 @@ namespace FlyShelf.Windows
         private void UpdateHubProviderStatus()
         {
             string active = AiProviderService.Instance.ActiveProviderName;
-            HubAiProviderStatus.Text = $"Detected provider: {active}";
+            if (HubAiProviderStatus != null)
+                HubAiProviderStatus.Text = $"Detected provider: {active}";
         }
 
         private void UpdateHubAiStatus()
         {
             var provider = AiProviderService.Instance.ActiveProviderName;
             bool hasKey = AiProviderService.Instance.HasCloudApiKey;
-            HubAiCurrentStatus.Text = $"Provider: {provider} | API Key: {(hasKey ? " Configured" : "Not set")} | AI: {(SettingsManager.Current.AiEnabled ? "Enabled" : "Disabled")}";
+            if (HubAiCurrentStatus != null)
+                HubAiCurrentStatus.Text = $"Provider: {provider} | API Key: {(hasKey ? " Configured" : "Not set")} | AI: {(SettingsManager.Current.AiEnabled ? "Enabled" : "Disabled")}";
         }
 
         private void HubAiApiKeySave_Click(object sender, RoutedEventArgs e)
         {
+            if (HubAiApiKeyBox == null) return;
             string newKey = HubAiApiKeyBox.Text?.Trim() ?? "";
             if (HubAiApiKeyBox.Tag as string == "masked") return;
 
@@ -1618,13 +1637,21 @@ namespace FlyShelf.Windows
             {
                 HubAiApiKeyBox.Text = newKey.Length > 8 ? string.Concat(newKey.AsSpan(0, 4), "...", newKey.AsSpan(newKey.Length - 4)) : "";
                 HubAiApiKeyBox.Tag = "masked";
-                HubAiApiKeyStatus.Text ="API key saved and encrypted!";
-                HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
+                if (HubAiApiKeyStatus != null)
+                {
+                    HubAiApiKeyStatus.Text = "API key saved and encrypted!";
+                    HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
+                }
             }
             else
             {
-                HubAiApiKeyStatus.Text ="API key cleared";
-                HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B"));
+                HubAiApiKeyBox.Text = "";
+                HubAiApiKeyBox.Tag = null;
+                if (HubAiApiKeyStatus != null)
+                {
+                    HubAiApiKeyStatus.Text = "API key cleared";
+                    HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B"));
+                }
             }
             UpdateHubProviderStatus();
             UpdateHubAiStatus();
@@ -1632,7 +1659,7 @@ namespace FlyShelf.Windows
 
         private void HubAiMethod_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (HubAiMethodCombo.SelectedItem is ComboBoxItem ci && ci.Tag is string tag)
+            if (HubAiMethodCombo?.SelectedItem is ComboBoxItem ci && ci.Tag is string tag)
             {
                 SettingsManager.Current.DefaultAiMethod = tag;
                 SettingsManager.Save();

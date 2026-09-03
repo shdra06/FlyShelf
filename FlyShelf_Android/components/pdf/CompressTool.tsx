@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system/legacy';
-import { colors, space, radius } from '../../styles/theme';
-import s from '../../styles/pdfToolsStyles';
+import { space, radius } from '../../styles/theme';
+import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { compressPdf } from '../../utils/pdfToolsUtils';
 import { getPdfPageInfo } from '../../utils/pdfUtils';
 import { SelectedFile } from './types';
@@ -18,6 +19,9 @@ interface CompressToolProps {
 }
 
 export default function CompressTool({ onBack, onPickFile, saveRecent }: CompressToolProps) {
+  const { colors, shadows } = useAppTheme();
+  const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
+
   const [file, setFile] = useState<SelectedFile | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [origSize, setOrigSize] = useState<number | null>(null);

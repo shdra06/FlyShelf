@@ -43,6 +43,7 @@ type NetworkDashboardProps = {
   onClose: () => void;
   pcUrl: string | null;
   pairingKey: string | null;
+  onPairPress?: () => void;
 };
 
 // ═══════════════════════════════════════════
@@ -323,6 +324,7 @@ export default function NetworkDashboard({
   onClose,
   pcUrl,
   pairingKey,
+  onPairPress,
 }: NetworkDashboardProps) {
   const { colors, shadows } = useAppTheme();
   const styles = useMemo(() => createNetworkStyles(colors, shadows), [colors, shadows]);
@@ -497,8 +499,31 @@ export default function NetworkDashboard({
             <Text style={styles.emptyIcon}>📡</Text>
             <Text style={styles.emptyTitle}>No Devices Found</Text>
             <Text style={styles.emptySubtitle}>
-              Pair devices in Settings to monitor your network connections here.
+              Connect your PC to monitor latency, transfer speeds, and synchronization health.
             </Text>
+            {onPairPress && (
+              <TouchableOpacity
+                style={{
+                  marginTop: 18,
+                  backgroundColor: colors.accent.primary,
+                  paddingHorizontal: 22,
+                  paddingVertical: 12,
+                  borderRadius: 24,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+                onPress={onPairPress}
+                activeOpacity={0.85}
+                accessibilityLabel="Pair a device"
+                accessibilityRole="button"
+              >
+                <Ionicons name="qr-code-outline" size={18} color="#FFF" />
+                <Text style={{ color: '#FFF', fontFamily: font.bold, fontSize: 14 }}>
+                  Connect a Device
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 

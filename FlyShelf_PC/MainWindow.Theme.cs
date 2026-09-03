@@ -137,7 +137,7 @@ namespace FlyShelf
                 if (hrBackdrop != 0)
                 {
                     this.Background = new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(32, 32, 32));
+                        System.Windows.Media.Color.FromRgb(0x16, 0x16, 0x2A));
                     Classes.Logger.LogAction("DWM_BACKDROP", "Fallback: DWM backdrop not supported, using solid dark background");
                 }
             }
@@ -146,7 +146,7 @@ namespace FlyShelf
                 Classes.Logger.LogAction("DWM_BACKDROP", $"EXCEPTION: {ex.Message}");
                 // Ensure window is visible even on crash
                 this.Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(32, 32, 32));
+                    System.Windows.Media.Color.FromRgb(0x16, 0x16, 0x2A));
             }
         }
 
@@ -181,7 +181,7 @@ namespace FlyShelf
             {
                 // Solid dark fallback when blur is disabled
                 ApplyDwmBackdrop(1); // DWMSBT_NONE
-                var greyBg = new SolidColorBrush(Color.FromRgb(0x2B, 0x2B, 0x2B));
+                var greyBg = new SolidColorBrush(Color.FromRgb(0x16, 0x16, 0x2A));
                 greyBg.Freeze();
                 this.Background = greyBg;
                 if (RootContent != null)
@@ -313,8 +313,8 @@ namespace FlyShelf
 
                 // STRICT BLUR RULE: Only blur the desktop wallpaper fallback when blur is enabled.
                 // When blur is OFF, show the wallpaper crystal clear.
-                bool blurFallbackEnabled = Classes.SettingsManager.Current.EnableBlurBehind 
-                                           && Classes.NativeMethods.ShouldUseBlur();
+                // NOTE: This is software GaussianBlur, not DWM — works without Windows transparency.
+                bool blurFallbackEnabled = Classes.SettingsManager.Current.EnableBlurBehind;
                 if (blurFallbackEnabled)
                 {
                     WallpaperBg.Opacity = 0.35;
@@ -463,15 +463,32 @@ namespace FlyShelf
             {
                 using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop"))
                 {
-                    _cachedDesktopWallpaperPath = key?.GetValue("Wallpaper") as string ?? "";
+                    string wp = key?.GetValue("Wallpaper") as string ?? "";
+                    if (!string.IsNullOrEmpty(wp) && System.IO.File.Exists(wp))
+                    {
+                        _cachedDesktopWallpaperPath = wp;
+                        return _cachedDesktopWallpaperPath;
+                    }
+                }
+            }
+            catch { }
+
+            // Fallback: TranscodedWallpaper (Windows active wallpaper cache)
+            try
+            {
+                string transcoded = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Microsoft", "Windows", "Themes", "TranscodedWallpaper");
+                if (System.IO.File.Exists(transcoded))
+                {
+                    _cachedDesktopWallpaperPath = transcoded;
                     return _cachedDesktopWallpaperPath;
                 }
             }
-            catch 
-            { 
-                _cachedDesktopWallpaperPath = "";
-                return ""; 
-            }
+            catch { }
+
+            _cachedDesktopWallpaperPath = "";
+            return "";
         }
 
         #endregion
@@ -578,8 +595,9 @@ namespace FlyShelf
 
                     // STRICT BLUR RULE: Only pre-blur the custom wallpaper when blur is enabled.
                     // When blur is OFF, the wallpaper is shown crystal clear — no blur processing at all.
-                    bool wallpaperBlurEnabled = Classes.SettingsManager.Current.EnableBlurBehind 
-                                                && Classes.NativeMethods.ShouldUseBlur();
+                    // NOTE: Wallpaper pre-blur is a software GaussianBlur (not DWM compositor),
+                    // so it works regardless of Windows transparency setting — only check user pref.
+                    bool wallpaperBlurEnabled = Classes.SettingsManager.Current.EnableBlurBehind;
                     if (wallpaperBlurEnabled)
                     {
                         WallpaperFrostHeader.Visibility = Visibility.Visible;
@@ -884,7 +902,7 @@ namespace FlyShelf
         {
             try
             {
-                string mode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                string mode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "desktop";
                 if (mode != "desktop") return;
 
                 // If user has manually set a wallpaper, don't override it
@@ -924,10 +942,24 @@ namespace FlyShelf
             {
                 using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop"))
                 {
-                    return key?.GetValue("Wallpaper") as string ?? "";
+                    string wp = key?.GetValue("Wallpaper") as string ?? "";
+                    if (!string.IsNullOrEmpty(wp) && System.IO.File.Exists(wp))
+                        return wp;
                 }
             }
-            catch { return ""; }
+            catch { }
+
+            try
+            {
+                string transcoded = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Microsoft", "Windows", "Themes", "TranscodedWallpaper");
+                if (System.IO.File.Exists(transcoded))
+                    return transcoded;
+            }
+            catch { }
+
+            return "";
         }
 
         // ═══ TranscodedWallpaper File Watcher ═══

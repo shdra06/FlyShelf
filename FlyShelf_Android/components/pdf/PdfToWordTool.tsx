@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Alert } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { colors, space, radius } from '../../styles/theme';
-import s from '../../styles/pdfToolsStyles';
+import { space, radius } from '../../styles/theme';
+import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { convertPdfToDocx } from '../../utils/pdfToWordUtils';
 import { getPdfPageInfo } from '../../utils/pdfUtils';
 import { PairedDevice } from '../../utils/deviceTypes';
@@ -19,6 +20,9 @@ interface PdfToWordToolProps {
 }
 
 export default function PdfToWordTool({ onBack, onPickFile, saveRecent }: PdfToWordToolProps) {
+  const { colors, shadows } = useAppTheme();
+  const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
+
   const [file, setFile] = useState<SelectedFile | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [hasPc, setHasPc] = useState(false);

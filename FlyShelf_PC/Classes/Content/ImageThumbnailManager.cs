@@ -263,5 +263,17 @@ namespace FlyShelf.Classes
         {
             _thumbnailCache.Clear();
         }
+
+        /// <summary>
+        /// Invalidates the cached thumbnail for a specific file path.
+        /// The next call to LoadThumbnail will re-read the file from disk.
+        /// </summary>
+        public static void InvalidateCache(string? filePath)
+        {
+            if (!string.IsNullOrEmpty(filePath))
+            {
+                _thumbnailCache.TryRemove(filePath, out _);
+            }
+        }
     }
 }

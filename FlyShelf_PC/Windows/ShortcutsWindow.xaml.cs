@@ -227,8 +227,8 @@ namespace FlyShelf.Windows
 
         private void UpdateUI()
         {
-            ShortcutCountLabel.Text = $"{ShortcutManager.Shortcuts.Count}/{ShortcutManager.MaxShortcuts}";
-            EmptyState.Visibility = ShortcutManager.Shortcuts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (ShortcutCountLabel != null) ShortcutCountLabel.Text = $"{ShortcutManager.Shortcuts.Count}/{ShortcutManager.MaxShortcuts}";
+            if (EmptyState != null) EmptyState.Visibility = ShortcutManager.Shortcuts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 }

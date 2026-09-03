@@ -79,6 +79,40 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
+        /// Encrypts plaintext using AES-256-GCM with a specific key string (e.g. an ephemeral pairing code).
+        /// Returns Base64 string in format: nonce(12B) + ciphertext + tag(16B)
+        /// </summary>
+        public static string Encrypt(string plaintext, string specificKey)
+        {
+            if (string.IsNullOrEmpty(plaintext)) return plaintext;
+            if (string.IsNullOrEmpty(specificKey)) throw new ArgumentException("Key cannot be empty", nameof(specificKey));
+
+            byte[] key = Rfc2898DeriveBytes.Pbkdf2(
+                specificKey,
+                SALT,
+                PBKDF2_ITERATIONS,
+                HashAlgorithmName.SHA256,
+                KEY_SIZE_BYTES);
+
+            var nonce = new byte[NONCE_SIZE];
+            RandomNumberGenerator.Fill(nonce);
+
+            var plaintextBytes = Encoding.UTF8.GetBytes(plaintext);
+            var ciphertext = new byte[plaintextBytes.Length];
+            var tag = new byte[TAG_SIZE];
+
+            using var aes = new AesGcm(key, TAG_SIZE);
+            aes.Encrypt(nonce, plaintextBytes, ciphertext, tag);
+
+            var result = new byte[NONCE_SIZE + ciphertext.Length + TAG_SIZE];
+            Buffer.BlockCopy(nonce, 0, result, 0, NONCE_SIZE);
+            Buffer.BlockCopy(ciphertext, 0, result, NONCE_SIZE, ciphertext.Length);
+            Buffer.BlockCopy(tag, 0, result, NONCE_SIZE + ciphertext.Length, TAG_SIZE);
+
+            return Convert.ToBase64String(result);
+        }
+
+        /// <summary>
         /// Decrypts AES-256-GCM ciphertext (Base64 encoded).
         /// Returns null if decryption fails (wrong key, tampered data, etc.)
         /// </summary>

@@ -92,6 +92,7 @@ namespace FlyShelf.Windows
                 {
                     if (!this.IsVisible) { ThumbDiag("SKIP: window not visible"); return; }
                     if (HistoryGrid == null || HistoryGrid.Visibility != Visibility.Visible) { ThumbDiag("SKIP: HistoryGrid not visible"); return; }
+                    if (HubListView == null) { ThumbDiag("SKIP: HubListView is null"); return; }
 
                     // Skip UpdateLayout() here — it forces a synchronous layout pass
                     // that fights CompositionTarget.Rendering for UI thread time.

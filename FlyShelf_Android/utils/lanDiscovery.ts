@@ -55,12 +55,6 @@ export const addToPcIpCache = async (ip: string, port: number): Promise<void> =>
   } catch {}
 };
 
-/** Clear the entire PC IP cache */
-export const clearPcIpCache = async (): Promise<void> => {
-  try {
-    await AsyncStorage.removeItem(LAN_CACHE_KEY);
-  } catch {}
-};
 
 // ═══ Smart Discovery ═══
 

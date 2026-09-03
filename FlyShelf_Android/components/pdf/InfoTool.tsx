@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system/legacy';
-import { colors } from '../../styles/theme';
-import s from '../../styles/pdfToolsStyles';
+
+import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { getPdfInfo } from '../../utils/pdfToolsUtils';
 import { SelectedFile } from './types';
 
@@ -15,6 +16,9 @@ interface InfoToolProps {
 }
 
 export default function InfoTool({ onBack, onPickFile, saveRecent }: InfoToolProps) {
+  const { colors, shadows } = useAppTheme();
+  const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
+
   const [file, setFile] = useState<SelectedFile | null>(null);
   const [info, setInfo] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -62,16 +66,16 @@ export default function InfoTool({ onBack, onPickFile, saveRecent }: InfoToolPro
           <ActivityIndicator size="large" color={colors.accent.primary} style={s.mt20} />
         ) : info ? (
           <View style={s.infoCard}>
-            <InfoRow label="File Name" value={info.fileName} />
-            <InfoRow label="Page Count" value={info.pageCount.toString()} />
-            <InfoRow label="File Size" value={formatSize(info.fileSize)} />
-            <InfoRow label="Title" value={info.title || 'N/A'} />
-            <InfoRow label="Author" value={info.author || 'N/A'} />
-            <InfoRow label="Creator" value={info.creator || 'N/A'} />
-            <InfoRow label="Producer" value={info.producer || 'N/A'} />
-            <InfoRow label="Created" value={info.creationDate ? new Date(info.creationDate).toLocaleString() : 'N/A'} />
-            <InfoRow label="Modified" value={info.modificationDate ? new Date(info.modificationDate).toLocaleString() : 'N/A'} />
-            <InfoRow label="Encrypted" value={info.isEncrypted ? 'Yes' : 'No'} />
+            <InfoRow s={s} label="File Name" value={info.fileName} />
+            <InfoRow s={s} label="Page Count" value={info.pageCount.toString()} />
+            <InfoRow s={s} label="File Size" value={formatSize(info.fileSize)} />
+            <InfoRow s={s} label="Title" value={info.title || 'N/A'} />
+            <InfoRow s={s} label="Author" value={info.author || 'N/A'} />
+            <InfoRow s={s} label="Creator" value={info.creator || 'N/A'} />
+            <InfoRow s={s} label="Producer" value={info.producer || 'N/A'} />
+            <InfoRow s={s} label="Created" value={info.creationDate ? new Date(info.creationDate).toLocaleString() : 'N/A'} />
+            <InfoRow s={s} label="Modified" value={info.modificationDate ? new Date(info.modificationDate).toLocaleString() : 'N/A'} />
+            <InfoRow s={s} label="Encrypted" value={info.isEncrypted ? 'Yes' : 'No'} />
           </View>
         ) : null}
       </ScrollView>
@@ -86,7 +90,7 @@ export default function InfoTool({ onBack, onPickFile, saveRecent }: InfoToolPro
   );
 }
 
-const InfoRow = ({ label, value }: { label: string; value: string }) => (
+const InfoRow = ({ label, value, s }: { label: string; value: string; s: any }) => (
   <View style={s.infoRow}>
     <Text style={s.infoLabel}>{label}</Text>
     <Text style={s.infoValue}>{value}</Text>

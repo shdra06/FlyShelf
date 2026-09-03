@@ -46,6 +46,7 @@ namespace FlyShelf
         private string? _dragFilePath;        // Always populated with the item's path
         private bool _dragCtrlPathMode = false;
         private string? _dragCtrlPendingPath; // Path text for fallback paste (text-only items)
+        private System.Windows.Controls.Border? _dragSourceHintOverlay; // "Hold Ctrl → paste path" overlay on drag ghost
         private DateTime _lastHoverUpdate = DateTime.MinValue;
 
         private async void ShelfListView_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -553,7 +554,55 @@ namespace FlyShelf
                                         .ContainerFromItem(firstItem) as ListViewItem;
                                 }
                                 if (dragSourceContainer != null)
+                                {
                                     dragSourceContainer.Opacity = 0.35;
+
+                                    // ── Inject "Hold Ctrl → paste path" hint into the dimmed ghost ──
+                                    if (!string.IsNullOrEmpty(firstItem.FilePath))
+                                    {
+                                        try
+                                        {
+                                            // Find the inner Grid (ItemGrid) inside the ListViewItem
+                                            var itemGrid = FindVisualChild<Grid>(dragSourceContainer, "ItemGrid");
+                                            if (itemGrid != null)
+                                            {
+                                                _dragSourceHintOverlay = new System.Windows.Controls.Border
+                                                {
+                                                    Background = new SolidColorBrush(Color.FromArgb(200, 15, 17, 25)),
+                                                    CornerRadius = new CornerRadius(10),
+                                                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                                                    VerticalAlignment = VerticalAlignment.Stretch,
+                                                    Padding = new Thickness(12, 8, 12, 8),
+                                                    IsHitTestVisible = false,
+                                                };
+                                                Grid.SetRow(_dragSourceHintOverlay, 0);
+                                                Grid.SetColumn(_dragSourceHintOverlay, 0);
+                                                Grid.SetRowSpan(_dragSourceHintOverlay, itemGrid.RowDefinitions.Count > 0 ? itemGrid.RowDefinitions.Count : 1);
+                                                Grid.SetColumnSpan(_dragSourceHintOverlay, itemGrid.ColumnDefinitions.Count > 0 ? itemGrid.ColumnDefinitions.Count : 1);
+                                                Panel.SetZIndex(_dragSourceHintOverlay, 100);
+
+                                                var hintContent = new StackPanel
+                                                {
+                                                    VerticalAlignment = VerticalAlignment.Center,
+                                                    HorizontalAlignment = HorizontalAlignment.Center,
+                                                };
+                                                hintContent.Children.Add(new TextBlock
+                                                {
+                                                    Text = "📋 Hold Ctrl → paste path",
+                                                    FontSize = 11,
+                                                    FontWeight = FontWeights.Medium,
+                                                    Foreground = new SolidColorBrush(Color.FromArgb(200, 137, 180, 250)),
+                                                    HorizontalAlignment = HorizontalAlignment.Center,
+                                                    TextAlignment = TextAlignment.Center,
+                                                });
+
+                                                _dragSourceHintOverlay.Child = hintContent;
+                                                itemGrid.Children.Add(_dragSourceHintOverlay);
+                                            }
+                                        }
+                                        catch { }
+                                    }
+                                }
                             }
                             catch (Exception previewEx)
                             {
@@ -604,16 +653,47 @@ namespace FlyShelf
                             catch { }
                             _dragPreviewWindow = null;
 
-                            // ═══ POST-DRAG FALLBACK PASTE ═══
-                            // If OLE drop was accepted (result != None), the target application already received the data.
-                            // Only attempt fallback clipboard paste if the target rejected OLE (result == None).
-                            if (result == DragDropEffects.None)
+                            // ═══ POST-DRAG: Ctrl+Drop → paste file path ═══
+                            // When Ctrl was held during drag, ALWAYS paste file path as text,
+                            // regardless of whether OLE accepted the drop or not.
+                            bool ctrlPathDrop = _dragCtrlPathMode && !string.IsNullOrEmpty(_dragCtrlPendingPath);
+
+                            if (ctrlPathDrop)
                             {
-                                bool shouldPastePath = _dragCtrlPathMode && !string.IsNullOrEmpty(_dragCtrlPendingPath);
-                                string? fallbackText = shouldPastePath
-                                    ? _dragCtrlPendingPath
-                                    : firstItem.RawContent;
-                                
+                                // Override: paste path text into the target window
+                                if (Classes.NativeMethods.GetCursorPos(out var dropPt))
+                                {
+                                    IntPtr targetHwnd = WindowFromPhysicalPoint(new Classes.NativeMethods.POINT { X = dropPt.X, Y = dropPt.Y });
+                                    if (targetHwnd != IntPtr.Zero)
+                                    {
+                                        IntPtr rootHwnd = GetAncestor(targetHwnd, 2 /* GA_ROOT */);
+                                        if (rootHwnd == IntPtr.Zero) rootHwnd = targetHwnd;
+
+                                        Classes.NativeMethods.GetWindowThreadProcessId(rootHwnd, out uint targetPid);
+                                        uint currentPid = (uint)System.Environment.ProcessId;
+
+                                        if (targetPid != 0 && targetPid != currentPid)
+                                        {
+                                            Classes.ClipboardHelper.SafeSetText(_dragCtrlPendingPath!, suppressEcho: true, echoDelayMs: 2000);
+                                            SetForegroundWindow(rootHwnd);
+                                            await System.Threading.Tasks.Task.Delay(60);
+
+                                            // Clean synthetic Ctrl+V without corrupting physical modifier state
+                                            keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
+                                            keybd_event(VK_V, 0, 0, UIntPtr.Zero);
+                                            keybd_event(VK_V, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+                                            keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+
+                                            AnimateAndHide();
+                                        }
+                                    }
+                                }
+                            }
+                            else if (result == DragDropEffects.None)
+                            {
+                                // ═══ FALLBACK PASTE (no Ctrl, OLE rejected) ═══
+                                string? fallbackText = firstItem.RawContent;
+
                                 if (!string.IsNullOrEmpty(fallbackText))
                                 {
                                     if (Classes.NativeMethods.GetCursorPos(out var dropPt))
@@ -684,7 +764,20 @@ namespace FlyShelf
                             _dragPreviewWindow = null;
 
                             if (dragSourceContainer != null)
+                            {
+                                // Remove the "Hold Ctrl → paste path" hint overlay
+                                if (_dragSourceHintOverlay != null)
+                                {
+                                    try
+                                    {
+                                        var parentGrid = _dragSourceHintOverlay.Parent as Panel;
+                                        parentGrid?.Children.Remove(_dragSourceHintOverlay);
+                                    }
+                                    catch { }
+                                    _dragSourceHintOverlay = null;
+                                }
                                 dragSourceContainer.Opacity = 1.0;
+                            }
                         }
                     }
                 }
@@ -748,7 +841,7 @@ namespace FlyShelf
                 _dragCtrlPathMode = true;
 
                 // Update drag preview to show path mode indicator
-                try { _dragPreviewWindow?.SetPathMode(true); } catch { }
+                try { _dragPreviewWindow?.SetPathMode(true, _dragCtrlPendingPath); } catch { }
             }
             else if (!ctrlPressed && _dragCtrlPathMode)
             {
@@ -1111,6 +1204,7 @@ namespace FlyShelf
                 var fullMsg = ex.ToString();
                 var inner = ex.InnerException;
                 while (inner != null) { fullMsg += "\n--- INNER: " + inner.Message; inner = inner.InnerException; }
+                FlyShelf.Classes.Logger.LogCrash("HUBWINDOW_FAIL", ex);
                 FlyShelf.Classes.Logger.LogAction("HUBWINDOW_FAIL", fullMsg);
                 FlyShelf.Windows.ToastWindow.ShowToast($"Hub Error: {(ex.InnerException?.Message ?? ex.Message)}");
             }
@@ -1181,6 +1275,7 @@ namespace FlyShelf
             catch (Exception ex)
             {
                 _hubWindowInstance = null;
+                FlyShelf.Classes.Logger.LogCrash("HUBWINDOW_FAIL_INTERNAL", ex);
                 FlyShelf.Classes.Logger.LogAction("HUBWINDOW_FAIL", ex.ToString());
             }
         }

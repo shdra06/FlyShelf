@@ -57,6 +57,19 @@ namespace FlyShelf.Classes
 
                 if (tasks.Count == 0)
                 {
+                    bool isMobile = string.Equals(peer.DeviceType, "Mobile", StringComparison.OrdinalIgnoreCase) ||
+                                    (peer.DeviceId != null && peer.DeviceId.StartsWith("Mobile_", StringComparison.OrdinalIgnoreCase));
+                    if (isMobile)
+                    {
+                        bool hasOpenWs = peer.LiveSocket != null && peer.LiveSocket.State == System.Net.WebSockets.WebSocketState.Open;
+                        bool recentlyActive = (DateTime.UtcNow - peer.LastSeen).TotalSeconds < 120;
+                        if (hasOpenWs || recentlyActive)
+                        {
+                            lock (peer.StateLock) { peer.IsAlive = true; }
+                            return;
+                        }
+                    }
+
                     lock (peer.StateLock) { peer.IsAlive = false; peer.Transport = "offline"; }
                     return;
                 }
@@ -83,6 +96,19 @@ namespace FlyShelf.Classes
 
                 if (!handshakeSucceeded)
                 {
+                    bool isMobile = string.Equals(peer.DeviceType, "Mobile", StringComparison.OrdinalIgnoreCase) ||
+                                    (peer.DeviceId != null && peer.DeviceId.StartsWith("Mobile_", StringComparison.OrdinalIgnoreCase));
+                    if (isMobile)
+                    {
+                        bool hasOpenWs = peer.LiveSocket != null && peer.LiveSocket.State == System.Net.WebSockets.WebSocketState.Open;
+                        bool recentlyActive = (DateTime.UtcNow - peer.LastSeen).TotalSeconds < 120;
+                        if (hasOpenWs || recentlyActive)
+                        {
+                            lock (peer.StateLock) { peer.IsAlive = true; }
+                            return;
+                        }
+                    }
+
                     lock (peer.StateLock) { peer.IsAlive = false; peer.Transport = "offline"; }
                     Logger.LogAction("PEER", $" {peer.DeviceName} unreachable (LAN:{(lanEnabled ? "on" : "off")}) tried LAN={peer.LanUrl ?? "null"} CF={peer.CloudflareUrl ?? "null"}");
                 }
@@ -291,8 +317,48 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
-        /// Sends ping every 30s over the WebSocket. If the connection drops,
+        /// Sends ping every 30s over the WebSocket in a background loop.
+        /// Separated from the receive loop so incoming messages are read continuously.
+        /// </summary>
+        private async Task PingLoop(PeerConnection peer, WebSocket ws, CancellationToken ct)
+        {
+            try
+            {
+                while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
+                {
+                    await Task.Delay(30_000, ct);
+
+                    // Use a 5s timeout instead of blocking forever. If a large
+                    // file transfer is holding the send lock, skip the ping rather than
+                    // blocking. The heartbeat loop provides independent liveness verification.
+                    byte[] ping = Encoding.UTF8.GetBytes("ping");
+                    bool pingAcquired = await peer.SendSemaphore.WaitAsync(5000, ct);
+                    if (!pingAcquired)
+                    {
+                        // Semaphore busy (file transfer in progress) — skip this ping cycle
+                        continue;
+                    }
+                    try
+                    {
+                        await ws.SendAsync(new ArraySegment<byte>(ping), WebSocketMessageType.Text, true, ct);
+                    }
+                    finally
+                    {
+                        peer.SendSemaphore.Release();
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Logger.LogAction("WS", $"{peer.DeviceName} PingLoop error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Continuously reads messages from the WebSocket. If the connection drops,
         /// we detect it INSTANTLY and mark the peer as dead.
+        /// Pings are sent by a separate PingLoop background task.
         /// </summary>
         private async Task MonitorWebSocket(PeerConnection peer)
         {
@@ -300,46 +366,30 @@ namespace FlyShelf.Classes
             var cts = peer.WsCts;
             if (ws == null || cts == null) return;
 
+            // Launch ping loop as a background task — failures are logged, not propagated
+            _ = PingLoop(peer, ws, cts.Token);
+
             var buf = new byte[4096]; // Larger buffer to handle JSON messages (UrlUpdate)
             try
             {
                 while (ws.State == WebSocketState.Open && !cts.Token.IsCancellationRequested)
                 {
-                    // FIX: Use a 5s timeout instead of blocking forever. If a large
-                    // file transfer is holding the send lock, skip the ping rather than
-                    // blocking the MonitorWebSocket loop (which also handles incoming
-                    // control messages like TransferPause/Resume/Cancel).
-                    // The heartbeat loop provides independent liveness verification.
-                    byte[] ping = Encoding.UTF8.GetBytes("ping");
-                    bool pingAcquired = await peer.SendSemaphore.WaitAsync(5000, cts.Token);
-                    if (!pingAcquired)
-                    {
-                        // Semaphore busy (file transfer in progress) — skip this ping cycle
-                        await Task.Delay(5000, cts.Token);
-                        continue;
-                    }
                     try
                     {
-                        await ws.SendAsync(new ArraySegment<byte>(ping), WebSocketMessageType.Text, true, cts.Token);
-                    }
-                    finally
-                    {
-                        peer.SendSemaphore.Release();
-                    }
-
-                    // Wait for response (pong or JSON message) with 15s timeout
-                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
-                    timeoutCts.CancelAfter(15_000);
-                    try
-                    {
-                        // Read full message (may span multiple frames)
+                        // Read full message (may span multiple frames) — 50MB hard cap
+                        const int MAX_WS_MSG_SIZE = 50 * 1024 * 1024;
                         using var ms = new System.IO.MemoryStream();
                         WebSocketReceiveResult result;
                         bool wsClosed = false;
                         do
                         {
-                            result = await ws.ReceiveAsync(new ArraySegment<byte>(buf), timeoutCts.Token);
+                            result = await ws.ReceiveAsync(new ArraySegment<byte>(buf), cts.Token);
                             if (result.MessageType == WebSocketMessageType.Close) { wsClosed = true; break; }
+                            if (ms.Length + result.Count > MAX_WS_MSG_SIZE)
+                            {
+                                Logger.LogAction("WS", $"Peer {peer.DeviceName} sent message exceeding 50MB limit — dropping");
+                                wsClosed = true; break;
+                            }
                             ms.Write(buf, 0, result.Count);
                         } while (!result.EndOfMessage);
                         if (wsClosed) break;
@@ -442,13 +492,9 @@ namespace FlyShelf.Classes
                     }
                     catch (OperationCanceledException) when (!cts.Token.IsCancellationRequested)
                     {
-                        // Pong timeout — peer may be dead
-                        Logger.LogAction("WS", $" {peer.DeviceName} WebSocket pong timeout");
-                        break;
+                        // Receive timed out or was cancelled externally — continue reading
+                        continue;
                     }
-
-                    // Wait 30s before next ping
-                    await Task.Delay(30_000, cts.Token);
                 }
             }
             catch (WebSocketException) { }

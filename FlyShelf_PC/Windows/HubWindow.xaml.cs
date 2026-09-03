@@ -91,11 +91,13 @@ namespace FlyShelf.Windows
                 Source = _viewModel.DroppedItems
             };
             // Bind Hub controls to the isolated view instead of the shared default view
-            HubListView.ItemsSource = _hubCollectionViewSource.View;
+            if (HubListView != null)
+                HubListView.ItemsSource = _hubCollectionViewSource.View;
             if (ImageGridControl != null)
                 ImageGridControl.ItemsSource = _hubCollectionViewSource.View;
 
-            _viewModel.DroppedItems.CollectionChanged += DroppedItems_CollectionChanged;
+            if (_viewModel?.DroppedItems != null)
+                _viewModel.DroppedItems.CollectionChanged += DroppedItems_CollectionChanged;
             // Theme override dictionary modification thrashes visual tree at construction,
             // so we only apply the theme in OnSourceInitialized when the handle is active.
 
@@ -113,7 +115,7 @@ namespace FlyShelf.Windows
             };
             DevicePairingManager.OnDevicePaired += _devicePairedHandler;
 
-            // Real-time peer status updates ΓÇö refresh UI when peers connect/disconnect
+            // Real-time peer status updates — refresh UI when peers connect/disconnect
             _peerConnectedHandler = (deviceId, transport) => Dispatcher.InvokeAsync(() =>
             {
                 RefreshPairedDevicesList();
@@ -139,8 +141,8 @@ namespace FlyShelf.Windows
 
             // Show real version from assembly
             string v = UpdateManager.CurrentVersion;
-            VersionBadgeText.Text = $"v{v}";
-            CurrentVersionText.Text = $"v{v}";
+            if (VersionBadgeText != null) VersionBadgeText.Text = $"v{v}";
+            if (CurrentVersionText != null) CurrentVersionText.Text = $"v{v}";
 
 #if MSIX_STORE
             // In Microsoft Store builds, suppress showing the in-app autoupdater card to comply with Store policies
@@ -155,12 +157,12 @@ namespace FlyShelf.Windows
             }
 #endif
 
-            // ΓòÉΓòÉΓòÉ HUB UPDATE BANNER ΓòÉΓòÉΓòÉ
+            // ═══ HUB UPDATE BANNER ═══
             // Show the update notification banner if an update was already detected
             if (UpdateManager.GlobalUpdateAvailable)
             {
-                HubUpdateBannerText.Text = $"FlyShelf v{UpdateManager.GlobalLatestVersion} is available — update now!";
-                HubUpdateBanner.Visibility = Visibility.Visible;
+                if (HubUpdateBannerText != null) HubUpdateBannerText.Text = $"FlyShelf v{UpdateManager.GlobalLatestVersion} is available — update now!";
+                if (HubUpdateBanner != null) HubUpdateBanner.Visibility = Visibility.Visible;
             }
             // Subscribe to future update detections
             UpdateManager.GlobalUpdateStatusChanged += OnHubGlobalUpdateStatusChanged;
@@ -276,6 +278,32 @@ namespace FlyShelf.Windows
             {
                 if (IsVisible)
                 {
+                    // Re-subscribe collection and update manager handlers when window is re-shown
+                    // (OnClosing unsubscribes them when the window is hidden)
+                    if (_viewModel?.DroppedItems != null)
+                    {
+                        _viewModel.DroppedItems.CollectionChanged -= DroppedItems_CollectionChanged;
+                        _viewModel.DroppedItems.CollectionChanged += DroppedItems_CollectionChanged;
+                    }
+                    if (_updateManager != null)
+                    {
+                        if (_updateStatusChangedHandler != null)
+                        {
+                            _updateManager.StatusChanged -= _updateStatusChangedHandler;
+                            _updateManager.StatusChanged += _updateStatusChangedHandler;
+                        }
+                        if (_updateDownloadProgressChangedHandler != null)
+                        {
+                            _updateManager.DownloadProgressChanged -= _updateDownloadProgressChangedHandler;
+                            _updateManager.DownloadProgressChanged += _updateDownloadProgressChangedHandler;
+                        }
+                        if (_updateCheckCompletedHandler != null)
+                        {
+                            _updateManager.UpdateCheckCompleted -= _updateCheckCompletedHandler;
+                            _updateManager.UpdateCheckCompleted += _updateCheckCompletedHandler;
+                        }
+                    }
+
                     _deviceRefreshTimer?.Start();
                     RefreshDevices_Click(null, null);
 
@@ -349,7 +377,7 @@ namespace FlyShelf.Windows
                         bool changed = false;
                         if (SettingsManager.Current.ThemeDisplayMode == "glass")
                         {
-                            SettingsManager.Current.ThemeDisplayMode = "mica";
+                            SettingsManager.Current.ThemeDisplayMode = "desktop";
                             changed = true;
                         }
                         string activeThemeName = SettingsManager.Current.ActiveThemeName ?? "";
@@ -358,7 +386,7 @@ namespace FlyShelf.Windows
                             SettingsManager.Current.ActiveThemeName = "";
                             if (SettingsManager.Current.ThemeDisplayMode == "theme")
                             {
-                                SettingsManager.Current.ThemeDisplayMode = "mica";
+                                SettingsManager.Current.ThemeDisplayMode = "desktop";
                             }
                             changed = true;
                         }
@@ -578,8 +606,8 @@ namespace FlyShelf.Windows
             {
                 if (updateAvailable && !_hubUpdateBannerDismissed)
                 {
-                    HubUpdateBannerText.Text = $"FlyShelf v{UpdateManager.GlobalLatestVersion} is available — update now!";
-                    HubUpdateBanner.Visibility = Visibility.Visible;
+                    if (HubUpdateBannerText != null) HubUpdateBannerText.Text = $"FlyShelf v{UpdateManager.GlobalLatestVersion} is available — update now!";
+                    if (HubUpdateBanner != null) HubUpdateBanner.Visibility = Visibility.Visible;
                 }
             });
         }

@@ -7,9 +7,10 @@ import NetInfo from '@react-native-community/netinfo';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { LogBox, useColorScheme } from 'react-native';
+import { LogBox, useColorScheme, NativeModules } from 'react-native';
 import 'react-native-reanimated';
 import { useEffect, useCallback } from 'react';
+import { router } from 'expo-router';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import * as SplashScreen from 'expo-splash-screen';
@@ -104,16 +105,16 @@ if (Platform.OS !== 'web') {
   });
 }
 
-// Custom light navigation theme — matches our warm gray base (NOT pure white)
+// Custom light navigation theme — warm creamy base (Apple-like finish)
 const FlyShelfLightTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: '#F5F6FA',
-    card: '#F5F6FA',
-    border: 'rgba(0,0,0,0.07)',
-    text: '#1A1D26',
-    primary: '#5570E8',
+    background: '#FAF9F6',
+    card: '#FAF9F6',
+    border: 'rgba(0,0,0,0.05)',
+    text: '#1A1A1A',
+    primary: '#4D68DF',
   },
 };
 
@@ -184,6 +185,26 @@ export default function RootLayout() {
     })().catch(console.warn);
   }, []);
 
+  // ─── Share Intent Detection ───
+  // When the app opens via Android share sheet, auto-navigate to share-receiver
+  useEffect(() => {
+    if (!fontsLoaded) return;
+    const checkShareIntent = async () => {
+      try {
+        const ShareIntent = NativeModules.ShareIntent;
+        if (!ShareIntent) return;
+        const result = await ShareIntent.getSharedFiles();
+        if (result && ((result.files && result.files.length > 0) || result.text)) {
+          // Small delay to ensure navigation is ready
+          setTimeout(() => {
+            router.push('/share-receiver' as any);
+          }, 300);
+        }
+      } catch {}
+    };
+    checkShareIntent();
+  }, [fontsLoaded]);
+
   if (!fontsLoaded) return null;
 
   return (
@@ -195,6 +216,8 @@ export default function RootLayout() {
               <Stack>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="pdf-tools" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+                <Stack.Screen name="settings-modal" options={{ headerShown: false, presentation: 'modal', animation: 'slide_from_bottom' }} />
+                <Stack.Screen name="share-receiver" options={{ headerShown: false, presentation: 'transparentModal', animation: 'fade' }} />
               </Stack>
               <StatusBar style={colorScheme === 'light' ? 'dark' : 'light'} translucent backgroundColor="transparent" />
             </ToastProvider>

@@ -28,6 +28,7 @@ namespace FlyShelf.Classes
         private FlyShelfViewModel _viewModel;
         private CloudflareDaemon _cfDaemon = new CloudflareDaemon();
         private System.Timers.Timer _heartbeatTimer;
+        private System.Timers.Timer? _handshakePollTimer;
         private System.Net.Sockets.TcpListener _proxyListener = null;
         private bool _proxyRunning = false;
         private int _proxyInternalPort = 0;
@@ -170,15 +171,98 @@ namespace FlyShelf.Classes
         }
 
         private static readonly ConcurrentDictionary<string, System.Net.WebSockets.WebSocket> _activePeerSockets = new();
+        private static readonly ConcurrentDictionary<string, SemaphoreSlim> _peerSendLocks = new();
+        private static readonly ConcurrentDictionary<string, long> _peerLastPong = new();
+        private static System.Threading.Timer? _wsPingTimer;
+
+        private static void WsPingSweep(object? state)
+        {
+            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            foreach (var kvp in _activePeerSockets)
+            {
+                var peerId = kvp.Key;
+                var socket = kvp.Value;
+                
+                long lastPong = _peerLastPong.TryGetValue(peerId, out long lp) ? lp : now;
+                if (now - lastPong > 60000)
+                {
+                    Logger.LogAction("WS-PEER", $"Pruning stale peer socket for {peerId}");
+                    try
+                    {
+                        socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "timeout", CancellationToken.None).ContinueWith(_ => {});
+                    }
+                    catch { }
+                    UnregisterPeerWebSocket(peerId);
+                    continue;
+                }
+                
+                if (socket.State == WebSocketState.Open)
+                {
+                    string pingMsg = $"{{\"type\":\"ping\",\"ts\":{now}}}";
+                    byte[] bytes = Encoding.UTF8.GetBytes(pingMsg);
+                    if (_peerSendLocks.TryGetValue(peerId, out var sendLock))
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            await sendLock.WaitAsync();
+                            try
+                            {
+                                await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
+                            }
+                            catch { }
+                            finally
+                            {
+                                sendLock.Release();
+                            }
+                        });
+                    }
+                }
+            }
+        }
 
         public static void RegisterPeerWebSocket(string peerDeviceId, System.Net.WebSockets.WebSocket socket)
         {
             _activePeerSockets[peerDeviceId] = socket;
+            _peerSendLocks[peerDeviceId] = new SemaphoreSlim(1, 1);
+            _peerLastPong[peerDeviceId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            
+            if (_wsPingTimer == null)
+            {
+                var newTimer = new System.Threading.Timer(WsPingSweep, null, 30000, 30000);
+                if (Interlocked.CompareExchange(ref _wsPingTimer, newTimer, null) != null)
+                {
+                    // Another thread already created the timer — dispose ours
+                    newTimer.Dispose();
+                }
+            }
         }
 
         public static void UnregisterPeerWebSocket(string peerDeviceId)
         {
             _activePeerSockets.TryRemove(peerDeviceId, out _);
+            if (_peerSendLocks.TryRemove(peerDeviceId, out var sendLock))
+            {
+                sendLock.Dispose();
+            }
+            _peerLastPong.TryRemove(peerDeviceId, out _);
+        }
+
+        public static void UpdatePeerPong(string peerDeviceId)
+        {
+            _peerLastPong[peerDeviceId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        }
+
+        public static int ActivePeerWebSocketCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (var s in _activePeerSockets.Values)
+                {
+                    if (s.State == System.Net.WebSockets.WebSocketState.Open) count++;
+                }
+                return count;
+            }
         }
 
         public static void BroadcastToPeerWebSockets(string messageJson)
@@ -188,14 +272,24 @@ namespace FlyShelf.Classes
             {
                 if (kvp.Value.State == System.Net.WebSockets.WebSocketState.Open)
                 {
-                    _ = Task.Run(async () =>
+                    var peerId = kvp.Key;
+                    var socket = kvp.Value;
+                    if (_peerSendLocks.TryGetValue(peerId, out var sendLock))
                     {
-                        try
+                        _ = Task.Run(async () =>
                         {
-                            await kvp.Value.SendAsync(new ArraySegment<byte>(bytes), System.Net.WebSockets.WebSocketMessageType.Text, true, CancellationToken.None);
-                        }
-                        catch { }
-                    });
+                            await sendLock.WaitAsync();
+                            try
+                            {
+                                await socket.SendAsync(new ArraySegment<byte>(bytes), System.Net.WebSockets.WebSocketMessageType.Text, true, CancellationToken.None);
+                            }
+                            catch { }
+                            finally
+                            {
+                                sendLock.Release();
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -260,12 +354,10 @@ namespace FlyShelf.Classes
         /// </summary>
         public Task ForceCheckTunnelHealth() => _cfDaemon.ForceCheckTunnelHealth();
 
-        // SECURITY (C-01): Restrict downloads to FlyShelf's own directories only.
-        // Previously included Downloads, Desktop, Documents, OneDrive — too broad.
+        // SECURITY (C-01 & SEC-PC-01): Restrict downloads strictly to FlyShelf's SyncedFiles directory.
+        // %TEMP% and root %APPDATA%\FlyShelf removed to prevent arbitrary file extraction of settings, tokens, or system temp files.
         private static readonly string[] _allowedRoots = {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles"),
-            Path.GetTempPath()
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles")
         };
 
         private static readonly DateTime _downloadGracePeriodEnd = DateTime.MinValue; // Auth always enforced

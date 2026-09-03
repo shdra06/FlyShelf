@@ -1357,7 +1357,7 @@ function TodoScreenInner() {
       <View style={s.container}>
         <KeyboardAvoidingView
           style={s.container}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
           {/* ─── Header ─── */}

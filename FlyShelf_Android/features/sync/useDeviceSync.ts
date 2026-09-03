@@ -14,105 +14,15 @@ import { NetworkClock } from '../../utils/networkClock';
 import { setSecureItem, removeSecureItem } from '../../utils/secureStorage';
 import { createTimeoutSignal } from '../../utils/timeoutSignal';
 import { normalizeTextForFingerprint } from '../../utils/textNormalize';
+import { DirectMesh } from '../../utils/directMesh';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { AdvanceOverlay } = NativeModules;
 
 // Audit Task 1: normalizeTextForFingerprint now imported from utils/textNormalize.ts
 
-// H-9 FIX: Extracted shared file download URL resolution helper to eliminate duplication
-async function resolveFileDownloadUrl(params: {
-  dlPath: string;
-  targetUrl: string;
-  lastWorkingPcUrlRef: React.MutableRefObject<string | null>;
-  pcLocalIp: string;
-  pairingKeyRef: React.MutableRefObject<string>;
-  cachedPcUrlRef: React.MutableRefObject<string | null>;
-}): Promise<{ fileUrl: string; dlSource: string }> {
-  const { dlPath, targetUrl, lastWorkingPcUrlRef, pcLocalIp, pairingKeyRef, cachedPcUrlRef } = params;
-  const pathPart = dlPath.includes('?path=') ? dlPath.substring(dlPath.indexOf('?path=')) : '';
-  let fileUrl = '';
-  let dlSource = 'Cloud';
-
-  if (pathPart) {
-    // Try LAN first (fast)
-    let lanBase = '';
-    const lanCandidates = [
-      ...(targetUrl && !targetUrl.includes('trycloudflare.com') ? [targetUrl] : []),
-      ...(lastWorkingPcUrlRef.current && !lastWorkingPcUrlRef.current.includes('trycloudflare.com') ? [lastWorkingPcUrlRef.current] : []),
-      ...(pcLocalIp ? pcLocalIp.split(',').map(s => s.trim()).filter(Boolean).map(ip => ip.startsWith('http') ? ip.replace(/\/$/, '') : `http://${ip.includes(':') ? ip : ip + ':8999'}`) : []),
-    ].filter((v, i, a) => a.indexOf(v) === i);
-
-    // AUDIT FIX: Probe all LAN candidates in parallel (Promise.any) instead of sequential
-    // Reduces worst-case from N*1200ms to just 1200ms
-    if (lanCandidates.length > 0) {
-      try {
-        const winner = await Promise.any(lanCandidates.map(async (candidate) => {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 1200);
-          try {
-            const h = await fetch(`${candidate}/api/health`, {
-              headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' },
-              signal: ctrl.signal,
-            });
-            clearTimeout(timer);
-            // AUDIT FIX #8: Validate response is actually FlyShelf, not a random server
-            if (h.ok) {
-              try {
-                const body = await h.json();
-                if (body?.app === 'FlyShelf') return candidate;
-              } catch { /* non-JSON response — not FlyShelf */ }
-            }
-            throw new Error('not FlyShelf');
-          } catch (e) {
-            clearTimeout(timer);
-            syncLog('FILE-DL', `LAN probe failed for ${candidate}: ${(e as any)?.message || e}`);
-            throw e;
-          }
-        }));
-        lanBase = winner;
-      } catch { /* all candidates failed */ }
-    }
-    if (lanBase) {
-      fileUrl = `${lanBase}/download${pathPart}`;
-      dlSource = 'LAN';
-    } else {
-      // Cloudflare fallback via Firebase
-      try {
-        const pk = pairingKeyRef.current;
-        if (pk) {
-          const devSnap = await get(ref(database, `active_devices/${pk}`));
-          if (devSnap.exists()) {
-            const devs = devSnap.val();
-            for (const dk of Object.keys(devs)) {
-              const d = await decryptDevice(devs[dk]);
-              if (d.GlobalUrl?.includes('trycloudflare.com') && d.DeviceType === 'PC') {
-                fileUrl = `${d.GlobalUrl.replace(/\/$/, '')}/download${pathPart}`;
-                break;
-              }
-            }
-          }
-        }
-      } catch (e) { syncLog('FILE-DL', `Firebase device lookup failed: ${(e as any)?.message || e}`); }
-      if (!fileUrl && targetUrl?.includes('trycloudflare.com')) {
-        fileUrl = `${targetUrl}/download${pathPart}`;
-      }
-    }
-    // Last resort: cached/resolved PC URL
-    if (!fileUrl && !lanBase) {
-      try {
-        const cachedUrl = cachedPcUrlRef.current || lastWorkingPcUrlRef.current;
-        if (cachedUrl) {
-          fileUrl = `${cachedUrl.replace(/\/$/, '')}/download${pathPart}`;
-          dlSource = cachedUrl.includes('trycloudflare.com') ? 'Cloud' : 'LAN';
-        }
-      } catch {}
-    }
-  } else if (dlPath.startsWith('http')) {
-    fileUrl = dlPath;
-  }
-  return { fileUrl, dlSource };
-}
+let recentNotificationCount = 0;
+let recentNotificationTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function useDeviceSync(params: {
   isGlobalSyncEnabled: boolean;
@@ -136,7 +46,7 @@ export function useDeviceSync(params: {
   lastSyncedContentRef: React.MutableRefObject<string>;
   processedEventsRef: React.MutableRefObject<Map<string, number>>;
   recentSyncFingerprintsRef: React.MutableRefObject<Map<string, number>>;
-  sentContentFingerprintsRef: React.MutableRefObject<Set<string>>;
+  sentContentFingerprintsRef: React.MutableRefObject<Map<string, number>>;
   pairingTimestampRef: React.MutableRefObject<number>;
   enqueueDownload: (item: any) => void;
   normalizeTextForFingerprint: (text: string) => string;
@@ -196,6 +106,33 @@ export function useDeviceSync(params: {
   const isFloatingBallEnabledRef = useLatest(isFloatingBallEnabled);
 
   // ─── Local PC Polling ───
+    const enqueueDownloadRef = useRef(enqueueDownload);
+  useEffect(() => { enqueueDownloadRef.current = enqueueDownload; }, [enqueueDownload]);
+  const markPcReachableRef = useRef(markPcReachable);
+  useEffect(() => { markPcReachableRef.current = markPcReachable; }, [markPcReachable]);
+  const markPcUnreachableRef = useRef(markPcUnreachable);
+  useEffect(() => { markPcUnreachableRef.current = markPcUnreachable; }, [markPcUnreachable]);
+  const updateDeviceStatusRef = useRef(updateDeviceStatus);
+  useEffect(() => { updateDeviceStatusRef.current = updateDeviceStatus; }, [updateDeviceStatus]);
+  const setConnectionInfoRef = useRef(setConnectionInfo);
+  useEffect(() => { setConnectionInfoRef.current = setConnectionInfo; }, [setConnectionInfo]);
+  const setClipsRef = useRef(setClips);
+  useEffect(() => { setClipsRef.current = setClips; }, [setClips]);
+  const setLastCopiedTextRef = useRef(setLastCopiedText);
+  useEffect(() => { setLastCopiedTextRef.current = setLastCopiedText; }, [setLastCopiedText]);
+  const setImageDownloadTriggerRef = useRef(setImageDownloadTrigger);
+  useEffect(() => { setImageDownloadTriggerRef.current = setImageDownloadTrigger; }, [setImageDownloadTrigger]);
+  const setRichMediaDownloadTriggerRef = useRef(setRichMediaDownloadTrigger);
+  useEffect(() => { setRichMediaDownloadTriggerRef.current = setRichMediaDownloadTrigger; }, [setRichMediaDownloadTrigger]);
+  const scrollToTopRef = useRef(scrollToTop);
+  useEffect(() => { scrollToTopRef.current = scrollToTop; }, [scrollToTop]);
+  const recordCloudflareFailureRef = useRef(recordCloudflareFailure);
+  useEffect(() => { recordCloudflareFailureRef.current = recordCloudflareFailure; }, [recordCloudflareFailure]);
+  const resetCloudflareFailCountRef = useRef(resetCloudflareFailCount);
+  useEffect(() => { resetCloudflareFailCountRef.current = resetCloudflareFailCount; }, [resetCloudflareFailCount]);
+  const invalidatePcUrlCacheRef = useRef(invalidatePcUrlCache);
+  useEffect(() => { invalidatePcUrlCacheRef.current = invalidatePcUrlCache; }, [invalidatePcUrlCache]);
+
   const pollLockRef = useRef(false); // Prevents concurrent pollFn from timer + long-poll
   const pollRetryCountRef = useRef(0); // Exponential backoff counter for failed polls
   const shortcutSyncTimestampRef = useRef<number>(0); // Throttle: sync shortcuts every 60s
@@ -208,6 +145,13 @@ export function useDeviceSync(params: {
       // Without this, the first poll fires with empty X-Pairing-Key → PC rejects → URL cache destroyed.
       if (!pairingKeyRef.current) return;
       pollLockRef.current = true;
+      // Prune entries older than 1 hour
+      const ONE_HOUR = 3600000;
+      const nowTs = Date.now();
+      for (const [key, timestamp] of sentContentFingerprintsRef.current.entries()) {
+        if (nowTs - timestamp > ONE_HOUR) sentContentFingerprintsRef.current.delete(key);
+      }
+
       try {
       // Gate: check if any paired device has clipboard sync enabled
       const currentPairedDevices = pairedDevicesRef.current;
@@ -230,46 +174,57 @@ export function useDeviceSync(params: {
         const syncHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion', 'Connection': 'keep-alive' };
         if (pairingKeyRef.current) syncHeaders['X-Pairing-Key'] = pairingKeyRef.current;
         // Send device identity so PC can update device status and show real name
-        if (deviceName) syncHeaders['X-Source-Device'] = deviceName;
+        if (deviceName) {
+          syncHeaders['X-Source-Device'] = deviceName;
+          syncHeaders['X-Device-Id'] = `Mobile_${deviceName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+        }
         const pollStart = performance.now();
         const syncUrl = lastSyncTimestampRef.current > 0
           ? `${targetUrl}/api/sync?since=${lastSyncTimestampRef.current}`
           : `${targetUrl}/api/sync?limit=3`;
         // DEV DEBUG: Log every poll attempt
-        syncLog('PC-POLL', `→ ${syncUrl.replace(targetUrl, '')} | key=${pairingKeyRef.current?.substring(0,8)}... | timeout=${timeout}ms | retries=${pollRetryCountRef.current}`);
+        syncLog('PC-POLL', `[STEP 5/6: SYNC POLL 1/3] → ${syncUrl.replace(targetUrl, '')} (Target: ${targetUrl}, Timeout: ${timeout}ms, Retries: ${pollRetryCountRef.current})`);
         const response = await fetchWithTimeout(syncUrl, { headers: syncHeaders }, timeout);
         if (!response.ok) {
           // DEV DEBUG: Log failure details
-          syncLog('PC-POLL', `✗ FAIL: HTTP ${response.status} ${response.statusText} | url=${targetUrl} | clearing cache`);
+          syncLog('PC-POLL', `[STEP 5/6: SYNC POLL 1/3 ERROR] ❌ HTTP ${response.status} ${response.statusText} | url=${targetUrl}`);
           cachedPcUrlRef.current = null;
           // Track Cloudflare failures for forced re-resolution (Issue #7)
           if (targetUrl.includes('trycloudflare.com')) {
-            if (recordCloudflareFailure()) {
+            if (recordCloudflareFailureRef.current()) {
               removeSecureItem('lastCloudflareUrl').catch(() => {});
               removeSecureItem('pairedGlobalUrl').catch(() => {});
             }
           }
-          markPcUnreachable();
-          setConnectionInfo(null); // Clear stale status — subtitle goes back to "Searching..."
+          markPcUnreachableRef.current();
+          setConnectionInfoRef.current(null); // Clear stale status — subtitle goes back to "Searching..."
           return;
         }
         {
           // Phase 1: PC is reachable — disconnect Firebase listener if active
-          markPcReachable();
-          resetCloudflareFailCount();
+          markPcReachableRef.current();
+          resetCloudflareFailCountRef.current();
           pollRetryCountRef.current = 0; // Reset backoff on successful connection
           // H-3: Connection quality indicator
           const pollLatency = Math.round(performance.now() - pollStart);
           // DEV DEBUG: Log every successful poll
           syncLog('PC-POLL', `✓ OK: ${response.status} | ${targetUrl.includes('trycloudflare.com') ? 'Cloud' : 'LAN'} | latency=${pollLatency}ms | url=${targetUrl.substring(0, 50)}`);
-          setConnectionInfo({ url: targetUrl, latencyMs: pollLatency, type: targetUrl.includes('trycloudflare.com') ? 'Cloud' : 'LAN' });
+          setConnectionInfoRef.current({ url: targetUrl, latencyMs: pollLatency, type: targetUrl.includes('trycloudflare.com') ? 'Cloud' : 'LAN' });
+          // Calibrate clock against PC server timestamp
+          const pcServerTimeStr = response.headers.get('X-Server-Time');
+          if (pcServerTimeStr) {
+            const pcServerTime = parseInt(pcServerTimeStr, 10);
+            if (!isNaN(pcServerTime)) {
+              NetworkClock.calibratePeer(pcServerTime, pollLatency);
+            }
+          }
           // Read PC identity from response headers — PC sends name, ID, and transport status
           const pcDeviceName = response.headers.get('X-PC-DeviceName') || '';
           const pcDeviceId = response.headers.get('X-PC-DeviceId') || '';
           // Update paired device status with real PC name, connection type & latency
           const connType = targetUrl.includes('trycloudflare.com') ? 'Cloud' as const : 'LAN' as const;
           pairedDevicesRef.current.filter(d => d.deviceType === 'PC').forEach(d => {
-            updateDeviceStatus(pcDeviceId || d.deviceId, {
+            updateDeviceStatusRef.current(pcDeviceId || d.deviceId, {
               isOnline: true, connectionType: connType, latencyMs: pollLatency, lastSeen: NetworkClock.now(),
               localUrl: connType === 'LAN' ? targetUrl : undefined,
               globalUrl: connType === 'Cloud' ? targetUrl : undefined,
@@ -347,14 +302,37 @@ export function useDeviceSync(params: {
                       if (Platform.OS === 'android' && AdvanceOverlay) {
                         try { AdvanceOverlay.setClipboardSuppressed(latestRaw); } catch(e) { await Clipboard.setStringAsync(latestRaw); }
                       } else { await Clipboard.setStringAsync(latestRaw); }
-                      setLastCopiedText(latestRaw);
+                      setLastCopiedTextRef.current(latestRaw);
                       lastCopiedRef.current = latestRaw;
                       toast.clipboard(`Synced from ${latest.SourceDeviceName || 'PC'}`, latestRaw);
-                      Notifications.scheduleNotificationAsync({
-                        content: { title: '📋 Clipboard Synced', body: latestRaw?.substring(0, 80) || 'New content from PC' },
-                        trigger: null,
-                      }).catch(() => {});
                     }
+
+                    // Add text clip to feed so it is visible in the Android clip list
+                    const resolvedTextItem: ClipItem = {
+                      id: latest.id || `clip_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                      Raw: latestRaw,
+                      Title: latest.Title || latestRaw,
+                      Type: latest.Type,
+                      Timestamp: latest.Timestamp || NetworkClock.now(),
+                      Time: latest.Time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                      SourceDeviceName: latest.SourceDeviceName || 'PC',
+                      SourceDeviceType: latest.SourceDeviceType || 'PC',
+                      _receivedVia: 'LAN' as const,
+                    };
+
+                    setClipsRef.current(prev => {
+                      const dupIdx = prev.findIndex(c =>
+                        (c.id && resolvedTextItem.id && c.id === resolvedTextItem.id) ||
+                        (c.Raw && resolvedTextItem.Raw && c.Raw === resolvedTextItem.Raw)
+                      );
+                      if (dupIdx >= 0) {
+                        const updated = [...prev];
+                        updated[dupIdx] = { ...updated[dupIdx], ...resolvedTextItem };
+                        return updated;
+                      }
+                      scrollToTopRef.current();
+                      return [resolvedTextItem, ...prev];
+                    });
                   }
                 } else if (latest.Type === 'Image' || latest.Type === 'ImageLink' || latest.Type === 'QRCode') {
                   // Add image to feed immediately with FULL LAN URLs resolved
@@ -363,7 +341,7 @@ export function useDeviceSync(params: {
                   if (resolvedItem.PreviewUrl?.startsWith('/')) resolvedItem.PreviewUrl = `${targetUrl}${resolvedItem.PreviewUrl}`;
                   if (resolvedItem.DownloadUrl?.startsWith('/')) resolvedItem.DownloadUrl = `${targetUrl}${resolvedItem.DownloadUrl}`;
                   if (resolvedItem.Raw?.startsWith('/')) resolvedItem.Raw = `${targetUrl}${resolvedItem.Raw}`;
-                  setClips(prev => {
+                  setClipsRef.current(prev => {
                     // Check ALL clips for duplicate by id, title, or raw content
                     const dupIdx = prev.findIndex(c =>
                       (c.id && latest.id && c.id === latest.id) ||
@@ -377,7 +355,7 @@ export function useDeviceSync(params: {
                       return updated;
                     }
                     // Genuinely new item — prepend and scroll
-                    scrollToTop();
+                    scrollToTopRef.current();
                     return [{ ...resolvedItem, _needsDownload: true, _receivedVia: 'LAN' as const } as any, ...prev];
                   });
                 } else if (['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation'].includes(latest.Type)) {
@@ -447,7 +425,7 @@ export function useDeviceSync(params: {
                               if (devSnap.exists()) {
                                 const devs = devSnap.val();
                                 for (const dk of Object.keys(devs)) {
-                                  const d = await decryptDevice(devs[dk]);
+                                  const d = await decryptDevice(devs[dk], pk);
                                   if (d.GlobalUrl?.includes('trycloudflare.com') && d.DeviceType === 'PC') {
                                     fileUrl = `${d.GlobalUrl.replace(/\/$/, '')}/download${pathPart}`;
                                     break;
@@ -481,7 +459,7 @@ export function useDeviceSync(params: {
                         const subfolder = latest.Type === 'Pdf' ? 'PDFs' : latest.Type === 'Video' ? 'Videos' : latest.Type === 'Audio' ? 'Audio' : 'Documents';
                         const safeName = (latest.Title || `file_${NetworkClock.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
                         const destPath = await getDownloadPath(subfolder, safeName);
-                        enqueueDownload({
+                        enqueueDownloadRef.current({
                           id: latest.id || '', title: latest.Title || safeName, type: latest.Type,
                           fileUrl, destPath, source: dlSource,
                           sourceDevice: latest.SourceDeviceName || 'PC',
@@ -494,7 +472,7 @@ export function useDeviceSync(params: {
                     }
                   }
                   // Add file entry to feed so the user sees it (show filename, not URL)
-                  setClips(prev => {
+                  setClipsRef.current(prev => {
                     // Check ALL clips for duplicate by id, title, or raw content
                     const dupIdx = prev.findIndex(c =>
                       (c.id && latest.id && c.id === latest.id) ||
@@ -508,7 +486,7 @@ export function useDeviceSync(params: {
                       return updated;
                     }
                     // Genuinely new item — prepend and scroll
-                    scrollToTop();
+                    scrollToTopRef.current();
                     return [{ ...latest, Raw: latest.Title || latest.Raw, Timestamp: NetworkClock.now(), _receivedVia: 'LAN' as const } as any, ...prev];
                   });
                   // REMOVED: UN-DELETE logic that brought back deleted items
@@ -528,17 +506,41 @@ export function useDeviceSync(params: {
                 // ═══ Smart Notification (Change 2) ═══
                 // Background: send OS notification. Foreground: scrollToTop handles the pill.
                 if (AppState.currentState !== 'active') {
-                  const typeEmoji: Record<string, string> = { 'Image': '📸', 'ImageLink': '📸', 'Pdf': '📄', 'Document': '📄', 'File': '📎', 'Video': '🎬', 'Audio': '🎵', 'Text': '📝', 'Url': '🔗', 'Code': '💻' };
-                  const emoji = typeEmoji[latest.Type] || '📋';
-                  const title = latest.Title || latest.Raw?.substring(0, 50) || 'New item';
-                  Notifications.scheduleNotificationAsync({
-                    content: {
-                      title: `${emoji} ${latest.Type} arrived`,
-                      body: title.length > 80 ? title.substring(0, 80) + '...' : title,
-                      sound: 'default',
-                    },
-                    trigger: null, // Immediate
-                  }).catch(() => {});
+                  const isFile = ['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation', 'Image', 'ImageLink', 'QRCode'].includes(latest.Type);
+                  const channelId = isFile ? 'sync_files' : 'sync_clips';
+                  const sourceDevice = latest.SourceDeviceName || 'PC';
+
+                  recentNotificationCount++;
+                  if (!recentNotificationTimer) {
+                    recentNotificationTimer = setTimeout(() => {
+                      recentNotificationCount = 0;
+                      recentNotificationTimer = null;
+                    }, 5000);
+                  }
+
+                  if (recentNotificationCount >= 3) {
+                    Notifications.scheduleNotificationAsync({
+                      identifier: 'sync_summary',
+                      content: {
+                        title: 'Sync Summary',
+                        body: `📋 ${recentNotificationCount} new clips synced from ${sourceDevice}`,
+                        categoryIdentifier: 'clip_action',
+                      },
+                      trigger: { channelId: channelId },
+                    }).catch(() => {});
+                  } else {
+                    const rawBody = latest.Raw || latest.Title || '';
+                    const body = rawBody.length > 100 ? rawBody.substring(0, 100) + '...' : rawBody;
+                    
+                    Notifications.scheduleNotificationAsync({
+                      content: {
+                        title: `📋 ${sourceDevice}`,
+                        body: body,
+                        categoryIdentifier: 'clip_action',
+                      },
+                      trigger: { channelId: channelId },
+                    }).catch(() => {});
+                  }
                 }
               }
             }
@@ -614,7 +616,7 @@ export function useDeviceSync(params: {
                       if (devSnap.exists()) {
                         const devs = devSnap.val();
                         for (const dk of Object.keys(devs)) {
-                          const d = await decryptDevice(devs[dk]);
+                          const d = await decryptDevice(devs[dk], pk);
                           if (d.GlobalUrl?.includes('trycloudflare.com') && d.DeviceType === 'PC') {
                             fileUrl = `${d.GlobalUrl.replace(/\/$/, '')}/download${pathPart}`;
                             break;
@@ -636,7 +638,7 @@ export function useDeviceSync(params: {
                 const safeName = (item.Title || `file_${NetworkClock.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
                 const destPath = await getDownloadPath(subfolder, safeName);
                 syncLog('PC-POLL', `File sweep → queue: ${item.Title} via ${dlSource}`);
-                enqueueDownload({
+                enqueueDownloadRef.current({
                   id: item.id || '', title: item.Title || safeName, type: item.Type,
                   fileUrl, destPath, source: dlSource,
                   sourceDevice: item.SourceDeviceName || 'PC',
@@ -646,7 +648,7 @@ export function useDeviceSync(params: {
               syncLog('PC-POLL', `File sweep error: ${item.Title} — ${dlErr?.message || dlErr}`);
             }
           }
-          setClips(current => {
+          setClipsRef.current(current => {
             let merged = [...current];
             let changed = false;
             let hasNewItems = false;
@@ -669,18 +671,18 @@ export function useDeviceSync(params: {
                 changed = true;
               } else {
                 // Genuinely new — add to top
-                merged.unshift({ ...localItem, _receivedVia: 'Cloud' });
+                merged.unshift({ ...localItem, _receivedVia: localItem._receivedVia || 'Cloud' });
                 changed = true;
                 hasNewItems = true;
               }
             });
             if (!changed) return current;
-            if (hasNewItems) scrollToTop(); // Only scroll for genuinely new items
+            if (hasNewItems) scrollToTopRef.current(); // Only scroll for genuinely new items
             return merged;
           });
           // Trigger background download effects for new clips from LAN poll
-          setImageDownloadTrigger(t => t + 1);
-          setRichMediaDownloadTrigger(t => t + 1);
+          setImageDownloadTriggerRef.current(t => t + 1);
+          setRichMediaDownloadTriggerRef.current(t => t + 1);
         }
 
         // Cleanup stale fingerprints (LAN path) — prevent unbounded growth
@@ -734,9 +736,9 @@ export function useDeviceSync(params: {
         
         // Invalidate in-memory cache so next poll runs fresh resolution (checking Firebase if needed)
         cachedPcUrlRef.current = null;
-        recordCloudflareFailure();
-        markPcUnreachable();
-        setConnectionInfo(null);
+        recordCloudflareFailureRef.current();
+        markPcUnreachableRef.current();
+        setConnectionInfoRef.current(null);
       }
       } finally { pollLockRef.current = false; }
     };
@@ -775,6 +777,9 @@ export function useDeviceSync(params: {
     });
 
     // ─── Unified Real-Time Duplex Engine (WebSocket Primary + Fallback Pipeline) ───
+    let wsReconnectDelay = 3000;
+    const WS_MAX_RECONNECT_DELAY = 60000;
+
     let wsInstance: WebSocket | null = null;
     let wsPingInterval: any = null;
     let isTornDown = false;
@@ -815,6 +820,7 @@ export function useDeviceSync(params: {
 
     const startWebSocketEngine = async () => {
       if (isTornDown) return;
+      if (!pairingKeyRef.current) { setTimeout(startWebSocketEngine, 1000); return; }
       try {
         const targetUrl = cachedPcUrlRef.current || (await getCachedPcUrl().catch(() => ''));
         if (!targetUrl || isTornDown) {
@@ -836,15 +842,19 @@ export function useDeviceSync(params: {
         const connType = targetUrl.includes('trycloudflare.com') ? 'Cloud' as const : 'LAN' as const;
 
         ws.onopen = () => {
+          wsReconnectDelay = 3000;
           if (isTornDown) { ws.close(); return; }
           wsConnected = true;
           longPollActive = false; // Disable fallback when WebSocket is live
-          markPcReachable();
-          resetCloudflareFailCount();
+          if (currentLongPollController) { currentLongPollController.abort(); currentLongPollController = null; }
+          DirectMesh.registerWebSocket(ws);
+          DirectMesh.drainOutbox();
+          markPcReachableRef.current();
+          resetCloudflareFailCountRef.current();
           pollRetryCountRef.current = 0;
           syncLog('WS-PEER', `✅ Persistent Duplex Socket ESTABLISHED to ${targetUrl} (${connType})`);
 
-          // Send initial ping and start 5s heartbeat
+          // Send initial ping and start 15s heartbeat
           const sendPing = () => {
             if (ws.readyState === WebSocket.OPEN) {
               const pingPayload = JSON.stringify({ type: 'Ping', ts: Date.now() });
@@ -853,7 +863,7 @@ export function useDeviceSync(params: {
           };
           sendPing();
           clearInterval(wsPingInterval);
-          wsPingInterval = setInterval(sendPing, 5000);
+          wsPingInterval = setInterval(sendPing, 15000);
         };
 
         ws.onmessage = (event) => {
@@ -861,7 +871,7 @@ export function useDeviceSync(params: {
             const raw = typeof event.data === 'string' ? event.data : '';
             if (!raw) return;
             if (raw === 'pong') {
-              markPcReachable();
+              markPcReachableRef.current();
               return;
             }
 
@@ -870,13 +880,33 @@ export function useDeviceSync(params: {
               if (msg.type === 'Pong') {
                 const now = Date.now();
                 const latency = msg.ts ? Math.max(1, Math.round(now - msg.ts)) : 5;
-                setConnectionInfo({ url: targetUrl, latencyMs: latency, type: connType });
+                setConnectionInfoRef.current({ url: targetUrl, latencyMs: latency, type: connType });
                 pairedDevicesRef.current.filter(d => d.deviceType === 'PC').forEach(d => {
-                  updateDeviceStatus(d.deviceId, { isOnline: true, connectionType: connType, latencyMs: latency, lastSeen: NetworkClock.now() });
+                  updateDeviceStatusRef.current(d.deviceId, { isOnline: true, connectionType: connType, latencyMs: latency, lastSeen: NetworkClock.now() });
                 });
-                markPcReachable();
-              } else if (msg.type === 'ClipboardPush' || msg.type === 'clipboard' || msg.type === 'SyncText') {
-                syncLog('WS-PEER', `⚡ Instant Push from PC via WebSocket (${msg.type})`);
+                markPcReachableRef.current();
+              } else if (msg.type === 'UrlUpdate') {
+                syncLog('WS-PEER', `⚡ Direct UrlUpdate from PC: LAN=${msg.lanUrl}, Cloud=${msg.cfUrl}`);
+                if (msg.cfUrl) {
+                  AsyncStorage.setItem('lastCloudflareUrl', msg.cfUrl).catch(() => {});
+                  AsyncStorage.setItem('pairedGlobalUrl', msg.cfUrl).catch(() => {});
+                  setSecureItem('pairedGlobalUrl', msg.cfUrl).catch(() => {});
+                  setSecureItem('lastCloudflareUrl', msg.cfUrl).catch(() => {});
+                  if (connType === 'Cloud') {
+                    cachedPcUrlRef.current = msg.cfUrl;
+                    cachedPcUrlTimestampRef.current = NetworkClock.now();
+                  }
+                }
+                if (msg.lanUrl) {
+                  AsyncStorage.setItem('@flyshelf_last_lan_url', msg.lanUrl).catch(() => {});
+                  setSecureItem('pairedLocalUrl', msg.lanUrl).catch(() => {});
+                  if (connType === 'LAN') {
+                    cachedPcUrlRef.current = msg.lanUrl;
+                    cachedPcUrlTimestampRef.current = NetworkClock.now();
+                  }
+                }
+              } else if (msg.type !== 'Ping') {
+                syncLog('WS-PEER', `⚡ Instant Push from PC via WebSocket (${msg.type || 'clip'})`);
                 lastActivityRef.current = NetworkClock.now();
                 pollFn().catch(() => {});
               }
@@ -892,17 +922,22 @@ export function useDeviceSync(params: {
 
         ws.onclose = (ev) => {
           clearInterval(wsPingInterval);
+          DirectMesh.registerWebSocket(null);
           if (isTornDown) return;
-          syncLog('WS-PEER', `WebSocket closed (code=${ev.code}). Engaging fallback & reconnecting.`);
+          syncLog('WS-PEER', `WebSocket closed (code=${ev.code}). Engaging fallback & reconnecting in ${wsReconnectDelay}ms.`);
           
           if (!wsConnected && !longPollActive) {
             startLongPollFallback();
           }
           
-          setTimeout(startWebSocketEngine, 3000);
+          setTimeout(startWebSocketEngine, wsReconnectDelay);
+          wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY);
         };
       } catch (err: any) {
-        if (!isTornDown) setTimeout(startWebSocketEngine, 3000);
+        if (!isTornDown) {
+          setTimeout(startWebSocketEngine, wsReconnectDelay);
+          wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY);
+        }
       }
     };
 
@@ -910,6 +945,7 @@ export function useDeviceSync(params: {
 
     return () => {
       isTornDown = true;
+      DirectMesh.registerWebSocket(null);
       appStateSub.remove();
       if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; }
       clearInterval(wsPingInterval);

@@ -146,20 +146,6 @@ export async function splitPdf(
 
 /** @internal Not currently used by any tool — kept for future use */
 /** Remove specific pages from a PDF (1-indexed page numbers) */
-export async function removePages(pdfPath: string, pageNumbers: number[]): Promise<string> {
-  const bytes = await readPdfBytes(pdfPath);
-  const source = await PDFDocument.load(bytes, { ignoreEncryption: true });
-  const totalPages = source.getPageCount();
-  const keep = Array.from({ length: totalPages }, (_, i) => i)
-    .filter(i => !pageNumbers.includes(i + 1));
-
-  if (keep.length === 0) throw new Error('Cannot remove all pages');
-
-  const newDoc = await PDFDocument.create();
-  const copied = await newDoc.copyPages(source, keep);
-  copied.forEach(p => newDoc.addPage(p));
-  return savePdf(newDoc, 'pages_removed');
-}
 
 /** Reorder pages in a PDF (0-indexed new order array) */
 export async function reorderPages(pdfPath: string, newOrder: number[]): Promise<string> {
@@ -381,37 +367,6 @@ export async function addImagePages(
 
 /** @internal Not currently used by any tool — kept for future use */
 /** Insert pages from another PDF into target at a specific position */
-export async function addPdfPages(
-  targetPath: string,
-  sourcePath: string,
-  insertAt: number,
-  sourcePages?: number[]
-): Promise<string> {
-  const targetBytes = await readPdfBytes(targetPath);
-  const sourceBytes = await readPdfBytes(sourcePath);
-  const targetDoc = await PDFDocument.load(targetBytes, { ignoreEncryption: true });
-  const sourceDoc = await PDFDocument.load(sourceBytes, { ignoreEncryption: true });
-  const totalPages = targetDoc.getPageCount();
-  const pos = Math.min(Math.max(0, insertAt), totalPages);
-
-  const srcIndices = sourcePages
-    ? sourcePages.map(n => n - 1).filter(i => i >= 0 && i < sourceDoc.getPageCount())
-    : sourceDoc.getPageIndices();
-
-  const result = await PDFDocument.create();
-  if (pos > 0) {
-    const before = await result.copyPages(targetDoc, Array.from({ length: pos }, (_, i) => i));
-    before.forEach(p => result.addPage(p));
-  }
-  const srcCopied = await result.copyPages(sourceDoc, srcIndices);
-  srcCopied.forEach(p => result.addPage(p));
-  if (pos < totalPages) {
-    const after = await result.copyPages(targetDoc, Array.from({ length: totalPages - pos }, (_, i) => pos + i));
-    after.forEach(p => result.addPage(p));
-  }
-
-  return savePdf(result, 'pdf_pages_added');
-}
 
 /** Optimize & compress PDF by cleaning unreferenced objects, stripping metadata, and recompressing streams */
 export async function compressPdf(pdfPath: string): Promise<string> {

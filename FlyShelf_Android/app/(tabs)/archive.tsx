@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AppErrorBoundary from '../../components/AppErrorBoundary';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, useWindowDimensions, Modal, Alert, ScrollView, Image, Platform, FlatList, ToastAndroid, Linking, TextInput, Pressable } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, useWindowDimensions, Modal, Alert, ScrollView, Image, Platform, RefreshControl, ToastAndroid, Linking, TextInput, Pressable } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+const FlashListCast = FlashList as React.ComponentType<any>;
 import { toast } from '../../context/ToastContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
@@ -46,6 +48,7 @@ function FilesScreenInner() {
     hasPermission,
     mediaAssets, setMediaAssets,
     isScanning,
+    isBackgroundRefreshing,
     scanMedia: scanMediaHook,
     autoScan,
     hasScannedRef,
@@ -68,7 +71,7 @@ function FilesScreenInner() {
 
   // Wrap scanMedia so the UI can pass current date range
   const scanMedia = useCallback(() => {
-    scanMediaHook(startDate, endDate);
+    scanMediaHook(startDate, endDate, true);
   }, [scanMediaHook, startDate, endDate]);
 
   // Transfer pause state (mirrored for UI)
@@ -509,7 +512,8 @@ function FilesScreenInner() {
       if (Platform.OS === 'android') {
         // Copy to app-local cache first — getContentUriAsync only works on paths within the app's configured FileProvider roots
         const fileName = (asset.filename || uri.split('/').pop() || `file_${Date.now()}`).replace(/[^a-zA-Z0-9.-]/g, '_');
-        const appLocalPath = `${(FileSystem as any).cacheDirectory}open_${fileName}`;
+        const nonce = `${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const appLocalPath = `${(FileSystem as any).cacheDirectory}open_${nonce}_${fileName}`;
         try {
           await FileSystem.copyAsync({ from: fileUri, to: appLocalPath });
         } catch (copyErr) {
@@ -630,27 +634,45 @@ function FilesScreenInner() {
 
       {/* Count + Actions */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 6, marginBottom: 4 }}>
-        <Text style={{ color: colors.text.secondary, fontSize: 12, fontFamily: font.semibold }}>
-          {flatListData.length} files · {selectedIds.size} selected
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ color: colors.text.secondary, fontSize: 12, fontFamily: font.semibold }}>
+            {flatListData.length} files · {selectedIds.size} selected
+          </Text>
+          {isBackgroundRefreshing && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <ActivityIndicator size={10} color={colors.accent.primary} />
+              <Text style={{ color: colors.accent.primary, fontSize: 10, fontFamily: font.medium }}>Updating…</Text>
+            </View>
+          )}
+        </View>
         <TouchableOpacity style={{ backgroundColor: colors.bg.cardHover, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: colors.border.subtle }} onPress={() => toggleSelectAll([...getFilteredAssets(), ...browserFiles])} accessibilityLabel="Select all files" accessibilityRole="button">
           <Text style={{ color: colors.text.primary, fontSize: 10, fontFamily: font.bold }}>Select All</Text>
         </TouchableOpacity>
       </View>
 
-      {/* File List */}
-      {isScanning ? (
+      {/* File List — FlashList for virtualized performance */}
+      {isScanning && flatListData.length === 0 ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color="#4A62EB" />
           <Text style={{ color: '#8A8F98', marginTop: 12, fontSize: 13 }}>Scanning device files...</Text>
         </View>
       ) : (
-        <FlatList
+        <FlashListCast
           data={flatListData}
           onScroll={scrollHandler}
-          keyExtractor={(item, idx) => item.id || `f_${idx}`}
+          keyExtractor={(item: any, idx: number) => item.id || `f_${idx}`}
+          estimatedItemSize={80}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: selectedIds.size > 0 ? 180 : 100 }}
-          renderItem={({ item: asset }) => {
+          refreshControl={
+            <RefreshControl
+              refreshing={isScanning}
+              onRefresh={scanMedia}
+              tintColor={colors.accent.primary}
+              colors={[colors.accent.primary]}
+              progressBackgroundColor={colors.bg.card}
+            />
+          }
+          renderItem={({ item: asset }: { item: any }) => {
             const isSelected = selectedIds.has(asset.id);
             const isPdf = asset.mediaType === 'pdf';
             const isDoc = asset.mediaType === 'doc';
@@ -691,7 +713,7 @@ function FilesScreenInner() {
               </TouchableOpacity>
             );
           }}
-          ListEmptyComponent={<View style={{ alignItems: 'center', marginTop: 60 }}><Ionicons name="folder-open-outline" size={48} color={colors.text.tertiary} /><Text style={{ color: colors.text.secondary, marginTop: 12 }}>No files found</Text></View>}
+          ListEmptyComponent={<View style={{ alignItems: 'center', marginTop: 60 }}><Ionicons name="folder-open-outline" size={48} color={colors.text.tertiary} /><Text style={{ color: colors.text.secondary, marginTop: 12 }}>Pull down to scan files</Text></View>}
         />
       )}
 

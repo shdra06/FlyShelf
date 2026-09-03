@@ -18,8 +18,7 @@ namespace FlyShelf.ViewModels
 {
     public partial class ClipboardItem
     {
-
-        // [FIX M-33]: Use Lazy<T> for thread-safe, once-only resolution
+        // Shared LibreOffice path resolver (used by QrCode.cs and other conversion helpers)
         private static readonly Lazy<string?> _cachedLibreOfficePath = new(() =>
         {
             string[] paths =
@@ -28,7 +27,7 @@ namespace FlyShelf.ViewModels
                 @"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "LibreOffice", "program", "soffice.exe")
             };
-            return paths.FirstOrDefault(File.Exists); // null if none found
+            return paths.FirstOrDefault(File.Exists);
         });
         private static string? GetLibreOfficePath() => _cachedLibreOfficePath.Value;
 
@@ -52,6 +51,9 @@ namespace FlyShelf.ViewModels
                 {
                     string workFilePath = FilePath;
 
+                    bool converted = false;
+                    bool isTempWorkFile = false;
+
                     // ── Markdown text items (clipboard text detected as markdown) have no file ──
                     if (IsMarkdownPreview && (string.IsNullOrEmpty(workFilePath) || !File.Exists(workFilePath)))
                     {
@@ -64,6 +66,7 @@ namespace FlyShelf.ViewModels
                         }
                         workFilePath = Path.Combine(Path.GetTempPath(), $"FlyShelf_MD_{DateTime.Now:yyyyMMdd_HHmmss}.md");
                         File.WriteAllText(workFilePath, mdContent, System.Text.Encoding.UTF8);
+                        isTempWorkFile = true;
                     }
                     else if ((ItemType == ClipboardItemType.Text || ItemType == ClipboardItemType.Code) && (string.IsNullOrEmpty(workFilePath) || !File.Exists(workFilePath)))
                     {
@@ -76,6 +79,7 @@ namespace FlyShelf.ViewModels
                         }
                         workFilePath = Path.Combine(Path.GetTempPath(), $"FlyShelf_TXT_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
                         File.WriteAllText(workFilePath, txtContent, System.Text.Encoding.UTF8);
+                        isTempWorkFile = true;
                     }
                     else if (string.IsNullOrEmpty(workFilePath) || !File.Exists(workFilePath))
                     {
@@ -90,36 +94,52 @@ namespace FlyShelf.ViewModels
                     {
                         FlyShelf.Windows.ToastWindow.ShowProgress("Converting to PDF", 10);
                         FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ShowConversionNotification(
-                            ext.TrimStart('.'), "PDF");
+                            string.IsNullOrEmpty(ext) ? "DOC" : ext.TrimStart('.'), "PDF");
                     });
 
                     string targetPdf = Path.Combine(
                          Path.GetDirectoryName(workFilePath) ?? Path.GetTempPath(),
                          Path.GetFileNameWithoutExtension(workFilePath) + $"_Converted_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
 
-
-                    bool converted = false;
-
-                    // ═══════════════════════════════════════════════════════
-                    // ROBUST MULTI-TIER PDF CONVERSION ENGINE
-                    // ═══════════════════════════════════════════════════════
-                    if (ext == ".MD")
+                    try
                     {
-                        converted = await FlyShelf.Classes.ConversionUtils.ConvertMarkdownToPdfAsync(workFilePath, targetPdf);
+                        // ═══════════════════════════════════════════════════════
+                        // ROBUST MULTI-TIER PDF CONVERSION ENGINE
+                        // ═══════════════════════════════════════════════════════
+                        if (ext == ".MD" || ext == ".MARKDOWN")
+                        {
+                            converted = await FlyShelf.Classes.ConversionUtils.ConvertMarkdownToPdfAsync(workFilePath, targetPdf);
+                        }
+                        else if (ext == ".DOCX" || ext == ".DOC" || ext == ".RTF" || ext == ".ODT")
+                        {
+                            string res = await FlyShelf.Classes.ConversionUtils.ConvertDocToPdfAsync(workFilePath, targetPdf);
+                            if (!string.IsNullOrEmpty(res) && File.Exists(res))
+                            {
+                                converted = true;
+                                targetPdf = res;
+                            }
+                        }
+                        else if (ext == ".PNG" || ext == ".JPG" || ext == ".JPEG" || ext == ".WEBP" || ext == ".BMP" || ext == ".GIF" || ext == ".TIFF" || ext == ".ICO")
+                        {
+                            string res = FlyShelf.Classes.ConversionUtils.ConvertImageToPdf(workFilePath, targetPdf);
+                            if (!string.IsNullOrEmpty(res) && File.Exists(res))
+                            {
+                                converted = true;
+                                targetPdf = res;
+                            }
+                        }
+                        else
+                        {
+                            // Universal Text, Code, CSV, XML, JSON, YAML, Config fallback
+                            converted = FlyShelf.Classes.ConversionUtils.ConvertTextToPdf(workFilePath, targetPdf);
+                        }
                     }
-                    else if (ext == ".TXT" || ext == ".LOG" || ext == ".CSV" || ext == ".JSON" || ext == ".XML" || ext == ".CS" || ext == ".PY" || ext == ".JS" || ext == ".CPP" || ext == ".H" || ext == ".TS" || ext == ".HTML" || ext == ".CSS")
+                    finally
                     {
-                        converted = FlyShelf.Classes.ConversionUtils.ConvertTextToPdf(workFilePath, targetPdf);
-                    }
-                    else if (ext == ".DOCX" || ext == ".DOC" || ext == ".RTF")
-                    {
-                        string res = await FlyShelf.Classes.ConversionUtils.ConvertDocToPdfAsync(workFilePath, targetPdf);
-                        converted = !string.IsNullOrEmpty(res) && File.Exists(res);
-                    }
-                    else if (ext == ".PNG" || ext == ".JPG" || ext == ".JPEG" || ext == ".WEBP" || ext == ".BMP" || ext == ".GIF" || ext == ".TIFF" || ext == ".ICO")
-                    {
-                        string res = FlyShelf.Classes.ConversionUtils.ConvertImageToPdf(workFilePath, targetPdf);
-                        converted = !string.IsNullOrEmpty(res) && File.Exists(res);
+                        if (isTempWorkFile && File.Exists(workFilePath))
+                        {
+                            try { File.Delete(workFilePath); } catch { }
+                        }
                     }
 
                     // ═══════════════════════════════════════════════════════
@@ -162,237 +182,8 @@ namespace FlyShelf.ViewModels
 #endif
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // NATIVE TXT/MD → PDF (delegated to robust ConversionUtils engine)
-        // ═══════════════════════════════════════════════════════════════
-        private static bool ConvertTextToPdfNative(string inputPath, string outputPdf)
-        {
-            return FlyShelf.Classes.ConversionUtils.ConvertTextToPdf(inputPath, outputPdf);
-        }
 
-        // ═══════════════════════════════════════════════════════════════
-        // LIBREOFFICE HEADLESS — Fully silent, no GUI, no popups
-        // ═══════════════════════════════════════════════════════════════
-        private static bool TryLibreOfficeConvert(string inputPath, string outputPdf,
-            System.Threading.CancellationToken ct = default)
-        {
-            try
-            {
-                string? sofficePath = GetLibreOfficePath();
-                if (sofficePath == null) return false;
 
-                string outDir = Path.GetDirectoryName(outputPdf) ?? Path.GetTempPath();
-                string expectedName = Path.GetFileNameWithoutExtension(inputPath) + ".pdf";
-                string expectedPath = Path.Combine(outDir, expectedName);
-
-                var psi = new ProcessStartInfo
-                {
-                    FileName = sofficePath,
-                    Arguments = $"--headless --norestore --nofirststartwizard --convert-to pdf --outdir \"{outDir}\" \"{inputPath}\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    WindowStyle = ProcessWindowStyle.Hidden
-                };
-
-                using (var proc = Process.Start(psi))
-                {
-                    if (proc == null) return false;
-
-                    // Register cancellation to kill LibreOffice if the other converter wins
-                    using var reg = ct.Register(() => { try { if (!proc.HasExited) proc.Kill(); } catch { } /* Best-effort: failure is acceptable */ });
-
-                    bool exited = proc.WaitForExit(30000); // 30s — enough for LO cold start
-                    if (!exited || ct.IsCancellationRequested)
-                    {
-                        try { proc.Kill(); } catch { } // Best-effort: failure is acceptable
-                        return false;
-                    }
-
-                    if (proc.ExitCode == 0 && File.Exists(expectedPath))
-                    {
-                        if (expectedPath != outputPdf)
-                        {
-                            try { File.Move(expectedPath, outputPdf, true); } catch { } // Best-effort: failure is acceptable
-                        }
-                        return File.Exists(outputPdf);
-                    }
-                }
-                return false;
-            }
-            catch (Exception ex)
-            {
-                FlyShelf.Classes.Logger.LogAction("CONVERT", $"LibreOffice conversion failed: {ex.Message}");
-                return false;
-            }
-        }
-
-        // ═══════════════════════════════════════════════════════════════
-        // WORD COM — Full dialog suppression + cancellation support
-        // [FIX H-12]: Run Word COM on an explicit STA thread to avoid
-        // MTA hangs — COM automation requires STA apartment state.
-        // ═══════════════════════════════════════════════════════════════
-        private static Task<bool> TryWordComConvertStaAsync(string inputPath, string outputPdf)
-        {
-            var tcs = new TaskCompletionSource<bool>();
-            var staThread = new System.Threading.Thread(() =>
-            {
-                try
-                {
-                    bool result = TryWordComConvertCore(inputPath, outputPdf);
-                    tcs.TrySetResult(result);
-                }
-                catch (Exception ex)
-                {
-                    tcs.TrySetException(ex);
-                }
-            });
-            staThread.SetApartmentState(System.Threading.ApartmentState.STA);
-            staThread.IsBackground = true;
-            staThread.Start();
-
-            // 30-second timeout — if Word COM hangs (modal dialog, deadlock),
-            // abandon the thread and fall through to native/LibreOffice fallback.
-            Task.Run(async () =>
-            {
-                await Task.Delay(30000);
-                if (!tcs.Task.IsCompleted)
-                {
-                    Classes.Logger.LogAction("DOC2PDF", "Word COM STA thread timed out after 30s — killing");
-                    try
-                    {
-                        // Kill any orphaned Word process started by this thread
-                        foreach (var p in Process.GetProcessesByName("WINWORD"))
-                        {
-                            try { if (p.MainWindowTitle == "") p.Kill(); } catch { }
-                        }
-                    }
-                    catch { }
-                    tcs.TrySetResult(false);
-                }
-            });
-
-            return tcs.Task;
-        }
-
-        private static bool TryWordComConvertCore(string inputPath, string outputPdf)
-        {
-            dynamic? wordApp = null;
-            dynamic? doc = null;
-            Process? wordProcess = null;
-
-            try
-            {
-                var wordType = Type.GetTypeFromProgID("Word.Application");
-                if (wordType == null) return false;
-
-                wordApp = Activator.CreateInstance(wordType);
-
-                // ── SUPPRESS ALL DIALOGS AND POPUPS ──
-                wordApp.Visible = false;
-                wordApp.DisplayAlerts = 0;              // wdAlertsNone
-                wordApp.AutomationSecurity = 3;          // msoAutomationSecurityForceDisable
-                wordApp.Options.DoNotPromptForConvert = true;
-
-                // Suppress Protected View for all sources
-                try
-                {
-                    wordApp.Options.WarnBeforeSavingPrintOrMailMerge = false;
-                }
-                catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("CONVERT", $"Non-critical: {ex.Message}"); } // Best-effort: failure is acceptable
-                try
-                {
-                    // Disable Protected View triggers
-                    var protView = wordApp.Application.ProtectedViewWindows;
-                }
-                catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("CONVERT", $"Non-critical: {ex.Message}"); }
-
-                // Track the Word process for timeout kill
-                try
-                {
-                    int hwnd = wordApp.Application.Hwnd;
-                    if (hwnd != 0)
-                    {
-                        wordProcess = Process.GetProcesses()
-                            .Where(p => p.ProcessName.Equals("WINWORD", StringComparison.OrdinalIgnoreCase))
-                            .OrderByDescending(p => p.StartTime)
-                            .FirstOrDefault();
-                    }
-                }
-                catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("CONVERT", $"Non-critical: {ex.Message}"); }
-
-                // Open document with all dialog-triggering options disabled
-                doc = wordApp.Documents.Open(
-                    inputPath,              // FileName
-                    false,                  // ConfirmConversions — NO conversion dialog
-                    true,                   // ReadOnly
-                    false,                  // AddToRecentFiles
-                    "",                     // PasswordDocument — empty string, not Missing
-                    "",                     // PasswordTemplate
-                    true,                   // Revert (don't ask to revert)
-                    "",                     // WritePasswordDocument
-                    "",                     // WritePasswordTemplate
-                    Type.Missing,           // Format
-                    Type.Missing,           // Encoding
-                    false,                  // Visible
-                    false,                  // OpenAndRepair
-                    Type.Missing,           // DocumentDirection
-                    true,                   // NoEncodingDialog — suppress encoding dialog
-                    Type.Missing            // XMLTransform
-                );
-
-                if (doc == null) return false;
-
-                // Export to PDF
-                doc.ExportAsFixedFormat(
-                    outputPdf,              // OutputFileName
-                    17,                     // wdExportFormatPDF
-                    false,                  // OpenAfterExport
-                    0,                      // OptimizeFor: wdExportOptimizeForPrint
-                    0,                      // Range: wdExportAllDocument
-                    1,                      // From
-                    1,                      // To
-                    0,                      // Item: wdExportDocumentContent
-                    true,                   // IncludeDocProps
-                    true,                   // KeepIRM
-                    0,                      // CreateBookmarks: wdExportCreateNoBookmarks
-                    true,                   // DocStructureTags
-                    true,                   // BitmapMissingFonts
-                    false                   // UseISO19005_1 (PDF/A)
-                );
-
-                return File.Exists(outputPdf) && new FileInfo(outputPdf).Length > 0;
-            }
-            catch (Exception ex)
-            {
-                FlyShelf.Classes.Logger.LogAction("CONVERT", $"Word COM failed: {ex.Message}");
-                ForceKillWord(wordProcess);
-                return false;
-            }
-            finally
-            {
-                // Clean up COM objects — prevent orphaned WINWORD.EXE
-                try { if (doc != null) { doc.Close(0 /* wdDoNotSaveChanges */); System.Runtime.InteropServices.Marshal.ReleaseComObject(doc); } } catch { } // Best-effort: failure is acceptable
-                try { if (wordApp != null) { wordApp.Quit(0); System.Runtime.InteropServices.Marshal.ReleaseComObject(wordApp); } } catch { } // Best-effort: failure is acceptable
-            }
-        }
-
-        /// <summary>
-        /// Force kill a Word process that is likely stuck on a dialog.
-        /// </summary>
-        private static void ForceKillWord(Process? wordProcess)
-        {
-            try
-            {
-                if (wordProcess != null && !wordProcess.HasExited)
-                {
-                    wordProcess.Kill();
-                    FlyShelf.Classes.Logger.LogAction("CONVERT", $"Force-killed WINWORD PID {wordProcess.Id}");
-                }
-            }
-            catch { } // Best-effort: failure is acceptable
-        }
 
         /// <summary>
         /// Convert an image to a PDF file using the robust ConversionUtils engine.
@@ -470,6 +261,9 @@ namespace FlyShelf.ViewModels
         /// </summary>
         public void ConvertImageFormat(string targetFormat)
         {
+            // M9 fix: Guard against null targetFormat
+            if (string.IsNullOrWhiteSpace(targetFormat)) return;
+
             if (!IsImagePreview || string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath))
             {
                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>

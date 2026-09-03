@@ -23,6 +23,11 @@ namespace FlyShelf.ViewModels
         // PERF: Debounce ShelfVisibility notification during rapid deletes
         private System.Windows.Threading.DispatcherTimer? _shelfVisibilityDebounce;
 
+        // Graduated capacity warning — tracks the last threshold that fired so each fires only once
+        private int _lastCapacityWarningCount = 0;
+        // Auto-cleanup retention toast throttle — fire at most once per calendar day
+        private DateTime _lastAutoCleanupToastDate = DateTime.MinValue;
+
         // PERF [FIX 5]: Cached unpinned item count with incremental updates
         // Avoids O(n) LINQ scans on every CollectionChanged — only recounts on Reset
         private int _cachedUnpinnedCount = -1;
@@ -661,21 +666,33 @@ namespace FlyShelf.ViewModels
         public void PruneOldItems()
         {
             int maxUnpinnedItems = Classes.LicenseManager.GetHistoryCap();
-            int warningThreshold = Classes.LicenseManager.IsPro ? 2000 : 150;
             int totalCount = DroppedItems.Count;
             
-            // Show warning starting at warningThreshold items (but don't prune yet)
-            if (totalCount >= warningThreshold && totalCount <= maxUnpinnedItems)
+            // ── Graduated capacity warnings (fire once per threshold crossing) ──
+            // Only 3 warnings before the hard limit, not every 50/100 items.
+            if (totalCount <= maxUnpinnedItems)
             {
                 int unpinnedCount = CachedUnpinnedCount;
-                if (unpinnedCount >= warningThreshold && unpinnedCount < maxUnpinnedItems)
+                if (unpinnedCount > _lastCapacityWarningCount)
                 {
-                    // Warn every 50 items for Free (or 100 for Pro) to give frequent heads-up
-                    int step = Classes.LicenseManager.IsPro ? 100 : 50;
-                    if (unpinnedCount % step == 0)
+                    int remaining = maxUnpinnedItems - unpinnedCount;
+                    // Threshold 3 (95%): urgent — about to fill
+                    if (unpinnedCount >= (int)(maxUnpinnedItems * 0.95) && _lastCapacityWarningCount < (int)(maxUnpinnedItems * 0.95))
                     {
-                        int remaining = maxUnpinnedItems - unpinnedCount;
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Clipboard has {unpinnedCount} items. {remaining} slots remaining (max {maxUnpinnedItems}).");
+                        _lastCapacityWarningCount = unpinnedCount;
+                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠ Clipboard almost full! Only {remaining} slots left. Oldest items will be auto-removed.");
+                    }
+                    // Threshold 2 (90%): warning
+                    else if (unpinnedCount >= (int)(maxUnpinnedItems * 0.90) && _lastCapacityWarningCount < (int)(maxUnpinnedItems * 0.90))
+                    {
+                        _lastCapacityWarningCount = unpinnedCount;
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Clipboard is 90% full ({unpinnedCount}/{maxUnpinnedItems}). Delete old items to free space.");
+                    }
+                    // Threshold 1 (80%): informational
+                    else if (unpinnedCount >= (int)(maxUnpinnedItems * 0.80) && _lastCapacityWarningCount < (int)(maxUnpinnedItems * 0.80))
+                    {
+                        _lastCapacityWarningCount = unpinnedCount;
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Clipboard is 80% full ({unpinnedCount}/{maxUnpinnedItems} items). Consider cleaning up old clips.");
                     }
                 }
             }
@@ -1129,8 +1146,12 @@ namespace FlyShelf.ViewModels
                         {
                             // v7.2 FREE: Show warning instead of auto-deleting
                             Classes.Logger.LogAction("AUTO_CLEANUP", $"⚠️ {expiredItems.Count} unpinned items are older than {retentionDays} days. Pin important items to keep them forever.");
-                            // Show a non-intrusive toast warning (not a blocking dialog)
-                            Windows.ToastWindow.ShowToast($"{expiredItems.Count} old clipboard items found. Pin important ones to keep them!");
+                            // Show a non-intrusive toast warning at most once per calendar day
+                            if (_lastAutoCleanupToastDate.Date != DateTime.Now.Date)
+                            {
+                                _lastAutoCleanupToastDate = DateTime.Now;
+                                Windows.ToastWindow.ShowToast($"{expiredItems.Count} old clipboard items found. Pin important ones to keep them!");
+                            }
                             // DO NOT delete — user must manually clear if they want
                             // ORIGINAL AUTO-DELETE:
                             // BulkRemoveItems(expiredItems);

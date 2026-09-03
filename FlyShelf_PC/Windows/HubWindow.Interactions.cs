@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -135,14 +135,22 @@ namespace FlyShelf.Windows
                 {
                     item.CompileAndRunNative();
                 }
-                else if (item.SmartActionType == "OpenPDF" || item.SmartActionType =="JoinMeeting"|| item.SmartActionType =="OpenBrowser")
+                else if (item.SmartActionType == "OpenPDF")
                 {
-                    string target = item.SmartActionType == "OpenPDF" ? item.FilePath : item.RawContent;
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { } // Best-effort: failure is acceptable
+                    if (!string.IsNullOrEmpty(item.FilePath))
+                        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = item.FilePath, UseShellExecute = true }); } catch { }
+                }
+                else if (item.SmartActionType == "JoinMeeting" || item.SmartActionType == "OpenBrowser")
+                {
+                    // SECURITY: Validate URL scheme is strictly http or https
+                    if (Uri.TryCreate(item.RawContent, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+                        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = item.RawContent, UseShellExecute = true }); } catch { }
                 }
                 else if (item.SmartActionType == "OpenMap")
                 {
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "bingmaps:?q=" + Uri.EscapeDataString(item.RawContent), UseShellExecute = true }); } catch { } // Best-effort: failure is acceptable
+                    // SECURITY: Use HTTPS URL instead of bingmaps: custom protocol handler
+                    string target = "https://www.bing.com/maps?q=" + Uri.EscapeDataString(item.RawContent);
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { }
                 }
             }
         }

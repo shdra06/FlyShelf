@@ -53,10 +53,10 @@ namespace FlyShelf.Windows
             {
                 IncognitoToggleBtn.Content = "Disable";
                 IncognitoToggleBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Danger;
-                IncognitoDurationCombo.IsEnabled = false;
+                if (IncognitoDurationCombo != null) IncognitoDurationCombo.IsEnabled = false;
 
                 string remaining = Classes.IncognitoManager.RemainingTimeText;
-                if (!string.IsNullOrEmpty(remaining))
+                if (!string.IsNullOrEmpty(remaining) && IncognitoStatusText != null)
                 {
                     IncognitoStatusText.Text = $"Active  {remaining}";
                     IncognitoStatusText.Visibility = Visibility.Visible;
@@ -66,8 +66,8 @@ namespace FlyShelf.Windows
             {
                 IncognitoToggleBtn.Content = "Enable";
                 IncognitoToggleBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Caution;
-                IncognitoDurationCombo.IsEnabled = true;
-                IncognitoStatusText.Visibility = Visibility.Collapsed;
+                if (IncognitoDurationCombo != null) IncognitoDurationCombo.IsEnabled = true;
+                if (IncognitoStatusText != null) IncognitoStatusText.Visibility = Visibility.Collapsed;
             }
         }
 

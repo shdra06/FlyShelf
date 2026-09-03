@@ -31,7 +31,7 @@ interface UseScreenshotSyncParams {
   activeDevices: any[];
   pcLocalIp: string;
   pairingKeyRef: React.MutableRefObject<string>;
-  sentContentFingerprintsRef: React.MutableRefObject<Set<string>>;
+  sentContentFingerprintsRef: React.MutableRefObject<Map<string, number>>;
   processedEventsRef: React.MutableRefObject<Map<string, number>>;
   localScreenshotsRef: React.MutableRefObject<ClipItem[]>;
   lastWorkingPcUrlRef: React.MutableRefObject<string | null>;
@@ -159,11 +159,11 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
           return;
         }
         lastScreenshotUploadTimeRef.current = now;
-        sentContentFingerprintsRef.current.add(`screenshot::${fileName}`);
+        sentContentFingerprintsRef.current.set(`screenshot::${fileName}`, Date.now());
         // M-9 FIX: Cap sentContentFingerprints to prevent unbounded growth
         if (sentContentFingerprintsRef.current.size > 500) {
-          const entries = Array.from(sentContentFingerprintsRef.current);
-          sentContentFingerprintsRef.current = new Set(entries.slice(-200));
+          const sorted = [...sentContentFingerprintsRef.current.entries()].sort((a, b) => b[1] - a[1]).slice(0, 200);
+          sentContentFingerprintsRef.current = new Map(sorted);
         }
         lastSyncedScreenshotRef.current = screenshotPath;
         syncLog('SCREENSHOT', `Native detected: ${fileName}`);
@@ -232,11 +232,11 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
             return;
           }
           setLastScannedImageId(latest.id);
-          sentContentFingerprintsRef.current.add(fp);
+          sentContentFingerprintsRef.current.set(fp, Date.now());
           // M-9 FIX: Cap sentContentFingerprints to prevent unbounded growth
           if (sentContentFingerprintsRef.current.size > 500) {
-            const entries = Array.from(sentContentFingerprintsRef.current);
-            sentContentFingerprintsRef.current = new Set(entries.slice(-200));
+            const sorted = [...sentContentFingerprintsRef.current.entries()].sort((a, b) => b[1] - a[1]).slice(0, 200);
+            sentContentFingerprintsRef.current = new Map(sorted);
           }
           setIsSending(true);
           syncLog('MEDIA', `Screenshot detected: ${latest.filename}`);

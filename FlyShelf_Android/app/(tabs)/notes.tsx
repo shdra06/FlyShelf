@@ -382,6 +382,7 @@ function NotesScreenInner() {
           Id: sectionId,
           Content: content,
           CreatedAt: curSections[0]?.CreatedAt || new Date().toISOString(),
+          SubNotes: curSections[0]?.SubNotes || [],
         }
       ];
       updated[idx] = {

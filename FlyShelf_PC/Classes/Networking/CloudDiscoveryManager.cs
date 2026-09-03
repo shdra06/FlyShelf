@@ -34,12 +34,7 @@ namespace FlyShelf.Classes
             return await AuthUrl(path);
         }
         
-        /// <summary>Returns the scoped clipboard path for this device's pairing key.</summary>
-        private static async Task<string> GetScopedClipboardUrl()
-        {
-            string pairingKey = DevicePairingManager.EnsurePairingKey();
-            return (await AuthUrl($"clipboard/{pairingKey}.json"));
-        }
+        // ZERO-TRUST: GetScopedClipboardUrl removed — Firebase stores zero clipboard data.
         
         // Public Cloudflare URL for constructing file download links
         public static string CachedGlobalUrl { get; set; } = "";
@@ -73,26 +68,27 @@ namespace FlyShelf.Classes
                 string uid = await FirebaseAuthManager.GetUidAsync();
                 if (string.IsNullOrEmpty(uid))
                 {
-                    Logger.LogAction("ROOM_MEMBER", "Cannot register room membership: UID is empty.");
+                    Logger.LogAction("ROOM_MEMBER", "[STEP 2/6: ROOM MEMBERSHIP ERROR] Cannot register room membership: UID is empty.");
                     return;
                 }
 
+                Logger.LogAction("ROOM_MEMBER", $"[STEP 2/6: ROOM MEMBERSHIP] Registering members/{pairingKey[..Math.Min(8, pairingKey.Length)]}.../{uid[..Math.Min(8, uid.Length)]}...");
                 string url = await AuthUrl($"members/{pairingKey}/{uid}.json");
                 var content = new StringContent("true", Encoding.UTF8, "application/json");
                 using var response = await _client.PutAsync(url, content);
                 if (response.IsSuccessStatusCode)
                 {
-                    Logger.LogAction("ROOM_MEMBER", $"Registered room membership successfully for pairing key: {pairingKey}");
+                    Logger.LogAction("ROOM_MEMBER", $"[STEP 2/6: ROOM MEMBERSHIP] ✅ Registered room membership successfully for key: {pairingKey[..Math.Min(8, pairingKey.Length)]}...");
                 }
                 else
                 {
                     string body = await response.Content.ReadAsStringAsync();
-                    Logger.LogAction("ROOM_MEMBER", $"Room membership registration failed: HTTP {(int)response.StatusCode} - {body}");
+                    Logger.LogAction("ROOM_MEMBER", $"[STEP 2/6: ROOM MEMBERSHIP ERROR] ❌ Room membership registration failed: HTTP {(int)response.StatusCode} - {body}");
                 }
             }
             catch (Exception ex)
             {
-                Logger.LogAction("ROOM_MEMBER", $"Room membership registration error: {ex.Message}");
+                Logger.LogAction("ROOM_MEMBER", $"[STEP 2/6: ROOM MEMBERSHIP ERROR] ❌ Room membership error: {ex.Message}");
             }
         }
 
@@ -119,7 +115,8 @@ namespace FlyShelf.Classes
             }
 
             // Time-windowed dedup: skip if same content was pushed SUCCESSFULLY within last 10 seconds
-            string fingerprint = $"{item.ItemType}::{(item.RawContent ?? "").AsSpan(0, Math.Min(200, (item.RawContent ?? "").Length))}";
+            string contentKey = !string.IsNullOrEmpty(item.FilePath) ? item.FilePath : (item.RawContent ?? "");
+            string fingerprint = $"{item.ItemType}::{contentKey.AsSpan(0, Math.Min(200, contentKey.Length))}";
             long nowMs = NetworkClock.UtcNowMs;
             lock (_recentPushTimes)
             {
@@ -151,17 +148,21 @@ namespace FlyShelf.Classes
             {
                 // ═━═━═━ v5 PEER-ONLY: Push directly to connected peers ═━═━═━
                 // PeerManager sends text/files directly via LAN or Cloudflare.
-                // Firebase is NEVER used for content transfer — only for device discovery & URL exchange.
+                // Mobile devices pull via /api/sync and receive real-time notifications via WebSocket/long-poll.
                 bool isTextType = item.ItemType == ClipboardItemType.Text || item.ItemType == ClipboardItemType.Url || item.ItemType == ClipboardItemType.Code;
                 bool isFileEarly = !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
 
+                // Instantly notify any connected mobile clients via NetworkSyncServer
+                NetworkSyncServer.Instance?.NotifyClipboardChanged(
+                    item.ItemType.ToString(), 
+                    item.FileName ?? (item.RawContent != null ? item.RawContent[..Math.Min(40, item.RawContent.Length)] : ""));
+
+                int delivered = 0;
                 if (PeerManager.Instance != null && PeerManager.Instance.AliveCount > 0)
                 {
-                    int delivered = 0;
-
                     if (isTextType || !isFileEarly)
                     {
-                        // TEXT: push directly to all peers
+                        // TEXT: push directly to all PC peers
                         string peerTitle = !string.IsNullOrEmpty(item.FileName)
                             ? item.FileName
                             : (item.RawContent?.Length > 30 ? string.Concat(item.RawContent.AsSpan(0, 30), "...") : item.RawContent ?? "");
@@ -170,28 +171,22 @@ namespace FlyShelf.Classes
                     }
                     else if (isFileEarly)
                     {
-                        // FILE: upload directly to all peers via multipart
+                        // FILE: upload directly to all PC peers via multipart
                         delivered = await PeerManager.Instance.PushFileToAllPeers(
                             item.FilePath, item.FileName ?? Path.GetFileName(item.FilePath), item.ItemType.ToString("G"));
                     }
+                }
 
-                    if (delivered > 0)
-                    {
-                        lock (_recentPushTimes) { _recentPushSuccess[fingerprint] = true; }
-                        Logger.LogAction("PEER SYNC", $"Delivered to {delivered} peer(s) directly via P2P");
-                    }
-                    else
-                    {
-                        lock (_recentPushTimes) { _recentPushSuccess[fingerprint] = false; }
-                        Logger.LogAction("PEER SYNC", $"Direct P2P delivery failed — no peers accepted the {(isTextType ? "text" : "file")}");
-                        throw new InvalidOperationException($"Direct P2P delivery failed: 0 peers accepted the {(isTextType ? "text" : "file")}.");
-                    }
+                int mobileCount = (NetworkSyncServer.Instance?.GetDirectlyConnectedDeviceCount() ?? 0) + NetworkSyncServer.ActivePeerWebSocketCount;
+                lock (_recentPushTimes) { _recentPushSuccess[fingerprint] = true; }
+
+                if (delivered > 0 || mobileCount > 0)
+                {
+                    Logger.LogAction("PEER SYNC", $"Staged/Delivered: {delivered} PC peer(s), {mobileCount} mobile companion(s)");
                 }
                 else
                 {
-                    lock (_recentPushTimes) { _recentPushSuccess[fingerprint] = false; }
-                    Logger.LogAction("PEER SYNC", $"No online peers available for direct P2P transport.");
-                    throw new InvalidOperationException("No online peers available for direct P2P transport.");
+                    Logger.LogAction("PEER SYNC", "Staged for pull-based sync (no active peers connected at this moment)");
                 }
             }
             catch (Exception ex)
@@ -202,227 +197,14 @@ namespace FlyShelf.Classes
             }
         }
 
-
         /// <summary>
-        /// Purge Firebase clipboard entries whose DownloadUrl contains a dead Cloudflare URL.
-        /// Called when tunnel restarts and gets a new subdomain ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â old URLs become permanently unreachable.
+        /// ZERO-TRUST POLICY: Firebase is strictly signaling-only.
+        /// No clipboard entries, files, or text are ever stored in, read from, or deleted from Firebase.
         /// </summary>
-        public static async Task PurgeStaleFileEntries(string deadUrl)
-        {
-            if (string.IsNullOrEmpty(deadUrl) || !deadUrl.Contains("trycloudflare.com", StringComparison.Ordinal)) return;
-            
-            try
-            {
-                string pairingKey = DevicePairingManager.EnsurePairingKey();
-                if (string.IsNullOrEmpty(pairingKey)) return;
-                string myDeviceId = SettingsManager.Current.DeviceId ?? "";
-
-                string url = (await AuthUrl($"clipboard/{pairingKey}.json"));
-                using var response = await _client.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return;
-
-                string json = await response.Content.ReadAsStringAsync();
-                if (string.IsNullOrWhiteSpace(json) || json == "null") return;
-
-                using var doc = JsonDocument.Parse(json);
-                int purged = 0;
-                foreach (var prop in doc.RootElement.EnumerateObject())
-                {
-                    try
-                    {
-                        var entry = prop.Value;
-                        // SAFETY: Only purge entries from THIS device ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â don't nuke other devices' entries
-                        string sourceId = entry.TryGetProperty("SourceDeviceId", out var sid) ? sid.GetString() ?? "" : "";
-                        string sourceName = entry.TryGetProperty("SourceDeviceName", out var sn) ? sn.GetString() ?? "" : "";
-                        bool isMyEntry = (!string.IsNullOrEmpty(sourceId) && sourceId == myDeviceId) ||
-                                         (string.IsNullOrEmpty(sourceId) && string.Equals(sourceName, SettingsManager.Current.DeviceName, StringComparison.OrdinalIgnoreCase));
-                        if (!isMyEntry) continue;
-
-                        // Check if Raw or DownloadUrl contains the dead Cloudflare URL
-                        string raw = entry.TryGetProperty("Raw", out var r) ? r.GetString() ?? "" : "";
-                        string dlUrl = entry.TryGetProperty("DownloadUrl", out var d) ? d.GetString() ?? "" : "";
-                        
-                        if (raw.Contains(deadUrl, StringComparison.Ordinal) || dlUrl.Contains(deadUrl, StringComparison.Ordinal))
-                        {
-                            string title = entry.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : "";
-                            await DeleteFirebaseEntry(pairingKey, prop.Name);
-                            purged++;
-                            Logger.LogAction("PURGE", $"Deleted MY stale file entry: {title} (dead URL: {string.Concat(deadUrl.AsSpan(0, Math.Min(40, deadUrl.Length)), "...")});");
-                        }
-                    }
-                    catch (Exception ex) { Logger.LogAction("PURGE", $"Failed to process entry during purge: {ex.Message}"); }
-                }
-
-                if (purged > 0)
-                    Logger.LogAction("PURGE", $"ÃƒÂ¢Ã…â€œÃ¢â‚¬ÂPurged {purged} of MY stale file entries with dead Cloudflare URL");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("PURGE", $"Failed to purge stale entries: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Delete a specific clipboard entry from Firebase by its key.
-        /// </summary>
-        public static async Task DeleteFirebaseEntry(string pairingKey, string entryKey)
-        {
-            try
-            {
-                string deleteUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryKey}.json"));
-                using var response = await _client.DeleteAsync(deleteUrl);
-            }
-            catch (Exception ex) { Logger.LogAction("FIREBASE", $"DeleteFirebaseEntry failed: {ex.Message}"); }
-        }
-
-        /// <summary>
-        /// Signal that this device has STARTED downloading a file.
-        /// Sender can see this status to know the item was received.
-        /// </summary>
-        public static async Task MarkDownloading(string entryId)
-        {
-            try
-            {
-                string pairingKey = DevicePairingManager.EnsurePairingKey();
-                if (string.IsNullOrEmpty(pairingKey)) return;
-                string myDeviceId = SettingsManager.Current.DeviceId ?? "PC";
-
-                string statusUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}/downloadStatus/{myDeviceId}.json"));
-                string statusJson = $"{{\"status\":\"downloading\",\"startedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
-                using var response = await _client.PutAsync(statusUrl, new StringContent(statusJson, Encoding.UTF8, "application/json"));
-                Logger.LogAction("SYNC_STATUS", $"Signaled DOWNLOADING: {entryId}");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("SYNC_STATUS", $"MarkDownloading failed: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Mark a file entry as downloaded by this device. When all target devices
-        /// have downloaded, the entry is automatically deleted from Firebase.
-        /// Offline devices are skipped (not blocking deletion).
-        /// </summary>
-        public static async Task MarkFileDownloaded(string entryId)
-        {
-            try
-            {
-                string pairingKey = DevicePairingManager.EnsurePairingKey();
-                if (string.IsNullOrEmpty(pairingKey)) return;
-                string myDeviceId = SettingsManager.Current.DeviceId ?? "PC";
-
-                // Step 1: Mark this device as having downloaded the file
-                string markUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}/downloadedBy/{myDeviceId}.json"));
-                var markContent = new StringContent(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture), Encoding.UTF8, "application/json");
-                using var markResponse = await _client.PutAsync(markUrl, markContent);
-
-                // Step 1b: Signal "downloaded" status so sender knows this device is done
-                try
-                {
-                    string statusUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}/downloadStatus/{myDeviceId}.json"));
-                    string statusJson = $"{{\"status\":\"downloaded\",\"completedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
-                    using var statusResponse = await _client.PutAsync(statusUrl, new StringContent(statusJson, Encoding.UTF8, "application/json"));
-                    Logger.LogAction("SYNC_STATUS", $"Signaled DOWNLOADED: {entryId}");
-                }
-                catch (Exception ex) { Logger.LogAction("SYNC_STATUS", $"Download status signal failed: {ex.Message}"); }
-
-                // Step 2: Read the full entry to check if all targets have downloaded
-                string entryUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}.json"));
-                using var response = await _client.GetAsync(entryUrl);
-                if (!response.IsSuccessStatusCode) return;
-
-                string json = await response.Content.ReadAsStringAsync();
-                if (string.IsNullOrWhiteSpace(json) || json == "null") return;
-
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                // Get targetDevices array
-                var targetDevices = new List<string>();
-                if (root.TryGetProperty("targetDevices", out var targets) && targets.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var t in targets.EnumerateArray())
-                    {
-                        string devId = t.GetString() ?? "";
-                        if (!string.IsNullOrEmpty(devId)) targetDevices.Add(devId);
-                    }
-                }
-
-                // Get downloadedBy object
-                var downloaded = new HashSet<string>();
-                if (root.TryGetProperty("downloadedBy", out var dlBy) && dlBy.ValueKind == JsonValueKind.Object)
-                {
-                    foreach (var prop in dlBy.EnumerateObject())
-                        downloaded.Add(prop.Name);
-                }
-
-                // Step 3: Check active status of remaining targets
-                // Mark devices as auto-complete if they've been offline for >1 hour
-                // (gives them time to come online, but doesn't block cleanup forever)
-                var remaining = targetDevices.Where(d => !downloaded.Contains(d)).ToList();
-                if (remaining.Count > 0)
-                {
-                    try
-                    {
-                        string devicesUrl = (await AuthUrl($"active_devices/{pairingKey}.json"));
-                        using var devResponse = await _client.GetAsync(devicesUrl);
-                        if (devResponse.IsSuccessStatusCode)
-                        {
-                            string devJson = await devResponse.Content.ReadAsStringAsync();
-                            if (!string.IsNullOrWhiteSpace(devJson) && devJson != "null")
-                            {
-                                using var devDoc = JsonDocument.Parse(devJson);
-                                long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                                const long OFFLINE_GRACE_MS = 60 * 60_000; // 1 hour grace period
-                                foreach (var prop in devDoc.RootElement.EnumerateObject())
-                                {
-                                    var dev = prop.Value;
-                                    string devId = dev.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name;
-                                    if (!remaining.Contains(devId)) continue;
-
-                                    bool isOnline = dev.TryGetProperty("IsOnline", out var io) && io.GetBoolean();
-                                    long ts = dev.TryGetProperty("Timestamp", out var tsv) ? (long)tsv.GetDouble() : 0;
-                                    long offlineFor = now - ts;
-
-                                    // Only auto-complete if offline for more than 1 hour
-                                    if (!isOnline || offlineFor > OFFLINE_GRACE_MS)
-                                    {
-                                        string offlineUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}/downloadedBy/{devId}.json"));
-                                        using var putResp = await _client.PutAsync(offlineUrl, new StringContent("-1", Encoding.UTF8, "application/json"));
-                                        downloaded.Add(devId);
-                                        Logger.LogAction("SYNC_TRACK", $"Auto-completed offline device ({offlineFor / 60_000}min offline): {devId}");
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex) { Logger.LogAction("SYNC_TRACK", $"Offline device check failed: {ex.Message}"); }
-                }
-
-                // Step 4: If all target devices have downloaded (or are offline), delete entry
-                if (targetDevices.Count > 0 && targetDevices.All(d => downloaded.Contains(d)))
-                {
-                    await DeleteFirebaseEntry(pairingKey, entryId);
-                    Logger.LogAction("SYNC_CLEANUP", $"All {targetDevices.Count} devices done ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â entry deleted: {entryId}");
-                }
-                else if (targetDevices.Count == 0)
-                {
-                    // No targetDevices ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â delete immediately. New items wipe old ones anyway.
-                    await DeleteFirebaseEntry(pairingKey, entryId);
-                    Logger.LogAction("SYNC_CLEANUP", $"No targetDevices ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â entry deleted: {entryId}");
-                }
-                else
-                {
-                    int done = downloaded.Count;
-                    int total = targetDevices.Count;
-                    Logger.LogAction("SYNC_TRACK", $"Downloaded by {done}/{total} devices ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â waiting for {total - done} more");
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("SYNC_TRACK", $"MarkFileDownloaded error: {ex.Message}");
-            }
-        }
+        public static Task PurgeStaleFileEntries(string deadUrl) => Task.CompletedTask;
+        public static Task DeleteFirebaseEntry(string pairingKey, string entryKey) => Task.CompletedTask;
+        public static Task MarkDownloading(string entryId) => Task.CompletedTask;
+        public static Task MarkFileDownloaded(string entryId) => Task.CompletedTask;
 
         /// <summary>
         /// Look up a sender device's current Cloudflare tunnel URL from Firebase.

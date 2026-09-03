@@ -62,6 +62,15 @@ namespace FlyShelf.Classes
         private bool _enableOutgoingSync = true;
         /// <summary>When false, local clipboard items are NOT pushed to paired devices.</summary>
         public bool EnableOutgoingSync { get => _enableOutgoingSync; set => SetProperty(ref _enableOutgoingSync, value); }
+
+        private bool _enableOfflineOutbox = false;
+        /// <summary>
+        /// When true, clipboard items copied while offline are queued and automatically
+        /// delivered to paired devices the moment a direct connection is re-established.
+        /// Default: disabled — only new items after connection is established are synced.
+        /// PRO FEATURE: Currently unlocked for all users while app is free.
+        /// </summary>
+        public bool EnableOfflineOutbox { get => _enableOfflineOutbox; set => SetProperty(ref _enableOfflineOutbox, value); }
         
         private string _webClientPinToken = "";
         /// <summary>Stored encrypted via DPAPI. Getter returns plaintext, setter accepts plaintext.</summary>
@@ -294,7 +303,7 @@ namespace FlyShelf.Classes
         public string ActiveThemeName { get => _activeThemeName; set => SetProperty(ref _activeThemeName, value); }
 
         /// <summary>
-        /// Controls clipboard background mode: "mica" (system blur), "desktop" (Windows wallpaper), or "theme" (custom theme).
+        /// Controls clipboard background mode: "desktop" (Windows wallpaper + blur), "glass" (acrylic), or "theme" (custom theme).
         /// </summary>
         private string _themeDisplayMode = "desktop";
         public string ThemeDisplayMode { get => _themeDisplayMode; set => SetProperty(ref _themeDisplayMode, value); }
@@ -495,15 +504,19 @@ namespace FlyShelf.Classes
                             Current.Version = 1;
                             Save(); // Persist the migrated settings with version 1
                         }
-                        // ═══ v1→v2 Migration: Ensure clean Mica Blur default ═══
-                        // Existing installs from v1 get the classic Mica Blur (grey) look.
-                        // Users can switch to "FlyShelf" (desktop wallpaper) mode from the theme combo.
-                        if (version < 2)
+                        // ═══ v2→v3 Migration: Ensure FlyShelf signature Desktop Wallpaper + Blur default ═══
+                        if (version < 3)
                         {
-                            Logger.LogAction("SETTINGS_MIGRATION", $"Upgrading config version from {version} to 2 — Mica Blur default.");
-                            Current.ActiveThemeName = "";
-                            Current.ThemeDisplayMode = "mica";
-                            Current.Version = 2;
+                            Logger.LogAction("SETTINGS_MIGRATION", $"Upgrading config version from {version} to 3 — FlyShelf Desktop Wallpaper + Blur default.");
+                            if (string.IsNullOrEmpty(Current.ThemeDisplayMode) || Current.ThemeDisplayMode == "mica")
+                            {
+                                Current.ThemeDisplayMode = "desktop";
+                            }
+                            if (string.IsNullOrEmpty(Current.ColorThemeName))
+                            {
+                                Current.ColorThemeName = "Default";
+                            }
+                            Current.Version = 3;
                             // Write synchronously to guarantee persistence before DebouncedSave can race
                             try
                             {

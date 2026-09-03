@@ -315,6 +315,9 @@ namespace FlyShelf.Classes
             if (!HasCloudApiKey)
                 throw new InvalidOperationException("Vision requires a cloud API key.");
 
+            if (imageBytes == null || imageBytes.Length == 0)
+                throw new ArgumentException("Image data is empty or null.", nameof(imageBytes));
+
             var tokens = maxTokens ?? Math.Max(SettingsManager.Current.AiMaxTokens, 4096);
             var provider = DetectProviderFromKey();
             var base64Image = Convert.ToBase64String(imageBytes);

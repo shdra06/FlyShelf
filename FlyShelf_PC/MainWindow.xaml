@@ -15,7 +15,7 @@
         WindowStyle="None" ResizeMode="NoResize" Background="Transparent" SystemBackdropType="Mica"
         ShowInTaskbar="False" Margin="0" Topmost="True" ShowActivated="False"
         AllowDrop="True" PreviewDrop="Window_PreviewDrop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
-        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Fixed" UseLayoutRounding="True" SnapsToDevicePixels="True"
         Loaded="MicaWindow_Loaded" Deactivated="MicaWindow_Deactivated">
 
     <controls:MicaWindow.Resources>
@@ -1071,7 +1071,7 @@
                   UseLayoutRounding="True" SnapsToDevicePixels="True"
                   TextOptions.TextFormattingMode="Ideal"
                   TextOptions.TextRenderingMode="ClearType"
-                  TextOptions.TextHintingMode="Auto"
+                  TextOptions.TextHintingMode="Fixed"
                   RenderOptions.ClearTypeHint="Enabled"
                   ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                   ScrollViewer.CanContentScroll="True"
@@ -1124,7 +1124,7 @@
                         <Border Name="CardBorder" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="{StaticResource RadiusMD}" Margin="0" Padding="0" RenderTransformOrigin="0.5,0.5" ClipToBounds="True"
                                 UseLayoutRounding="True" SnapsToDevicePixels="True" RenderOptions.ClearTypeHint="Enabled">
                         <Border.Background>
-                            <SolidColorBrush Color="{DynamicResource MicaWPF.Colors.SubtleFillColorSecondary}" Opacity="0.38" />
+                            <SolidColorBrush Color="{DynamicResource MicaWPF.Colors.SubtleFillColorSecondary}" Opacity="0.88" />
                         </Border.Background>
                         <Border.Style>
                             <Style TargetType="Border">
@@ -2256,7 +2256,8 @@
                                     <TextBlock Text="{Binding SourceAppName, Mode=OneTime}" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
                                                VerticalAlignment="Center" FontWeight="Regular" Opacity="0.8"/>
                                 </StackPanel>
-                                
+
+
                                 <!-- File Transfer / Download Progress Panel -->
                                 <StackPanel Margin="0,4,0,0" Visibility="{Binding IsTransferring, Converter={StaticResource BooleanToVisibilityConverter}}">
                                     <ProgressBar Value="{Binding TransferProgress}" Minimum="0" Maximum="100" Height="4" Foreground="{DynamicResource SyncIncomingColor}" Background="{DynamicResource ThemeOverlayBgHover}" BorderThickness="0">
@@ -2957,7 +2958,7 @@
                         </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <Border Name="AltCardBorder" CornerRadius="{StaticResource RadiusMD}" Padding="0" ClipToBounds="True" Background="{DynamicResource AltCardBg}" BorderBrush="{DynamicResource AltCardBorder}" BorderThickness="1">
+                                <Border Name="AltCardBorder" CornerRadius="{StaticResource RadiusMD}" Padding="0" ClipToBounds="True" Background="{DynamicResource AltCardBg}" BorderBrush="{DynamicResource AltCardBorder}" BorderThickness="1" RenderOptions.ClearTypeHint="Enabled">
                                     <Border.Style><Style TargetType="Border"><Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
                                             <Setter Property="Background" Value="{DynamicResource AltCardBgHover}"/>

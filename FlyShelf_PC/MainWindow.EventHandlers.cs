@@ -950,11 +950,32 @@ namespace FlyShelf
                     {
                         if (!string.IsNullOrEmpty(filePath) && System.IO.File.Exists(filePath))
                         {
-                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(filePath) { UseShellExecute = true });
+                            string ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
+                            string[] dangerousExts = { ".exe", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".jse", ".wsf", ".wsh", ".scr", ".msi", ".com", ".hta", ".dll", ".jar", ".pif", ".reg" };
+                            if (System.Array.IndexOf(dangerousExts, ext) >= 0)
+                            {
+                                // SECURITY: Do not execute untrusted executables/scripts directly on double-click.
+                                // Instead, open Windows Explorer with the file selected.
+                                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{filePath}\"") { UseShellExecute = true });
+                                Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast("Security: Executable file opened in folder instead of running."));
+                            }
+                            else
+                            {
+                                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(filePath) { UseShellExecute = true });
+                            }
                         }
                         else if (itemType == FlyShelf.ViewModels.ClipboardItemType.Url && !string.IsNullOrEmpty(rawContent))
                         {
-                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(rawContent) { UseShellExecute = true });
+                            // SECURITY: Validate URL protocol is strictly http or https
+                            if (Uri.TryCreate(rawContent, UriKind.Absolute, out var uri) &&
+                                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+                            {
+                                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(rawContent) { UseShellExecute = true });
+                            }
+                            else
+                            {
+                                Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast("Blocked unsafe URL protocol"));
+                            }
                         }
                     }
                     catch (Exception)
@@ -1179,10 +1200,17 @@ namespace FlyShelf
                 {
                     item.CompileAndRunNative();
                 }
-                else if (item.SmartActionType == "OpenPDF" || item.SmartActionType == "JoinMeeting" || item.SmartActionType == "OpenBrowser")
+                else if (item.SmartActionType == "OpenPDF")
                 {
-                    string target = item.SmartActionType == "OpenPDF" ? item.FilePath : item.RawContent;
-                    _ = System.Threading.Tasks.Task.Run(() => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { } }); // Best-effort: failure is acceptable
+                    if (!string.IsNullOrEmpty(item.FilePath))
+                        _ = System.Threading.Tasks.Task.Run(() => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = item.FilePath, UseShellExecute = true }); } catch { } });
+                }
+                else if (item.SmartActionType == "JoinMeeting" || item.SmartActionType == "OpenBrowser")
+                {
+                    // SECURITY: Validate URL scheme is strictly http or https to prevent arbitrary protocol handler launches
+                    string target = item.RawContent;
+                    if (Uri.TryCreate(target, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+                        _ = System.Threading.Tasks.Task.Run(() => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { } });
                 }
                 else if (item.SmartActionType == "OpenMap")
                 {

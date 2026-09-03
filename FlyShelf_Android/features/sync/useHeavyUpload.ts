@@ -70,7 +70,12 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
 
   // ─── Resolve URL with fallback chain ───
   const resolveUrl = useCallback(async (device?: any): Promise<string | null> => {
-    let resolved = device ? await resolveOptimalUrl(device) : null;
+    let resolved = device && typeof device === 'object' ? await resolveOptimalUrl(device) : null;
+    if (!resolved) {
+      try {
+        resolved = await getCachedPcUrl();
+      } catch {}
+    }
     if (!resolved) {
       if (lastWorkingPcUrlRef.current) {
         resolved = lastWorkingPcUrlRef.current;
@@ -83,7 +88,7 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
       }
     }
     return resolved;
-  }, [lastWorkingPcUrlRef, pcLocalIp]);
+  }, [lastWorkingPcUrlRef, pcLocalIp, getCachedPcUrl]);
 
   // ─── Single POST upload with retry ───
   const uploadSinglePost = useCallback(async (
@@ -250,27 +255,28 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
         await FileSystem.makeDirectoryAsync(`${FileSystem.cacheDirectory}FlyShelf_Upload/`, { intermediates: true }).catch(() => {});
         await FileSystem.copyAsync({ from: physicalPath, to: hydratedPath });
 
-        if (targetDeviceOrGlobal === 'Global') {
-          const pc = activeDevices.find((d: any) => d.DeviceType === 'PC');
-          if (!pc) { Alert.alert('No PC Found', 'No paired PC is online. Connect a PC first.'); setIsSending(false); setPendingUploadPayload(null); return; }
-          const resolved = await resolveUrl(pc);
-          if (!resolved) { Alert.alert('PC Unreachable'); setIsSending(false); setPendingUploadPayload(null); return; }
-          const startTime = performance.now();
-          await uploadSinglePost(resolved, hydratedPath, name, type, size || 0, startTime);
-        } else {
-          let resolved = await resolveUrl(targetDeviceOrGlobal);
-          if (!resolved) { Alert.alert('Device Unreachable'); setIsSending(false); setPendingUploadPayload(null); return; }
-          const isCloudflare = resolved.includes('trycloudflare.com');
-          const chunkSize = isCloudflare ? CLOUD_CHUNK_SIZE : LAN_CHUNK_SIZE;
-          const fileSize = size || 0;
-          const useChunkedUpload = (isCloudflare && fileSize > CLOUD_CHUNK_SIZE) || (!isCloudflare && fileSize > LAN_CHUNK_THRESHOLD);
+        const pc = activeDevices.find((d: any) => d.DeviceType === 'PC');
+        const target = (targetDeviceOrGlobal === 'Global' || !targetDeviceOrGlobal) ? pc : targetDeviceOrGlobal;
+        let resolved = await resolveUrl(target);
+        if (!resolved) {
+          try { resolved = await getCachedPcUrl(); } catch {}
+        }
+        if (!resolved) {
+          Alert.alert('PC Not Connected', 'Could not reach your PC. Please check that FlyShelf is open on your PC or connect via QR code.');
+          setIsSending(false);
+          setPendingUploadPayload(null);
+          return;
+        }
 
-          if (useChunkedUpload) {
-            await uploadChunked(resolved, hydratedPath, name, fileSize, chunkSize);
-          } else {
-            const startTime = performance.now();
-            await uploadSinglePost(resolved, hydratedPath, name, type, fileSize, startTime);
-          }
+        const isCloudflare = resolved.includes('trycloudflare.com');
+        const chunkSize = isCloudflare ? CLOUD_CHUNK_SIZE : LAN_CHUNK_SIZE;
+        const useChunkedUpload = (isCloudflare && fileSize > CLOUD_CHUNK_SIZE) || (!isCloudflare && fileSize > LAN_CHUNK_THRESHOLD);
+
+        if (useChunkedUpload) {
+          await uploadChunked(resolved, hydratedPath, name, fileSize, chunkSize);
+        } else {
+          const startTime = performance.now();
+          await uploadSinglePost(resolved, hydratedPath, name, type, fileSize, startTime);
         }
         toast.success('File Sent to PC', name);
       } catch (err: any) {

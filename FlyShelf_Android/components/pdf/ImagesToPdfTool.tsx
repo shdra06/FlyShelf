@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { colors } from '../../styles/theme';
-import s from '../../styles/pdfToolsStyles';
+
+import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { imagesToPdf } from '../../utils/pdfToolsUtils';
 import { SelectedFile } from './types';
 import ResultView from './ResultView';
@@ -17,6 +18,9 @@ interface ImagesToPdfToolProps {
 }
 
 export default function ImagesToPdfTool({ onBack, onPickImages, saveRecent }: ImagesToPdfToolProps) {
+  const { colors, shadows } = useAppTheme();
+  const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
+
   const [files, setFiles] = useState<SelectedFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [resultPath, setResultPath] = useState<string | null>(null);

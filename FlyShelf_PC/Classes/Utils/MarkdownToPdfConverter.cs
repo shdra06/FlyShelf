@@ -48,6 +48,7 @@ namespace FlyShelf.Classes.Utils
 
         public static bool ConvertContent(string markdownContent, string outputPdfPath, string documentTitle = "Document", string sourceDir = "")
         {
+            MdLayoutState state = null;
             try
             {
                 FlyShelfFontResolver.EnsureRegistered();
@@ -57,7 +58,7 @@ namespace FlyShelf.Classes.Utils
                 pdfDoc.Info.Title = documentTitle;
                 pdfDoc.Info.Creator = "FlyShelf Native Markdown Engine";
 
-                var state = new MdLayoutState
+                state = new MdLayoutState
                 {
                     Doc = pdfDoc,
                     CurrentY = MarginTop,
@@ -213,6 +214,10 @@ namespace FlyShelf.Classes.Utils
             {
                 Logger.LogAction("MD2PDF_CONVERT_ERR", $"ConvertContent error: {ex.Message}");
                 return false;
+            }
+            finally
+            {
+                state?.DisposeDeferred();
             }
         }
 
@@ -578,8 +583,10 @@ namespace FlyShelf.Classes.Utils
         {
             try
             {
-                using var fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                using var xImg = XImage.FromStream(fs);
+                var fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                state.DeferredDisposables.Add(fs);
+                var xImg = XImage.FromStream(fs);
+                state.DeferredDisposables.Add(xImg);
 
                 double w = xImg.PointWidth;
                 double h = xImg.PointHeight;
@@ -627,6 +634,17 @@ namespace FlyShelf.Classes.Utils
                 Gfx?.Dispose();
                 Gfx = XGraphics.FromPdfPage(page);
                 CurrentY = MarginTop;
+            }
+
+            public readonly List<IDisposable> DeferredDisposables = new();
+
+            public void DisposeDeferred()
+            {
+                foreach (var d in DeferredDisposables)
+                {
+                    try { d.Dispose(); } catch { }
+                }
+                DeferredDisposables.Clear();
             }
         }
 

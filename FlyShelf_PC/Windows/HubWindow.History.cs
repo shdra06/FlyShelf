@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════
 // HubWindow.History.cs — Clipboard history management: duplicate sweeper,
-// timeframe-based cleanup, and retention settings.
+// advanced date-range + category-filtered cleanup, and retention settings.
 // Part of the HubWindow partial class split.
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using FlyShelf.Classes;
 using FlyShelf.ViewModels;
 
@@ -17,6 +18,9 @@ namespace FlyShelf.Windows
     public partial class HubWindow
     {
         private bool _isRetentionChanging = false;
+        // Suppress recursive updates when Select All programmatically toggles children
+        private bool _isCategoryBulkUpdate = false;
+
         private void RetentionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (_isRetentionChanging) return;
@@ -132,65 +136,280 @@ namespace FlyShelf.Windows
             }
         }
 
-        private void CleanHistory_Click(object sender, RoutedEventArgs e)
+        // ═══════════════════════════════════════════════════════════════
+        // Advanced History Cleanup — Date Range + Category Filter
+        // ═══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// All category checkboxes in the filter dropdown, used for iteration.
+        /// </summary>
+        private CheckBox[] GetCategoryCheckboxes() => new[]
+        {
+            CatText, CatCode, CatUrl,
+            CatImage, CatQRCode,
+            CatDocument, CatPdf, CatPresentation,
+            CatVideo, CatAudio,
+            CatFile, CatArchive, CatFolder
+        };
+
+        /// <summary>
+        /// Returns the set of ClipboardItemTypes currently selected in the category dropdown.
+        /// </summary>
+        private HashSet<ClipboardItemType> GetSelectedCategories()
+        {
+            var selected = new HashSet<ClipboardItemType>();
+            foreach (var cb in GetCategoryCheckboxes())
+            {
+                if (cb != null && cb.IsChecked == true && cb.Tag is string tagStr)
+                {
+                    if (Enum.TryParse<ClipboardItemType>(tagStr, true, out var parsed))
+                        selected.Add(parsed);
+                }
+            }
+            return selected;
+        }
+
+        /// <summary>
+        /// Computes the list of items matching the current date range and category filters.
+        /// </summary>
+        private List<ClipboardItem> GetFilteredCleanupItems()
+        {
+            DateTime? fromDate = CleanupFromDate?.SelectedDate;
+            DateTime? toDate = CleanupToDate?.SelectedDate;
+
+            // If no date range selected, return empty
+            if (fromDate == null && toDate == null) return new List<ClipboardItem>();
+
+            var selectedTypes = GetSelectedCategories();
+            if (selectedTypes.Count == 0) return new List<ClipboardItem>();
+
+            // Use start of fromDate and end of toDate for inclusive date range
+            DateTime rangeStart = fromDate?.Date ?? DateTime.MinValue;
+            DateTime rangeEnd = toDate?.Date.AddDays(1).AddTicks(-1) ?? DateTime.MaxValue;
+
+            return _viewModel.DroppedItems
+                .Where(item => !item.IsPinned
+                    && item.DateCopied >= rangeStart
+                    && item.DateCopied <= rangeEnd
+                    && selectedTypes.Contains(item.ItemType))
+                .ToList();
+        }
+
+        /// <summary>
+        /// Updates the live match count label based on current filter selections.
+        /// </summary>
+        private void UpdateCleanupMatchCount()
+        {
+            if (CleanupMatchCount == null || _viewModel == null) return;
+
+            try
+            {
+                DateTime? fromDate = CleanupFromDate?.SelectedDate;
+                DateTime? toDate = CleanupToDate?.SelectedDate;
+
+                if (fromDate == null && toDate == null)
+                {
+                    CleanupMatchCount.Text = "Select a date range to preview";
+                    CleanupMatchCount.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorTertiary");
+                    return;
+                }
+
+                var selectedTypes = GetSelectedCategories();
+                if (selectedTypes.Count == 0)
+                {
+                    CleanupMatchCount.Text = "No categories selected";
+                    CleanupMatchCount.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorTertiary");
+                    return;
+                }
+
+                var matchedItems = GetFilteredCleanupItems();
+                int count = matchedItems.Count;
+
+                if (count == 0)
+                {
+                    CleanupMatchCount.Text = "No matching items found";
+                    CleanupMatchCount.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorTertiary");
+                }
+                else
+                {
+                    // Build a category summary of matched types
+                    var typeCounts = matchedItems
+                        .GroupBy(i => i.ItemType)
+                        .OrderByDescending(g => g.Count())
+                        .Take(3)
+                        .Select(g => $"{g.Count()} {g.Key}");
+                    string typeSummary = string.Join(", ", typeCounts);
+                    if (matchedItems.GroupBy(i => i.ItemType).Count() > 3)
+                        typeSummary += "…";
+
+                    CleanupMatchCount.Text = $"{count} item{(count != 1 ? "s" : "")} match ({typeSummary})";
+                    CleanupMatchCount.Foreground = new System.Windows.Media.SolidColorBrush(
+                        count > 100 ? System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)  // Red for large deletions
+                                    : System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81)); // Green for normal
+                }
+            }
+            catch
+            {
+                CleanupMatchCount.Text = "Select a date range to preview";
+            }
+        }
+
+        /// <summary>
+        /// Updates the category filter button label to reflect current selection.
+        /// </summary>
+        private void UpdateCategoryFilterLabel()
+        {
+            if (CategoryFilterLabel == null) return;
+
+            var checkboxes = GetCategoryCheckboxes().Where(cb => cb != null).ToArray();
+            int total = checkboxes.Length;
+            if (total == 0) return;
+            int checkedCount = checkboxes.Count(cb => cb.IsChecked == true);
+
+            if (checkedCount == total)
+                CategoryFilterLabel.Text = "All Types";
+            else if (checkedCount == 0)
+                CategoryFilterLabel.Text = "No Types Selected";
+            else
+            {
+                // Show up to 2 selected type names, then "+N more"
+                var names = checkboxes
+                    .Where(cb => cb.IsChecked == true)
+                    .Select(cb => cb.Content?.ToString() ?? "")
+                    .Take(2)
+                    .ToList();
+                string label = string.Join(", ", names);
+                if (checkedCount > 2)
+                    label += $" +{checkedCount - 2} more";
+                CategoryFilterLabel.Text = label;
+            }
+        }
+
+        // ── Event Handlers ──
+
+        private void CleanupDateRange_Changed(object? sender, SelectionChangedEventArgs e)
+        {
+            UpdateCleanupMatchCount();
+        }
+
+        private void CategoryFilter_ToggleDropdown(object sender, RoutedEventArgs e)
+        {
+            if (CategoryFilterPopup != null)
+                CategoryFilterPopup.IsOpen = !CategoryFilterPopup.IsOpen;
+        }
+
+        private void CategorySelectAll_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isCategoryBulkUpdate) return;
+            // Guard: This event fires during InitializeComponent() when XAML sets IsChecked,
+            // but the individual category checkboxes (CatText, CatCode, etc.) aren't created yet.
+            if (CategorySelectAll == null) return;
+            _isCategoryBulkUpdate = true;
+            try
+            {
+                bool isChecked = CategorySelectAll.IsChecked == true;
+                foreach (var cb in GetCategoryCheckboxes())
+                {
+                    if (cb != null) cb.IsChecked = isChecked;
+                }
+            }
+            finally
+            {
+                _isCategoryBulkUpdate = false;
+            }
+            UpdateCategoryFilterLabel();
+            UpdateCleanupMatchCount();
+        }
+
+        private void CategoryItem_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isCategoryBulkUpdate) return;
+            if (CategorySelectAll == null) return;
+
+            // Sync the "Select All" checkbox state
+            _isCategoryBulkUpdate = true;
+            try
+            {
+                var checkboxes = GetCategoryCheckboxes().Where(cb => cb != null).ToArray();
+                if (checkboxes.Length == 0) return;
+                int checkedCount = checkboxes.Count(cb => cb.IsChecked == true);
+                if (checkedCount == checkboxes.Length)
+                    CategorySelectAll.IsChecked = true;
+                else if (checkedCount == 0)
+                    CategorySelectAll.IsChecked = false;
+                else
+                    CategorySelectAll.IsChecked = null; // Indeterminate
+            }
+            finally
+            {
+                _isCategoryBulkUpdate = false;
+            }
+            UpdateCategoryFilterLabel();
+            UpdateCleanupMatchCount();
+        }
+
+        private void AdvancedCleanup_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                if (CleanupTimeframeCombo.SelectedItem is ComboBoxItem selected && selected.Tag != null)
+                DateTime? fromDate = CleanupFromDate?.SelectedDate;
+                DateTime? toDate = CleanupToDate?.SelectedDate;
+
+                if (fromDate == null && toDate == null)
                 {
-                    string tag = selected.Tag.ToString();
-                    TimeSpan selectedTimeSpan;
-                    string timeframeName;
-
-                    switch (tag)
-                    {
-                        case "1h":
-                            selectedTimeSpan = TimeSpan.FromHours(1);
-                            timeframeName = "Last 1 Hour";
-                            break;
-                        case "6h":
-                            selectedTimeSpan = TimeSpan.FromHours(6);
-                            timeframeName = "Last 6 Hours";
-                            break;
-                        case "9h":
-                            selectedTimeSpan = TimeSpan.FromHours(9);
-                            timeframeName = "Last 9 Hours";
-                            break;
-                        case "24h":
-                            selectedTimeSpan = TimeSpan.FromHours(24);
-                            timeframeName = "Last 24 Hours";
-                            break;
-                        case "2d":
-                            selectedTimeSpan = TimeSpan.FromDays(2);
-                            timeframeName = "Last 2 Days";
-                            break;
-                        default:
-                            return;
-                    }
-
-                    var confirm = MessageBox.Show(
-                        $"Are you sure you want to permanently delete all unpinned clipboard entries from the {timeframeName}?\n\nPinned entries will remain secure and untouched.",
-                        "Smart History Cleanup",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Warning);
-
-                    if (confirm != MessageBoxResult.Yes) return;
-
-                    DateTime threshold = DateTime.Now.Subtract(selectedTimeSpan);
-                    var itemsToDelete = _viewModel.DroppedItems
-                        .Where(item => !item.IsPinned && item.DateCopied >= threshold)
-                        .ToList();
-
-                    if (itemsToDelete.Count == 0)
-                    {
-                        ToastWindow.ShowToast($"No entries found from the {timeframeName}.");
-                        return;
-                    }
-
-                    _viewModel.BulkRemoveItems(itemsToDelete);
-
-                    ToastWindow.ShowToast($"Successfully deleted {itemsToDelete.Count} entry/entries!");
+                    ToastWindow.ShowToast("Please select a date range first.");
+                    return;
                 }
+
+                // Validate date order
+                if (fromDate != null && toDate != null && fromDate > toDate)
+                {
+                    ToastWindow.ShowToast("\"From\" date must be before \"To\" date.");
+                    return;
+                }
+
+                var selectedTypes = GetSelectedCategories();
+                if (selectedTypes.Count == 0)
+                {
+                    ToastWindow.ShowToast("Please select at least one category.");
+                    return;
+                }
+
+                var itemsToDelete = GetFilteredCleanupItems();
+
+                if (itemsToDelete.Count == 0)
+                {
+                    ToastWindow.ShowToast("No matching items found in the selected range.");
+                    return;
+                }
+
+                // Build description for confirmation
+                string dateDesc;
+                if (fromDate != null && toDate != null)
+                    dateDesc = $"{fromDate:MMM d, yyyy} → {toDate:MMM d, yyyy}";
+                else if (fromDate != null)
+                    dateDesc = $"from {fromDate:MMM d, yyyy} onwards";
+                else
+                    dateDesc = $"up to {toDate:MMM d, yyyy}";
+
+                int typeCount = selectedTypes.Count;
+                int totalTypes = GetCategoryCheckboxes().Length;
+                string typeDesc = typeCount == totalTypes ? "all types" : $"{typeCount} selected type{(typeCount != 1 ? "s" : "")}";
+
+                var confirm = MessageBox.Show(
+                    $"This will permanently delete {itemsToDelete.Count} unpinned clipboard item{(itemsToDelete.Count != 1 ? "s" : "")} from {dateDesc} matching {typeDesc}.\n\nPinned items will remain safe and untouched.\n\nAre you sure you want to proceed?",
+                    "Advanced History Cleanup",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+                if (confirm != MessageBoxResult.Yes) return;
+
+                _viewModel.BulkRemoveItems(itemsToDelete);
+
+                ToastWindow.ShowToast($"Successfully deleted {itemsToDelete.Count} item{(itemsToDelete.Count != 1 ? "s" : "")}!");
+
+                // Refresh the match count after deletion
+                UpdateCleanupMatchCount();
             }
             catch (Exception ex)
             {

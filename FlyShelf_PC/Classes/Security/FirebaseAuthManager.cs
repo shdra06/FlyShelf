@@ -72,6 +72,7 @@ namespace FlyShelf.Classes
                 // Step 1: Load persisted refresh token from disk (first call only)
                 if (!_diskLoaded)
                 {
+                    Logger.LogAction("FIREBASE AUTH", "[STEP 1/6: AUTH] Loading persisted auth identity from disk...");
                     LoadPersistedToken();
                     _diskLoaded = true;
                 }
@@ -81,18 +82,20 @@ namespace FlyShelf.Classes
                 {
                     try
                     {
+                        Logger.LogAction("FIREBASE AUTH", "[STEP 1/6: AUTH] Refreshing Firebase Auth token...");
                         await RefreshTokenAsync();
                         PersistToken(); // Save updated tokens to disk
+                        Logger.LogAction("FIREBASE AUTH", $"[STEP 1/6: AUTH] ✅ Token refreshed successfully (UID: {_uid.Substring(0, Math.Min(8, _uid.Length))}...)");
                         return _idToken;
                     }
                     catch (Exception ex)
                     {
-                        Logger.LogAction("FIREBASE AUTH", $"Token refresh failed: {ex.Message}");
+                        Logger.LogAction("FIREBASE AUTH", $"[STEP 1/6: AUTH ERROR] ⚠️ Token refresh failed: {ex.Message}");
                         // If refresh fails with 400 (invalid grant), the refresh token is dead.
                         // Clear it so we don't keep retrying a dead token.
                         if (ex.Message.Contains("400"))
                         {
-                            Logger.LogAction("FIREBASE AUTH", "Refresh token expired/revoked — will create new anonymous identity");
+                            Logger.LogAction("FIREBASE AUTH", "[STEP 1/6: AUTH] Refresh token expired/revoked — creating new anonymous identity...");
                             _refreshToken = "";
                             DeletePersistedToken();
                         }
@@ -101,8 +104,10 @@ namespace FlyShelf.Classes
 
                 // Step 3: Last resort — create a new anonymous identity
                 // This only happens on truly fresh installs or when the refresh token is revoked
+                Logger.LogAction("FIREBASE AUTH", "[STEP 1/6: AUTH] Signing in anonymously to Firebase REST API...");
                 await SignInAnonymouslyAsync();
                 PersistToken(); // Save the new identity to disk for future sessions
+                Logger.LogAction("FIREBASE AUTH", $"[STEP 1/6: AUTH] ✅ Anonymous sign-in complete (UID: {_uid.Substring(0, Math.Min(8, _uid.Length))}...)");
                 return _idToken;
             }
             finally
@@ -200,11 +205,11 @@ namespace FlyShelf.Classes
             }
 
             // All attempts exhausted — notify user
-            Logger.LogAction("FIREBASE AUTH", $"⚠️ Anonymous sign-in failed after {MAX_ATTEMPTS} attempts — cloud sync unavailable");
+            Logger.LogAction("FIREBASE AUTH", $"[STEP 1/6: AUTH ERROR] ⚠️ Anonymous sign-in failed after {MAX_ATTEMPTS} attempts: {lastException?.Message}");
             try
             {
                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    Windows.ToastWindow.ShowToast("☁️ Cloud sync unavailable — check your internet connection"));
+                    Windows.ToastWindow.ShowError("Cloud Sync Unavailable", $"Firebase Auth failed after {MAX_ATTEMPTS} attempts: {lastException?.Message}"));
             }
             catch { } // Best-effort: failure is acceptable
         }

@@ -25,12 +25,17 @@ namespace FlyShelf.Classes
         private FlyShelfViewModel _viewModel;
         private long _lastProcessedTimestamp = 0;
         private CancellationTokenSource? _cts = null;
-        private HashSet<string> _processedIds = new HashSet<string>();
 
         // Debounce: prevent multiple rapid queries (e.g. during network flap)
         private DateTime _lastQueryTime = DateTime.MinValue;
         private const int QUERY_DEBOUNCE_MS = 3000; // 3s minimum between queries
         private readonly SemaphoreSlim _querySemaphore = new(1, 1);
+
+        // H-13 fix: Adaptive polling to prevent Firebase quota exhaustion
+        private int _currentPollInterval = 30_000;  // Start at 30s (was 10s)
+        private const int POLL_INTERVAL_MIN = 30_000;   // 30s floor
+        private const int POLL_INTERVAL_MAX = 300_000;   // 5 min ceiling
+        private int _lastPeerCount = -1;  // Track peer changes to reset interval
 
         public CloudDiscoveryListener(FlyShelfViewModel viewModel)
         {
@@ -59,12 +64,45 @@ namespace FlyShelf.Classes
 
             _cts = new CancellationTokenSource();
             _lastProcessedTimestamp = DateTimeOffset.UtcNow.AddMinutes(-5).ToUnixTimeMilliseconds();
-            _processedIds.Clear();
 
-            Logger.LogAction("FIREBASE LISTENER", "On-demand query mode active (no persistent SSE — 0 Firebase connections held).");
+            Logger.LogAction("FIREBASE LISTENER", "Responsive query mode active — checking Firebase periodically & on-demand.");
 
             // Initial query to discover existing peers
             _ = Task.Run(() => QueryPeersOnce());
+
+            // Responsive background query loop: adaptive polling to avoid Firebase quota exhaustion (H-13)
+            // 30s base, doubles when peers are stable (up to 5min), resets to 30s on peer count changes
+            var token = _cts.Token;
+            _ = Task.Run(async () =>
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await Task.Delay(_currentPollInterval, token);
+                        await QueryPeersOnce();
+
+                        // Adaptive interval: increase when stable, reset on changes
+                        int currentAlive = PeerManager.Instance?.AliveCount ?? 0;
+                        if (_lastPeerCount >= 0 && currentAlive == _lastPeerCount && currentAlive > 0)
+                        {
+                            // Peers stable — back off (double interval, capped at 5min)
+                            _currentPollInterval = Math.Min(_currentPollInterval * 2, POLL_INTERVAL_MAX);
+                        }
+                        else
+                        {
+                            // Peer count changed or no peers — reset to base for faster discovery
+                            _currentPollInterval = POLL_INTERVAL_MIN;
+                        }
+                        _lastPeerCount = currentAlive;
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("FIREBASE LISTENER", $"Loop error: {ex.Message}");
+                    }
+                }
+            }, token);
         }
 
         public void StopPolling()
@@ -72,6 +110,7 @@ namespace FlyShelf.Classes
             if (_cts != null)
             {
                 try { _cts.Cancel(); } catch { } // Best-effort: failure is acceptable
+                try { _cts.Dispose(); } catch { }
                 _cts = null;
             }
         }
@@ -92,14 +131,12 @@ namespace FlyShelf.Classes
             // Debounce: skip if called too soon after last query
             if ((DateTime.UtcNow - _lastQueryTime).TotalMilliseconds < QUERY_DEBOUNCE_MS)
             {
-                Logger.LogAction("PEER QUERY", "Debounced — skipping (queried < 3s ago)");
                 return;
             }
 
             // Serialize queries — only one at a time
             if (!await _querySemaphore.WaitAsync(0))
             {
-                Logger.LogAction("PEER QUERY", "Skipped — another query already in progress");
                 return;
             }
 
@@ -110,7 +147,6 @@ namespace FlyShelf.Classes
                 string pairingKey = DevicePairingManager.EnsurePairingKey();
                 if (string.IsNullOrEmpty(pairingKey))
                 {
-                    Logger.LogAction("PEER QUERY", "No pairing key — skipping query");
                     return;
                 }
 
@@ -126,19 +162,14 @@ namespace FlyShelf.Classes
                 string json = await response.Content.ReadAsStringAsync();
                 if (string.IsNullOrWhiteSpace(json) || json == "null")
                 {
-                    Logger.LogAction("PEER QUERY", "No active devices in Firebase");
                     return;
                 }
 
-                // Parse and update peers — same logic as the old SSE ProcessPeerUrlChange
-                // but wrapped in a single snapshot parse
-                await ProcessPeerSnapshot(json, myDeviceId);
-
-                Logger.LogAction("PEER QUERY", "Peer discovery query completed (single REST call)");
+                // Parse and update peers
+                await ProcessPeerSnapshot(json, myDeviceId, pairingKey);
             }
             catch (TaskCanceledException)
             {
-                Logger.LogAction("PEER QUERY", "Query timed out");
             }
             catch (Exception ex)
             {
@@ -154,7 +185,7 @@ namespace FlyShelf.Classes
         /// Parses a full Firebase snapshot of active_devices/{pairingKey} and
         /// updates PeerManager with any new or changed peer URLs.
         /// </summary>
-        private async Task ProcessPeerSnapshot(string jsonData, string myDeviceId)
+        private async Task ProcessPeerSnapshot(string jsonData, string myDeviceId, string pairingKey)
         {
             try
             {
@@ -167,13 +198,49 @@ namespace FlyShelf.Classes
                 if (root.ValueKind != JsonValueKind.Object) return;
 
                 var peerManager = PeerManager.Instance;
-                if (peerManager == null) return;
+
+                // 1. Check for room-level wakeSignal or urlRequest
+                if (root.TryGetProperty("urlRequest", out _) || root.TryGetProperty("wakeSignal", out _))
+                {
+                    Logger.LogAction("URL_REQUEST", "⚡ Room-level URL refresh signal received — publishing fresh endpoints immediately!");
+                    _ = CloudDiscoveryManager.PushTunnelUrl(
+                        CloudDiscoveryManager.CachedGlobalUrl ?? CloudDiscoveryManager.CachedLocalUrl ?? "",
+                        true,
+                        CloudDiscoveryManager.CachedLocalUrl ?? "",
+                        forceWrite: true);
+                }
 
                 int peerCount = 0;
 
                 foreach (var prop in root.EnumerateObject())
                 {
-                    if (prop.Name == myDeviceId) continue;
+                    if (prop.Value.ValueKind != JsonValueKind.Object) continue;
+
+                    // 2. Check for direct urlRequest targeted at this PC
+                    if (prop.Name == myDeviceId)
+                    {
+                        if (prop.Value.TryGetProperty("urlRequest", out _))
+                        {
+                            Logger.LogAction("URL_REQUEST", $"⚡ Direct URL request received for PC ({myDeviceId}) — publishing fresh endpoints immediately!");
+                            _ = CloudDiscoveryManager.PushTunnelUrl(
+                                CloudDiscoveryManager.CachedGlobalUrl ?? CloudDiscoveryManager.CachedLocalUrl ?? "",
+                                true,
+                                CloudDiscoveryManager.CachedLocalUrl ?? "",
+                                forceWrite: true);
+
+                            // Clean up fulfilled request node
+                            _ = Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    string delUrl = await AuthUrl($"active_devices/{pairingKey}/{myDeviceId}/urlRequest.json");
+                                    await _queryClient.DeleteAsync(delUrl);
+                                }
+                                catch { }
+                            });
+                        }
+                        continue;
+                    }
 
                     // SECURITY: Skip Firebase entries from blocked (recently-unpaired) devices
                     if (DevicePairingManager.IsDeviceBlocked(prop.Name))
@@ -181,10 +248,21 @@ namespace FlyShelf.Classes
                         Logger.LogAction("CLOUD", $"Skipped peer update from blocked device: {prop.Name}");
                         continue;
                     }
+
                     // Check if any peer has a urlRequest for us
-                    if (prop.Value.ValueKind == JsonValueKind.Object && prop.Value.TryGetProperty("urlRequest", out _))
+                    if (prop.Value.TryGetProperty("urlRequest", out _))
                     {
-                        _ = Task.Run(() => peerManager.HandlePeerUrlRequest(prop.Name));
+                        Logger.LogAction("URL_REQUEST", $"⚡ Companion '{prop.Name}' has active urlRequest — publishing fresh endpoints!");
+                        _ = CloudDiscoveryManager.PushTunnelUrl(
+                            CloudDiscoveryManager.CachedGlobalUrl ?? CloudDiscoveryManager.CachedLocalUrl ?? "",
+                            true,
+                            CloudDiscoveryManager.CachedLocalUrl ?? "",
+                            forceWrite: true);
+
+                        if (peerManager != null)
+                        {
+                            _ = Task.Run(() => peerManager.HandlePeerUrlRequest(prop.Name));
+                        }
                     }
 
                     string globalUrl = prop.Value.TryGetProperty("GlobalUrl", out var gu) ? gu.GetString() ?? "" : "";
@@ -192,12 +270,16 @@ namespace FlyShelf.Classes
                     string deviceName = prop.Value.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? prop.Name : prop.Name;
                     bool isOnline = prop.Value.TryGetProperty("IsOnline", out var on) && on.GetBoolean();
 
+                    // ZERO-TRUST VALIDATION: Strictly sanitize URLs from Firebase
+                    if (!IsValidGlobalTunnelUrl(globalUrl)) globalUrl = "";
+                    if (!IsValidLocalLanUrl(localUrl)) localUrl = "";
+
                     if (isOnline)
                     {
                         DevicePairingManager.RecordDeviceActivity(prop.Name, deviceName, !string.IsNullOrEmpty(localUrl) ? "LAN" : "Cloud");
                     }
 
-                    if (!string.IsNullOrEmpty(globalUrl) || !string.IsNullOrEmpty(localUrl))
+                    if (peerManager != null && (!string.IsNullOrEmpty(globalUrl) || !string.IsNullOrEmpty(localUrl)))
                     {
                         peerCount++;
                         _ = Task.Run(() => peerManager.HandlePeerUrlUpdate(prop.Name, deviceName, localUrl, globalUrl));
@@ -205,12 +287,32 @@ namespace FlyShelf.Classes
                 }
 
                 if (peerCount > 0)
-                    Logger.LogAction("PEER QUERY", $"Found {peerCount} peer(s) with URLs in Firebase");
+                    Logger.LogAction("PEER QUERY", $"Found {peerCount} peer(s) with validated URLs in Firebase");
             }
             catch (Exception ex)
             {
                 Logger.LogAction("PEER QUERY", $"ProcessPeerSnapshot error: {ex.Message}");
             }
+        }
+
+        private static bool IsValidGlobalTunnelUrl(string? url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return false;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+            if (uri.Scheme != Uri.UriSchemeHttps) return false;
+            return uri.Host.EndsWith("trycloudflare.com", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsValidLocalLanUrl(string? url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return false;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+            if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) return false;
+            string host = uri.Host;
+            return host == "localhost" || host == "127.0.0.1" ||
+                   host.StartsWith("192.168.", StringComparison.Ordinal) ||
+                   host.StartsWith("10.", StringComparison.Ordinal) ||
+                   System.Text.RegularExpressions.Regex.IsMatch(host, @"^172\.(1[6-9]|2[0-9]|3[0-1])\.");
         }
 
     }

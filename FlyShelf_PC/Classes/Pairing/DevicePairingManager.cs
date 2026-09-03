@@ -27,6 +27,7 @@ namespace FlyShelf.Classes
         public string localUrl { get; set; } = "";
         public string globalUrl { get; set; } = "";
         public string pin { get; set; } = "";
+        public string encryptedData { get; set; } = "";
         public double timestamp { get; set; }
     }
 
@@ -107,8 +108,13 @@ namespace FlyShelf.Classes
             return await FirebaseAuthManager.AuthenticateUrl($"{FIREBASE_BASE}/{path}");
         }
         
+        private static string _currentPairingCode = "";
         /// <summary>Current active pairing code for this device (displayed in UI).</summary>
-        public static string CurrentPairingCode { get; private set; } = "";
+        public static string CurrentPairingCode
+        {
+            get => _currentPairingCode;
+            private set => _currentPairingCode = value;
+        }
 
         /// <summary>
         /// Verify a pairing code over LAN — returns device info if the code matches the current active code.
@@ -143,15 +149,12 @@ namespace FlyShelf.Classes
         /// </summary>
         public static async Task<bool> CompleteLanPairing(string code, string remoteDeviceId, string remoteDeviceName, string remoteDeviceType, string remotePairingKey)
         {
-            // Verify code first
-            if (string.IsNullOrEmpty(code) || !string.Equals(code, CurrentPairingCode, StringComparison.OrdinalIgnoreCase))
+            var capturedCode = System.Threading.Interlocked.Exchange(ref _currentPairingCode, "");
+            if (string.IsNullOrEmpty(capturedCode) || !string.Equals(capturedCode, code, StringComparison.OrdinalIgnoreCase))
                 return false;
 
             // Register the remote device
             TryPairDevice(remotePairingKey, remoteDeviceId, remoteDeviceName, remoteDeviceType, "lan");
-
-            // Invalidate the code
-            CurrentPairingCode = "";
 
             // Push our info to Firebase if available (best-effort for cloud backup)
             _ = Task.Run(async () =>
@@ -192,11 +195,6 @@ namespace FlyShelf.Classes
         /// </summary>
         public static string EnsurePairingKey()
         {
-            // Fix #6: Clear any stale pairing code from a previous session
-            // Prevents the UI from showing codes that are no longer valid in Firebase.
-            // Firebase cleanup happens on next PublishPairingCode call.
-            CurrentPairingCode = null;
-
             string configKey = SettingsManager.Current.PairingKey ?? "";
             
             // Self-healing alignment: If we have paired devices, but the config key is different or empty,
@@ -212,6 +210,7 @@ namespace FlyShelf.Classes
                         SettingsManager.Current.PairingKey = firstDevice.PairingKey;
                         SettingsManager.Save();
                         SyncCrypto.ClearKeyCache();
+                        _ = CloudDiscoveryManager.RegisterRoomMembershipAsync(firstDevice.PairingKey);
                         return firstDevice.PairingKey;
                     }
                 }
@@ -232,13 +231,18 @@ namespace FlyShelf.Classes
         /// </summary>
         public static string CreatePairingKeyIfNeeded()
         {
-            if (string.IsNullOrEmpty(SettingsManager.Current.PairingKey))
+            lock (_lock)
             {
-                SettingsManager.Current.PairingKey = Guid.NewGuid().ToString("N"); // 32-char hex
-                SettingsManager.Save();
-                SyncCrypto.ClearKeyCache();
-                Logger.LogAction("PAIRING", $"Generated new pairing key: {SettingsManager.Current.PairingKey.Substring(0, 8)}...");
+                if (string.IsNullOrEmpty(SettingsManager.Current.PairingKey))
+                {
+                    SettingsManager.Current.PairingKey = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant(); // 32-char hex
+                    SettingsManager.Save();
+                    SyncCrypto.ClearKeyCache();
+                    Logger.LogAction("PAIRING", $"Generated new pairing key: {SettingsManager.Current.PairingKey.Substring(0, 8)}...");
+                }
             }
+            // Ensure room membership is registered in Firebase immediately
+            _ = CloudDiscoveryManager.RegisterRoomMembershipAsync(SettingsManager.Current.PairingKey);
             return SettingsManager.Current.PairingKey;
         }
 
@@ -319,7 +323,7 @@ namespace FlyShelf.Classes
         public static string RegeneratePairingKey()
         {
             string oldKey = SettingsManager.Current.PairingKey;
-            SettingsManager.Current.PairingKey = Guid.NewGuid().ToString("N");
+            SettingsManager.Current.PairingKey = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
             SettingsManager.Save();
             SyncCrypto.ClearKeyCache();
 
@@ -354,18 +358,36 @@ namespace FlyShelf.Classes
                 });
             }
 
+            // Ensure room membership for the new key immediately
+            _ = CloudDiscoveryManager.RegisterRoomMembershipAsync(SettingsManager.Current.PairingKey);
+
             return SettingsManager.Current.PairingKey;
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â QR Code Generation Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ QR Code Generation ═══
 
         /// <summary>
         /// Builds the JSON payload for the QR code containing all connection info.
         /// </summary>
         public static string BuildQRPayload(string localUrl, string globalUrl, string pin)
         {
-            // This is when the PC becomes the "room creator" Ã¢â‚¬â€ generate key if needed
+            // This is when the PC becomes the "room creator" — generate key if needed
             string pairingKey = CreatePairingKeyIfNeeded();
+
+            // Proactively ensure room membership and presence are registered in Firebase immediately
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await CloudDiscoveryManager.RegisterRoomMembershipAsync(pairingKey);
+                    await CloudDiscoveryManager.PushTunnelUrl(
+                        globalUrl ?? CloudDiscoveryManager.CachedGlobalUrl ?? localUrl ?? "",
+                        true,
+                        localUrl ?? CloudDiscoveryManager.CachedLocalUrl ?? "");
+                }
+                catch { }
+            });
+
             var payload = new
             {
                 app = "FlyShelf",
@@ -435,7 +457,16 @@ namespace FlyShelf.Classes
 
         public static List<PairedDevice> GetPairedDevices()
         {
-            lock (_lock) return _pairedDevices.ToList();
+            lock (_lock) return _pairedDevices.Select(d => new PairedDevice {
+                DeviceId = d.DeviceId,
+                DeviceName = d.DeviceName,
+                DeviceType = d.DeviceType,
+                PairingKey = d.PairingKey,
+                PairedAt = d.PairedAt,
+                LastSeen = d.LastSeen,
+                LastKnownIP = d.LastKnownIP,
+                KnownLanIps = d.KnownLanIps.ToList()
+            }).ToList();
         }
 
         /// <summary>
@@ -522,6 +553,23 @@ namespace FlyShelf.Classes
 
             Save();
             OnDevicePaired?.Invoke(deviceName);
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    if (PeerManager.Instance != null)
+                    {
+                        if (deviceType == "Mobile" || string.Equals(remoteIP, "cloud", StringComparison.OrdinalIgnoreCase))
+                        {
+                            PeerManager.Instance.TouchMobilePeer(deviceId, deviceName, remoteIP, "LAN");
+                        }
+                        await PeerManager.Instance.ForceResync();
+                    }
+                }
+                catch { }
+            });
+
             return true;
         }
 
@@ -578,7 +626,7 @@ namespace FlyShelf.Classes
                 using var hmac = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(key));
                 byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(message));
                 string computed = Convert.ToHexString(hash).ToLowerInvariant();
-                return string.Equals(computed, expectedHmac, StringComparison.OrdinalIgnoreCase);
+                return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(computed), Encoding.UTF8.GetBytes(expectedHmac.ToLowerInvariant()));
             }
             catch { return false; }
         }
@@ -756,24 +804,35 @@ namespace FlyShelf.Classes
 
                 // Build JSON manually to use Firebase server timestamp {".sv":"timestamp"}
                 // This ensures the timestamp comes from Firebase's server, not the PC clock,
-                // so the phone's TTL check always works regardless of clock drift.
+                // so the phone's TTL check always works.
                 string pairingKey = CreatePairingKeyIfNeeded();
                 await CloudDiscoveryManager.RegisterRoomMembershipAsync(pairingKey);
+
                 // SECURITY: Include uid for Firebase rule ownership validation (M-01 hardening)
                 string uid = "";
                 try { uid = await FirebaseAuthManager.GetUidAsync() ?? ""; } catch (Exception ex) { Logger.LogAction("PAIR", $"Firebase UID fetch failed: {ex.Message}"); }
+
+                // SECURITY (SEC-SRV-02): Encrypt sensitive pairing secrets (pairingKey, pin, localUrl, globalUrl)
+                // using an AES-256-GCM key derived from the ephemeral 6-character code.
+                // Zero plaintext secrets are stored in Firebase.
+                string sensitiveJson = JsonSerializer.Serialize(new
+                {
+                    pairingKey,
+                    localUrl = CloudDiscoveryManager.CachedLocalUrl ?? "",
+                    globalUrl = CloudDiscoveryManager.CachedGlobalUrl ?? "",
+                    pin = SettingsManager.Current.WebClientPinToken ?? "",
+                });
+                string encryptedData = SyncCrypto.Encrypt(sensitiveJson, code);
+
                 string jsonPayload = JsonSerializer.Serialize(new
                 {
                     deviceId = SettingsManager.Current.DeviceId,
                     deviceName = SettingsManager.Current.DeviceName,
                     deviceType = "PC",
-                    pairingKey,
-                    localUrl = CloudDiscoveryManager.CachedLocalUrl ?? "",
-                    globalUrl = CloudDiscoveryManager.CachedGlobalUrl ?? "",
-                    pin = SettingsManager.Current.WebClientPinToken ?? "",
+                    encryptedData,
                     uid,
                 });
-                // Inject Firebase server timestamp Ã¢â‚¬â€ {".sv":"timestamp"} is resolved server-side
+                // Inject Firebase server timestamp — {".sv":"timestamp"} is resolved server-side
                 var jsonObj = System.Text.Json.Nodes.JsonNode.Parse(jsonPayload).AsObject();
                 var svTimestamp = new System.Text.Json.Nodes.JsonObject();
                 svTimestamp[".sv"] = "timestamp";
@@ -786,7 +845,7 @@ namespace FlyShelf.Classes
                 if (response.IsSuccessStatusCode)
                 {
                     CurrentPairingCode = code;
-                    Logger.LogAction("PAIR CODE", $"Published pairing code: {code}");
+                    Logger.LogAction("PAIR CODE", $"Published encrypted pairing code: {code}");
 
                     // Auto-expire after 5 minutes
                     _ = Task.Run(async () =>
@@ -815,28 +874,51 @@ namespace FlyShelf.Classes
 
         /// <summary>
         /// Look up a pairing code from Firebase. Returns device info or null if not found/expired.
+        /// Decrypts payload using the entered 6-character code.
         /// </summary>
         public static async Task<PairingCodeInfo> LookupPairingCode(string code)
         {
             try
             {
                 string upperCode = code.Trim().ToUpperInvariant();
+                Logger.LogAction("PAIR CODE", $"[STEP 4/6: CODE PAIRING] Looking up code {upperCode} in Firebase...");
                 var response = await _httpClient.GetAsync((await AuthUrl($"pairing_codes/{upperCode}.json")));
                 if (!response.IsSuccessStatusCode)
                 {
-                    Logger.LogAction("PAIR CODE", $"Firebase lookup for {upperCode} returned HTTP {(int)response.StatusCode}");
+                    Logger.LogAction("PAIR CODE", $"[STEP 4/6: CODE PAIRING ERROR] ❌ Firebase lookup for {upperCode} returned HTTP {(int)response.StatusCode}");
                     return null;
                 }
 
                 string json = await response.Content.ReadAsStringAsync();
-                Logger.LogAction("PAIR CODE", $"Firebase response for {upperCode}: {(json?.Length > 200 ? string.Concat(json.AsSpan(0, 200), "...") : json)}");
                 if (string.IsNullOrWhiteSpace(json) || json == "null")
                 {
-                    Logger.LogAction("PAIR CODE", $"Code {upperCode} not found in Firebase (response was null/empty)");
+                    Logger.LogAction("PAIR CODE", $"[STEP 4/6: CODE PAIRING ERROR] ❌ Code {upperCode} not found in Firebase (empty response)");
                     return null;
                 }
 
                 var info = JsonSerializer.Deserialize<PairingCodeInfo>(json);
+
+                // Decrypt encryptedData if present (Zero-Trust pairing protocol)
+                if (info != null && !string.IsNullOrEmpty(info.encryptedData))
+                {
+                    try
+                    {
+                        string? decrypted = SyncCrypto.Decrypt(info.encryptedData, upperCode);
+                        if (!string.IsNullOrEmpty(decrypted))
+                        {
+                            using var decDoc = JsonDocument.Parse(decrypted);
+                            var decRoot = decDoc.RootElement;
+                            if (decRoot.TryGetProperty("pairingKey", out var pk)) info.pairingKey = pk.GetString() ?? "";
+                            if (decRoot.TryGetProperty("pin", out var pinProp)) info.pin = pinProp.GetString() ?? "";
+                            if (decRoot.TryGetProperty("localUrl", out var lu)) info.localUrl = lu.GetString() ?? "";
+                            if (decRoot.TryGetProperty("globalUrl", out var gu)) info.globalUrl = gu.GetString() ?? "";
+                        }
+                    }
+                    catch (Exception decEx)
+                    {
+                        Logger.LogAction("PAIR CODE", $"Decryption failed for code {upperCode}: {decEx.Message}");
+                    }
+                }
                 
                 // Check if code is still fresh (5 min TTL)
                 if (info != null && info.timestamp > 0)
@@ -844,17 +926,17 @@ namespace FlyShelf.Classes
                     double ageMs = NetworkClock.UtcNowMs - info.timestamp;
                     if (Math.Abs(ageMs) > 5 * 60_000)
                     {
-                        Logger.LogAction("PAIR CODE", $"Code {upperCode} expired/drifted ({ageMs / 1000}s offset)");
+                        Logger.LogAction("PAIR CODE", $"[STEP 4/6: CODE PAIRING ERROR] ❌ Code {upperCode} expired/drifted ({ageMs / 1000:F1}s offset)");
                         return null;
                     }
                 }
 
-                Logger.LogAction("PAIR CODE", $"Found device via code {upperCode}: {info?.deviceName}");
+                Logger.LogAction("PAIR CODE", $"[STEP 4/6: CODE PAIRING] ✅ Found device via code {upperCode}: '{info?.deviceName}' (Type: {info?.deviceType})");
                 return info;
             }
             catch (Exception ex)
             {
-                Logger.LogAction("PAIR CODE", $"Lookup error: {ex.Message}");
+                Logger.LogAction("PAIR CODE", $"[STEP 4/6: CODE PAIRING ERROR] ❌ Lookup error for {code}: {ex.Message}");
                 return null;
             }
         }

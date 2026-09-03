@@ -564,10 +564,15 @@ namespace FlyShelf.Windows
         // ═══════════════════════════════════════════════════════════════
 
         private Border? _pathModeBadge;
+        private Border? _pathOverlay;
         private static readonly Brush _pathModeBorderBrush = Helpers.BrushHelper.Frozen(Color.FromArgb(200, 137, 180, 250));
         private static readonly Brush _defaultBorderBrush = Helpers.BrushHelper.Frozen(Color.FromArgb(50, 255, 255, 255));
 
-        public void SetPathMode(bool isPathMode)
+        /// <summary>
+        /// Toggles the Ctrl+Drag path mode visual.
+        /// Shows a full-card overlay with the file path text, with a smooth transition.
+        /// </summary>
+        public void SetPathMode(bool isPathMode, string? filePath = null)
         {
             if (_isClosed) return;
 
@@ -578,7 +583,81 @@ namespace FlyShelf.Windows
                     _rootCard.BorderBrush = _pathModeBorderBrush;
                     _rootCard.BorderThickness = new Thickness(1.5);
 
-                    if (_pathModeBadge == null && _rootCard.Child is Panel panel)
+                    // ── Create full path overlay on first activation ──
+                    if (_pathOverlay == null && _rootCard.Child is Panel panel)
+                    {
+                        // Determine display path
+                        string displayPath = filePath ?? "";
+                        if (string.IsNullOrEmpty(displayPath))
+                            displayPath = "📋 Path Mode";
+
+                        // Path overlay — covers the entire card content
+                        _pathOverlay = new Border
+                        {
+                            Background = Helpers.BrushHelper.Frozen(Color.FromArgb(245, 20, 22, 35)),
+                            CornerRadius = new CornerRadius(CardCornerRadius - 1),
+                            HorizontalAlignment = HorizontalAlignment.Stretch,
+                            VerticalAlignment = VerticalAlignment.Stretch,
+                            Padding = new Thickness(10, 8, 10, 8),
+                            Opacity = 0,
+                        };
+
+                        var overlayContent = new StackPanel
+                        {
+                            VerticalAlignment = VerticalAlignment.Center,
+                            HorizontalAlignment = HorizontalAlignment.Stretch,
+                        };
+
+                        // "📋 Path" header
+                        var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
+                        headerRow.Children.Add(new TextBlock
+                        {
+                            Text = "📋",
+                            FontSize = 12,
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Margin = new Thickness(0, 0, 5, 0),
+                        });
+                        headerRow.Children.Add(new TextBlock
+                        {
+                            Text = "Drop as Path",
+                            FontSize = 10,
+                            FontWeight = FontWeights.SemiBold,
+                            Foreground = Helpers.BrushHelper.Frozen(Color.FromArgb(230, 137, 180, 250)),
+                            VerticalAlignment = VerticalAlignment.Center,
+                        });
+                        overlayContent.Children.Add(headerRow);
+
+                        // File path text
+                        overlayContent.Children.Add(new TextBlock
+                        {
+                            Text = displayPath,
+                            FontSize = 10,
+                            FontFamily = new FontFamily("Cascadia Mono, Consolas, Courier New"),
+                            Foreground = Helpers.BrushHelper.Frozen(Color.FromArgb(220, 220, 230, 255)),
+                            TextWrapping = TextWrapping.NoWrap,
+                            TextTrimming = TextTrimming.CharacterEllipsis,
+                            MaxWidth = CardMaxWidth - 24,
+                            Opacity = 0.9,
+                        });
+
+                        _pathOverlay.Child = overlayContent;
+                        panel.Children.Add(_pathOverlay);
+                    }
+
+                    if (_pathOverlay != null)
+                    {
+                        _pathOverlay.Visibility = Visibility.Visible;
+
+                        // Smooth fade-in
+                        var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120))
+                        {
+                            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                        };
+                        _pathOverlay.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+                    }
+
+                    // Also keep the badge for redundancy
+                    if (_pathModeBadge == null && _rootCard.Child is Panel badgePanel)
                     {
                         _pathModeBadge = new Border
                         {
@@ -596,7 +675,7 @@ namespace FlyShelf.Windows
                                 Foreground = Helpers.BrushHelper.Frozen(Color.FromRgb(20, 20, 28))
                             }
                         };
-                        panel.Children.Add(_pathModeBadge);
+                        badgePanel.Children.Add(_pathModeBadge);
                     }
                     if (_pathModeBadge != null) _pathModeBadge.Visibility = Visibility.Visible;
                 }
@@ -604,6 +683,22 @@ namespace FlyShelf.Windows
                 {
                     _rootCard.BorderBrush = _defaultBorderBrush;
                     _rootCard.BorderThickness = new Thickness(1.0);
+
+                    // Smooth fade-out for overlay
+                    if (_pathOverlay != null)
+                    {
+                        var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(100))
+                        {
+                            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+                        };
+                        fadeOut.Completed += (s, e) =>
+                        {
+                            if (_pathOverlay != null)
+                                _pathOverlay.Visibility = Visibility.Collapsed;
+                        };
+                        _pathOverlay.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+                    }
+
                     if (_pathModeBadge != null) _pathModeBadge.Visibility = Visibility.Collapsed;
                 }
             }

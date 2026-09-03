@@ -91,6 +91,7 @@ namespace FlyShelf.ViewModels
             {
                 FlyShelf.Windows.ToastWindow.ShowToast("AI OCR in progress...");
 
+                if (string.IsNullOrEmpty(FilePath)) return;
                 byte[] imageBytes = await Task.Run(() =>
                 {
                     var fi = new System.IO.FileInfo(FilePath!);
@@ -98,7 +99,6 @@ namespace FlyShelf.ViewModels
                         throw new InvalidOperationException($"File too large for OCR ({fi.Length} bytes): {FilePath}");
                     return File.ReadAllBytes(FilePath);
                 });
-                if (string.IsNullOrEmpty(FilePath)) return;
                 string ext = Path.GetExtension(FilePath).ToLowerInvariant();
                 string mimeType = ext switch
                 {

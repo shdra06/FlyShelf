@@ -656,9 +656,29 @@ namespace FlyShelf
 
         private void PasteFilePath_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item 
+            FlyShelf.ViewModels.ClipboardItem? item = null;
+
+            if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem menuItem)
+                item = menuItem;
+            else if (sender is FrameworkElement fe && fe.Tag is FlyShelf.ViewModels.ClipboardItem feItem)
+                item = feItem;
+
+            if (item != null && !string.IsNullOrEmpty(item.FilePath))
+            {
+                _ = CopyItemAndPaste(item, hideWindow: true, pastePathOnly: true);
+            }
+        }
+
+        /// <summary>
+        /// Handles the inline "Ctrl+Click → paste path" hint click on the card.
+        /// Directly pastes the file path without requiring Ctrl key.
+        /// </summary>
+        private void InlinePastePath_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is FlyShelf.ViewModels.ClipboardItem item
                 && !string.IsNullOrEmpty(item.FilePath))
             {
+                e.Handled = true; // Prevent bubbling to card click handler
                 _ = CopyItemAndPaste(item, hideWindow: true, pastePathOnly: true);
             }
         }
@@ -1105,8 +1125,7 @@ namespace FlyShelf
                         bool changed = false;
                         if (Classes.SettingsManager.Current.ThemeDisplayMode == "glass")
                         {
-                            Classes.SettingsManager.Current.ThemeDisplayMode = "mica";
-                            Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                            Classes.SettingsManager.Current.ThemeDisplayMode = "desktop";
                             changed = true;
                         }
                         
@@ -1116,8 +1135,7 @@ namespace FlyShelf
                             Classes.SettingsManager.Current.ActiveThemeName = "";
                             if (Classes.SettingsManager.Current.ThemeDisplayMode == "theme")
                             {
-                                Classes.SettingsManager.Current.ThemeDisplayMode = "mica";
-                                Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                                Classes.SettingsManager.Current.ThemeDisplayMode = "desktop";
                             }
                             changed = true;
                         }
@@ -1138,7 +1156,7 @@ namespace FlyShelf
                         Dispatcher.InvokeAsync(() =>
                         {
                             // If the current display mode is NOT custom "theme", we should absolutely ignore all mascot animations and ensure the mascot is stopped/hidden!
-                            string displayMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                            string displayMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "desktop";
                             if (displayMode != "theme")
                             {
                                 MascotIdle.StopAnimation();
@@ -1214,7 +1232,7 @@ namespace FlyShelf
                                 WallpaperFrostHeader.Visibility = Visibility.Collapsed;
                                 _currentLoadedWallpaperPath = "";
 
-                                string displayMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                                string displayMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "desktop";
 
                                 // Always remove Glass UI theme unless glass mode is active
                                 if (displayMode != "glass")
@@ -1261,8 +1279,9 @@ namespace FlyShelf
                                         if (!hasColorThemeWp)
                                         {
                                             // Re-apply color theme wallpaper if a color theme is active
-                                            string activeColorTheme = Classes.SettingsManager.Current.ColorThemeName ?? "Default";
-                                            if (!string.IsNullOrEmpty(activeColorTheme) && !activeColorTheme.Equals("ArcticSnow", System.StringComparison.OrdinalIgnoreCase))
+                                            string activeColorTheme = Classes.SettingsManager.Current.ColorThemeName ?? "";
+                                            if (!string.IsNullOrEmpty(activeColorTheme) && !activeColorTheme.Equals("Default", System.StringComparison.OrdinalIgnoreCase)
+                                                && !activeColorTheme.Equals("ArcticSnow", System.StringComparison.OrdinalIgnoreCase))
                                             {
                                                 Classes.ThemeManager.Instance.ApplyColorTheme(activeColorTheme);
                                                 colorThemeWp = Classes.SettingsManager.Current.ClipboardWallpaperPath ?? "";
@@ -1346,7 +1365,7 @@ namespace FlyShelf
                                 // to prevent the alternate clipboard from losing its color theme
                                 try
                                 {
-                                    string currentDisplayMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                                    string currentDisplayMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "desktop";
                                     string aeroThemeKey = currentDisplayMode == "glass"
                                         ? "__glass__"
                                         : (Classes.SettingsManager.Current.ColorThemeName ?? "Default");
@@ -1374,7 +1393,7 @@ namespace FlyShelf
                     Classes.ThemeManager.Instance.ActiveThemeChanged += _themeChangedHandler;
 
                     // ═══ Startup: Apply correct mode ═══
-                    string startupMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                    string startupMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "desktop";
                     if (startupMode == "glass")
                     {
                         // Glass mode — optional system blur, glassmorphism UI
@@ -1396,9 +1415,10 @@ namespace FlyShelf
                         else
                         {
                             // Check for active color theme wallpaper
-                            string activeColorTheme = Classes.SettingsManager.Current.ColorThemeName ?? "Default";
+                            string activeColorTheme = Classes.SettingsManager.Current.ColorThemeName ?? "";
                             bool hasColorThemeWp = false;
-                            if (!string.IsNullOrEmpty(activeColorTheme) && !activeColorTheme.Equals("ArcticSnow", System.StringComparison.OrdinalIgnoreCase))
+                            if (!string.IsNullOrEmpty(activeColorTheme) && !activeColorTheme.Equals("Default", System.StringComparison.OrdinalIgnoreCase)
+                                && !activeColorTheme.Equals("ArcticSnow", System.StringComparison.OrdinalIgnoreCase))
                             {
                                 // Apply the color theme (which sets ClipboardWallpaperPath to theme wallpaper)
                                 Classes.ThemeManager.Instance.ApplyColorTheme(activeColorTheme);

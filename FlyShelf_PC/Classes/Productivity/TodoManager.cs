@@ -1000,9 +1000,23 @@ namespace FlyShelf.Classes
                     if (changed)
                     {
                         _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
-                        // Rebuild _days from _allDays
-                        _days.Clear();
-                        foreach (var d in _allDays) _days.Add(d);
+                        var app = System.Windows.Application.Current;
+                        if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                        {
+                            app.Dispatcher.InvokeAsync(() =>
+                            {
+                                lock (_lock)
+                                {
+                                    _days.Clear();
+                                    foreach (var d in _allDays) _days.Add(d);
+                                }
+                            });
+                        }
+                        else
+                        {
+                            _days.Clear();
+                            foreach (var d in _allDays) _days.Add(d);
+                        }
                     }
                 }
                 if (changed) ScheduleSave();

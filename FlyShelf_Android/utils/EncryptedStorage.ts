@@ -29,6 +29,17 @@ const PLAINTEXT_KEYS = new Set([
   'last_crash_error',
 ]);
 
+// Keys that MUST NEVER be stored in plaintext under any circumstances (fail-closed)
+const SENSITIVE_KEYS = new Set([
+  'pairingKey',
+  '@flyshelf_vault_manifest',
+  'flyshelf_master_encryption_key',
+  'firebase_auth_token',
+  'pairedGlobalUrl',
+  'pairedLocalUrl',
+  'webClientPinToken',
+]);
+
 const EncryptedStorage = {
   async getItem(key: string): Promise<string | null> {
     const raw = await AsyncStorage.getItem(key);
@@ -54,7 +65,12 @@ const EncryptedStorage = {
       const encrypted = encrypt(value);
       await AsyncStorage.setItem(key, encrypted);
     } catch {
-      // Crypto not available — fallback to plaintext (better than losing data)
+      // SECURITY: If this is a sensitive key, do NOT write plaintext! Fail closed!
+      if (SENSITIVE_KEYS.has(key) || key.toLowerCase().includes('key') || key.toLowerCase().includes('token') || key.toLowerCase().includes('vault')) {
+        console.error(`[EncryptedStorage] Encryption failed for sensitive key '${key}' — failing closed`);
+        throw new Error(`Encryption failed for sensitive key '${key}'`);
+      }
+      // Non-sensitive: fallback to plaintext
       console.warn(`[EncryptedStorage] Encryption failed for key '${key}' — storing as plaintext`);
       await AsyncStorage.setItem(key, value);
     }

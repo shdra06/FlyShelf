@@ -498,6 +498,7 @@ namespace FlyShelf.ViewModels
             {
                 FlyShelf.Windows.ToastWindow.ShowToast("AI Table Extraction...");
 
+                if (string.IsNullOrEmpty(FilePath)) return;
                 byte[] imageBytes = await Task.Run(() =>
                 {
                     var fi = new System.IO.FileInfo(FilePath!);

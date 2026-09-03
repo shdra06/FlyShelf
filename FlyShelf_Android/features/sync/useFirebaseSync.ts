@@ -1,18 +1,36 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import { Platform, NativeModules } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { database } from '../../firebaseConfig';
+import { database, auth, ensureFirebaseAuth } from '../../firebaseConfig';
 import { syncLog } from '../../utils/debugLog';
-import { ref, get, onValue, query, limitToLast, orderByChild, update } from 'firebase/database';
-import { ClipItem, DOWNLOAD_BASE, getDownloadPath } from '../../utils/clipTypes';
+import { ref, get, set, onValue, update } from 'firebase/database';
+import { ClipItem } from '../../utils/clipTypes';
 import { isValidPairingKey, decryptDeviceList } from '../../utils/networkHelpers';
-import { encrypt as aesEncrypt, decrypt as aesDecrypt } from '../../utils/syncCrypto';
 import { NetworkClock } from '../../utils/networkClock';
 import { setSecureItem } from '../../utils/secureStorage';
 import { createTimeoutSignal } from '../../utils/timeoutSignal';
 import { ActiveDevice } from '../../components/DeviceHub';
 
 const { AdvanceOverlay } = NativeModules;
+
+// ZERO-TRUST VALIDATION: Strictly sanitize peer URLs received from Firebase
+function isValidGlobalTunnelUrl(url?: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  return /^https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com(\/.*)?$/.test(url.trim());
+}
+
+function isValidLanHostOrIp(url?: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const raw = url.trim().replace(/^https?:\/\//, '').split(':')[0].split('/')[0];
+    if (raw === 'localhost' || raw === '127.0.0.1') return true;
+    if (raw.startsWith('192.168.') || raw.startsWith('10.')) return true;
+    if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(raw)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 export function useFirebaseSync(params: {
   isGlobalSyncEnabled: boolean;
@@ -50,7 +68,7 @@ export function useFirebaseSync(params: {
     pairingKeyRef,
     deviceName,
     pairingTimestampRef,
-    autoSyncTop5,
+    autoSyncTop5: _autoSyncTop5,
     processedEventsRef,
     recentSyncFingerprintsRef,
     localScreenshotsRef,
@@ -118,7 +136,10 @@ export function useFirebaseSync(params: {
     // AUDIT FIX #5: PC now preserves URLs in Firebase (no longer auto-deletes after 5s).
     // Listener caches URLs locally and uses Timestamp-based liveness checking.
     const peerDevicesRef = ref(database, `active_devices/${pk}`);
-    const processDevicesSnapshot = async (snapshot: any) => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const processDevicesSnapshot = (snapshot: any) => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
       try {
         // Issue #6: Skip expensive LAN probing if PC is already reachable via direct polling
         const pcAlreadyReachable = lastWorkingPcUrlRef.current && (NetworkClock.now() - lastSuccessfulPollRef.current) < 10_000;
@@ -130,14 +151,14 @@ export function useFirebaseSync(params: {
         const data = snapshot.val();
         const now = NetworkClock.now();
         const filtered = Object.keys(data).map(k => ({ ...data[k], _key: k })).filter(d => d.IsOnline !== false);
-        rawDevices = await decryptDeviceList(filtered);
+        rawDevices = await decryptDeviceList(filtered, pk);
 
         // ── Phase 1: Immediately extract & cache Cloudflare/LAN URLs for instant connectivity ──
         for (let i = 0; i < rawDevices.length; i++) {
           const dev = rawDevices[i];
           if (dev.DeviceType === 'PC') {
             // Immediate Cloudflare Tunnel URL processing
-            if (dev.GlobalUrl && dev.GlobalUrl.includes('trycloudflare.com')) {
+            if (isValidGlobalTunnelUrl(dev.GlobalUrl)) {
               const cleanGlobal = dev.GlobalUrl.trim().replace(/\/$/, '');
               setSecureItem('lastCloudflareUrl', cleanGlobal).catch(() => {});
               setSecureItem('pairedGlobalUrl', cleanGlobal).catch(() => {});
@@ -146,13 +167,16 @@ export function useFirebaseSync(params: {
               cachedPcUrlRef.current = cleanGlobal;
               cachedPcUrlTimestampRef.current = NetworkClock.now();
               syncLog('FIREBASE', `⚡ Instant PC Cloudflare URL cached: ${cleanGlobal}`);
+            } else if (dev.GlobalUrl) {
+              syncLog('FIREBASE', `⚠️ Discarded non-conforming GlobalUrl: ${dev.GlobalUrl}`);
+              dev.GlobalUrl = undefined;
             }
             // Immediate LAN IP caching
-            if (dev.LocalIp) {
+            if (dev.LocalIp && typeof dev.LocalIp === 'string') {
               const parts = dev.LocalIp.split(',');
               const normalizedParts = parts.map((part: string) => {
                 const trimmed = part.trim();
-                if (!trimmed) return '';
+                if (!trimmed || !isValidLanHostOrIp(trimmed)) return '';
                 return trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
               }).filter(Boolean);
               if (normalizedParts.length > 0) {
@@ -173,6 +197,7 @@ export function useFirebaseSync(params: {
             const parts = (dev.LocalIp as string).split(',').map((s: string) => s.trim()).filter(Boolean);
             const candidateUrls: string[] = [];
             for (const part of parts) {
+              if (!isValidLanHostOrIp(part)) continue;
               const clean = part.startsWith('http') ? part.replace(/\/$/, '') : `http://${part}`;
               if (!clean.replace(/^https?:\/\//, '').includes(':')) {
                 candidateUrls.push(`${clean}:8999`);
@@ -294,22 +319,61 @@ export function useFirebaseSync(params: {
         if (activePc) {
           const isPro = !!activePc.IsPro;
           const licenseKey = activePc.LicenseKey || '';
-          const pcPair = pairedDevices.find(d => d.deviceType === 'PC');
+          const pcPair = pairedDevicesRef.current.find(d => d.deviceType === 'PC');
           if (pcPair) {
             updatePairedDeviceLicensing(pcPair.deviceId, isPro, licenseKey);
           }
         }
       } catch (e) { syncLog('FIREBASE', `Active devices listener error: ${e}`); }
+      }, 500);
     };
 
-    // 1. Instant REST snapshot on mount (0ms wait, zero persistent connection overhead)
-    get(peerDevicesRef).then(processDevicesSnapshot).catch(() => {});
+    // 1. Ensure Firebase Auth & Room Membership before subscribing to active_devices
+    let isCancelled = false;
+    let unsubscribeDevices: (() => void) | null = null;
 
-    // 2. Real-time active devices listener
-    const unsubscribeDevices = onValue(peerDevicesRef, processDevicesSnapshot);
+    const setupListener = async () => {
+      try {
+        syncLog('FIREBASE', '[STEP 2/6: ROOM MEMBERSHIP] Ensuring Firebase Auth...');
+        await ensureFirebaseAuth();
+        if (isCancelled) return;
+
+        const uid = auth?.currentUser?.uid;
+        if (uid) {
+          syncLog('FIREBASE', `[STEP 2/6: ROOM MEMBERSHIP] Registering members/${pk.substring(0, 8)}.../${uid.substring(0, 8)}...`);
+          await set(ref(database, `members/${pk}/${uid}`), true).catch((e) => {
+            syncLog('FIREBASE', `[STEP 2/6: ROOM MEMBERSHIP ERROR] ⚠️ Room write notice: ${e?.message || e}`);
+          });
+          syncLog('FIREBASE', `[STEP 2/6: ROOM MEMBERSHIP] ✅ Room membership registered`);
+        }
+        if (isCancelled) return;
+
+        syncLog('FIREBASE', `[STEP 3/6: ACTIVE DEVICES] Subscribing to active_devices/${pk.substring(0, 8)}...`);
+        // Instant snapshot + real-time listener
+        get(peerDevicesRef).then(processDevicesSnapshot).catch((e) => {
+          syncLog('FIREBASE', `[STEP 3/6: ACTIVE DEVICES ERROR] ⚠️ Initial snapshot error: ${e?.message || e}`);
+        });
+        if (unsubscribeDevices) unsubscribeDevices();
+
+        unsubscribeDevices = onValue(peerDevicesRef, processDevicesSnapshot, (error) => {
+          syncLog('FIREBASE', `[STEP 3/6: ACTIVE DEVICES ERROR] ⚠️ Listener error: ${error.message} — will retry`);
+          if (!isCancelled) {
+            setTimeout(setupListener, 3000);
+          }
+        });
+      } catch (e: any) {
+        syncLog('FIREBASE', `[STEP 2/6: ROOM MEMBERSHIP ERROR] ❌ Firebase setup error: ${e?.message || e}`);
+        if (!isCancelled) {
+          setTimeout(setupListener, 3000);
+        }
+      }
+    };
+
+    setupListener();
 
     return () => {
-      unsubscribeDevices();
+      isCancelled = true;
+      if (unsubscribeDevices) unsubscribeDevices();
     };
   // AC-3: Stabilize pairedDevices dependency with useMemo to avoid inline JSON.stringify
   }, [isGlobalSyncEnabled, contextPairingKey, pairedDeviceKeysStable]);

@@ -17,6 +17,7 @@ namespace FlyShelf.Classes
 
         public static bool SafeSetText(string text, bool suppressEcho = true, int echoDelayMs = 200)
         {
+            if (text == null) return false;
             return ExecuteOnDispatcher(() =>
             {
                 if (suppressEcho)
@@ -25,6 +26,8 @@ namespace FlyShelf.Classes
                 }
 
                 bool success = false;
+                try
+                {
                 for (int retry = 0; retry < 3; retry++)
                 {
                     try
@@ -51,10 +54,13 @@ namespace FlyShelf.Classes
                         }
                     }
                 }
-
-                if (suppressEcho)
+                }
+                finally
                 {
-                    ReleaseEchoGuardWithDelay(echoDelayMs);
+                    if (suppressEcho)
+                    {
+                        ReleaseEchoGuardWithDelay(echoDelayMs);
+                    }
                 }
 
                 return success;

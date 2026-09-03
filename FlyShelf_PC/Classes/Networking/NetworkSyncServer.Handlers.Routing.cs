@@ -67,6 +67,16 @@ namespace FlyShelf.Classes
             string key = $"{(isTrusted ? "T" : "E")}:{(isWrite ? "W" : "R")}:{ip}";
             long now = Environment.TickCount64;
 
+            // M-7: Periodically purge expired entries to prevent dictionary leak
+            if (_rateLimits.Count > 100)
+            {
+                foreach (var kvp in _rateLimits)
+                {
+                    if (now - kvp.Value.windowStart > RATE_WINDOW_MS)
+                        _rateLimits.TryRemove(kvp.Key, out _);
+                }
+            }
+
             var entry = _rateLimits.AddOrUpdate(key,
                 _ => (1, now),
                 (_, prev) =>
@@ -137,6 +147,8 @@ namespace FlyShelf.Classes
                     res.AddHeader("Access-Control-Allow-Origin", corsOrigin);
                 res.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
                 res.AddHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Content-Range, X-Original-Date, X-FlyShelf-Client, X-Pairing-Key, X-File-Name, X-File-Type, X-Item-Type, X-Source-Device, X-Source-DeviceId, X-Batch-Name, X-Upload-Session, X-Chunk-Index, X-Total-Chunks, X-Device-Id, X-Transfer-Id");
+                res.AddHeader("Access-Control-Expose-Headers", "X-Server-Time, Content-Disposition, Content-Length");
+                res.AddHeader("X-Server-Time", NetworkClock.UtcNowMs.ToString(CultureInfo.InvariantCulture));
                 // Enable Keep-Alive to allow socket reuse (crucial for zero-handshake P2P sync and chunked uploads)
                 res.KeepAlive = true;
                 // SECURITY: X-Global-Url header REMOVED — was leaking the Cloudflare tunnel URL in every response
@@ -348,7 +360,7 @@ namespace FlyShelf.Classes
                         res.Close();
                         return;
                     }
-                    Logger.LogAction("WS", $"Peer WebSocket accepted from {peerDeviceId}");
+                    Logger.LogAction("WS", $"[STEP 5/6: WS SERVER] ✅ Peer WebSocket accepted from {peerDeviceId}");
                     var wsContext = await context.AcceptWebSocketAsync(null);
                     _ = Task.Run(() => HandlePeerWebSocket(wsContext.WebSocket, peerDeviceId));
                 }
@@ -412,6 +424,16 @@ namespace FlyShelf.Classes
                 }
                 else if (path == "/api/pair_verify" && req.HttpMethod == "GET")
                 {
+                    // C-4: Rate limit pairing verification to prevent LAN brute-force
+                    if (IsRateLimited(clientIp, false, false))
+                    {
+                        res.StatusCode = 429;
+                        byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"429 Too Many Requests\"}");
+                        res.ContentType = "application/json";
+                        try { res.OutputStream.Write(err, 0, err.Length); } catch { }
+                        res.Close();
+                        return;
+                    }
                     // LAN pairing verification — no auth needed (the code IS the auth)
                     string code = req.QueryString["code"] ?? "";
                     var codeInfo = DevicePairingManager.VerifyLocalPairingCode(code);
@@ -448,6 +470,16 @@ namespace FlyShelf.Classes
                 }
                 else if (path == "/api/pair_complete" && req.HttpMethod == "POST")
                 {
+                    // C-4: Rate limit pairing completion to prevent LAN brute-force
+                    if (IsRateLimited(clientIp, true, false))
+                    {
+                        res.StatusCode = 429;
+                        byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"429 Too Many Requests\"}");
+                        res.ContentType = "application/json";
+                        try { res.OutputStream.Write(err, 0, err.Length); } catch { }
+                        res.Close();
+                        return;
+                    }
                     // LAN pairing completion — Android sends its device info
                     try
                     {
@@ -536,17 +568,19 @@ namespace FlyShelf.Classes
                     {
                         try
                         {
-                            // Register Android/Mobile devices as nearby when they health-check from LAN
+                            // Register Android/Mobile devices as nearby and touch PeerManager when they health-check from LAN
                             string flyshelfClient = req.Headers["X-FlyShelf-Client"] ?? "";
-                            if (flyshelfClient == "MobileCompanion" && NearbyDiscovery.Instance != null)
+                            if (flyshelfClient == "MobileCompanion")
                             {
                                 string mobileDeviceId = req.Headers["X-Device-Id"] ?? req.Headers["X-Source-Device"] ?? "";
                                 string mobileDeviceName = req.Headers["X-Source-Device"] ?? "Mobile";
                                 string mobileIp = req.RemoteEndPoint?.Address?.ToString() ?? "";
                                 if (!string.IsNullOrEmpty(mobileIp) && !string.IsNullOrEmpty(mobileDeviceId))
                                 {
-                                    NearbyDiscovery.Instance.RecordHttpDiscovery(
+                                    NearbyDiscovery.Instance?.RecordHttpDiscovery(
                                         mobileDeviceId, mobileDeviceName, mobileIp, 8999, "Mobile");
+                                    PeerManager.Instance?.TouchMobilePeer(mobileDeviceId, mobileDeviceName, mobileIp, isFromTunnel ? "Cloudflare" : "LAN");
+                                    DevicePairingManager.RecordDeviceActivity(mobileDeviceId, mobileDeviceName, isFromTunnel ? "Cloud" : "LAN");
                                 }
                             }
 
@@ -578,15 +612,15 @@ namespace FlyShelf.Classes
                     }
                     else if (path == "/api/sync" && req.HttpMethod == "GET")
                     {
-                        string deviceId = req.Headers["X-Pairing-Key"] ?? req.Headers["X-Device-Id"] ?? req.RemoteEndPoint?.Address?.ToString() ?? "unknown";
-                        _directDeviceLastSeen[deviceId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        string directKey = req.Headers["X-Pairing-Key"] ?? req.Headers["X-Device-Id"] ?? req.RemoteEndPoint?.Address?.ToString() ?? "unknown";
+                        _directDeviceLastSeen[directKey] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                         CloudDiscoveryManager.DirectlyConnectedDeviceCount = GetDirectlyConnectedDeviceCount();
 
                         // Also register as nearby device and record activity so device status shows online
                         string mobileIp = req.RemoteEndPoint?.Address?.ToString() ?? "";
                         string mobileClient = req.Headers["X-FlyShelf-Client"] ?? "";
                         string mobileDeviceName = req.Headers["X-Source-Device"] ?? "Mobile";
-                        string mobileDeviceId = req.Headers["X-Device-Id"] ?? deviceId;
+                        string mobileDeviceId = req.Headers["X-Device-Id"] ?? (mobileDeviceName != "Mobile" ? $"Mobile_{mobileDeviceName.Replace(" ", "_")}" : directKey);
 
                         DevicePairingManager.RecordDeviceActivity(mobileDeviceId, mobileDeviceName, !string.IsNullOrEmpty(mobileIp) ? "LAN" : "Cloud");
 
@@ -682,6 +716,8 @@ namespace FlyShelf.Classes
         private async Task HandlePeerWebSocket(WebSocket ws, string peerDeviceId)
         {
             RegisterPeerWebSocket(peerDeviceId, ws);
+            PeerManager.Instance?.RegisterMobilePeerWebSocket(peerDeviceId, ws, "LAN");
+            DevicePairingManager.RecordDeviceActivity(peerDeviceId, "", "LAN");
             byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(65536);
             try
             {
@@ -733,6 +769,12 @@ namespace FlyShelf.Classes
                                 var root = doc.RootElement;
                                 string envelopeType = root.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : "";
 
+                                if (envelopeType == "pong")
+                                {
+                                    UpdatePeerPong(peerDeviceId);
+                                    continue;
+                                }
+
                                 if (envelopeType == "Ping" || envelopeType == "Heartbeat")
                                 {
                                     long clientTs = root.TryGetProperty("ts", out var tsProp) ? tsProp.GetInt64() : 0;
@@ -747,7 +789,7 @@ namespace FlyShelf.Classes
                                     await ws.SendAsync(new ArraySegment<byte>(pongBytes), WebSocketMessageType.Text, true, CancellationToken.None);
                                     continue;
                                 }
-                                else if (envelopeType == "SyncText")
+                                else if (envelopeType == "SyncText" || envelopeType == "SyncClip")
                                 {
                                     string sourceDeviceId = root.TryGetProperty("sourceDeviceId", out var idProp) ? idProp.GetString() ?? "" : "";
                                     if (sourceDeviceId == SettingsManager.Current.DeviceId)
@@ -761,15 +803,20 @@ namespace FlyShelf.Classes
                                         Logger.LogAction("PEER", $"Rejected WS text from blocked device: {sourceDeviceId}");
                                         continue;
                                     }
-                                    string itemType = root.TryGetProperty("itemType", out var itProp) ? itProp.GetString() : "Text";
-                                    string title = root.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : "";
-                                    string data = root.TryGetProperty("data", out var dataProp) ? dataProp.GetString() : "";
-                                    string sourceDeviceName = root.TryGetProperty("sourceDeviceName", out var nameProp) ? nameProp.GetString() : "Remote PC";
+                                    string itemType = root.TryGetProperty("itemType", out var itProp) ? itProp.GetString() ?? "Text" : "Text";
+                                    string title = root.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? "" : "";
+                                    string data = root.TryGetProperty("data", out var dataProp) ? dataProp.GetString() ?? "" : "";
+                                    if (string.IsNullOrEmpty(data) && root.TryGetProperty("raw", out var rawProp)) data = rawProp.GetString() ?? "";
+                                    if (string.IsNullOrEmpty(data) && root.TryGetProperty("content", out var contentProp)) data = contentProp.GetString() ?? "";
+                                    string sourceDeviceName = root.TryGetProperty("sourceDeviceName", out var nameProp) ? nameProp.GetString() ?? "Companion" : "Companion";
+                                    string sourceDeviceType = root.TryGetProperty("sourceDeviceType", out var sdtProp) ? sdtProp.GetString() ?? "Mobile" : "Mobile";
 
-                                    Logger.LogAction("WS", $"Received SyncText via WebSocket from {sourceDeviceName}: '{title}'");
+                                    DevicePairingManager.RecordDeviceActivity(sourceDeviceId, sourceDeviceName, "WebSocket");
+
+                                    Logger.LogAction("WS", $"[STEP 6/6: CLIP EVENT] Received {envelopeType} ({itemType}) via WebSocket from '{sourceDeviceName}': '{title}'");
                                     if (SettingsManager.Current.EnableIncomingSync)
                                     {
-                                        InjectReceivedText(data, sourceDeviceName, "WebSocket", itemType, "PC");
+                                        InjectReceivedText(data, sourceDeviceName, "WebSocket", itemType, sourceDeviceType);
                                     }
                                     else
                                     {
@@ -1049,8 +1096,20 @@ namespace FlyShelf.Classes
             finally
             {
                 UnregisterPeerWebSocket(peerDeviceId);
+                if (PeerManager.Instance != null && PeerManager.Instance.ConnectedPeers.TryGetValue(peerDeviceId, out var peer))
+                {
+                    lock (peer.StateLock)
+                    {
+                        if (peer.LiveSocket == ws)
+                        {
+                            peer.LiveSocket = null;
+                            peer.IsAlive = false;
+                            peer.Transport = "offline";
+                        }
+                    }
+                }
                 System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
-                ws.Dispose();
+                try { ws.Dispose(); } catch { }
             }
         }
 

@@ -210,11 +210,11 @@ namespace FlyShelf.Windows
                     double totalDownload = activeSessions.Where(s => s.Direction == TransferDirection.Receive).Sum(s => s.SpeedBps);
                     int activeCount = activeSessions.Length;
 
-                    DashboardUploadSpeed.Text = LanTransferSession.FormatSpeed(totalUpload);
-                    DashboardDownloadSpeed.Text = LanTransferSession.FormatSpeed(totalDownload);
-                    DashboardActiveCount.Text = $"{activeCount} active";
-                    DashboardActiveDot.Visibility = activeCount > 0 ? Visibility.Visible : Visibility.Collapsed;
-                    TransferSpeedDashboard.Visibility = (activeCount > 0 || transfersSnapshot.Length > 0) ? Visibility.Visible : Visibility.Collapsed;
+                    if (DashboardUploadSpeed != null) DashboardUploadSpeed.Text = LanTransferSession.FormatSpeed(totalUpload);
+                    if (DashboardDownloadSpeed != null) DashboardDownloadSpeed.Text = LanTransferSession.FormatSpeed(totalDownload);
+                    if (DashboardActiveCount != null) DashboardActiveCount.Text = $"{activeCount} active";
+                    if (DashboardActiveDot != null) DashboardActiveDot.Visibility = activeCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+                    if (TransferSpeedDashboard != null) TransferSpeedDashboard.Visibility = (activeCount > 0 || transfersSnapshot.Length > 0) ? Visibility.Visible : Visibility.Collapsed;
                 }
             }
             catch (Exception ex)

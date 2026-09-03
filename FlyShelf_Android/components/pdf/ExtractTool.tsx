@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system/legacy';
-import { colors } from '../../styles/theme';
-import s from '../../styles/pdfToolsStyles';
+
+import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { getPdfPageInfo, extractPages } from '../../utils/pdfUtils';
 import { SelectedFile, PageEntry } from './types';
 import ResultView from './ResultView';
@@ -19,6 +20,9 @@ interface ExtractToolProps {
 }
 
 export default function ExtractTool({ onBack, onPickFile, saveRecent }: ExtractToolProps) {
+  const { colors, shadows } = useAppTheme();
+  const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
+
   const [file, setFile] = useState<SelectedFile | null>(null);
   const [pages, setPages] = useState<PageEntry[]>([]);
   const [loadingPages, setLoadingPages] = useState(false);
@@ -33,7 +37,7 @@ export default function ExtractTool({ onBack, onPickFile, saveRecent }: ExtractT
       setLoadingPages(true);
       try {
         const info = await getPdfPageInfo(files[0].uri);
-        setPages(info.pages.map((p, i) => ({ ...p, index: i, rotation: 0, selected: false })));
+        setPages(info.pages.map((p, i) => ({ ...p, index: i, originalIndex: i, rotation: 0, selected: false, source: 'original' as const })));
       } catch (e: any) {
         Alert.alert('Error', 'Failed to load PDF');
       } finally {
@@ -100,7 +104,7 @@ export default function ExtractTool({ onBack, onPickFile, saveRecent }: ExtractT
       </View>
       <ScrollView style={s.modalScroll} contentContainerStyle={s.pb100}>
         {!file ? (
-          <PickButton label="Pick PDF" onPress={handlePick} />
+          <PickButton label="Pick PDF" onPress={handlePick} s={s} />
         ) : loadingPages ? (
           <ActivityIndicator size="large" color={colors.accent.primary} style={s.mt20} />
         ) : (
@@ -157,7 +161,7 @@ export default function ExtractTool({ onBack, onPickFile, saveRecent }: ExtractT
   );
 }
 
-const PickButton = ({ label, onPress }: { label: string; onPress: () => void }) => (
+const PickButton = ({ label, onPress, s }: { label: string; onPress: () => void; s: any }) => (
   <Pressable style={[s.btnPrimary, s.mb16]} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
     <Text style={s.btnPrimaryText}>{label}</Text>
   </Pressable>

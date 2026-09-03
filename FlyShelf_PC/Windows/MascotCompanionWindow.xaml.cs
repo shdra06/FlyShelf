@@ -54,6 +54,8 @@ namespace FlyShelf.Windows
             settingsItem.Click += (s, e) =>
             {
                 SettingsManager.Current.EnableDesktopMascot = false;
+                SettingsManager.Save();
+                this.Close();
             };
             menu.Items.Add(openItem);
             menu.Items.Add(settingsItem);

@@ -209,6 +209,10 @@ namespace FlyShelf.Classes
                     await DevicePairingManager.CheckForHandshakes();
                 });
 
+                // H-13b: Handshake poll timer is now on-demand — started via StartHandshakePollTimer()
+                // when a pairing code is actively published, and stopped via StopHandshakePollTimer().
+                // This avoids unnecessary Firebase polling every 3s when no pairing is in progress.
+
                 // Heartbeat: reduced to 900s (15 min) — URL updates are now handled via
                 // P2P WebSocket directly to connected peers. Firebase writes only happen
                 // at startup and on URL change. Timer is mainly for pairing handshakes.
@@ -584,6 +588,8 @@ namespace FlyShelf.Classes
             _proxyRunning = false;
             ServerUrl = "Offline";
             try { _heartbeatTimer?.Stop(); _heartbeatTimer?.Dispose(); } catch { } // Best-effort: failure is acceptable
+            StopHandshakePollTimer();
+            try { var t = Interlocked.Exchange(ref _wsPingTimer, null); t?.Dispose(); } catch { } // M-8: Dispose WebSocket ping timer
             try { System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged; } catch { } // Best-effort: failure is acceptable
             _cfDaemon.Stop();
             try { PeerManager.Instance?.Stop(); } catch { } // Best-effort: failure is acceptable
@@ -604,6 +610,46 @@ namespace FlyShelf.Classes
             TlsUrl = "";
             // [FIX M-35]: Null-conditional to prevent NRE during app shutdown
             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => _viewModel.RefreshLocalServerData());
+        }
+
+        /// <summary>
+        /// H-13b: Starts the handshake poll timer (3s interval) on demand.
+        /// Call when a pairing code is actively published so we poll Firebase for handshakes.
+        /// </summary>
+        public void StartHandshakePollTimer()
+        {
+            if (_handshakePollTimer != null) return; // Already running
+            _handshakePollTimer = new System.Timers.Timer(3000);
+            _handshakePollTimer.Elapsed += async (s, e) =>
+            {
+                try
+                {
+                    if (_isRunning && DevicePairingManager.HasPairingKey)
+                    {
+                        await DevicePairingManager.CheckForHandshakes();
+                    }
+                }
+                catch { }
+            };
+            _handshakePollTimer.AutoReset = true;
+            _handshakePollTimer.Start();
+            Logger.LogAction("HANDSHAKE", "Handshake poll timer started (3s interval)");
+        }
+
+        /// <summary>
+        /// H-13b: Stops and disposes the handshake poll timer.
+        /// Call when the pairing code is no longer published.
+        /// </summary>
+        public void StopHandshakePollTimer()
+        {
+            try
+            {
+                _handshakePollTimer?.Stop();
+                _handshakePollTimer?.Dispose();
+            }
+            catch { } // Best-effort: failure is acceptable
+            _handshakePollTimer = null;
+            Logger.LogAction("HANDSHAKE", "Handshake poll timer stopped");
         }
 
         private void UpdateServerUrl()
@@ -660,6 +706,10 @@ namespace FlyShelf.Classes
                         try { await PeerManager.Instance?.BroadcastUrlUpdate(newDisplayUrl, GlobalUrl ?? ""); }
                         catch { } // Best-effort: failure is acceptable
                     });
+
+                    // M-9: Rebind UDP multicast listeners on network change
+                    try { PeerManager.Instance?.RestartMulticastListeners(); }
+                    catch { } // Best-effort: failure is acceptable
 
                     // [FIX M-35]: Null-conditional to prevent NRE during app shutdown
             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => _viewModel.RefreshLocalServerData());

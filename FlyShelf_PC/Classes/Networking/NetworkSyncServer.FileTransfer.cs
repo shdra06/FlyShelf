@@ -26,6 +26,8 @@ namespace FlyShelf.Classes
         private const int PAIR_MAX_FAILS_PER_IP   = 5;          // max failures from one IP per window
         private const int PAIR_MAX_FAILS_GLOBAL    = 20;         // total failures across all IPs before global lockout
         private static int _pairGlobalFailCount    = 0;
+        private static long _pairGlobalFailWindowStart = 0;     // H-9: Timestamp-based reset instead of Task.Delay
+        private const long PAIR_GLOBAL_WINDOW_TICKS = 5L * 60 * 10_000_000; // 5-minute global window
         private const long PAIR_RATE_WINDOW_TICKS  = 60L * 10_000_000; // 60-second window
 
         // ═══ HTTP Transfer tracking (for Android REST-based file transfers) ═══
@@ -207,6 +209,13 @@ namespace FlyShelf.Classes
                 long nowTicks = DateTime.UtcNow.Ticks;
 
                 // Global lockout: too many failures from any IP combined
+                // H-9: Timestamp-based auto-reset instead of Task.Delay
+                if (_pairGlobalFailWindowStart > 0 && nowTicks - _pairGlobalFailWindowStart > PAIR_GLOBAL_WINDOW_TICKS)
+                {
+                    // Window expired — reset global counter
+                    System.Threading.Volatile.Write(ref _pairGlobalFailCount, 0);
+                    System.Threading.Volatile.Write(ref _pairGlobalFailWindowStart, 0);
+                }
                 if (System.Threading.Volatile.Read(ref _pairGlobalFailCount) >= PAIR_MAX_FAILS_GLOBAL)
                 {
                     byte[] tooMany = Encoding.UTF8.GetBytes("{\"error\":\"Too many pairing attempts. Try again later.\"}");
@@ -296,9 +305,8 @@ namespace FlyShelf.Classes
                             : (old.count + 1, old.windowStart) // still in window — increment
                     );
                     System.Threading.Interlocked.Increment(ref _pairGlobalFailCount);
-                    // Auto-reset global counter after 5 minutes to recover from transient attack
-                    _ = System.Threading.Tasks.Task.Delay(TimeSpan.FromMinutes(5))
-                        .ContinueWith(_ => System.Threading.Interlocked.Decrement(ref _pairGlobalFailCount));
+                    // H-9: Record window start if this is the first failure in a new window
+                    System.Threading.Interlocked.CompareExchange(ref _pairGlobalFailWindowStart, nowTicks, 0);
 
                     byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Invalid pairing key\"}");
                     res.StatusCode = 403;

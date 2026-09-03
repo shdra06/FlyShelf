@@ -91,11 +91,11 @@ namespace FlyShelf.Classes
                 // Use PUT to register or update our specific Device node (scoped to pairing key)
                 string pairingKey = DevicePairingManager.EnsurePairingKey();
                 if (string.IsNullOrEmpty(pairingKey)) { Logger.LogAction("FIREBASE SYNC", "Skipped device registration — no pairing key"); return; }
-                // Register room membership concurrently — don't delay the tunnel URL push
+                // Ensure room membership is registered before writing to active_devices (Firebase rule requirement)
                 if (!_roomMembershipRegistered)
                 {
+                    await RegisterRoomMembershipAsync(pairingKey);
                     _roomMembershipRegistered = true;
-                    _ = RegisterRoomMembershipAsync(pairingKey);
                 }
                 string tunnelNodeUrl = (await AuthUrl($"active_devices/{pairingKey}/{SettingsManager.Current.DeviceId}.json"));
                 // H4: Skip Firebase writes during backoff period
@@ -105,43 +105,61 @@ namespace FlyShelf.Classes
                     return;
                 }
 
+                Logger.LogAction("FIREBASE SYNC", $"[STEP 3/6: ACTIVE DEVICE DNS] Publishing to active_devices/{pairingKey[..Math.Min(8, pairingKey.Length)]}.../{SettingsManager.Current.DeviceId} (Online: {isOnline}, URL: {url})");
                 using var response = await _client.PutAsync(tunnelNodeUrl, content);
                 
                 if (response.IsSuccessStatusCode)
                 {
                     _lastPushedTunnelUrl = urlFingerprint;
                     _firebaseQuotaWarningShown = false; // Reset on success
-                    Logger.LogAction("FIREBASE SYNC", $"Tunnel DNS updated: {url} [{isOnline}]");
+                    Logger.LogAction("FIREBASE SYNC", $"[STEP 3/6: ACTIVE DEVICE DNS] ✅ Tunnel DNS published successfully: {url} [{isOnline}]");
+
+                    // DirectMesh: Broadcast updated endpoints directly to active WebSocket peers
+                    try
+                    {
+                        var urlUpdate = new
+                        {
+                            type = "UrlUpdate",
+                            sourceDeviceId = SettingsManager.Current.DeviceId ?? "PC",
+                            sourceDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
+                            lanUrl = CachedLocalUrl ?? localIp,
+                            cfUrl = CachedGlobalUrl ?? url,
+                            ts = NetworkClock.UtcNowMs
+                        };
+                        string urlUpdateJson = JsonSerializer.Serialize(urlUpdate);
+                        NetworkSyncServer.BroadcastToPeerWebSockets(urlUpdateJson);
+                    }
+                    catch { }
                 }
                 else
                 {
                     int statusCode = (int)response.StatusCode;
+                    string body = await response.Content.ReadAsStringAsync();
                     // H4: Detect Firebase quota exceeded (402) and rate limiting (429)
                     if (statusCode == 429 || statusCode == 402)
                     {
                         _firebaseBackoffUntil = DateTime.UtcNow.AddMinutes(5);
-                        Logger.LogAction("FIREBASE QUOTA", $"⚠️ Firebase returned {statusCode} — backing off for 5 minutes");
+                        Logger.LogAction("FIREBASE QUOTA", $"[STEP 3/6: ACTIVE DEVICE DNS ERROR] ⚠️ Firebase returned {statusCode} — backing off for 5 minutes");
                         if (!_firebaseQuotaWarningShown)
                         {
                             _firebaseQuotaWarningShown = true;
                             try
                             {
                                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                                    Windows.ToastWindow.ShowToast("Cloud sync temporarily limited — retrying in 5 minutes"));
+                                    Windows.ToastWindow.ShowWarning("Cloud Sync Limited", "Firebase returned quota/rate limit (429/402) — retrying in 5 minutes"));
                             }
                             catch { } // Best-effort: failure is acceptable
                         }
                     }
                     else
                     {
-                        string body = await response.Content.ReadAsStringAsync();
-                        Logger.LogAction("FIREBASE ERROR", $"Tunnel push failed: HTTP {statusCode} — {body}");
+                        Logger.LogAction("FIREBASE ERROR", $"[STEP 3/6: ACTIVE DEVICE DNS ERROR] ❌ Tunnel push failed: HTTP {statusCode} — {body}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Logger.LogAction("FIREBASE ERROR", $"Tunnel DNS Failure: {ex.Message}");
+                Logger.LogAction("FIREBASE ERROR", $"[STEP 3/6: ACTIVE DEVICE DNS ERROR] ❌ Tunnel DNS Failure: {ex.Message}");
             }
         }
 
@@ -183,6 +201,7 @@ namespace FlyShelf.Classes
                         if (!string.IsNullOrWhiteSpace(json) && json != "null")
                         {
                             using var doc = JsonDocument.Parse(json);
+                            if (doc.RootElement.ValueKind != JsonValueKind.Object) return devices;
                             string myId = SettingsManager.Current.DeviceId ?? "";
                             string myName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
 

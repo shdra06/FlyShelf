@@ -58,6 +58,7 @@ class ScreenshotObserver(private val context: Context) : ContentObserver(Handler
                             
                             Handler(Looper.getMainLooper()).post {
                                 Toast.makeText(context, "📸 Screenshot detected — syncing...", Toast.LENGTH_SHORT).show()
+                                OverlayService.instance?.pulseBall()
                             }
 
                             // Auto-upload to PC in background if URL is available

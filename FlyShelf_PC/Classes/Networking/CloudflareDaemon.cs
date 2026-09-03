@@ -189,10 +189,14 @@ namespace FlyShelf.Classes
                                 var token = _restartCts.Token;
                                 _ = Task.Run(async () =>
                                 {
-                                    KillExisting();
-                                    await Task.Delay(2000, token);
-                                    if (!token.IsCancellationRequested)
-                                        await StartTunnelCore();
+                                    try
+                                    {
+                                        KillExisting();
+                                        await Task.Delay(2000, token);
+                                        if (!token.IsCancellationRequested)
+                                            await StartTunnelCore();
+                                    }
+                                    catch (OperationCanceledException) { /* Restart was superseded */ }
                                 });
                                 return;
                             }

@@ -17,7 +17,6 @@
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/GlobalScrollBar.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/ImagePlaceholder.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/FlyShelfColorPalette.xaml"/>
-                <ResourceDictionary Source="pack://application:,,,/Resources/Themes/Theme.Midnight.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Styles/AltClipboardStyles.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/TypeRamp.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/FileTypeIcons.xaml"/>
@@ -185,7 +184,6 @@
                 <Setter Property="CanContentScroll" Value="False"/>
                 <Setter Property="PanningMode" Value="None"/>
             </Style>
-
         </ResourceDictionary>
     </Application.Resources>
 </Application>

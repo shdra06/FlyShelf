@@ -27,30 +27,40 @@ namespace FlyShelf.Classes
 
         public static async Task<(bool Success, string DeviceName)> ConnectByCode(string code)
         {
+            Logger.LogAction("PAIR CODE", $"[STEP 4/6: CODE PAIRING] Starting pairing connection for code: {code}...");
             var info = await LookupPairingCode(code);
             if (info == null)
+            {
+                Logger.LogAction("PAIR CODE", $"[STEP 4/6: CODE PAIRING ERROR] ❌ Pairing code {code} is invalid, expired, or not found");
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    Windows.ToastWindow.ShowError("Pairing Code Not Found", $"Code {code.ToUpperInvariant()} was not found or has expired."));
                 return (false, "");
+            }
 
-            // Try to reach the device and pair Ã¢â‚¬â€ LAN first, then Cloudflare
+            // Try to reach the device and pair — LAN first, then Cloudflare
             string[] urls = new[] { info.localUrl, info.globalUrl }
                 .Where(u => !string.IsNullOrEmpty(u) && u.StartsWith("http", StringComparison.Ordinal))
                 .ToArray();
 
-            // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â CASE 1: Mobile device with no HTTP server Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+            // ═══ CASE 1: Mobile device with no HTTP server ═══ 
             // When a mobile generates a code, it has no localUrl/globalUrl.
-            // We can't POST /api/pair to it Ã¢â‚¬â€ instead, adopt the shared pairing key
+            // We can't POST /api/pair to it — instead, adopt the shared pairing key
             // directly and register the device locally. The shared key enables cloud sync.
             if (urls.Length == 0)
             {
-                Logger.LogAction("PAIR CODE", $"Device {info.deviceName} has no HTTP URLs Ã¢â‚¬â€ performing local-only key adoption");
+                Logger.LogAction("PAIR CODE", $"[STEP 4/6: CODE PAIRING] Companion device '{info.deviceName}' is mobile (no HTTP server) — adopting key & establishing room...");
                 
                 // Adopt the remote device's pairing key as our own (shared room)
                 if (!string.IsNullOrEmpty(info.pairingKey))
                 {
+                    string existingKey = SettingsManager.Current.PairingKey;
+                    if (!string.IsNullOrEmpty(existingKey) && existingKey != info.pairingKey) {
+                        Logger.LogAction("WARN", $"Adopting new pairing key from code. Previous key '{existingKey}' will be abandoned — previously paired devices may lose connectivity.");
+                    }
                     SettingsManager.Current.PairingKey = info.pairingKey;
                     SettingsManager.Save();
                     SyncCrypto.ClearKeyCache();
-                    Logger.LogAction("PAIR CODE", $"Adopted pairing key from {info.deviceName}: {info.pairingKey.Substring(0, 8)}...");
+                    Logger.LogAction("PAIR CODE", $"[STEP 4/6: CODE PAIRING] Adopted pairing key from '{info.deviceName}': {info.pairingKey.Substring(0, Math.Min(8, info.pairingKey.Length))}...");
                     await CloudDiscoveryManager.RegisterRoomMembershipAsync(info.pairingKey);
                 }
 
@@ -63,7 +73,9 @@ namespace FlyShelf.Classes
                     true,
                     CloudDiscoveryManager.CachedLocalUrl ?? "");
 
-                Logger.LogAction("PAIR CODE", $"✓ Local-only paired with {info.deviceName} (key adoption)");
+                Logger.LogAction("PAIR CODE", $"[STEP 4/6: CODE PAIRING] ✅ Paired successfully with '{info.deviceName}'!");
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    Windows.ToastWindow.ShowSuccess($"Paired with {info.deviceName}", "Cross-device sync is now active"));
                 
                 // Notify the code-provider that we joined — write a handshake to Firebase
                 _ = WriteHandshakeToFirebase(info.pairingKey, info.deviceId);
@@ -87,8 +99,9 @@ namespace FlyShelf.Classes
                     catch (Exception ex) { Logger.LogAction("PAIR CODE", $"Post-pair ForceResync failed: {ex.Message}"); }
                 });
                 
-                // Invalidate the pairing code now that pairing is complete
-                _ = DeletePairingCode(code);
+                // Note: Do NOT delete the pairing code immediately here.
+                // The code-generator (e.g. Android) is actively polling pairing_codes/{code} for the response.
+                // Android will delete the code itself once it receives the response, or it will expire via 5-min TTL.
 
                 return (true, info.deviceName);
             }
@@ -120,6 +133,10 @@ namespace FlyShelf.Classes
                         // share the same Firebase scope for clipboard sync and device discovery
                         if (!string.IsNullOrEmpty(info.pairingKey))
                         {
+                            string existingKey = SettingsManager.Current.PairingKey;
+                            if (!string.IsNullOrEmpty(existingKey) && existingKey != info.pairingKey) {
+                                Logger.LogAction("WARN", $"Adopting new pairing key from code. Previous key '{existingKey}' will be abandoned — previously paired devices may lose connectivity.");
+                            }
                             SettingsManager.Current.PairingKey = info.pairingKey;
                             SettingsManager.Save();
                             SyncCrypto.ClearKeyCache();
@@ -203,9 +220,8 @@ namespace FlyShelf.Classes
                 
                 _ = WriteHandshakeToFirebase(info.pairingKey, info.deviceId);
                 _ = WriteResponseToPairingCode(code, info.pairingKey);
-                
-                // Invalidate the pairing code now that pairing is complete
-                _ = DeletePairingCode(code);
+                // Note: Do NOT delete the pairing code immediately here.
+                // Android/companion polls pairing_codes/{code} for the response.
 
                 return (true, info.deviceName + " ⏳");
             }
@@ -248,7 +264,7 @@ namespace FlyShelf.Classes
 
                 // PH-4 FIX: Encrypt handshake data before writing to Firebase
                 // Prevents plaintext device info from being readable by unauthorized parties
-                string payload = SyncCrypto.Encrypt(json) ?? json;
+                string payload = SyncCrypto.Encrypt(json) ?? throw new InvalidOperationException("Encryption failed — handshake requires encryption");
 
                 string url = (await AuthUrl($"pairing_handshake/{pairingKey}/{myDeviceId}.json"));
                 // Write as a JSON string value (encrypted payload) rather than raw JSON object
@@ -282,14 +298,22 @@ namespace FlyShelf.Classes
                 string myDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
                 string localUrl = CloudDiscoveryManager.CachedLocalUrl ?? "";
                 string globalUrl = CloudDiscoveryManager.CachedGlobalUrl ?? "";
+
+                // SECURITY: Encrypt response payload with pairing code
+                string sensitiveResponse = JsonSerializer.Serialize(new
+                {
+                    pairingKey,
+                    localUrl,
+                    globalUrl,
+                });
+                string encryptedData = SyncCrypto.Encrypt(sensitiveResponse, code);
+
                 var response = new
                 {
                     deviceId = myDeviceId,
                     deviceName = myDeviceName,
                     deviceType = "PC",
-                    pairingKey,
-                    localUrl,
-                    globalUrl,
+                    encryptedData,
                     timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                 };
                 string json = JsonSerializer.Serialize(response);
@@ -363,9 +387,12 @@ namespace FlyShelf.Classes
                     else if (prop.Value.ValueKind == JsonValueKind.Object)
                     {
                         // Legacy unencrypted format: value is a JSON object
-                        devId = prop.Value.TryGetProperty("deviceId", out var di) ? di.GetString() ?? "" : "";
-                        devName = prop.Value.TryGetProperty("deviceName", out var dn) ? dn.GetString() ?? "" : "";
-                        devType = prop.Value.TryGetProperty("deviceType", out var dt) ? dt.GetString() ?? "PC" : "PC";
+                        if (!prop.Value.TryGetProperty("deviceId", out var di)) prop.Value.TryGetProperty("DeviceId", out di);
+                        devId = di.ValueKind != JsonValueKind.Undefined ? di.GetString() ?? "" : "";
+                        if (!prop.Value.TryGetProperty("deviceName", out var dn)) prop.Value.TryGetProperty("DeviceName", out dn);
+                        devName = dn.ValueKind != JsonValueKind.Undefined ? dn.GetString() ?? "" : "";
+                        if (!prop.Value.TryGetProperty("deviceType", out var dt)) prop.Value.TryGetProperty("DeviceType", out dt);
+                        devType = dt.ValueKind != JsonValueKind.Undefined ? dt.GetString() ?? "PC" : "PC";
                     }
 
                     if (devId == myDeviceId || string.IsNullOrWhiteSpace(devId)) continue;
@@ -497,6 +524,11 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("PAIR", $"Load failed: {ex.Message}");
+                if (File.Exists(_storagePath))
+                {
+                    File.Copy(_storagePath, _storagePath + ".bak", true);
+                    Logger.LogAction("WARN", "Paired devices decryption failed. Backup saved to " + _storagePath + ".bak");
+                }
                 _pairedDevices = new();
             }
         }

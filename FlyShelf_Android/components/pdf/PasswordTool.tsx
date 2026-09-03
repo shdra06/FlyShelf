@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { colors } from '../../styles/theme';
-import s from '../../styles/pdfToolsStyles';
+
+import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { protectPdf } from '../../utils/pdfToolsUtils';
 import { SelectedFile } from './types';
 import ResultView from './ResultView';
@@ -14,6 +15,9 @@ interface PasswordToolProps {
 }
 
 export default function PasswordTool({ onBack, onPickFile }: PasswordToolProps) {
+  const { colors, shadows } = useAppTheme();
+  const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
+
   const [file, setFile] = useState<SelectedFile | null>(null);
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);

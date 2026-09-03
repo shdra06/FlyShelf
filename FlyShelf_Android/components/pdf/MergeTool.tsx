@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system/legacy';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { colors } from '../../styles/theme';
-import s from '../../styles/pdfToolsStyles';
+
+import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { mergePdfs } from '../../utils/pdfUtils';
 import { SelectedFile } from './types';
 import ResultView from './ResultView';
@@ -20,6 +21,9 @@ interface MergeToolProps {
 }
 
 export default function MergeTool({ onBack, onPickFiles, saveRecent }: MergeToolProps) {
+  const { colors, shadows } = useAppTheme();
+  const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
+
   const [files, setFiles] = useState<SelectedFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [resultPath, setResultPath] = useState<string | null>(null);

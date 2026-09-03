@@ -30,7 +30,7 @@ namespace FlyShelf.Classes
             };
 
             // Custom sniffer folders are a Pro feature
-            if (LicenseManager.IsPro)
+            if (LicenseManager.IsPro && SettingsManager.Current.CustomSnifferPaths != null)
             {
                 pathsToWatch.AddRange(SettingsManager.Current.CustomSnifferPaths);
             }

@@ -103,8 +103,8 @@ namespace FlyShelf.Windows
             {
                 activeCount = ReminderManager.Reminders.Count(r => !r.IsDone);
             }
-            ReminderCountLabel.Text = $"{activeCount} active";
-            EmptyState.Visibility = _filteredReminders.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (ReminderCountLabel != null) ReminderCountLabel.Text = $"{activeCount} active";
+            if (EmptyState != null) EmptyState.Visibility = _filteredReminders.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void UpdateFilterVisuals()

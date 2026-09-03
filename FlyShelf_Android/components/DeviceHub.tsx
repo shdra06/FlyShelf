@@ -20,6 +20,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import * as HapticsModule from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { useSettings, PairedDevice } from '../context/SettingsContext';
 import { IconSymbol } from './ui/icon-symbol';
 import { deviceStyles as s } from '../styles/deviceStyles';
@@ -53,6 +54,8 @@ type DeviceHubProps = {
   visible: boolean;
   onClose: () => void;
   activeDevices?: ActiveDevice[];
+  onScanQr?: () => void;
+  onEnterCode?: () => void;
 };
 
 // ═══════════════════════════════════════════
@@ -310,7 +313,7 @@ const DeviceCard = React.memo(function DeviceCard({ device, activeInfo, index, o
 // DEVICE HUB COMPONENT
 // ═══════════════════════════════════════════
 
-export default function DeviceHub({ visible, onClose, activeDevices = [] }: DeviceHubProps) {
+export default function DeviceHub({ visible, onClose, activeDevices = [], onScanQr, onEnterCode }: DeviceHubProps) {
   const {
     pairedDevices,
     removePairedDevice,
@@ -402,22 +405,37 @@ export default function DeviceHub({ visible, onClose, activeDevices = [] }: Devi
   }, [regeneratePairingKey]);
 
   const handleAddDevice = useCallback(() => {
+    safeHaptic(HapticsModule.ImpactFeedbackStyle.Light);
     Alert.alert(
-      'Add Device',
-      'How would you like to pair a new device?',
+      'Connect New Device',
+      'Choose your preferred pairing method:',
       [
         {
           text: '📷 Scan QR Code',
-          onPress: () => onClose(),
+          onPress: () => {
+            onClose();
+            if (onScanQr) {
+              setTimeout(() => onScanQr(), 250);
+            } else {
+              router.navigate('/(tabs)');
+            }
+          },
         },
         {
           text: '🔢 Enter Pairing Code',
-          onPress: () => onClose(),
+          onPress: () => {
+            onClose();
+            if (onEnterCode) {
+              setTimeout(() => onEnterCode(), 250);
+            } else {
+              router.navigate('/(tabs)');
+            }
+          },
         },
         { text: 'Cancel', style: 'cancel' },
       ]
     );
-  }, [onClose]);
+  }, [onClose, onScanQr, onEnterCode]);
 
   const toggleKeySection = useCallback(() => {
     setKeyExpanded(prev => !prev);

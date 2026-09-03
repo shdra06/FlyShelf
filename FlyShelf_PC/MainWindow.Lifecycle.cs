@@ -846,7 +846,10 @@ namespace FlyShelf
                 lock (_timerLock)
                 {
                     _clipboardWriteResetTimer?.Stop();
-                    _clipboardWriteResetTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2000) };
+                    _clipboardWriteResetTimer = new System.Windows.Threading.DispatcherTimer(
+                        System.Windows.Threading.DispatcherPriority.Normal,
+                        System.Windows.Application.Current?.Dispatcher ?? System.Windows.Threading.Dispatcher.CurrentDispatcher)
+                    { Interval = TimeSpan.FromMilliseconds(2000) };
                     _clipboardWriteResetTimer.Tick += (s, e) =>
                     {
                         _clipboardWriteResetTimer?.Stop();

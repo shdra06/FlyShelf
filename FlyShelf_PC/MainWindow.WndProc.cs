@@ -352,8 +352,8 @@ namespace FlyShelf
                     }
                     finally
                     {
-                        if (threadCompleted)
-                            _clipboardStaSemaphore.Release();
+                        // Always release semaphore so subsequent clipboard events are not permanently deadlocked
+                        _clipboardStaSemaphore.Release();
                     }
                 });
                 

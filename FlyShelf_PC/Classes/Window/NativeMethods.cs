@@ -937,7 +937,7 @@ public static partial class NativeMethods
         // Set backdrop and background based on active theme and blur setting
         if (window is MicaWPF.Controls.MicaWindow micaWin)
         {
-            string mode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
+            string mode = SettingsManager.Current.ThemeDisplayMode ?? "desktop";
             bool blurEnabled = SettingsManager.Current.EnableBlurBehind && ShouldUseBlur();
 
             if (blurEnabled && window is not MainWindow)

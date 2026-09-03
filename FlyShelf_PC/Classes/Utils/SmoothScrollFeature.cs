@@ -249,6 +249,16 @@ namespace FlyShelf.Classes
 
         // ═══ Visual Tree Helpers ═══
 
+        private static DependencyObject? GetParentSafe(DependencyObject? element)
+        {
+            if (element == null) return null;
+            if (element is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D)
+                return VisualTreeHelper.GetParent(element);
+            if (element is FrameworkContentElement fce)
+                return fce.Parent ?? LogicalTreeHelper.GetParent(fce);
+            return LogicalTreeHelper.GetParent(element);
+        }
+
         private static ScrollViewer? FindScrollableAncestor(DependencyObject? element)
         {
             if (element == null) return null;
@@ -265,7 +275,7 @@ namespace FlyShelf.Classes
                     _svCache[element] = sv;
                     return sv;
                 }
-                current = VisualTreeHelper.GetParent(current);
+                current = GetParentSafe(current);
             }
 
             return null;
@@ -277,7 +287,7 @@ namespace FlyShelf.Classes
             while (current != null)
             {
                 if (current == ancestor) return true;
-                current = VisualTreeHelper.GetParent(current);
+                current = GetParentSafe(current);
             }
             return false;
         }

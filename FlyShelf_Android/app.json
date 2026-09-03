@@ -76,6 +76,7 @@
         }
       ],
       "./plugins/withNetworkSecurityConfig",
+      "./plugins/withShareTarget",
       "expo-web-browser",
       "expo-secure-store"
     ],

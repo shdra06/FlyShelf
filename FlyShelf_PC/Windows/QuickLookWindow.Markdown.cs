@@ -8,6 +8,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Windows;
+using FlyShelf.Classes;
 using ICSharpCode.AvalonEdit.Highlighting;
 
 namespace FlyShelf.Windows
@@ -44,7 +45,7 @@ namespace FlyShelf.Windows
 
             try
             {
-                Clipboard.SetText(content);
+                ClipboardHelper.SafeSetText(content);
                 FlyShelf.Windows.ToastWindow.ShowToast("Raw Markdown copied to clipboard! 📋");
             }
             catch { }
@@ -159,7 +160,7 @@ namespace FlyShelf.Windows
                 }
                 else
                 {
-                    Clipboard.SetText(contentToSave);
+                    ClipboardHelper.SafeSetText(contentToSave);
                     FlyShelf.Windows.ToastWindow.ShowToast("Markdown updated & copied to clipboard! 💾");
                 }
             }

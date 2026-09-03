@@ -183,9 +183,9 @@ namespace FlyShelf.ViewModels
                         }
                         else if (Directory.Exists(path))
                         {
-                            var dirInfo = new DirectoryInfo(path);
-                            var allFiles = dirInfo.GetFiles("*", SearchOption.AllDirectories);
-                            totalSize += allFiles.Sum(f => f.Length);
+                            var enumOpts = new EnumerationOptions { IgnoreInaccessible = true, RecurseSubdirectories = true };
+                            var allFiles = Directory.GetFiles(path, "*", enumOpts);
+                            totalSize += allFiles.Sum(f => { try { return new FileInfo(f).Length; } catch { return 0L; } });
                             folderCount++;
                         }
                     }
@@ -504,8 +504,9 @@ namespace FlyShelf.ViewModels
                         try
                         {
                             // [FIX H-22]: Use EnumerateFiles with Take cap to prevent hangs on junction loops
-                            var allFiles = Directory.EnumerateFiles(capturedPath, "*", SearchOption.AllDirectories).Take(5000).ToArray();
-                            var allDirs = Directory.EnumerateDirectories(capturedPath, "*", SearchOption.AllDirectories).Take(1000).ToArray();
+                            var enumOpts = new EnumerationOptions { IgnoreInaccessible = true, RecurseSubdirectories = true };
+                            var allFiles = Directory.EnumerateFiles(capturedPath, "*", enumOpts).Take(5000).ToArray();
+                            var allDirs = Directory.EnumerateDirectories(capturedPath, "*", enumOpts).Take(1000).ToArray();
                             long folderSize = allFiles.Sum(f => { try { return new FileInfo(f).Length; } catch { return 0L; } });
                             string fmtSize = string.Create(CultureInfo.InvariantCulture, $"{FormatBytes(folderSize)} • {allFiles.Length} files");
                             Application.Current?.Dispatcher?.InvokeAsync(() => FormattedSize = fmtSize);

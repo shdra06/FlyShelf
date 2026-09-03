@@ -81,13 +81,16 @@ namespace FlyShelf.Windows
                 e.Effects = DragDropEffects.Copy;
 
                 // Show overlay
-                DropOverlay.Visibility = Visibility.Visible;
+                if (DropOverlay != null) DropOverlay.Visibility = Visibility.Visible;
 
                 // Update target text
                 var selectedPeer = _vm.SelectedPeer;
-                DropTargetText.Text = selectedPeer != null
-                    ? $"Will send to {selectedPeer.DeviceName}"
-                    : "Select a peer device first";
+                if (DropTargetText != null)
+                {
+                    DropTargetText.Text = selectedPeer != null
+                        ? $"Will send to {selectedPeer.DeviceName}"
+                        : "Select a peer device first";
+                }
             }
             else
             {

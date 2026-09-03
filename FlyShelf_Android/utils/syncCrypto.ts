@@ -47,13 +47,18 @@ const TAG_SIZE = 16; // GCM auth tag
 let _cachedKey: CryptoKey | null = null;
 let _cachedPairingKey: string | null = null;
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 /**
  * Derives the AES-256 key from the pairing key using Web Crypto PBKDF2.
  * This is hardware-accelerated and produces identical output to .NET's Rfc2898DeriveBytes.
  * Cached for the lifetime of the pairing session.
  */
-async function getKey(): Promise<CryptoKey> {
-  const pairingKey = await getSecureItem('pairingKey');
+async function getKey(specificPairingKey?: string): Promise<CryptoKey> {
+  let pairingKey = specificPairingKey;
+  if (!pairingKey) {
+    pairingKey = (await getSecureItem('pairingKey')) || (await AsyncStorage.getItem('pairingKey')) || (await AsyncStorage.getItem('@pairingKey')) || '';
+  }
   if (!pairingKey) throw new Error('Cannot encrypt — no pairing key set');
 
   if (_cachedKey && _cachedPairingKey === pairingKey) return _cachedKey;
@@ -77,8 +82,10 @@ async function getKey(): Promise<CryptoKey> {
     false,
     ['encrypt', 'decrypt']
   );
-  _cachedKey = derivedKey;
-  _cachedPairingKey = pairingKey;
+  if (!specificPairingKey) {
+    _cachedKey = derivedKey;
+    _cachedPairingKey = pairingKey;
+  }
   return derivedKey;
 }
 
@@ -91,36 +98,40 @@ async function getKey(): Promise<CryptoKey> {
  * so the output format is: nonce + (ciphertext || tag), which is identical
  * to the PC's format of nonce + ciphertext + tag.
  */
-export async function encrypt(plaintext: string): Promise<string> {
-  if (!plaintext) return plaintext;
-  
-  // Do NOT catch errors here — let them propagate to the caller
-  // so the caller can correctly set Encrypted: false when crypto fails.
-  const key = await getKey();
-  const encoder = new TextEncoder();
-  const plaintextBytes = encoder.encode(plaintext);
+export async function encrypt(plaintext: string, specificPairingKey?: string): Promise<string> {
+  try {
+    if (!plaintext) return plaintext;
+    
+    // Do NOT catch errors here — let them propagate to the caller
+    // so the caller can correctly set Encrypted: false when crypto fails.
+    const key = await getKey(specificPairingKey);
+    const encoder = new TextEncoder();
+    const plaintextBytes = encoder.encode(plaintext);
 
-  const cryptoInstance = getCrypto();
+    const cryptoInstance = getCrypto();
 
-  // Generate random 12-byte nonce
-  const nonce = new Uint8Array(NONCE_SIZE);
-  cryptoInstance.getRandomValues(nonce);
+    // Generate random 12-byte nonce
+    const nonce = new Uint8Array(NONCE_SIZE);
+    cryptoInstance.getRandomValues(nonce);
 
-  // Encrypt with AES-GCM (output = ciphertext + tag appended)
-  const encryptedBuffer = await cryptoInstance.subtle.encrypt(
-    { name: 'AES-GCM', iv: nonce, tagLength: TAG_SIZE * 8 },
-    key,
-    plaintextBytes
-  );
+    // Encrypt with AES-GCM (output = ciphertext + tag appended)
+    const encryptedBuffer = await cryptoInstance.subtle.encrypt(
+      { name: 'AES-GCM', iv: nonce, tagLength: TAG_SIZE * 8 },
+      key,
+      plaintextBytes
+    );
 
-  // Pack: nonce + ciphertextWithTag
-  const encrypted = new Uint8Array(encryptedBuffer);
-  const combined = new Uint8Array(NONCE_SIZE + encrypted.length);
-  combined.set(nonce, 0);
-  combined.set(encrypted, NONCE_SIZE);
+    // Pack: nonce + ciphertextWithTag
+    const encrypted = new Uint8Array(encryptedBuffer);
+    const combined = new Uint8Array(NONCE_SIZE + encrypted.length);
+    combined.set(nonce, 0);
+    combined.set(encrypted, NONCE_SIZE);
 
-  // Convert to base64
-  return uint8ArrayToBase64(combined);
+    // Convert to base64
+    return uint8ArrayToBase64(combined);
+  } catch (err: any) {
+    throw new Error(`Encryption failed: ${err?.message || 'unknown error'}`);
+  }
 }
 
 /**
@@ -131,11 +142,11 @@ export async function encrypt(plaintext: string): Promise<string> {
  * Expected input format: Base64(nonce(12B) + ciphertext + tag(16B))
  * Web Crypto expects: iv + ciphertextWithTag (tag appended to ciphertext)
  */
-export async function decrypt(base64Ciphertext: string): Promise<string | null> {
+export async function decrypt(base64Ciphertext: string, specificPairingKey?: string): Promise<string | null> {
   if (!base64Ciphertext) return null;
 
   try {
-    const key = await getKey();
+    const key = await getKey(specificPairingKey);
     
     // Decode base64 to bytes
     const packed = base64ToUint8Array(base64Ciphertext);

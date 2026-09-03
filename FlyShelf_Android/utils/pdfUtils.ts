@@ -35,7 +35,18 @@ async function readFileBytes(uri: string, maxBytes: number = MAX_SINGLE_FILE_BYT
 
   // content:// URIs are handled directly by expo-file-system — no path transform needed
   if (isContent) {
+    // C-2 fix: Check size BEFORE loading entire file into memory
+    const fileSize = await getFileSize(uri);
+    if (fileSize > 0 && fileSize > maxBytes) {
+      throw new Error(`This file is too large (${(fileSize / 1024 / 1024).toFixed(1)}MB). Maximum supported size is ${Math.round(maxBytes / 1024 / 1024)}MB.`);
+    }
     let b64: string | null = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+    // Post-read size guard (in case getInfoAsync couldn't report size for content:// URI)
+    const actualSize = b64.length * 0.75; // approximate decoded size
+    if (actualSize > maxBytes) {
+      b64 = null;
+      throw new Error(`This file is too large (~${(actualSize / 1024 / 1024).toFixed(1)}MB). Maximum supported size is ${Math.round(maxBytes / 1024 / 1024)}MB.`);
+    }
     const bytes = base64ToUint8Array(b64);
     b64 = null; // Release Base64 for GC
     return bytes;
@@ -87,14 +98,42 @@ async function readFileBytes(uri: string, maxBytes: number = MAX_SINGLE_FILE_BYT
 const readPdfBytes = readFileBytes;
 
 /**
- * Detect if a file is a PDF based on extension.
+ * Detect if a file is a PDF.
+ * Uses magic bytes (%PDF-) for reliable detection on content:// URIs.
+ * Falls back to extension check when magic bytes can't be read.
  */
+async function isPdfFileAsync(uri: string): Promise<boolean> {
+  const lower = uri.toLowerCase();
+  // Fast path: clear extension match
+  if (lower.endsWith('.pdf')) return true;
+  const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.heic', '.heif'];
+  if (imageExts.some(ext => lower.endsWith(ext))) return false;
+
+  // For content:// or ambiguous URIs: read first 5 bytes to check %PDF- magic header
+  try {
+    // Read a tiny slice (enough for the magic bytes) as base64
+    const b64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+      length: 8,
+      position: 0,
+    });
+    // Decode first 5 chars: %PDF-
+    const decoded = atob(b64).substring(0, 5);
+    return decoded === '%PDF-';
+  } catch {
+    // If we can't read the file, fall back to false (treat as image)
+    return false;
+  }
+}
+
+// Synchronous fallback for contexts where async isn't possible
 function isPdfFile(uri: string): boolean {
   const lower = uri.toLowerCase();
   if (lower.endsWith('.pdf')) return true;
-  if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') ||
-      lower.endsWith('.gif') || lower.endsWith('.webp') || lower.endsWith('.bmp')) return false;
-  if (lower.includes('/pdfs/') || lower.includes('_pages.pdf') || lower.includes('merged_')) return true;
+  const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.heic', '.heif'];
+  if (imageExts.some(ext => lower.endsWith(ext))) return false;
+  // For content:// URIs without extension, assume PDF (caller should use isPdfFileAsync)
+  if (lower.startsWith('content://')) return true;
   return false;
 }
 
@@ -114,11 +153,11 @@ function clampDimensions(width: number, height: number): { width: number; height
  * Enforces a cumulative size limit to prevent OOM.
  */
 export async function mergePdfs(fileUris: string[], outputPath: string): Promise<string> {
-  // Pre-flight: check cumulative size
+  // Pre-flight: check cumulative size (including content:// URIs)
   let cumulativeBytes = 0;
   for (const uri of fileUris) {
-    if (!uri.startsWith('http://') && !uri.startsWith('https://') && !uri.startsWith('content://')) {
-      const fileUri = uri.startsWith('file://') ? uri : `file://${uri}`;
+    if (!uri.startsWith('http://') && !uri.startsWith('https://')) {
+      const fileUri = uri.startsWith('file://') || uri.startsWith('content://') ? uri : `file://${uri}`;
       const size = await getFileSize(fileUri);
       cumulativeBytes += size;
     }
@@ -132,7 +171,9 @@ export async function mergePdfs(fileUris: string[], outputPath: string): Promise
 
   for (const uri of fileUris) {
     try {
-      if (isPdfFile(uri)) {
+      // Use async detection for reliable content:// URI handling
+      const isPdf = await isPdfFileAsync(uri);
+      if (isPdf) {
         const pdfBytes = await readPdfBytes(uri);
         const sourcePdf = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
         const pageIndices = sourcePdf.getPageIndices();

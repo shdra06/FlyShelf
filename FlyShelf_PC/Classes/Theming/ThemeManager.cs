@@ -547,7 +547,7 @@ namespace FlyShelf.Classes
         // ═══════════════════════════════════════════════════════════════
 
         private const string ColorThemePrefix = "pack://application:,,,/Resources/Themes/Theme.";
-        private static readonly string[] ValidColorThemes = { "Default", "Midnight", "Ocean", "Sunset", "Emerald", "Lavender", "ArcticSnow" };
+        private static readonly string[] ValidColorThemes = { "Midnight", "Ocean", "Sunset", "Emerald", "Lavender", "ArcticSnow" };
         private System.Windows.ResourceDictionary? _activeColorThemeDict;
 
         /// <summary>
@@ -562,26 +562,43 @@ namespace FlyShelf.Classes
 
         /// <summary>
         /// Switch to a named color theme. Swaps the theme ResourceDictionary at runtime.
+        /// When themeName is "Default", removes any active color theme dictionary so FlyShelf's
+        /// native default appearance is used with the desktop wallpaper and blur.
         /// </summary>
         public void ApplyColorTheme(string themeName)
         {
             try
             {
-                if (string.IsNullOrEmpty(themeName))
-                    themeName = "Default";
+                // "Default" means remove the theme overlay — use pure native FlyShelf defaults
+                if (string.IsNullOrEmpty(themeName) || themeName.Equals("Default", StringComparison.OrdinalIgnoreCase))
+                {
+                    RemoveColorTheme();
+                    return;
+                }
 
-                // Normalize casing
+                // Normalize casing or fallback to Default
+                if (!Array.Exists(ValidColorThemes, t => t.Equals(themeName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    Logger.LogAction("COLOR_THEME", $"Invalid color theme: '{themeName}', falling back to Default");
+                    RemoveColorTheme();
+                    return;
+                }
+
                 themeName = Array.Find(ValidColorThemes, t => t.Equals(themeName, StringComparison.OrdinalIgnoreCase)) ?? "Default";
+                if (themeName.Equals("Default", StringComparison.OrdinalIgnoreCase))
+                {
+                    RemoveColorTheme();
+                    return;
+                }
 
                 var app = System.Windows.Application.Current;
                 if (app == null) return;
 
-                // Remove the existing color theme dictionary
+                // Remove any existing color theme dictionary
                 RemoveColorThemeDict(app);
 
-                // For "Default", load the signature FlyShelf theme (Midnight)
-                string themeFile = themeName.Equals("Default", StringComparison.OrdinalIgnoreCase) ? "Midnight" : themeName;
-                string themeSource = $"{ColorThemePrefix}{themeFile}.xaml";
+                // Build the new theme source URI
+                string themeSource = $"{ColorThemePrefix}{themeName}.xaml";
 
                 // Load and add the new theme dictionary
                 var dict = new System.Windows.ResourceDictionary
@@ -594,10 +611,14 @@ namespace FlyShelf.Classes
                 // Persist the choice
                 SettingsManager.Current.ColorThemeName = themeName;
 
-                // Auto-apply matching wallpaper for the theme
+                // ═══ System theme mode ═══
+                bool isLight = themeName.Equals("ArcticSnow", StringComparison.OrdinalIgnoreCase);
+                SwitchSystemThemeMode(app, isLight);
+
+                // Auto-apply matching wallpaper for dark themes
                 ApplyColorThemeWallpaper(themeName);
 
-                Logger.LogAction("COLOR_THEME", $"Applied color theme: '{themeName}' (source={themeFile})");
+                Logger.LogAction("COLOR_THEME", $"Applied color theme: '{themeName}'");
 
                 // Update Aero UI resources to match the active color theme
                 ApplyAeroThemeOverrides(themeName);
@@ -608,17 +629,14 @@ namespace FlyShelf.Classes
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // COLOR THEME WALLPAPER
-        // ═══════════════════════════════════════════════════════════════
+        // ═══ Color Theme Wallpaper ═══
 
         /// <summary>
         /// Map of color theme names to their embedded wallpaper resource names.
-        /// Default and Midnight both use the signature FlyShelf dark Midnight wallpaper.
+        /// ArcticSnow and Default have no wallpaper (use desktop).
         /// </summary>
         private static readonly Dictionary<string, string> ThemeWallpaperMap = new(StringComparer.OrdinalIgnoreCase)
         {
-            { "Default",  "Resources/Wallpapers/Theme_Midnight.png" },
             { "Midnight", "Resources/Wallpapers/Theme_Midnight.png" },
             { "Ocean",    "Resources/Wallpapers/Theme_Ocean.png" },
             { "Sunset",   "Resources/Wallpapers/Theme_Sunset.png" },
@@ -844,28 +862,46 @@ namespace FlyShelf.Classes
 
         /// <summary>
         /// Restore the saved color theme on startup. Call after Initialize().
-        /// Defaults to the FlyShelf signature theme (Midnight).
         /// </summary>
         public void RestoreColorTheme()
         {
             string savedTheme = SettingsManager.Current.ColorThemeName ?? "Default";
+            if (string.IsNullOrEmpty(savedTheme) || savedTheme.Equals("Default", StringComparison.OrdinalIgnoreCase))
+            {
+                RemoveColorTheme();
+                return;
+            }
             ApplyColorTheme(savedTheme);
         }
 
         /// <summary>
-        /// Resets the color theme to FlyShelf default (Midnight), ensuring all FlyShelf
-        /// theme resources and wallpapers are cleanly applied.
+        /// Removes the current color theme dictionary, restoring the app to palette defaults
+        /// with the user's desktop wallpaper applied.
         /// </summary>
         public void RemoveColorTheme()
         {
             try
             {
-                ApplyColorTheme("Default");
-                Logger.LogAction("COLOR_THEME", "Color theme reset to FlyShelf default (Midnight)");
+                var app = System.Windows.Application.Current;
+                if (app == null) return;
+                RemoveColorThemeDict(app);
+                _activeColorThemeDict = null;
+                SettingsManager.Current.ColorThemeName = "Default";
+
+                // Restore Dark system theme
+                SwitchSystemThemeMode(app, false);
+
+                // Clear any theme wallpaper so desktop wallpaper is used
+                ApplyColorThemeWallpaper("Default");
+
+                // Reset Aero UI resources to default dark tokens
+                ApplyAeroThemeOverrides("Default");
+
+                Logger.LogAction("COLOR_THEME", "Color theme removed — using clean default FlyShelf appearance with desktop wallpaper");
             }
             catch (Exception ex)
             {
-                Logger.LogAction("COLOR_THEME", $"Error resetting color theme: {ex.Message}");
+                Logger.LogAction("COLOR_THEME", $"Error removing color theme: {ex.Message}");
             }
         }
 
@@ -888,138 +924,159 @@ namespace FlyShelf.Classes
             if (string.IsNullOrEmpty(themeName))
                 themeName = "Default";
 
-            // Themed modes — vibrant tinted backgrounds with dark text for each theme
-            switch (themeName)
+            // ArcticSnow is the only light mode
+            if (themeName.Equals("ArcticSnow", StringComparison.OrdinalIgnoreCase))
             {
-                case "ArcticSnow":
-                    // Warm cream/ivory — cozy paper-like light theme
-                    SetAeroResource(app, "AltCardBg", "#C0FBF5EC");
-                    SetAeroResource(app, "AltCardBgHover", "#E8FFF8F0");
-                    SetAeroResource(app, "AltCardBorder", "#186B5B3A");
-                    SetAeroResource(app, "AltCardBorderHover", "#286B5B3A");
-                    SetAeroResource(app, "AltTextPrimary", "#2C1810");
-                    SetAeroResource(app, "AltTextSecondary", "#5C4A3A");
-                    SetAeroResource(app, "AltTextTertiary", "#9C8A7A");
-                    SetAeroResource(app, "AltSearchBg", "#A0FBF5EC");
-                    SetAeroResource(app, "AltSearchBorder", "#1C6B5B3A");
-                    SetAeroResource(app, "AltSearchFg", "#7A6A5A");
-                    SetAeroResource(app, "AltBottomBarBg", "#D8F5EFE4");
-                    SetAeroResource(app, "AltBottomBarBorder", "#1C6B5B3A");
-                    SetAeroResource(app, "AltSidebarHover", "#186B5B3A");
-                    SetAeroResource(app, "AltTimestampFg", "#7A6A5A");
-                    SetAeroResource(app, "AltSubtitleFg", "#7A6A5A");
-                    break;
-                case "Midnight":
-                case "Default":
-                default:
-                    // Vibrant indigo-tinted — luminous periwinkle cards
-                    SetAeroResource(app, "AltCardBg", "#C0E8ECFF");
-                    SetAeroResource(app, "AltCardBgHover", "#E8F0F4FF");
-                    SetAeroResource(app, "AltCardBorder", "#35506AE8");
-                    SetAeroResource(app, "AltCardBorderHover", "#486080F0");
-                    SetAeroResource(app, "AltTextPrimary", "#1A1A2E");
-                    SetAeroResource(app, "AltTextSecondary", "#2D2D44");
-                    SetAeroResource(app, "AltTextTertiary", "#555570");
-                    SetAeroResource(app, "AltSearchBg", "#A0E8ECFF");
-                    SetAeroResource(app, "AltSearchBorder", "#30506AE8");
-                    SetAeroResource(app, "AltSearchFg", "#3D3D58");
-                    SetAeroResource(app, "AltBottomBarBg", "#E0D0D8F8");
-                    SetAeroResource(app, "AltBottomBarBorder", "#30506AE8");
-                    SetAeroResource(app, "AltSidebarHover", "#206366F1");
-                    SetAeroResource(app, "AltTimestampFg", "#4A4A68");
-                    SetAeroResource(app, "AltSubtitleFg", "#4A4A68");
-                    break;
-                case "Ocean":
-                    // Vibrant teal-tinted — luminous aqua cards
-                    SetAeroResource(app, "AltCardBg", "#C0E0F8FF");
-                    SetAeroResource(app, "AltCardBgHover", "#E8F0FBFF");
-                    SetAeroResource(app, "AltCardBorder", "#35189098");
-                    SetAeroResource(app, "AltCardBorderHover", "#4820A0B0");
-                    SetAeroResource(app, "AltTextPrimary", "#0A2028");
-                    SetAeroResource(app, "AltTextSecondary", "#1A3A44");
-                    SetAeroResource(app, "AltTextTertiary", "#3A6070");
-                    SetAeroResource(app, "AltSearchBg", "#A0E0F8FF");
-                    SetAeroResource(app, "AltSearchBorder", "#30189098");
-                    SetAeroResource(app, "AltSearchFg", "#2A4A58");
-                    SetAeroResource(app, "AltBottomBarBg", "#E0C8F0F8");
-                    SetAeroResource(app, "AltBottomBarBorder", "#30189098");
-                    SetAeroResource(app, "AltSidebarHover", "#200EA5B5");
-                    SetAeroResource(app, "AltTimestampFg", "#3A5A68");
-                    SetAeroResource(app, "AltSubtitleFg", "#3A5A68");
-                    break;
-                case "Sunset":
-                    // Vibrant amber-tinted — luminous golden cards
-                    SetAeroResource(app, "AltCardBg", "#C0FFF4E0");
-                    SetAeroResource(app, "AltCardBgHover", "#E8FFF8E8");
-                    SetAeroResource(app, "AltCardBorder", "#35C08020");
-                    SetAeroResource(app, "AltCardBorderHover", "#48D09030");
-                    SetAeroResource(app, "AltTextPrimary", "#2A1A08");
-                    SetAeroResource(app, "AltTextSecondary", "#4A3018");
-                    SetAeroResource(app, "AltTextTertiary", "#6A5030");
-                    SetAeroResource(app, "AltSearchBg", "#A0FFF4E0");
-                    SetAeroResource(app, "AltSearchBorder", "#30C08020");
-                    SetAeroResource(app, "AltSearchFg", "#5A4020");
-                    SetAeroResource(app, "AltBottomBarBg", "#E0F8E8C8");
-                    SetAeroResource(app, "AltBottomBarBorder", "#30C08020");
-                    SetAeroResource(app, "AltSidebarHover", "#20D09000");
-                    SetAeroResource(app, "AltTimestampFg", "#6A5030");
-                    SetAeroResource(app, "AltSubtitleFg", "#6A5030");
-                    break;
-                case "Emerald":
-                    // Vibrant mint-tinted — luminous jade cards
-                    SetAeroResource(app, "AltCardBg", "#C0E0FFE8");
-                    SetAeroResource(app, "AltCardBgHover", "#E8F0FFF0");
-                    SetAeroResource(app, "AltCardBorder", "#35109E65");
-                    SetAeroResource(app, "AltCardBorderHover", "#4818B878");
-                    SetAeroResource(app, "AltTextPrimary", "#0A2018");
-                    SetAeroResource(app, "AltTextSecondary", "#1A3A28");
-                    SetAeroResource(app, "AltTextTertiary", "#3A6048");
-                    SetAeroResource(app, "AltSearchBg", "#A0E0FFE8");
-                    SetAeroResource(app, "AltSearchBorder", "#30109E65");
-                    SetAeroResource(app, "AltSearchFg", "#2A4A38");
-                    SetAeroResource(app, "AltBottomBarBg", "#E0C8F8D8");
-                    SetAeroResource(app, "AltBottomBarBorder", "#30109E65");
-                    SetAeroResource(app, "AltSidebarHover", "#2010A068");
-                    SetAeroResource(app, "AltTimestampFg", "#3A5A48");
-                    SetAeroResource(app, "AltSubtitleFg", "#3A5A48");
-                    break;
-                case "Lavender":
-                    // Vibrant purple-tinted — luminous orchid cards
-                    SetAeroResource(app, "AltCardBg", "#C0F0E8FF");
-                    SetAeroResource(app, "AltCardBgHover", "#E8F5F0FF");
-                    SetAeroResource(app, "AltCardBorder", "#357850C8");
-                    SetAeroResource(app, "AltCardBorderHover", "#489060D8");
-                    SetAeroResource(app, "AltTextPrimary", "#1A1028");
-                    SetAeroResource(app, "AltTextSecondary", "#302040");
-                    SetAeroResource(app, "AltTextTertiary", "#584870");
-                    SetAeroResource(app, "AltSearchBg", "#A0F0E8FF");
-                    SetAeroResource(app, "AltSearchBorder", "#307850C8");
-                    SetAeroResource(app, "AltSearchFg", "#403058");
-                    SetAeroResource(app, "AltBottomBarBg", "#E0E0D0F8");
-                    SetAeroResource(app, "AltBottomBarBorder", "#307850C8");
-                    SetAeroResource(app, "AltSidebarHover", "#207B50C8");
-                    SetAeroResource(app, "AltTimestampFg", "#504068");
-                    SetAeroResource(app, "AltSubtitleFg", "#504068");
-                    break;
-                case "__glass__":
-                    // ═══ GLASS SLAB — Fully translucent frosted Aero clipboard ═══
-                    // Light text on dark/transparent cards, matching GlassTheme.xaml aesthetics
-                    SetAeroResource(app, "AltCardBg", "#15FFFFFF");
-                    SetAeroResource(app, "AltCardBgHover", "#25FFFFFF");
-                    SetAeroResource(app, "AltCardBorder", "#20FFFFFF");
-                    SetAeroResource(app, "AltCardBorderHover", "#38FFFFFF");
-                    SetAeroResource(app, "AltTextPrimary", "#F0FFFFFF");
-                    SetAeroResource(app, "AltTextSecondary", "#B0FFFFFF");
-                    SetAeroResource(app, "AltTextTertiary", "#70FFFFFF");
-                    SetAeroResource(app, "AltSearchBg", "#12FFFFFF");
-                    SetAeroResource(app, "AltSearchBorder", "#25FFFFFF");
-                    SetAeroResource(app, "AltSearchFg", "#80FFFFFF");
-                    SetAeroResource(app, "AltBottomBarBg", "#10FFFFFF");
-                    SetAeroResource(app, "AltBottomBarBorder", "#20FFFFFF");
-                    SetAeroResource(app, "AltSidebarHover", "#18FFFFFF");
-                    SetAeroResource(app, "AltTimestampFg", "#70FFFFFF");
-                    SetAeroResource(app, "AltSubtitleFg", "#70FFFFFF");
-                    break;
+                SetAeroResource(app, "AltCardBg", "#C0FBF5EC");
+                SetAeroResource(app, "AltCardBgHover", "#E8FFF8F0");
+                SetAeroResource(app, "AltCardBorder", "#186B5B3A");
+                SetAeroResource(app, "AltCardBorderHover", "#286B5B3A");
+                SetAeroResource(app, "AltTextPrimary", "#2C1810");
+                SetAeroResource(app, "AltTextSecondary", "#5C4A3A");
+                SetAeroResource(app, "AltTextTertiary", "#9C8A7A");
+                SetAeroResource(app, "AltSearchBg", "#A0FBF5EC");
+                SetAeroResource(app, "AltSearchBorder", "#1C6B5B3A");
+                SetAeroResource(app, "AltSearchFg", "#7A6A5A");
+                SetAeroResource(app, "AltBottomBarBg", "#D8F5EFE4");
+                SetAeroResource(app, "AltBottomBarBorder", "#1C6B5B3A");
+                SetAeroResource(app, "AltSidebarHover", "#186B5B3A");
+                SetAeroResource(app, "AltTimestampFg", "#7A6A5A");
+                SetAeroResource(app, "AltSubtitleFg", "#7A6A5A");
+            }
+            else
+            {
+                // Themed modes — vibrant tinted backgrounds with dark text for each theme
+                switch (themeName)
+                {
+                    case "Midnight":
+                        // Vibrant indigo-tinted — luminous periwinkle cards
+                        SetAeroResource(app, "AltCardBg", "#C0E8ECFF");
+                        SetAeroResource(app, "AltCardBgHover", "#E8F0F4FF");
+                        SetAeroResource(app, "AltCardBorder", "#35506AE8");
+                        SetAeroResource(app, "AltCardBorderHover", "#486080F0");
+                        SetAeroResource(app, "AltTextPrimary", "#1A1A2E");
+                        SetAeroResource(app, "AltTextSecondary", "#2D2D44");
+                        SetAeroResource(app, "AltTextTertiary", "#555570");
+                        SetAeroResource(app, "AltSearchBg", "#A0E8ECFF");
+                        SetAeroResource(app, "AltSearchBorder", "#30506AE8");
+                        SetAeroResource(app, "AltSearchFg", "#3D3D58");
+                        SetAeroResource(app, "AltBottomBarBg", "#E0D0D8F8");
+                        SetAeroResource(app, "AltBottomBarBorder", "#30506AE8");
+                        SetAeroResource(app, "AltSidebarHover", "#206366F1");
+                        SetAeroResource(app, "AltTimestampFg", "#4A4A68");
+                        SetAeroResource(app, "AltSubtitleFg", "#4A4A68");
+                        break;
+                    case "Ocean":
+                        // Vibrant teal-tinted — luminous aqua cards
+                        SetAeroResource(app, "AltCardBg", "#C0E0F8FF");
+                        SetAeroResource(app, "AltCardBgHover", "#E8F0FBFF");
+                        SetAeroResource(app, "AltCardBorder", "#35189098");
+                        SetAeroResource(app, "AltCardBorderHover", "#4820A0B0");
+                        SetAeroResource(app, "AltTextPrimary", "#0A2028");
+                        SetAeroResource(app, "AltTextSecondary", "#1A3A44");
+                        SetAeroResource(app, "AltTextTertiary", "#3A6070");
+                        SetAeroResource(app, "AltSearchBg", "#A0E0F8FF");
+                        SetAeroResource(app, "AltSearchBorder", "#30189098");
+                        SetAeroResource(app, "AltSearchFg", "#2A4A58");
+                        SetAeroResource(app, "AltBottomBarBg", "#E0C8F0F8");
+                        SetAeroResource(app, "AltBottomBarBorder", "#30189098");
+                        SetAeroResource(app, "AltSidebarHover", "#200EA5B5");
+                        SetAeroResource(app, "AltTimestampFg", "#3A5A68");
+                        SetAeroResource(app, "AltSubtitleFg", "#3A5A68");
+                        break;
+                    case "Sunset":
+                        // Vibrant amber-tinted — luminous golden cards
+                        SetAeroResource(app, "AltCardBg", "#C0FFF4E0");
+                        SetAeroResource(app, "AltCardBgHover", "#E8FFF8E8");
+                        SetAeroResource(app, "AltCardBorder", "#35C08020");
+                        SetAeroResource(app, "AltCardBorderHover", "#48D09030");
+                        SetAeroResource(app, "AltTextPrimary", "#2A1A08");
+                        SetAeroResource(app, "AltTextSecondary", "#4A3018");
+                        SetAeroResource(app, "AltTextTertiary", "#6A5030");
+                        SetAeroResource(app, "AltSearchBg", "#A0FFF4E0");
+                        SetAeroResource(app, "AltSearchBorder", "#30C08020");
+                        SetAeroResource(app, "AltSearchFg", "#5A4020");
+                        SetAeroResource(app, "AltBottomBarBg", "#E0F8E8C8");
+                        SetAeroResource(app, "AltBottomBarBorder", "#30C08020");
+                        SetAeroResource(app, "AltSidebarHover", "#20D09000");
+                        SetAeroResource(app, "AltTimestampFg", "#6A5030");
+                        SetAeroResource(app, "AltSubtitleFg", "#6A5030");
+                        break;
+                    case "Emerald":
+                        // Vibrant mint-tinted — luminous jade cards
+                        SetAeroResource(app, "AltCardBg", "#C0E0FFE8");
+                        SetAeroResource(app, "AltCardBgHover", "#E8F0FFF0");
+                        SetAeroResource(app, "AltCardBorder", "#35109E65");
+                        SetAeroResource(app, "AltCardBorderHover", "#4818B878");
+                        SetAeroResource(app, "AltTextPrimary", "#0A2018");
+                        SetAeroResource(app, "AltTextSecondary", "#1A3A28");
+                        SetAeroResource(app, "AltTextTertiary", "#3A6048");
+                        SetAeroResource(app, "AltSearchBg", "#A0E0FFE8");
+                        SetAeroResource(app, "AltSearchBorder", "#30109E65");
+                        SetAeroResource(app, "AltSearchFg", "#2A4A38");
+                        SetAeroResource(app, "AltBottomBarBg", "#E0C8F8D8");
+                        SetAeroResource(app, "AltBottomBarBorder", "#30109E65");
+                        SetAeroResource(app, "AltSidebarHover", "#2010A068");
+                        SetAeroResource(app, "AltTimestampFg", "#3A5A48");
+                        SetAeroResource(app, "AltSubtitleFg", "#3A5A48");
+                        break;
+                    case "Lavender":
+                        // Vibrant purple-tinted — luminous orchid cards
+                        SetAeroResource(app, "AltCardBg", "#C0F0E8FF");
+                        SetAeroResource(app, "AltCardBgHover", "#E8F5F0FF");
+                        SetAeroResource(app, "AltCardBorder", "#357850C8");
+                        SetAeroResource(app, "AltCardBorderHover", "#489060D8");
+                        SetAeroResource(app, "AltTextPrimary", "#1A1028");
+                        SetAeroResource(app, "AltTextSecondary", "#302040");
+                        SetAeroResource(app, "AltTextTertiary", "#584870");
+                        SetAeroResource(app, "AltSearchBg", "#A0F0E8FF");
+                        SetAeroResource(app, "AltSearchBorder", "#307850C8");
+                        SetAeroResource(app, "AltSearchFg", "#403058");
+                        SetAeroResource(app, "AltBottomBarBg", "#E0E0D0F8");
+                        SetAeroResource(app, "AltBottomBarBorder", "#307850C8");
+                        SetAeroResource(app, "AltSidebarHover", "#207B50C8");
+                        SetAeroResource(app, "AltTimestampFg", "#504068");
+                        SetAeroResource(app, "AltSubtitleFg", "#504068");
+                        break;
+                    case "__glass__":
+                        // ═══ GLASS SLAB — Fully translucent frosted Aero clipboard ═══
+                        // Light text on dark/transparent cards, matching GlassTheme.xaml aesthetics
+                        SetAeroResource(app, "AltCardBg", "#15FFFFFF");
+                        SetAeroResource(app, "AltCardBgHover", "#25FFFFFF");
+                        SetAeroResource(app, "AltCardBorder", "#20FFFFFF");
+                        SetAeroResource(app, "AltCardBorderHover", "#38FFFFFF");
+                        SetAeroResource(app, "AltTextPrimary", "#F0FFFFFF");
+                        SetAeroResource(app, "AltTextSecondary", "#B0FFFFFF");
+                        SetAeroResource(app, "AltTextTertiary", "#70FFFFFF");
+                        SetAeroResource(app, "AltSearchBg", "#12FFFFFF");
+                        SetAeroResource(app, "AltSearchBorder", "#25FFFFFF");
+                        SetAeroResource(app, "AltSearchFg", "#80FFFFFF");
+                        SetAeroResource(app, "AltBottomBarBg", "#10FFFFFF");
+                        SetAeroResource(app, "AltBottomBarBorder", "#20FFFFFF");
+                        SetAeroResource(app, "AltSidebarHover", "#18FFFFFF");
+                        SetAeroResource(app, "AltTimestampFg", "#70FFFFFF");
+                        SetAeroResource(app, "AltSubtitleFg", "#70FFFFFF");
+                        break;
+                    case "Default":
+                    default:
+                        // Pure native FlyShelf dark card tokens
+                        SetAeroResource(app, "AltCardBg", "#18FFFFFF");
+                        SetAeroResource(app, "AltCardBgHover", "#28FFFFFF");
+                        SetAeroResource(app, "AltCardBorder", "#22FFFFFF");
+                        SetAeroResource(app, "AltCardBorderHover", "#35FFFFFF");
+                        SetAeroResource(app, "AltTextPrimary", "#F1F5F9");
+                        SetAeroResource(app, "AltTextSecondary", "#94A3B8");
+                        SetAeroResource(app, "AltTextTertiary", "#64748B");
+                        SetAeroResource(app, "AltSearchBg", "#12FFFFFF");
+                        SetAeroResource(app, "AltSearchBorder", "#20FFFFFF");
+                        SetAeroResource(app, "AltSearchFg", "#F1F5F9");
+                        SetAeroResource(app, "AltBottomBarBg", "#16FFFFFF");
+                        SetAeroResource(app, "AltBottomBarBorder", "#20FFFFFF");
+                        SetAeroResource(app, "AltSidebarHover", "#15FFFFFF");
+                        SetAeroResource(app, "AltTimestampFg", "#64748B");
+                        SetAeroResource(app, "AltSubtitleFg", "#64748B");
+                        break;
+                }
             }
 
             // Update background gradients and overlay programmatically
@@ -1030,7 +1087,7 @@ namespace FlyShelf.Classes
 
                 // Find the AltArcticOverlay and toggle its visibility based on theme
                 var arcticOverlay = mainWin.FindName("AltArcticOverlay") as System.Windows.Controls.Border;
-                bool isLight = themeName == "ArcticSnow";
+                bool isLight = themeName.Equals("ArcticSnow", StringComparison.OrdinalIgnoreCase);
                 bool isGlass = themeName == "__glass__";
 
                 if (arcticOverlay != null)
@@ -1095,10 +1152,12 @@ namespace FlyShelf.Classes
                                 grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFFFF8F0"), 0.8));
                                 grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFF5EFE4"), 1.0));
                                 break;
-                            default: // Default — light gradient handled by overlay
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFF0F7FF"), 0.0));
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFF5F5F5"), 0.5));
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFFAFAFA"), 1.0));
+                            case "Default":
+                            default:
+                                // Translucent — lets the desktop wallpaper and blur shine through completely
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#08FFFFFF"), 0.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#05FFFFFF"), 0.5));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#08FFFFFF"), 1.0));
                                 break;
                         }
                         bgBorder.Background = grad;

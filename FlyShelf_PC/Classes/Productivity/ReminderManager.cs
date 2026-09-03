@@ -238,6 +238,7 @@ namespace FlyShelf.Classes
                     item.IsSnoozed = false;
                     item.SnoozedUntil = null;
                     item.LastFiredAt = DateTime.UtcNow;
+                    ReminderScheduler.ClearShownId(id);
                 }
                 else
                 {
@@ -257,6 +258,7 @@ namespace FlyShelf.Classes
 
                 item.IsSnoozed = true;
                 item.SnoozedUntil = DateTime.UtcNow + duration;
+                ReminderScheduler.ClearShownId(id);
             }
 
             ScheduleSave();
@@ -268,7 +270,10 @@ namespace FlyShelf.Classes
             {
                 var item = _reminders.FirstOrDefault(r => r.Id == id);
                 if (item != null)
+                {
                     _reminders.Remove(item);
+                    ReminderScheduler.ClearShownId(id);
+                }
             }
 
             ScheduleSave();
