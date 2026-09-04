@@ -22,7 +22,7 @@ const MAX_RETRY_COUNT = 3;
 // Uniform card height — matches PC app's Height=165 scaled for mobile density
 const CARD_IMAGE_HEIGHT = 200;
 
-const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: () => void }) => {
+const CachedImage = React.memo(({ imgUri, onPress, onCached }: { imgUri: string; onPress: () => void; onCached?: (localPath: string) => void }) => {
   const { colors } = useAppTheme();
   const [localUri, setLocalUri] = React.useState<string | null>(null);
   const [failed, setFailed] = React.useState(false);
@@ -96,7 +96,10 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
           // Check cache first
           const info = await FileSystem.getInfoAsync(permUri);
           if (info.exists && (info as any).size > 500) {
-            if (!cancelled) setLocalUri(permUri);
+            if (!cancelled) {
+              setLocalUri(permUri);
+              onCached?.(permUri);
+            }
             return;
           }
 
@@ -109,7 +112,10 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
               if (dl.status === 200) {
                 const dlInfo = await FileSystem.getInfoAsync(dl.uri);
                 if (dlInfo.exists && (dlInfo as any).size > 100) {
-                  if (!cancelled) setLocalUri(dl.uri);
+                  if (!cancelled) {
+                    setLocalUri(dl.uri);
+                    onCached?.(dl.uri);
+                  }
                   return;
                 }
               }

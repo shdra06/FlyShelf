@@ -300,6 +300,7 @@ function SyncScreenInner() {
           DownloadUrl: (c as any).DownloadUrl || undefined,
           PreviewUrl: (c as any).PreviewUrl || undefined,
           IsPinned: c.IsPinned || undefined,
+          _receivedVia: c._receivedVia || undefined,
         }));
         const jsonStr = JSON.stringify(toSave);
         const diskClipsBackup = `${FileSystem.documentDirectory}flyshelf_clips_backup.json`;
@@ -1795,9 +1796,14 @@ function SyncScreenInner() {
         {/* Card Content body */}
         <View style={{ flex: 1, paddingLeft: isMultiSelectMode ? 30 : 0 }}>
           {(item.Type === 'Image' || item.Type === 'ImageLink') ? (() => {
-            const imgUri = mediaUrl || item.CachedUri || item.Raw || '';
+            // Prefer local cache over remote URL — images work offline
+            const imgUri = item.CachedUri || mediaUrl || item.Raw || '';
             if (!imgUri) return <View style={{ marginBottom: 8, height: 100, borderRadius: 12, backgroundColor: '#1C202B', justifyContent: 'center', alignItems: 'center' }}><Ionicons name="image-outline" size={32} color={colors.text.tertiary} /><Text style={{color: '#8A8F98', fontSize: 12, marginTop: 8}}>No image URL</Text></View>;
-            return <CachedImage imgUri={imgUri} onPress={() => setExpandedImage(imgUri)} />;
+            return <CachedImage imgUri={imgUri} onPress={() => setExpandedImage(imgUri)} onCached={(localPath) => {
+              if (!item.CachedUri || item.CachedUri !== localPath) {
+                setClips(prev => prev.map(c => c === item ? { ...c, CachedUri: localPath } : c));
+              }
+            }} />;
           })() : null}
           
           {(item.Type !== 'Image' && item.Type !== 'ImageLink') && (

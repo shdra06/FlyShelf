@@ -711,6 +711,9 @@ namespace FlyShelf
 
             Classes.Logger.LogAction("VD_HIDE", $"AnimateAndHide | notes={_isNotesActive} todo={_isTodoActive} deskSwitchFlag={_desktopSwitchedSinceLastDismiss}");
 
+            // ═══ CLOSE SEARCH FIRST ═══
+            CloseSearch();
+
             // ═══ CLOSE NOTES/TODO/RESEARCH ═══
             if (_isNotesActive || _isTodoActive || _isResearchActive)
             {
@@ -729,7 +732,6 @@ namespace FlyShelf
             _lastActualHeight = this.ActualHeight;
 
             DismissMergeState();
-            CloseSearch();
             // Reset category filters on dismiss — prevents stale filter persisting
             // when Hub changes the filter while clipboard is hidden
             if (_activeCategoryFilter != null) ClearCategoryFilter();

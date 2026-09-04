@@ -1119,6 +1119,9 @@ namespace FlyShelf
                     StopPanelAutoRevertTimer();
                     _mascotDelayTimer?.Stop();
 
+                    // Close search state before closing active panels
+                    CloseSearch();
+
                     // Save panel state so it can restore on re-summon
                     if (_isNotesActive || _isTodoActive || _isResearchActive)
                     {
@@ -1129,7 +1132,6 @@ namespace FlyShelf
                     }
 
                     DismissMergeState();      // PC-4: Clear PDF merge bar
-                    CloseSearch();            // Clear search state
                     if (_isFilterBarActive) ToggleFilterBar(false); // PC-5: Clear filter bar
 
                     // PC-8: Reset drag hover indicator
