@@ -45,6 +45,20 @@ export interface EditorState {
 
 export type ImageFilter = 'original' | 'enhanced' | 'grayscale' | 'bw' | 'whiteboard';
 
+export type ScannerStep = 'capture' | 'review' | 'save';
+
+export interface ScanPage {
+  uri: string;
+  filter: ImageFilter;
+  rotation: number;
+}
+
+export interface ScanCompleteResult {
+  pdfPath: string;
+  name: string;
+  pageCount: number;
+}
+
 export interface ScanResult {
   imageUris: string[];
   filter: ImageFilter;

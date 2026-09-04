@@ -1,5 +1,5 @@
 // PDF Tools Styles — Theme-aware factory
-import { StyleSheet, Dimensions } from 'react-native';
+import { StyleSheet, Dimensions, Platform, StatusBar } from 'react-native';
 import { colors as defaultColors, font, radius, space, shadows as defaultShadows } from './theme';
 
 type ThemeColors = Record<string, any>;
@@ -8,6 +8,7 @@ type ThemeShadows = Record<string, any>;
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_GAP = 12;
 const CARD_W = (SCREEN_W - space.xl * 2 - CARD_GAP) / 2;
+const STATUS_BAR_H = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 44;
 
 export const createPdfToolsStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.create({
   // ── Layout ──
@@ -20,7 +21,7 @@ export const createPdfToolsStyles = (colors: ThemeColors, shadows: ThemeShadows)
   // ── Header ──
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: space.xl, paddingTop: 52, paddingBottom: space.lg,
+    paddingHorizontal: space.xl, paddingTop: STATUS_BAR_H + 8, paddingBottom: space.lg,
     backgroundColor: colors.bg.base,
   },
   backBtn: { padding: space.sm, marginRight: space.sm, borderRadius: radius.sm },

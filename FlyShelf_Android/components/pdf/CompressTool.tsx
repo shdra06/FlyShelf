@@ -29,6 +29,13 @@ export default function CompressTool({ onBack, onPickFile, saveRecent, onSendToP
   const [compressedSize, setCompressedSize] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [resultPath, setResultPath] = useState<string | null>(null);
+  const [quality, setQuality] = useState<'low' | 'medium' | 'high'>('medium');
+
+  const COMPRESSION_LEVELS = [
+    { id: 'low', label: 'Low', quality: 'low', icon: 'flash-outline' as const, color: colors.accent.success, desc: 'Smallest file' },
+    { id: 'medium', label: 'Medium', quality: 'medium', icon: 'speedometer-outline' as const, color: colors.accent.primary, desc: 'Balanced' },
+    { id: 'high', label: 'High', quality: 'high', icon: 'diamond-outline' as const, color: colors.accent.warning, desc: 'Best quality' },
+  ];
 
   const handlePick = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -50,7 +57,7 @@ export default function CompressTool({ onBack, onPickFile, saveRecent, onSendToP
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
-      const outPath = await compressPdf(file.uri);
+      const outPath = await compressPdf(file.uri, quality);
       const info = await FileSystem.getInfoAsync(outPath);
       if (info.exists && 'size' in info && typeof info.size === 'number') {
         setCompressedSize(info.size);
@@ -76,6 +83,7 @@ export default function CompressTool({ onBack, onPickFile, saveRecent, onSendToP
     const savedPercent = origSize && compressedSize && origSize > compressedSize
       ? Math.round(((origSize - compressedSize) / origSize) * 100)
       : null;
+    const gotLarger = origSize && compressedSize && compressedSize >= origSize;
 
     return (
       <View style={s.modalOverlay}>
@@ -90,6 +98,19 @@ export default function CompressTool({ onBack, onPickFile, saveRecent, onSendToP
             <View style={{ backgroundColor: colors.accent.successDim, padding: space.lg, borderRadius: radius.md, marginBottom: space.lg, alignItems: 'center' }}>
               <Text style={{ color: colors.accent.success, fontSize: 18, fontWeight: '700' }}>
                 🎉 Reduced by {savedPercent}%!
+              </Text>
+              <Text style={{ color: colors.text.secondary, marginTop: 4, fontSize: 13 }}>
+                {formatSize(origSize)} → {formatSize(compressedSize)}
+              </Text>
+            </View>
+          )}
+          {gotLarger && (
+            <View style={{ backgroundColor: colors.accent.warningDim, padding: space.lg, borderRadius: radius.md, marginBottom: space.lg, alignItems: 'center' }}>
+              <Text style={{ color: colors.accent.warning, fontSize: 16, fontWeight: '700' }}>
+                ⚠️ File Got Larger
+              </Text>
+              <Text style={{ color: colors.text.secondary, marginTop: 4, fontSize: 13, textAlign: 'center' }}>
+                This PDF was already highly optimized or didn't contain compressible elements like large images.
               </Text>
               <Text style={{ color: colors.text.secondary, marginTop: 4, fontSize: 13 }}>
                 {formatSize(origSize)} → {formatSize(compressedSize)}
@@ -136,7 +157,29 @@ export default function CompressTool({ onBack, onPickFile, saveRecent, onSendToP
               </Pressable>
             </View>
 
-            <View style={{ backgroundColor: colors.bg.card, borderRadius: radius.md, padding: space.lg, marginTop: space.md, borderWidth: 1, borderColor: colors.border.subtle }}>
+            <View style={{ flexDirection: 'row', gap: space.md, marginTop: space.lg }}>
+              {COMPRESSION_LEVELS.map(level => (
+                <Pressable
+                  key={level.id}
+                  onPress={() => { setQuality(level.quality as any); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: colors.bg.card,
+                    borderRadius: radius.md,
+                    padding: space.md,
+                    alignItems: 'center',
+                    borderWidth: 2,
+                    borderColor: quality === level.quality ? level.color : colors.border.subtle,
+                  }}
+                >
+                  <Ionicons name={level.icon} size={24} color={level.color} style={{ marginBottom: 4 }} />
+                  <Text style={{ color: colors.text.primary, fontWeight: '600', fontSize: 13 }}>{level.label}</Text>
+                  <Text style={{ color: colors.text.tertiary, fontSize: 11, marginTop: 2 }}>{level.desc}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={{ backgroundColor: colors.bg.card, borderRadius: radius.md, padding: space.lg, marginTop: space.xl, borderWidth: 1, borderColor: colors.border.subtle }}>
               <Text style={{ color: colors.text.primary, fontWeight: '600', marginBottom: 8, fontSize: 14 }}>
                 ⚡ Optimization Features:
               </Text>

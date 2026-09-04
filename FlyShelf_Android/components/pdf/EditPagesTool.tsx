@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -8,6 +8,7 @@ import { useAppTheme } from '../../hooks/useAppTheme';
 import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { getPdfPageInfo } from '../../utils/pdfUtils';
 import { editPdfPages, addImagePages } from '../../utils/pdfToolsUtils';
+import { generateThumbnails } from '../../utils/pdfEditorUtils';
 import { SelectedFile, PageEntry } from './types';
 import ResultView from './ResultView';
 import ProcessingOverlay from './ProcessingOverlay';
@@ -37,7 +38,18 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
       setLoading(true);
       try {
         const info = await getPdfPageInfo(files[0].uri);
-        setPages(info.pages.map((p, i) => ({ index: i, originalIndex: i, width: p.width, height: p.height, rotation: 0, source: 'original' as const })));
+        const pageIndices = info.pages.map((_, i) => i);
+        const thumbs = await generateThumbnails(files[0].uri, pageIndices, 200);
+
+        setPages(info.pages.map((p, i) => ({ 
+          index: i, 
+          originalIndex: i, 
+          width: p.width, 
+          height: p.height, 
+          rotation: 0, 
+          source: 'original' as const,
+          thumbnailUri: thumbs.get(i)
+        })));
       } catch (e: any) {
         Alert.alert('Error', 'Failed to load PDF pages');
       } finally {
@@ -84,7 +96,17 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
       const outPath = await addImagePages(file.uri, pages.length, imgs.map(i => i.uri));
       setFile({ ...file, uri: outPath });
       const info = await getPdfPageInfo(outPath);
-      setPages(info.pages.map((p, i) => ({ index: i, originalIndex: i, width: p.width, height: p.height, rotation: 0, source: 'original' as const })));
+      const pageIndices = info.pages.map((_, i) => i);
+      const thumbs = await generateThumbnails(outPath, pageIndices, 200);
+      setPages(info.pages.map((p, i) => ({ 
+        index: i, 
+        originalIndex: i, 
+        width: p.width, 
+        height: p.height, 
+        rotation: 0, 
+        source: 'original' as const,
+        thumbnailUri: thumbs.get(i)
+      })));
     } catch (e: any) {
       Alert.alert('Error', 'Failed to add images');
     } finally {
@@ -97,7 +119,7 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
-      const pageConfigs = pages.map(p => ({ index: p.index, rotation: p.rotation }));
+      const pageConfigs = pages.map(p => ({ index: p.originalIndex, rotation: p.rotation }));
       const outPath = await editPdfPages(file.uri, pageConfigs);
       
       setResultPath(outPath);
@@ -147,6 +169,9 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
           pages.map((p, i) => (
             <Animated.View key={`page-${i}`} entering={FadeInDown.delay(i * 30)} style={s.pageCard}>
               <View style={s.pageNum}><Text style={s.pageNumText}>{i + 1}</Text></View>
+              {p.thumbnailUri && (
+                <Image source={{ uri: p.thumbnailUri }} style={{ width: 40, height: 56, borderRadius: 4, marginRight: 12, backgroundColor: colors.bg.elevated }} resizeMode="cover" />
+              )}
               <View style={s.pageInfo}>
                 <Text style={s.pageSize}>{Math.round(p.width)} × {Math.round(p.height)}</Text>
                 {p.rotation !== 0 && <Text style={s.pageRotation}>Rotated {p.rotation}°</Text>}

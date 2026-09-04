@@ -1362,10 +1362,6 @@ namespace FlyShelf
                 {
                     CloseSearch();
                 }
-                else if (_isAltSearchActive)
-                {
-                    CloseAltSearch();
-                }
                 else
                 {
                     AnimateAndHide();
@@ -1438,10 +1434,6 @@ namespace FlyShelf
                 if (_isSearchActive)
                 {
                     CloseSearch();
-                }
-                else if (_isAltSearchActive)
-                {
-                    CloseAltSearch();
                 }
                 else
                 {

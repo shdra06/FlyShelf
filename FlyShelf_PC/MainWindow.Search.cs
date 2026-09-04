@@ -37,6 +37,9 @@ namespace FlyShelf
             }
             else
             {
+                // If Todo is active, close it first — search only works on clipboard/notes
+                if (_isTodoActive) CloseTodoPanel(immediate: true);
+
                 _isSearchActive = true;
                 if (_isFilterBarActive) ToggleFilterBar(false);
 
@@ -244,10 +247,7 @@ namespace FlyShelf
         internal void CloseSearch(bool switchingPanel = false)
         {
             if (_isClosingSearch) return;   // prevent re-entrant calls
-            if (!_isSearchActive && string.IsNullOrEmpty(SearchTextBox.Text) &&
-                (SearchBarContainer == null || SearchBarContainer.Visibility != Visibility.Visible) &&
-                (UnifiedSearchPanel == null || UnifiedSearchPanel.Visibility != Visibility.Visible) &&
-                !_isAltSearchActive) return;   // PERF: fast-path — nothing to close
+            if (!_isSearchActive && string.IsNullOrEmpty(SearchTextBox.Text)) return;   // PERF: fast-path — nothing to close
             _isClosingSearch = true;
             try
             {
@@ -257,34 +257,13 @@ namespace FlyShelf
                 _todoSearchDebounce?.Stop();
                 SearchTextBox.Text = "";           // fires TextChanged, but the guard above blocks it
 
-                // Hide unified search results panel and clear cached suggestion items
+                // Hide unified search results panel
                 if (UnifiedSearchPanel != null)
                     UnifiedSearchPanel.Visibility = Visibility.Collapsed;
-                if (SearchNotesResults != null)
-                    SearchNotesResults.ItemsSource = null;
-                if (SearchTodosResults != null)
-                    SearchTodosResults.ItemsSource = null;
-                if (SearchNotesSection != null)
-                    SearchNotesSection.Visibility = Visibility.Collapsed;
-                if (SearchTodosSection != null)
-                    SearchTodosSection.Visibility = Visibility.Collapsed;
-                if (SmartAddTodoBtn != null)
-                    SmartAddTodoBtn.Visibility = Visibility.Collapsed;
-                if (SmartTimerSection != null)
-                    SmartTimerSection.Visibility = Visibility.Collapsed;
-                if (SearchSmartCommandsSection != null)
-                    SearchSmartCommandsSection.Visibility = Visibility.Collapsed;
 
                 // Always clear search results in child panels (Notes & Todo)
                 try { NotesContent?.ClearSearch(); } catch { }
                 try { TodoContent?.ClearSearch(); } catch { }
-                try { ApplyTodoSearch(""); } catch { }
-
-                // Also close Alt UI search if active
-                if (_isAltSearchActive)
-                {
-                    try { CloseAltSearch(); } catch { }
-                }
 
                 // Restore WS_EX_NOACTIVATE dynamically immediately
                 UpdateWindowActivationStyle();

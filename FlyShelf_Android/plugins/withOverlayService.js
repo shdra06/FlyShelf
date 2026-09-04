@@ -1115,6 +1115,58 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
             )
         } catch (e: Exception) {}
     }
+
+    @ReactMethod
+    fun getFlyShelfStoragePath(promise: Promise) {
+        try {
+            val basePath = android.os.Environment.getExternalStorageDirectory().absolutePath + "/FlyShelf"
+            promise.resolve(basePath)
+        } catch (e: Exception) {
+            promise.reject("ERR", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun ensureFlyShelfDirs(promise: Promise) {
+        try {
+            val base = java.io.File(android.os.Environment.getExternalStorageDirectory(), "FlyShelf")
+            val dirs = arrayOf("Vault", "Clipboard", "Cache", "Backups")
+            base.mkdirs()
+            for (d in dirs) {
+                java.io.File(base, d).mkdirs()
+            }
+            promise.resolve(base.absolutePath)
+        } catch (e: Exception) {
+            promise.reject("ERR", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun hasAllFilesPermission(promise: Promise) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            promise.resolve(android.os.Environment.isExternalStorageManager())
+        } else {
+            promise.resolve(true)
+        }
+    }
+
+    @ReactMethod
+    fun requestAllFilesPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = Uri.parse("package:" + reactApplicationContext.packageName)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                reactApplicationContext.startActivity(intent)
+            } catch (e: Exception) {
+                try {
+                    val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    reactApplicationContext.startActivity(intent)
+                } catch (e2: Exception) {}
+            }
+        }
+    }
 }
 `;
 
@@ -1576,6 +1628,10 @@ function withOverlayManifest(config) {
     }
     if (!permissions.some(p => p.$?.['android:name'] === postNotifPerm)) {
         permissions.push({ $: { 'android:name': postNotifPerm } });
+    }
+    const manageStoragePerm = 'android.permission.MANAGE_EXTERNAL_STORAGE';
+    if (!permissions.some(p => p.$?.['android:name'] === manageStoragePerm)) {
+        permissions.push({ $: { 'android:name': manageStoragePerm } });
     }
     manifest.manifest['uses-permission'] = permissions;
 

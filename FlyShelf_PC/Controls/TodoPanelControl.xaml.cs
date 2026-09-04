@@ -67,8 +67,6 @@ namespace FlyShelf.Controls
             return null;
         }
 
-        private MainWindow? GetMainWindow() => Window.GetWindow(this) as MainWindow;
-
         // ═══════════════════════════════════════════════════════════
         // PUBLIC API — Called by MainWindow.Todo.cs coordinator
         // ═══════════════════════════════════════════════════════════
@@ -78,8 +76,6 @@ namespace FlyShelf.Controls
         /// </summary>
         public void Initialize(TodoDay today)
         {
-            ClearSearch();
-
             // Bind days list
             TodoDaySidebar.ItemsSource = TodoManager.Days;
 
@@ -113,6 +109,19 @@ namespace FlyShelf.Controls
         }
 
         /// <summary>
+        /// Unconditionally clears all todo search state.
+        /// Called during unsummon/dismiss to ensure no stale filters persist.
+        /// </summary>
+        public void ClearSearch()
+        {
+            _todoSearchResults = null;
+            if (_selectedTodoDay != null)
+            {
+                TodoListItemsControl.ItemsSource = _selectedTodoDay.Items;
+            }
+        }
+
+        /// <summary>
         /// Update the sync status indicators in the todo header.
         /// </summary>
         public void UpdateSyncStatus(int count, bool isSynced)
@@ -133,12 +142,6 @@ namespace FlyShelf.Controls
 
         private void TodoBack_Click(object sender, MouseButtonEventArgs e)
         {
-            ClearSearch();
-            var mainWin = GetMainWindow();
-            if (mainWin != null && mainWin.IsSearchActive)
-            {
-                mainWin.CloseSearch();
-            }
             CloseRequested?.Invoke(this, EventArgs.Empty);
         }
 

@@ -12,6 +12,7 @@ import { PairedDevice } from '../../utils/deviceTypes';
 import { SelectedFile } from './types';
 import ResultView from './ResultView';
 import ProcessingOverlay from './ProcessingOverlay';
+import { useSettings } from '../../context/SettingsContext';
 
 interface PdfToWordToolProps {
   onBack: () => void;
@@ -111,6 +112,22 @@ export default function PdfToWordTool({ onBack, onPickFile, saveRecent, onSendTo
       </View>
 
       <ScrollView style={s.modalScroll} contentContainerStyle={{ paddingBottom: 40 }}>
+        {!hasPc ? (
+          <View style={{ backgroundColor: colors.accent.warningDim, padding: space.md, borderRadius: radius.md, marginBottom: space.md, borderWidth: 1, borderColor: colors.accent.warning }}>
+            <Text style={{ color: colors.accent.warning, fontSize: 14, fontWeight: '600' }}>⚠️ Standalone Mode</Text>
+            <Text style={{ color: colors.text.secondary, fontSize: 13, marginTop: 4 }}>
+              Basic conversion only — text layout and tables require a paired PC for full accuracy.
+            </Text>
+          </View>
+        ) : (
+          <View style={{ backgroundColor: colors.accent.successDim, padding: space.md, borderRadius: radius.md, marginBottom: space.md, borderWidth: 1, borderColor: colors.accent.success }}>
+            <Text style={{ color: colors.accent.success, fontSize: 14, fontWeight: '600' }}>✓ Full Conversion Available</Text>
+            <Text style={{ color: colors.text.secondary, fontSize: 13, marginTop: 4 }}>
+              Paragraph layout, tables, and formatting will be preserved via desktop engine.
+            </Text>
+          </View>
+        )}
+
         {!file ? (
           <Pressable
             style={[s.fileItem, { paddingVertical: 28, justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }]}
@@ -137,27 +154,23 @@ export default function PdfToWordTool({ onBack, onPickFile, saveRecent, onSendTo
               </Pressable>
             </View>
 
-            {hasPc ? (
-              <View style={{ backgroundColor: '#06B6D4' + '20', borderRadius: radius.md, padding: space.md, marginTop: space.md, flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="desktop-outline" size={24} color="#06B6D4" style={{ marginRight: 10 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: '#06B6D4', fontWeight: '700', fontSize: 13 }}>Cross-Device Synergy Active</Text>
-                  <Text style={{ color: colors.text.secondary, fontSize: 11, marginTop: 2 }}>
-                    Uses paired PC desktop OpenXML engine for layout fidelity
-                  </Text>
-                </View>
-              </View>
-            ) : null}
-
             <View style={{ backgroundColor: colors.bg.card, borderRadius: radius.md, padding: space.lg, marginTop: space.md, borderWidth: 1, borderColor: colors.border.subtle }}>
               <Text style={{ color: colors.text.primary, fontWeight: '600', marginBottom: 8, fontSize: 14 }}>
                 📄 Conversion Features:
               </Text>
               <Text style={{ color: colors.text.secondary, fontSize: 13, lineHeight: 20 }}>
-                • Paragraph &amp; heading layout preservation{'\n'}
-                • Multi-column table detection &amp; cell styling{'\n'}
-                • Embedded image extraction &amp; document bundling{'\n'}
-                • Compatible with Microsoft Word, LibreOffice, &amp; Google Docs
+                {hasPc ? (
+                  <>
+                    • Full paragraph layout{'\n'}
+                    • Table detection{'\n'}
+                    • Image extraction
+                  </>
+                ) : (
+                  <>
+                    • Page structure export{'\n'}
+                    • Basic text flow
+                  </>
+                )}
               </Text>
             </View>
 

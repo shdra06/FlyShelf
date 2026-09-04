@@ -235,14 +235,28 @@ export default function PdfToolsScreen() {
 
   useEffect(() => { cleanupEditorTempFiles(); }, []);
 
-  const handleScanComplete = async (imageUris: string[], _filter: ImageFilter) => {
-    if (imageUris.length === 0) return;
+  // New scanner complete handler — scanner now builds PDF internally
+  const handleNewScanComplete = useCallback((result: { pdfPath: string; name: string; pageCount: number }) => {
+    saveRecent(result.name, result.pdfPath, result.pageCount, 'scanToPdf');
+    setActiveTool(null);
+    setEditorPdf(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    toast.success('PDF Saved', `${result.name} — ${result.pageCount} page${result.pageCount !== 1 ? 's' : ''}`);
+  }, []);
 
-    // Convert scanned images into a PDF using the editor
+  // Scanner → Open in Editor
+  const handleScanOpenInEditor = useCallback((pdfPath: string, name: string) => {
+    setEditorPdf({ uri: pdfPath, name });
+    setActiveTool('pdfEditor');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, []);
+
+  // Legacy handler for backward compat (used by PdfEditorScreen's internal scanner)
+  const handleLegacyScanComplete = async (imageUris: string[], _filter: ImageFilter) => {
+    if (imageUris.length === 0) return;
     try {
-      // M-11: Get actual image dimensions instead of hardcoding A4
       const pages: PageEntry[] = await Promise.all(imageUris.map(async (uri, i) => {
-        let w = 595, h = 842; // A4 fallback
+        let w = 595, h = 842;
         try {
           const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
             require('react-native').Image.getSize(
@@ -251,26 +265,19 @@ export default function PdfToolsScreen() {
               (err: Error) => reject(err),
             );
           });
-          // Scale to PDF points (max 2000pt dimension)
           const scale = Math.min(2000 / Math.max(dims.width, dims.height), 1);
           w = Math.round(dims.width * scale);
           h = Math.round(dims.height * scale);
         } catch {}
         return {
-          index: i,
-          originalIndex: i,
-          width: w,
-          height: h,
-          rotation: 0,
-          source: 'scanned' as const,
-          sourceUri: uri,
+          index: i, originalIndex: i,
+          width: w, height: h, rotation: 0,
+          source: 'scanned' as const, sourceUri: uri,
         };
       }));
-
       const outputPath = await buildEditedPdf('', pages);
       const name = `Scan_${new Date().toISOString().slice(0, 10)}.pdf`;
       saveRecent(name, outputPath, pages.length, 'scanToPdf');
-      // Open the result in the editor for further editing
       setEditorPdf({ uri: outputPath, name });
       setActiveTool('pdfEditor');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -285,7 +292,6 @@ export default function PdfToolsScreen() {
       setEditorPdf({ uri: files[0].uri, name: files[0].name });
       setActiveTool('pdfEditor');
     } else {
-      // H-1: User cancelled picker — return to tool grid, don't leave blank screen
       setActiveTool(null);
     }
   };
@@ -298,7 +304,9 @@ export default function PdfToolsScreen() {
           <DocumentScanner
             visible={true}
             onClose={back}
-            onScanned={handleScanComplete}
+            onScanComplete={handleNewScanComplete}
+            onOpenInEditor={handleScanOpenInEditor}
+            onSendToPc={handleSendToPc}
           />
         );
       case 'pdfEditor':
@@ -442,6 +450,69 @@ export default function PdfToolsScreen() {
         </View>
 
         <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* Quick Actions — Hero buttons for most-used tools */}
+          {selectedCategory === 'all' && !searchQuery.trim() && (
+            <View style={{ marginBottom: space.lg }}>
+              <Text style={{ fontFamily: font.semibold, fontSize: 13, color: colors.text.tertiary, marginBottom: space.sm, paddingHorizontal: 2 }}>
+                QUICK ACTIONS
+              </Text>
+              <View style={{ flexDirection: 'row', gap: space.sm }}>
+                {/* Scan Document */}
+                <Pressable
+                  onPress={() => { setActiveTool('scanToPdf'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
+                  style={{
+                    flex: 1, backgroundColor: `${colors.accent.success}18`,
+                    borderRadius: radius.lg, padding: space.lg,
+                    borderWidth: 1, borderColor: `${colors.accent.success}30`,
+                  }}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${colors.accent.success}20`, alignItems: 'center', justifyContent: 'center', marginBottom: space.sm }}>
+                    <Ionicons name="scan-outline" size={22} color={colors.accent.success} />
+                  </View>
+                  <Text style={{ fontFamily: font.bold, fontSize: 14, color: colors.text.primary }}>Scan</Text>
+                  <Text style={{ fontFamily: font.regular, fontSize: 11, color: colors.text.tertiary, marginTop: 2 }}>Camera to PDF</Text>
+                </Pressable>
+                {/* Edit PDF */}
+                <Pressable
+                  onPress={() => { setActiveTool('pdfEditor'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
+                  style={{
+                    flex: 1, backgroundColor: `${colors.accent.primary}14`,
+                    borderRadius: radius.lg, padding: space.lg,
+                    borderWidth: 1, borderColor: `${colors.accent.primary}25`,
+                  }}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${colors.accent.primary}18`, alignItems: 'center', justifyContent: 'center', marginBottom: space.sm }}>
+                    <Ionicons name="create-outline" size={22} color={colors.accent.primary} />
+                  </View>
+                  <Text style={{ fontFamily: font.bold, fontSize: 14, color: colors.text.primary }}>Edit</Text>
+                  <Text style={{ fontFamily: font.regular, fontSize: 11, color: colors.text.tertiary, marginTop: 2 }}>Pages & layout</Text>
+                </Pressable>
+                {/* Merge */}
+                <Pressable
+                  onPress={() => { setActiveTool('merge'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
+                  style={{
+                    flex: 1, backgroundColor: `${colors.accent.info}14`,
+                    borderRadius: radius.lg, padding: space.lg,
+                    borderWidth: 1, borderColor: `${colors.accent.info}25`,
+                  }}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${colors.accent.info}18`, alignItems: 'center', justifyContent: 'center', marginBottom: space.sm }}>
+                    <Ionicons name="git-merge-outline" size={22} color={colors.accent.info} />
+                  </View>
+                  <Text style={{ fontFamily: font.bold, fontSize: 14, color: colors.text.primary }}>Merge</Text>
+                  <Text style={{ fontFamily: font.regular, fontSize: 11, color: colors.text.tertiary, marginTop: 2 }}>Combine PDFs</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* All Tools Section */}
+          {selectedCategory === 'all' && !searchQuery.trim() && (
+            <Text style={{ fontFamily: font.semibold, fontSize: 13, color: colors.text.tertiary, marginBottom: space.sm, paddingHorizontal: 2 }}>
+              ALL TOOLS
+            </Text>
+          )}
+
           {filteredTools.length === 0 ? (
             <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48, paddingHorizontal: 20 }}>
               <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.bg.card, alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: colors.border.subtle }}>
@@ -504,20 +575,80 @@ export default function PdfToolsScreen() {
 
           {recentPdfs.length > 0 && (
             <View style={s.recentSection}>
-              <Text style={s.sectionTitle}>Recent Documents</Text>
-              {recentPdfs.map((pdf) => (
-                <Pressable
-                  key={pdf.path}
-                  style={s.recentItem}
-                  onPress={() => handleRecentPress(pdf)}
-                >
-                  <Ionicons name="time-outline" size={20} color={colors.text.tertiary} />
-                  <View style={s.recentInfo}>
-                    <Text style={s.recentName} numberOfLines={1}>{pdf.name}</Text>
-                    <Text style={s.recentMeta}>{new Date(pdf.date).toLocaleDateString()} • {pdf.pages} pages</Text>
-                  </View>
-                </Pressable>
-              ))}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.sm }}>
+                <Text style={s.sectionTitle}>Recent Documents</Text>
+                {recentPdfs.length > 3 && (
+                  <Pressable
+                    onPress={() => {
+                      Alert.alert('Clear All Recents', 'Remove all recent documents from this list?', [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Clear All', style: 'destructive',
+                          onPress: () => {
+                            setRecentPdfs([]);
+                            AsyncStorage.setItem(RECENT_KEY, '[]').catch(() => {});
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          },
+                        },
+                      ]);
+                    }}
+                    hitSlop={8}
+                  >
+                    <Text style={{ fontFamily: font.medium, fontSize: 12, color: colors.text.tertiary }}>Clear All</Text>
+                  </Pressable>
+                )}
+              </View>
+              {recentPdfs.map((pdf) => {
+                // Relative time formatting
+                const elapsed = Date.now() - pdf.date;
+                const mins = Math.floor(elapsed / 60000);
+                const hrs = Math.floor(elapsed / 3600000);
+                const days = Math.floor(elapsed / 86400000);
+                const timeAgo = mins < 1 ? 'Just now' : mins < 60 ? `${mins}m ago` : hrs < 24 ? `${hrs}h ago` : `${days}d ago`;
+
+                // Tool label mapping
+                const toolLabels: Record<string, string> = {
+                  scanToPdf: 'Scanned', pdfEditor: 'Edited', merge: 'Merged',
+                  split: 'Split', compress: 'Compressed', imagesToPdf: 'From Images',
+                  extract: 'Extracted', watermark: 'Watermarked', pdfToWord: 'Converted',
+                  editPages: 'Pages Edited', metadata: 'Metadata',
+                };
+
+                return (
+                  <Animated.View key={pdf.path} entering={FadeInDown.delay(50)}>
+                    <Pressable
+                      style={[s.recentItem, { gap: space.md }]}
+                      onPress={() => handleRecentPress(pdf)}
+                    >
+                      <View style={{
+                        width: 40, height: 40, borderRadius: 10,
+                        backgroundColor: colors.accent.errorDim,
+                        alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <Ionicons name="document-text" size={20} color={colors.accent.error} />
+                      </View>
+                      <View style={[s.recentInfo, { flex: 1 }]}>
+                        <Text style={s.recentName} numberOfLines={1}>{pdf.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          <Text style={s.recentMeta}>{timeAgo}</Text>
+                          <Text style={{ color: colors.text.disabled, fontSize: 10 }}>•</Text>
+                          <Text style={s.recentMeta}>{pdf.pages || 1} pages</Text>
+                          <View style={{
+                            backgroundColor: colors.accent.primaryDim,
+                            paddingHorizontal: 6, paddingVertical: 1,
+                            borderRadius: radius.sm,
+                          }}>
+                            <Text style={{ fontFamily: font.medium, fontSize: 9, color: colors.accent.primary }}>
+                              {toolLabels[pdf.tool] || pdf.tool}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={colors.text.disabled} />
+                    </Pressable>
+                  </Animated.View>
+                );
+              })}
             </View>
           )}
         </ScrollView>

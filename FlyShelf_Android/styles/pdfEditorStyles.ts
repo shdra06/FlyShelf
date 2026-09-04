@@ -1,6 +1,9 @@
 // PDF Editor Styles — Theme-aware factory
-import { StyleSheet, Dimensions } from 'react-native';
+import { StyleSheet, Dimensions, Platform, StatusBar } from 'react-native';
 import { font, radius, space, shadows as defaultShadows } from './theme';
+
+// Dynamic top padding based on platform
+const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 44;
 
 type ThemeColors = Record<string, any>;
 type ThemeShadows = Record<string, any>;
@@ -22,7 +25,7 @@ export const createPdfEditorStyles = (colors: ThemeColors, shadows: ThemeShadows
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: space.md,
-    paddingTop: 48,
+    paddingTop: STATUS_BAR_HEIGHT + 8,
     paddingBottom: space.sm,
     backgroundColor: colors.bg.base,
     borderBottomWidth: 1,
@@ -389,7 +392,7 @@ export const createPdfEditorStyles = (colors: ThemeColors, shadows: ThemeShadows
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 48,
+    paddingTop: STATUS_BAR_HEIGHT + 8,
     paddingBottom: space.md,
     paddingHorizontal: space.md,
     backgroundColor: 'rgba(0,0,0,0.7)',

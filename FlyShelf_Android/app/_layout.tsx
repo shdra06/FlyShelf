@@ -321,6 +321,7 @@ export default function RootLayout() {
               <Stack>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="pdf-tools" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+                <Stack.Screen name="tools" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
                 <Stack.Screen name="settings-modal" options={{ headerShown: false, presentation: 'modal', animation: 'slide_from_bottom' }} />
                 <Stack.Screen name="share-receiver" options={{ headerShown: false, presentation: 'transparentModal', animation: 'fade' }} />
               </Stack>

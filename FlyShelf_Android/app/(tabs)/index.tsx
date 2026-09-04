@@ -2188,6 +2188,8 @@ function SyncScreenInner() {
           onScanDocument={() => router.push('/pdf-tools')}
           onSendFile={pickFileAndSend}
           onPdfTools={() => router.push('/pdf-tools')}
+          onToolbox={() => router.push('/tools')}
+          onQrScan={() => router.push('/tools')}
         />
 
         {/* Recent Activity Feed */}

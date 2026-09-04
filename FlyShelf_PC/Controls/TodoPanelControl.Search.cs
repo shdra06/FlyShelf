@@ -19,24 +19,17 @@ namespace FlyShelf.Controls
 
         private ObservableCollection<TodoItem>? _todoSearchResults;
 
-        /// <summary>
-        /// Clears todo search results and restores normal selected day items.
-        /// </summary>
-        public void ClearSearch()
-        {
-            _todoSearchResults = null;
-            if (_selectedTodoDay != null && TodoListItemsControl != null)
-            {
-                TodoListItemsControl.ItemsSource = _selectedTodoDay.Items;
-            }
-        }
-
         private void ApplyTodoSearch(string query)
         {
             string queryClean = (query ?? "").Trim();
             if (string.IsNullOrWhiteSpace(queryClean))
             {
-                ClearSearch();
+                // Restore normal view — show selected day's items
+                if (_selectedTodoDay != null)
+                {
+                    TodoListItemsControl.ItemsSource = _selectedTodoDay.Items;
+                }
+                _todoSearchResults = null;
                 return;
             }
 

@@ -58,51 +58,50 @@ namespace FlyShelf
             ToggleAltSearch();
         }
 
-        public void CloseAltSearch()
-        {
-            _altSearchDebounce?.Stop();
-            _isAltSearchActive = false;
-            if (AltSearchContainer != null)
-                AltSearchContainer.Visibility = Visibility.Collapsed;
-            if (AltSearchPlaceholder != null)
-                AltSearchPlaceholder.Visibility = Visibility.Visible;
-            if (AltSearchTextBox != null && !string.IsNullOrEmpty(AltSearchTextBox.Text))
-                AltSearchTextBox.Text = "";
-
-            if (AltShelfListView?.ItemsSource != null)
-            {
-                var view = System.Windows.Data.CollectionViewSource.GetDefaultView(AltShelfListView.ItemsSource);
-                if (view != null)
-                {
-                    if (string.IsNullOrEmpty(_altActiveCategory))
-                        view.Filter = null;
-                    else
-                        ApplyAltCategoryFilter(_altActiveCategory);
-                }
-            }
-        }
-
-        public void ResetAltFiltersAndSearch()
-        {
-            CloseAltSearch();
-            ApplyAltCategoryFilter(null);
-            UpdateAltSidebarSelection("All");
-        }
-
         private void ToggleAltSearch()
         {
             if (AltSearchContainer == null || AltSearchTextBox == null) return;
 
+            _isAltSearchActive = !_isAltSearchActive;
+            AltSearchContainer.Visibility = _isAltSearchActive ? Visibility.Visible : Visibility.Collapsed;
+            AltSearchPlaceholder.Visibility = _isAltSearchActive ? Visibility.Collapsed : Visibility.Visible;
+
             if (_isAltSearchActive)
             {
-                CloseAltSearch();
+                AltSearchTextBox.Focus();
             }
             else
             {
-                _isAltSearchActive = true;
-                AltSearchContainer.Visibility = Visibility.Visible;
-                AltSearchPlaceholder.Visibility = Visibility.Collapsed;
-                AltSearchTextBox.Focus();
+                AltSearchTextBox.Text = "";
+                // Clear filter
+                if (AltShelfListView?.ItemsSource != null)
+                {
+                    var view = System.Windows.Data.CollectionViewSource.GetDefaultView(AltShelfListView.ItemsSource);
+                    if (view != null) view.Filter = null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Unconditionally clears the Alt UI search state.
+        /// Called during unsummon to ensure no stale filters persist.
+        /// </summary>
+        internal void ClearAltSearch()
+        {
+            if (AltSearchContainer == null || AltSearchTextBox == null) return;
+
+            _altSearchDebounce?.Stop();
+            _isAltSearchActive = false;
+            AltSearchTextBox.Text = "";
+            AltSearchContainer.Visibility = Visibility.Collapsed;
+            if (AltSearchPlaceholder != null)
+                AltSearchPlaceholder.Visibility = Visibility.Visible;
+
+            // Clear the CollectionView filter
+            if (AltShelfListView?.ItemsSource != null)
+            {
+                var view = System.Windows.Data.CollectionViewSource.GetDefaultView(AltShelfListView.ItemsSource);
+                if (view != null) view.Filter = null;
             }
         }
 
@@ -199,7 +198,6 @@ namespace FlyShelf
         private void ApplyAltCategoryFilter(string category)
         {
             _altActiveCategory = category;
-            UpdateAltSidebarSelection(category ?? "All");
             if (AltShelfListView?.ItemsSource == null) return;
             var view = System.Windows.Data.CollectionViewSource.GetDefaultView(AltShelfListView.ItemsSource);
             if (view == null) return;

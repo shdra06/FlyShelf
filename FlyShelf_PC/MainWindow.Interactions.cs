@@ -1009,13 +1009,10 @@ namespace FlyShelf
                 // ═══ RESET FILTERS ON RESUMMON ═══
                 if (_activeCategoryFilter != null)
                     ClearCategoryFilter();
-                ResetAltFiltersAndSearch();
                 if (_isFilterBarActive)
                     ToggleFilterBar(false);
                 if (_isSearchActive)
                     CloseSearch();
-                try { NotesContent?.ClearSearch(); } catch { }
-                try { TodoContent?.ClearSearch(); } catch { }
 
                 double targetX = -1;
                 double targetY = -1;
@@ -1126,20 +1123,17 @@ namespace FlyShelf
                     CloseSearch();
 
                     // Save panel state so it can restore on re-summon
-                    if (_isNotesActive || _isTodoActive || _isResearchActive || _isAiSettingsActive)
+                    if (_isNotesActive || _isTodoActive || _isResearchActive)
                     {
-                        _lastPanelBeforeDismiss = _isNotesActive ? "notes" : _isTodoActive ? "todo" : _isResearchActive ? "research" : null;
+                        _lastPanelBeforeDismiss = _isNotesActive ? "notes" : _isTodoActive ? "todo" : "research";
                         if (_isNotesActive) CloseNotesPanel(immediate: true);
                         if (_isTodoActive) CloseTodoPanel(immediate: true);
                         if (_isResearchActive) CloseResearchPanel(immediate: true);
-                        if (_isAiSettingsActive) CloseAiSettingsPanel(immediate: true);
                     }
 
                     DismissMergeState();      // PC-4: Clear PDF merge bar
-                    if (_activeCategoryFilter != null) ClearCategoryFilter();
-                    ResetAltFiltersAndSearch();
                     if (_isFilterBarActive) ToggleFilterBar(false); // PC-5: Clear filter bar
-                    if (_isClearConfirmActive) ToggleClearConfirmPanel(false);
+                    try { ClearAltSearch(); } catch { } // Clear alt UI search state
 
                     // PC-8: Reset drag hover indicator
                     IsDragHovering = false;

@@ -47,7 +47,7 @@ function VaultScreenInner() {
   const { colors, shadows } = useAppTheme();
   const s = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
   
-  const { manifest, isLoading, addFile, removeFile, openFile, shareFile, getDecryptedFilePath, getEntriesForCategory, searchEntries } = useVault();
+  const { manifest, isLoading, addFile, removeFile, openFile, shareFile, getDecryptedFilePath, getEntriesForCategory, searchEntries, hasPermission, requestPermission, storagePath } = useVault();
   const { pairedDevices, pcLocalIp, pairingKey, deviceName } = useSettings();
   
   const [searchQuery, setSearchQuery] = useState('');
@@ -147,15 +147,20 @@ function VaultScreenInner() {
 
   const handleFileOptions = (entry: VaultEntry) => {
     const name = cleanDisplayName(entry.originalName);
-    Alert.alert(name, undefined, [
+    const originLabel = entry.origin ? ` • From: ${entry.origin}${entry.originDevice ? ' (' + entry.originDevice + ')' : ''}` : '';
+    Alert.alert(name, `${(entry.fileSize / 1024).toFixed(1)} KB${originLabel}`, [
       { text: '📖 Open', onPress: () => openFile(entry) },
       { text: '📤 Share', onPress: () => shareFile(entry) },
       { text: '💻 Send to PC', onPress: () => sendEntryToPc(entry) },
-      { text: '🗑️ Delete', style: 'destructive', onPress: () => {
-        Alert.alert('Delete File', `Remove "${name}"?`, [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: () => removeFile(entry.id) }
-        ]);
+      { text: '🗑️ Permanently Delete', style: 'destructive', onPress: () => {
+        Alert.alert(
+          '⚠️ Permanently Delete?',
+          `"${name}" will be permanently removed from ALL storage locations (internal + FlyShelf folder). This cannot be undone.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete Forever', style: 'destructive', onPress: () => removeFile(entry.id) }
+          ]
+        );
       }},
       { text: 'Cancel', style: 'cancel' }
     ]);
@@ -365,6 +370,28 @@ function VaultScreenInner() {
             />
             {searchQuery ? <TouchableOpacity onPress={() => setSearchQuery('')}><Ionicons name="close-circle" size={18} color={colors.text.tertiary} /></TouchableOpacity> : null}
           </View>
+        </View>
+
+        {/* Storage permission banner */}
+        {!hasPermission && (
+          <TouchableOpacity
+            onPress={requestPermission}
+            style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: '#FBBF2420', borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#FBBF2440' }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="warning-outline" size={20} color="#FBBF24" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#FBBF24', fontWeight: '700', fontSize: 12 }}>Storage Permission Required</Text>
+              <Text style={{ color: colors.text.secondary, fontSize: 11, marginTop: 2 }}>Tap to grant "All Files Access" so vault data survives app reinstalls</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#FBBF24" />
+          </TouchableOpacity>
+        )}
+
+        {/* Storage path indicator */}
+        <View style={{ paddingHorizontal: 16, paddingBottom: 6, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Ionicons name={storagePath === 'Internal' ? 'phone-portrait-outline' : 'folder-outline'} size={12} color={colors.text.tertiary} />
+          <Text style={{ color: colors.text.tertiary, fontSize: 10, fontWeight: '600' }}>{storagePath === 'Internal' ? 'Internal Storage' : storagePath}</Text>
         </View>
 
         {searchQuery ? (

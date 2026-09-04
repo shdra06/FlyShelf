@@ -198,10 +198,6 @@ namespace FlyShelf
             if (!_isResearchActive) return;
 
             _isResearchActive = false;
-            if (_isSearchActive)
-            {
-                CloseSearch();
-            }
 
             // Unsubscribe auto-refresh events
             _transferRefreshTimer?.Stop();

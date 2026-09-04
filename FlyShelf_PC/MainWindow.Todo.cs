@@ -36,7 +36,6 @@ namespace FlyShelf
             if (_isResearchActive) CloseResearchPanel(immediate: true);
             if (_isAiSettingsActive) CloseAiSettingsPanel(immediate: true);
             if (_isSearchActive) CloseSearch(switchingPanel: true);
-            try { TodoContent?.ClearSearch(); } catch { }
             if (_isFilterBarActive) ToggleFilterBar(false);
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
 
@@ -130,20 +129,15 @@ namespace FlyShelf
         {
             if (!_isTodoActive) return;
 
+            // Clear any active todo search before closing
+            try { TodoContent?.ClearSearch(); } catch { }
+
             // Restore todo button icon and tooltip
             TodoToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.TaskListSquareLtr24 };
             TodoToggleBtn.ToolTip = "To-Do List";
             TodoToggleBtn.ClearValue(ForegroundProperty);
 
             _isTodoActive = false;
-
-            // Clear search state inside Todo panel
-            try { TodoContent?.ClearSearch(); } catch { }
-            if (_isSearchActive)
-            {
-                CloseSearch();
-            }
-
             Title = "FlyShelf";
 
             UpdateWindowActivationStyle();

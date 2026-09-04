@@ -365,15 +365,13 @@ namespace FlyShelf
             StopPanelAutoRevertTimer(); // One-shot
 
             // If a panel is still active after 1 minute, auto-revert to clipboard mode
-            if (_isNotesActive || _isTodoActive || _isResearchActive || _isAiSettingsActive)
+            if (_isNotesActive || _isTodoActive || _isResearchActive)
             {
                 Classes.Logger.LogAction("AUTO_REVERT", "Panel idle for 1 minute — auto-reverting to clipboard mode.");
 
-                CloseSearch();
                 if (_isNotesActive) CloseNotesPanel(immediate: true);
                 if (_isTodoActive) CloseTodoPanel(immediate: true);
                 if (_isResearchActive) CloseResearchPanel(immediate: true);
-                if (_isAiSettingsActive) CloseAiSettingsPanel(immediate: true);
 
                 // PC-10 FIX: Don't set _desktopSwitchedSinceLastDismiss = true here.
                 // That flag triggers a 50ms DWM settle delay on re-summon which is wrong
@@ -386,10 +384,8 @@ namespace FlyShelf
 
                 // Consistent cleanup — same as AnimateAndHide
                 DismissMergeState();
-                if (_activeCategoryFilter != null) ClearCategoryFilter();
-                ResetAltFiltersAndSearch();
+                CloseSearch();
                 if (_isFilterBarActive) ToggleFilterBar(false);
-                if (_isClearConfirmActive) ToggleClearConfirmPanel(false);
                 IsDragHovering = false;
                 _viewModel.IsScrolling = false;
                 _viewModel.AllowHover = true;
@@ -718,17 +714,16 @@ namespace FlyShelf
             // ═══ CLOSE SEARCH FIRST ═══
             CloseSearch();
 
-            // ═══ CLOSE NOTES/TODO/RESEARCH/AI SETTINGS ═══
-            if (_isNotesActive || _isTodoActive || _isResearchActive || _isAiSettingsActive)
+            // ═══ CLOSE NOTES/TODO/RESEARCH ═══
+            if (_isNotesActive || _isTodoActive || _isResearchActive)
             {
                 // Always save which panel was active — ToggleMainClipboard decides whether to restore
-                _lastPanelBeforeDismiss = _isNotesActive ? "notes" : _isTodoActive ? "todo" : _isResearchActive ? "research" : null;
+                _lastPanelBeforeDismiss = _isNotesActive ? "notes" : _isTodoActive ? "todo" : "research";
                 Classes.Logger.LogAction("VD_HIDE", $"Panel close: saved={_lastPanelBeforeDismiss}");
 
                 if (_isNotesActive) CloseNotesPanel(immediate: true);
                 if (_isTodoActive) CloseTodoPanel(immediate: true);
                 if (_isResearchActive) CloseResearchPanel(immediate: true);
-                if (_isAiSettingsActive) CloseAiSettingsPanel(immediate: true);
             }
 
             StopPanelAutoRevertTimer();
@@ -740,9 +735,9 @@ namespace FlyShelf
             // Reset category filters on dismiss — prevents stale filter persisting
             // when Hub changes the filter while clipboard is hidden
             if (_activeCategoryFilter != null) ClearCategoryFilter();
-            ResetAltFiltersAndSearch();
+            if (_altActiveCategory != null) ApplyAltCategoryFilter(null);
             if (_isFilterBarActive) ToggleFilterBar(false);
-            if (_isClearConfirmActive) ToggleClearConfirmPanel(false);
+            try { ClearAltSearch(); } catch { } // Clear alt UI search state
 
             // PC-8: Reset drag hover indicator
             IsDragHovering = false;
