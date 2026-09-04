@@ -167,4 +167,17 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
         }
         promise.resolve(arr.toString())
     }
+
+    @ReactMethod
+    fun updateQuickTile(syncing: Boolean, connectionType: String) {
+        FlyShelfTileService.isSyncing = syncing
+        FlyShelfTileService.connectionType = connectionType
+        // Request tile update
+        try {
+            android.service.quicksettings.TileService.requestListeningState(
+                reactApplicationContext,
+                android.content.ComponentName(reactApplicationContext, FlyShelfTileService::class.java)
+            )
+        } catch (e: Exception) {}
+    }
 }

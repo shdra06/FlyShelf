@@ -21,6 +21,7 @@ class MainActivity : ReactActivity() {
     SplashScreenManager.registerOnActivity(this)
     // @generated end expo-splashscreen
     super.onCreate(null)
+    handleClipCopyIntent(intent)
   }
 
   /**
@@ -66,6 +67,20 @@ class MainActivity : ReactActivity() {
   override fun onNewIntent(intent: android.content.Intent) {
       super.onNewIntent(intent)
       setIntent(intent)
+      handleClipCopyIntent(intent)
       ShareIntentModule.onNewIntent(intent)
+  }
+
+  private fun handleClipCopyIntent(intent: android.content.Intent?) {
+      if (intent?.action == "com.shivendra.flyshelf.ACTION_COPY_CLIP") {
+          val clipText = intent.getStringExtra("clip_text") ?: return
+          try {
+              val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+              cm.setPrimaryClip(android.content.ClipData.newPlainText("FlyShelf", clipText))
+              android.widget.Toast.makeText(this, "📋 Copied!", android.widget.Toast.LENGTH_SHORT).show()
+          } catch (e: Exception) {}
+          // Move to back so user stays where they were
+          moveTaskToBack(true)
+      }
   }
 }

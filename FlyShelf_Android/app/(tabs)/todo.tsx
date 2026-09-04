@@ -32,6 +32,7 @@ import { fuzzyIsMatch } from '../../utils/textNormalize';
 import { Ionicons } from '@expo/vector-icons';
 import RAnimated, { useSharedValue } from 'react-native-reanimated';
 import ScreenHeader from '../../components/ScreenHeader';
+import { PomodoroTimer } from '../../components/PomodoroTimer';
 
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS
@@ -154,6 +155,11 @@ function TodoScreenInner() {
   const [reminderPickerItemId, setReminderPickerItemId] = useState<string | null>(null);
   const [reminderPickerValue, setReminderPickerValue] = useState(new Date());
   const [reminderPickerMode, setReminderPickerMode] = useState<'date' | 'time'>('date');
+
+  // ─── Pomodoro Timer state ─────────────────────────────
+  const [pomodoroVisible, setPomodoroVisible] = useState(false);
+  const [pomodoroTaskName, setPomodoroTaskName] = useState('');
+  const [pomodoroItemId, setPomodoroItemId] = useState<string | null>(null);
 
   // ─── Refs ──────────────────────────────────────────────
   const daysRef = useRef<TodoDay[]>([]);
@@ -1176,6 +1182,22 @@ function TodoScreenInner() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={s.actionBtn}
+            onPress={() => {
+              setPomodoroTaskName(item.Text);
+              setPomodoroItemId(item.Id);
+              setPomodoroVisible(true);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            }}
+            activeOpacity={0.7}
+            accessibilityLabel="Start Pomodoro focus session"
+            accessibilityRole="button"
+          >
+            <Text style={{ fontSize: 12 }}>🍅</Text>
+            <Text style={s.actionBtnText}>Focus</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[s.actionBtn, s.actionBtnDanger]}
             onPress={() => handleDeleteItem(item.Id)}
             activeOpacity={0.7}
@@ -1349,6 +1371,7 @@ function TodoScreenInner() {
   };
 
   return (
+    <>
     <LinearGradient
       colors={[colors.bg.base, colors.bg.baseEnd]}
       style={s.container}
@@ -1787,6 +1810,24 @@ function TodoScreenInner() {
         </KeyboardAvoidingView>
       </View>
     </LinearGradient>
+
+      {/* ═══ Pomodoro Focus Timer ═══ */}
+      <PomodoroTimer
+        visible={pomodoroVisible}
+        taskName={pomodoroTaskName}
+        onClose={() => setPomodoroVisible(false)}
+        onWorkComplete={() => {
+          toast.success('🍅 Focus Complete!', `Great work on "${pomodoroTaskName}"`);
+        }}
+        onAllComplete={() => {
+          toast.success('🎉 All Sessions Done!', 'You completed a full Pomodoro set!');
+          // Optionally mark the task done
+          if (pomodoroItemId) {
+            handleToggleDone(pomodoroItemId);
+          }
+        }}
+      />
+    </>
   );
 }
 

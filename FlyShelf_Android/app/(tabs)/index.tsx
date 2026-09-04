@@ -609,6 +609,18 @@ function SyncScreenInner() {
   const [isSendTextModalVisible, setIsSendTextModalVisible] = useState(false);
   const { isTargetModalVisible, setIsTargetModalVisible, isCameraOptionsVisible, setIsCameraOptionsVisible, isQRScannerActive, setIsQRScannerActive, expandedImage, setExpandedImage, isMergeModalVisible, setIsMergeModalVisible, mergeQueue, setMergeQueue, isForceSyncModalVisible, setIsForceSyncModalVisible, forceSyncDevices, setForceSyncDevices, isConnectModalVisible, setIsConnectModalVisible } = useModals();
   const [connectionInfo, setConnectionInfo] = useState<{ url: string; latencyMs: number; type: 'LAN' | 'Cloud' } | null>(null);
+  
+  // Update Quick Settings Tile
+  useEffect(() => {
+    if (Platform.OS === 'android' && AdvanceOverlay && typeof AdvanceOverlay.updateQuickTile === 'function') {
+      if (connectionInfo) {
+        const isCloud = cachedPcUrlRef?.current?.includes('trycloudflare.com') || connectionInfo.type === 'Cloud';
+        AdvanceOverlay.updateQuickTile(true, isCloud ? 'Cloud' : 'LAN');
+      } else {
+        AdvanceOverlay.updateQuickTile(false, 'Offline');
+      }
+    }
+  }, [connectionInfo]);
   const [showNetworkDashboard, setShowNetworkDashboard] = useState(false);
   const [downloadedItems, setDownloadedItems] = useState<Set<string>>(new Set());
   // ─── Download Queue (extracted to useDownloadQueue hook) ─────────────────

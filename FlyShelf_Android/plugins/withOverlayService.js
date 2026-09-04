@@ -868,6 +868,9 @@ class OverlayService : Service() {
             
             // Show notification
             showSyncNotification(title, source)
+            
+            // Update home screen widget
+            try { FlyShelfWidgetProvider.updateAllWidgets(this) } catch (e: Exception) {}
         } catch (e: Exception) {}
     }
 
@@ -881,12 +884,23 @@ class OverlayService : Service() {
                 channel.setShowBadge(true)
                 nm.createNotificationChannel(channel)
             }
+            // "Copy" action — launches the app which gains focus, then copies
+            val copyIntent = Intent(this, MainActivity::class.java).apply {
+                action = "com.shivendra.flyshelf.ACTION_COPY_CLIP"
+                putExtra("clip_text", title.take(2000))
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            val copyPending = android.app.PendingIntent.getActivity(
+                this, System.currentTimeMillis().toInt(), copyIntent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
             val notif = Notification.Builder(this, "flyshelf_sync")
-                .setContentTitle("📋 $source")
+                .setContentTitle("\uD83D\uDCCB $source")
                 .setContentText(title.take(100))
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setAutoCancel(true)
                 .setGroup("flyshelf_clips")
+                .addAction(Notification.Action.Builder(null, "📋 Copy", copyPending).build())
                 .build()
             nm.notify(System.currentTimeMillis().toInt(), notif)
         } catch (e: Exception) {}
@@ -1081,6 +1095,19 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
         }
         promise.resolve(arr.toString())
     }
+
+    @ReactMethod
+    fun updateQuickTile(syncing: Boolean, connectionType: String) {
+        FlyShelfTileService.isSyncing = syncing
+        FlyShelfTileService.connectionType = connectionType
+        // Request tile update
+        try {
+            android.service.quicksettings.TileService.requestListeningState(
+                reactApplicationContext,
+                android.content.ComponentName(reactApplicationContext, FlyShelfTileService::class.java)
+            )
+        } catch (e: Exception) {}
+    }
 }
 `;
 
@@ -1250,6 +1277,246 @@ class ScreenshotObserver(private val context: Context) : ContentObserver(Handler
 
 // ====== PLUGIN LOGIC ======
 
+// ── Home Screen Widget ──
+
+const WIDGET_PROVIDER_KT = `package ${PACKAGE_NAME}
+
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProvider
+import android.content.Context
+import android.content.Intent
+import android.widget.RemoteViews
+import android.app.PendingIntent
+import android.content.ClipboardManager
+import android.content.ClipData
+import android.widget.Toast
+
+class FlyShelfWidgetProvider : AppWidgetProvider() {
+
+    companion object {
+        const val ACTION_COPY_CLIP = "com.shivendra.flyshelf.WIDGET_COPY"
+        const val EXTRA_CLIP_TEXT = "clip_text"
+
+        fun updateAllWidgets(context: Context) {
+            val intent = Intent(context, FlyShelfWidgetProvider::class.java)
+            intent.action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+            val ids = AppWidgetManager.getInstance(context)
+                .getAppWidgetIds(android.content.ComponentName(context, FlyShelfWidgetProvider::class.java))
+            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+            context.sendBroadcast(intent)
+        }
+    }
+
+    override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        for (id in appWidgetIds) {
+            updateWidget(context, appWidgetManager, id)
+        }
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == ACTION_COPY_CLIP) {
+            val text = intent.getStringExtra(EXTRA_CLIP_TEXT) ?: return
+            try {
+                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("FlyShelf", text))
+                Toast.makeText(context, "\\uD83D\\uDCCB Copied!", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {}
+        }
+    }
+
+    private fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int) {
+        val views = RemoteViews(context.packageName, R.layout.widget_flyshelf)
+
+        // Open app on header tap
+        val openIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        if (openIntent != null) {
+            val openPending = PendingIntent.getActivity(context, 0, openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            views.setOnClickPendingIntent(R.id.widget_header, openPending)
+        }
+
+        // Read clips from OverlayService companion
+        try {
+            val arr = org.json.JSONArray(OverlayService.clipboardItems)
+            val clipIds = arrayOf(R.id.clip_1, R.id.clip_2, R.id.clip_3)
+            for (i in clipIds.indices) {
+                if (i < arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val raw = obj.optString("Raw", obj.optString("Title", ""))
+                    val display = if (raw.length > 80) raw.take(77) + "..." else raw
+                    views.setTextViewText(clipIds[i], display)
+                    views.setViewVisibility(clipIds[i], android.view.View.VISIBLE)
+
+                    // Copy on tap
+                    val copyIntent = Intent(context, FlyShelfWidgetProvider::class.java).apply {
+                        action = ACTION_COPY_CLIP
+                        putExtra(EXTRA_CLIP_TEXT, raw)
+                    }
+                    val copyPending = PendingIntent.getBroadcast(context, i + widgetId * 10, copyIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                    views.setOnClickPendingIntent(clipIds[i], copyPending)
+                } else {
+                    views.setViewVisibility(clipIds[i], android.view.View.GONE)
+                }
+            }
+        } catch (e: Exception) {
+            views.setTextViewText(R.id.clip_1, "Open FlyShelf to sync clips")
+        }
+
+        manager.updateAppWidget(widgetId, views)
+    }
+}
+`;
+
+const WIDGET_LAYOUT_XML = `<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:id="@+id/widget_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="8dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="📋 FlyShelf"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tap to copy ›"
+            android:textColor="#888888"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/clip_1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/widget_clip_bg"
+        android:padding="10dp"
+        android:layout_marginBottom="4dp"
+        android:text="No clips yet"
+        android:textColor="#E0E0E0"
+        android:textSize="13sp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:clickable="true" />
+
+    <TextView
+        android:id="@+id/clip_2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/widget_clip_bg"
+        android:padding="10dp"
+        android:layout_marginBottom="4dp"
+        android:textColor="#E0E0E0"
+        android:textSize="13sp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:visibility="gone"
+        android:clickable="true" />
+
+    <TextView
+        android:id="@+id/clip_3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/widget_clip_bg"
+        android:padding="10dp"
+        android:textColor="#E0E0E0"
+        android:textSize="13sp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:visibility="gone"
+        android:clickable="true" />
+</LinearLayout>
+`;
+
+const WIDGET_BG_XML = `<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#CC1A1A2E" />
+    <corners android:radius="16dp" />
+</shape>
+`;
+
+const WIDGET_CLIP_BG_XML = `<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#332A2F3A" />
+    <corners android:radius="10dp" />
+</shape>
+`;
+
+const WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_flyshelf"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:previewImage="@mipmap/ic_launcher"
+    android:description="@string/app_name" />
+`;
+
+// ── Tile Service ──
+const TILE_SERVICE_KT = `package ${PACKAGE_NAME}
+
+import android.service.quicksettings.TileService
+import android.service.quicksettings.Tile
+import android.content.Intent
+import android.os.Build
+import android.graphics.drawable.Icon
+
+class FlyShelfTileService : TileService() {
+    
+    companion object {
+        @Volatile var isSyncing: Boolean = false
+        @Volatile var connectionType: String = "Offline" // "LAN", "Cloud", "Offline"
+    }
+    
+    override fun onStartListening() {
+        super.onStartListening()
+        updateTile()
+    }
+    
+    override fun onClick() {
+        super.onClick()
+        // Launch the app
+        val intent = packageManager.getLaunchIntentForPackage(packageName)
+        if (intent != null) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startActivityAndCollapse(android.app.PendingIntent.getActivity(this, 0, intent, android.app.PendingIntent.FLAG_IMMUTABLE))
+            } else {
+                @Suppress("DEPRECATION")
+                startActivityAndCollapse(intent)
+            }
+        }
+    }
+    
+    private fun updateTile() {
+        val tile = qsTile ?: return
+        tile.label = "FlyShelf"
+        tile.subtitle = connectionType
+        tile.state = if (isSyncing) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+        tile.updateTile()
+    }
+}
+`;
+
 function withOverlayServiceFiles(config) {
   return withDangerousMod(config, ['android', async (config) => {
     const projectRoot = config.modRequest.projectRoot;
@@ -1263,8 +1530,23 @@ function withOverlayServiceFiles(config) {
     fs.writeFileSync(path.join(javaDir, 'AdvanceOverlayModule.kt'), OVERLAY_MODULE_KT);
     fs.writeFileSync(path.join(javaDir, 'AdvanceOverlayPackage.kt'), OVERLAY_PACKAGE_KT);
     fs.writeFileSync(path.join(javaDir, 'ScreenshotObserver.kt'), SCREENSHOT_OBSERVER_KT);
+    fs.writeFileSync(path.join(javaDir, 'FlyShelfTileService.kt'), TILE_SERVICE_KT);
+    fs.writeFileSync(path.join(javaDir, 'FlyShelfWidgetProvider.kt'), WIDGET_PROVIDER_KT);
 
-    console.log('[FlyShelf] ✅ Native overlay Kotlin files injected successfully.');
+    // Write widget XML resources
+    const resDir = path.join(projectRoot, 'android', 'app', 'src', 'main', 'res');
+    const layoutDir = path.join(resDir, 'layout');
+    const drawableDir = path.join(resDir, 'drawable');
+    const xmlDir = path.join(resDir, 'xml');
+    fs.mkdirSync(layoutDir, { recursive: true });
+    fs.mkdirSync(drawableDir, { recursive: true });
+    fs.mkdirSync(xmlDir, { recursive: true });
+    fs.writeFileSync(path.join(layoutDir, 'widget_flyshelf.xml'), WIDGET_LAYOUT_XML);
+    fs.writeFileSync(path.join(drawableDir, 'widget_bg.xml'), WIDGET_BG_XML);
+    fs.writeFileSync(path.join(drawableDir, 'widget_clip_bg.xml'), WIDGET_CLIP_BG_XML);
+    fs.writeFileSync(path.join(xmlDir, 'flyshelf_widget_info.xml'), WIDGET_INFO_XML);
+
+    console.log('[FlyShelf] ✅ Native overlay + widget + tile Kotlin files injected successfully.');
     return config;
   }]);
 }
@@ -1309,7 +1591,55 @@ function withOverlayManifest(config) {
         });
     }
 
-    console.log('[FlyShelf] ✅ OverlayService registered in AndroidManifest.xml');
+    // Register TileService
+    const tileServiceExists = application.service.some(s => s.$?.['android:name'] === '.FlyShelfTileService');
+    if (!tileServiceExists) {
+        application.service.push({
+            $: {
+                'android:name': '.FlyShelfTileService',
+                'android:exported': 'true',
+                'android:label': 'FlyShelf Sync',
+                'android:permission': 'android.permission.BIND_QUICK_SETTINGS_TILE',
+                'android:icon': '@drawable/ic_launcher_foreground'
+            },
+            'intent-filter': [{
+                action: [{ $: { 'android:name': 'android.service.quicksettings.action.QS_TILE' } }]
+            }],
+            'meta-data': [{
+                $: {
+                    'android:name': 'android.service.quicksettings.ACTIVE_TILE',
+                    'android:value': 'true'
+                }
+            }]
+        });
+    }
+
+    // Register Widget
+    if (!application.receiver) application.receiver = [];
+    const widgetExists = application.receiver.some(r => r.$?.['android:name'] === '.FlyShelfWidgetProvider');
+    if (!widgetExists) {
+        application.receiver.push({
+            $: {
+                'android:name': '.FlyShelfWidgetProvider',
+                'android:exported': 'true',
+                'android:label': 'FlyShelf Clipboard'
+            },
+            'intent-filter': [{
+                action: [
+                    { $: { 'android:name': 'android.appwidget.action.APPWIDGET_UPDATE' } },
+                    { $: { 'android:name': 'com.shivendra.flyshelf.WIDGET_COPY' } }
+                ]
+            }],
+            'meta-data': [{
+                $: {
+                    'android:name': 'android.appwidget.provider',
+                    'android:resource': '@xml/flyshelf_widget_info'
+                }
+            }]
+        });
+    }
+
+    console.log('[FlyShelf] ✅ Services + Widget registered in AndroidManifest.xml');
     return config;
   });
 }

@@ -30,6 +30,12 @@
     <service android:name=".OverlayService" android:exported="false" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Floating clipboard overlay for quick paste access"/>
     </service>
+    <service android:name=".FlyShelfTileService" android:exported="true" android:label="FlyShelf Sync" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:icon="@drawable/ic_launcher_foreground">
+      <intent-filter>
+        <action android:name="android.service.quicksettings.action.QS_TILE"/>
+      </intent-filter>
+      <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true"/>
+    </service>
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
@@ -66,5 +72,12 @@
         <data android:mimeType="text/*"/>
       </intent-filter>
     </activity>
+    <receiver android:name=".FlyShelfWidgetProvider" android:exported="true" android:label="FlyShelf Clipboard">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+        <action android:name="com.shivendra.flyshelf.WIDGET_COPY"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/flyshelf_widget_info"/>
+    </receiver>
   </application>
 </manifest>

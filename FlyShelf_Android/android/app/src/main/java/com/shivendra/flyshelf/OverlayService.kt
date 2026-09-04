@@ -859,25 +859,37 @@ class OverlayService : Service() {
             
             // Show notification
             showSyncNotification(title, source)
+            
+            // Update home screen widget
+            try { FlyShelfWidgetProvider.updateAllWidgets(this) } catch (e: Exception) {}
         } catch (e: Exception) {}
     }
 
     private fun showSyncNotification(title: String, source: String) {
         try {
             val nm = getSystemService(NotificationManager::class.java) ?: return
-            // Create sync channel if not exists
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = NotificationChannel("flyshelf_sync", "Clip Sync", NotificationManager.IMPORTANCE_DEFAULT)
                 channel.description = "Notifications for synced clipboard items"
                 channel.setShowBadge(true)
                 nm.createNotificationChannel(channel)
             }
+            val copyIntent = Intent(this, MainActivity::class.java).apply {
+                action = "com.shivendra.flyshelf.ACTION_COPY_CLIP"
+                putExtra("clip_text", title.take(2000))
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            val copyPending = android.app.PendingIntent.getActivity(
+                this, System.currentTimeMillis().toInt(), copyIntent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
             val notif = Notification.Builder(this, "flyshelf_sync")
-                .setContentTitle("📋 $source")
+                .setContentTitle("\uD83D\uDCCB $source")
                 .setContentText(title.take(100))
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setAutoCancel(true)
                 .setGroup("flyshelf_clips")
+                .addAction(Notification.Action.Builder(null, "📋 Copy", copyPending).build())
                 .build()
             nm.notify(System.currentTimeMillis().toInt(), notif)
         } catch (e: Exception) {}
