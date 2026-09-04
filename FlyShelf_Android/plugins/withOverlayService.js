@@ -1600,7 +1600,7 @@ function withOverlayManifest(config) {
                 'android:exported': 'true',
                 'android:label': 'FlyShelf Sync',
                 'android:permission': 'android.permission.BIND_QUICK_SETTINGS_TILE',
-                'android:icon': '@drawable/ic_launcher_foreground'
+                'android:icon': '@mipmap/ic_launcher'
             },
             'intent-filter': [{
                 action: [{ $: { 'android:name': 'android.service.quicksettings.action.QS_TILE' } }]

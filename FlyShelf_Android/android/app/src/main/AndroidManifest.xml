@@ -3,8 +3,8 @@
   <uses-permission android:name="android.permission.CAMERA"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
-  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
   <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
@@ -30,7 +30,7 @@
     <service android:name=".OverlayService" android:exported="false" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Floating clipboard overlay for quick paste access"/>
     </service>
-    <service android:name=".FlyShelfTileService" android:exported="true" android:label="FlyShelf Sync" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:icon="@drawable/ic_launcher_foreground">
+    <service android:name=".FlyShelfTileService" android:exported="true" android:label="FlyShelf Sync" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:icon="@mipmap/ic_launcher">
       <intent-filter>
         <action android:name="android.service.quicksettings.action.QS_TILE"/>
       </intent-filter>

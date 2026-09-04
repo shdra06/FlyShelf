@@ -868,12 +868,14 @@ class OverlayService : Service() {
     private fun showSyncNotification(title: String, source: String) {
         try {
             val nm = getSystemService(NotificationManager::class.java) ?: return
+            // Create sync channel if not exists
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = NotificationChannel("flyshelf_sync", "Clip Sync", NotificationManager.IMPORTANCE_DEFAULT)
                 channel.description = "Notifications for synced clipboard items"
                 channel.setShowBadge(true)
                 nm.createNotificationChannel(channel)
             }
+            // "Copy" action — launches the app which gains focus, then copies
             val copyIntent = Intent(this, MainActivity::class.java).apply {
                 action = "com.shivendra.flyshelf.ACTION_COPY_CLIP"
                 putExtra("clip_text", title.take(2000))
@@ -884,7 +886,7 @@ class OverlayService : Service() {
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
             )
             val notif = Notification.Builder(this, "flyshelf_sync")
-                .setContentTitle("\uD83D\uDCCB $source")
+                .setContentTitle("📋 $source")
                 .setContentText(title.take(100))
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setAutoCancel(true)

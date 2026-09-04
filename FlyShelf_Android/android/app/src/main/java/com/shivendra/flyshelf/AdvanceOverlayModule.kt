@@ -27,7 +27,7 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
                 context.startService(intent)
             }
         } catch (e: Exception) {
-            android.util.Log.e("AdvanceOverlay", "Failed to start overlay service: ${e.message}")
+            android.util.Log.e("AdvanceOverlay", "Failed to start overlay service: " + e.message)
         }
     }
 
