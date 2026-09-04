@@ -59,6 +59,10 @@ namespace FlyShelf
         {
             if (!_isAiSettingsActive) return;
             _isAiSettingsActive = false;
+            if (_isSearchActive)
+            {
+                CloseSearch();
+            }
             Title = "FlyShelf";
 
             // Restore button

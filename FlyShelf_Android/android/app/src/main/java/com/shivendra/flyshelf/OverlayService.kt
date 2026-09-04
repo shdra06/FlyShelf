@@ -879,6 +879,7 @@ class OverlayService : Service() {
                 nm.createNotificationChannel(channel)
             }
             syncNotifCount++
+            // "Copy" action
             val copyIntent = Intent(this, MainActivity::class.java).apply {
                 action = "com.shivendra.flyshelf.ACTION_COPY_CLIP"
                 putExtra("clip_text", title.take(2000))
@@ -888,7 +889,7 @@ class OverlayService : Service() {
                 this, System.currentTimeMillis().toInt(), copyIntent,
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
             )
-            val displayTitle = if (syncNotifCount > 1) "$syncNotifCount clips synced" else "Clip synced"
+            val displayTitle = if (syncNotifCount > 1) syncNotifCount.toString() + " clips synced" else "Clip synced"
             val notif = Notification.Builder(this, "flyshelf_sync")
                 .setContentTitle(displayTitle)
                 .setContentText(title.take(100))
@@ -899,7 +900,7 @@ class OverlayService : Service() {
                 .setNumber(syncNotifCount)
                 .addAction(Notification.Action.Builder(null, "Copy", copyPending).build())
                 .build()
-            nm.notify(42, notif)
+            nm.notify(42, notif) // Single ID: updates in place, no notification spam
         } catch (e: Exception) {}
     }
 

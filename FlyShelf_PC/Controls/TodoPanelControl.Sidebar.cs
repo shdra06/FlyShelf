@@ -23,6 +23,14 @@ namespace FlyShelf.Controls
 
         private void SelectTodoDay(TodoDay day)
         {
+            // Clear search if active
+            ClearSearch();
+            var mainWin = GetMainWindow();
+            if (mainWin != null && mainWin.IsSearchActive)
+            {
+                mainWin.CloseSearch();
+            }
+
             // Update IsSelected on all days for data-driven binding
             foreach (var d in TodoManager.Days)
                 d.IsSelected = d == day;

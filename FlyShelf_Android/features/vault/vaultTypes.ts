@@ -15,6 +15,8 @@ export interface VaultEntry {
   dateAdded: number;
   iv?: string; // encryption IV for legacy encrypted files (optional for direct safe files)
   thumbnailBase64?: string; // small thumbnail for images
+  origin?: string; // where this file came from: 'PC', 'Phone', 'Cloud', device name, etc.
+  originDevice?: string; // source device name
 }
 export interface VaultManifest {
   version: number;

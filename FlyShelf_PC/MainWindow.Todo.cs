@@ -36,6 +36,7 @@ namespace FlyShelf
             if (_isResearchActive) CloseResearchPanel(immediate: true);
             if (_isAiSettingsActive) CloseAiSettingsPanel(immediate: true);
             if (_isSearchActive) CloseSearch(switchingPanel: true);
+            try { TodoContent?.ClearSearch(); } catch { }
             if (_isFilterBarActive) ToggleFilterBar(false);
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
 
@@ -135,6 +136,14 @@ namespace FlyShelf
             TodoToggleBtn.ClearValue(ForegroundProperty);
 
             _isTodoActive = false;
+
+            // Clear search state inside Todo panel
+            try { TodoContent?.ClearSearch(); } catch { }
+            if (_isSearchActive)
+            {
+                CloseSearch();
+            }
+
             Title = "FlyShelf";
 
             UpdateWindowActivationStyle();

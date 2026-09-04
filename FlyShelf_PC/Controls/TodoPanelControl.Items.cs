@@ -32,6 +32,13 @@ namespace FlyShelf.Controls
         {
             if (_selectedTodoDay == null) return;
 
+            // If search was active, clear it first so the new item is visible in today's list
+            if (_todoSearchResults != null)
+            {
+                ClearSearch();
+                GetMainWindow()?.CloseSearch();
+            }
+
             // Cooldown check for safety (e.g. rapid multiple clicks/enters)
             if ((DateTime.Now - _lastTodoItemAddedTime).TotalMilliseconds < 250)
             {
