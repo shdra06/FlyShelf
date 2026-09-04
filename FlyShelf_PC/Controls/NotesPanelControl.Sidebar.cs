@@ -23,25 +23,10 @@ namespace FlyShelf.Controls
         // DAY SELECTION (SIDEBAR)
         // ═══════════════════════════════════════════════════════════
 
-        private void SelectNoteDay(NoteDay day)
+        private void SelectNoteDay(NoteDay day, string? targetSectionId = null)
         {
-            // Auto-determine mode based on existing content
-            bool hasBullets = day.Bullets.Any(b => !string.IsNullOrWhiteSpace(b.Header) || !string.IsNullOrWhiteSpace(b.Content) || b.HasImage);
-            bool hasFreeform = !string.IsNullOrWhiteSpace(day.FreeformContent) || day.FreeformImages.Count > 0;
-
-            if (hasBullets && !hasFreeform)
-            {
-                day.IsFreeformMode = false;
-            }
-            else if (hasFreeform && !hasBullets)
-            {
-                day.IsFreeformMode = true;
-            }
-            else if (!hasBullets && !hasFreeform)
-            {
-                // New/empty notes: always open in freeform mode by default
-                day.IsFreeformMode = true;
-            }
+            // Always use freeform mode (bullet mode removed)
+            day.IsFreeformMode = true;
 
             _selectedNoteDay = day;
             _selectedMonth = -1;
@@ -63,36 +48,21 @@ namespace FlyShelf.Controls
             day.MigrateFreeformIfNeeded(); // Ensure at least one section exists
             NotesFreeformSectionsList.ItemsSource = day.FreeformSections;
 
-            // Show correct mode
-            if (day.IsFreeformMode)
+            // Always show freeform mode
+            NotesBulletList.Visibility = Visibility.Collapsed;
+            NotesFreeformArea.Visibility = Visibility.Visible;
+            // Defer focus to target section or last freeform section text box
+            Dispatcher.InvokeAsync(() =>
             {
-                NotesBulletList.Visibility = Visibility.Collapsed;
-                NotesFreeformArea.Visibility = Visibility.Visible;
-                NotesModeToggleText.Text = "Bullets";
-                // Defer focus to last freeform section text box
-                Dispatcher.InvokeAsync(() =>
+                if (!string.IsNullOrEmpty(targetSectionId))
                 {
-                    FocusFreeformLastSection();
-                }, System.Windows.Threading.DispatcherPriority.Input);
-            }
-            else
-            {
-                NotesBulletList.Visibility = Visibility.Visible;
-                NotesFreeformArea.Visibility = Visibility.Collapsed;
-                NotesModeToggleText.Text = "Freeform";
-
-                // Auto-create a first bullet if the day is empty so user can start typing immediately
-                if (day.Bullets.Count == 0)
-                {
-                    _lastBulletAddedTime = DateTime.MinValue; // Reset cooldown
-                    AddNewBulletAndFocus();
+                    FocusFreeformSectionById(targetSectionId);
                 }
                 else
                 {
-                    // Auto-focus the last bullet's content text box
-                    FocusActiveTextBox();
+                    FocusFreeformLastSection();
                 }
-            }
+            }, System.Windows.Threading.DispatcherPriority.Input);
 
             // Update day label
             NotesCurrentDayLabel.Text = day.DisplayDate;
@@ -164,7 +134,6 @@ namespace FlyShelf.Controls
 
             NotesBulletList.Visibility = Visibility.Visible;
             NotesFreeformArea.Visibility = Visibility.Collapsed;
-            NotesModeToggleText.Text = "Month View";
         }
 
         private void CurrentDayLabel_Click(object sender, MouseButtonEventArgs e)
@@ -329,7 +298,14 @@ namespace FlyShelf.Controls
             if (sender is FrameworkElement fe && fe.DataContext is NoteSearchResult result)
             {
                 GetMainWindow()?.CloseSearch();
-                SelectNoteDay(result.Day);
+
+                string? targetSecId = result.SectionId;
+                if (string.IsNullOrEmpty(targetSecId) && result.Bullet?.Id != null && result.Bullet.Id.StartsWith("section_", StringComparison.Ordinal))
+                {
+                    targetSecId = result.Bullet.Id.Substring("section_".Length);
+                }
+
+                SelectNoteDay(result.Day, targetSecId);
                 if (result.Bullet != null)
                 {
                     result.Bullet.IsCollapsed = false;

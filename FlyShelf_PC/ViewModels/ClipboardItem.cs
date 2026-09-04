@@ -1055,6 +1055,22 @@ namespace FlyShelf.ViewModels
         public bool CanRename => HasFilePath && !IsPassword && ItemType != ClipboardItemType.Text
             && ItemType != ClipboardItemType.Code && ItemType != ClipboardItemType.Url;
 
+        private bool _isRenaming;
+        /// <summary>True when the user is editing this item's name directly on the card in-place (File Explorer style).</summary>
+        [JsonIgnore]
+        public bool IsRenaming
+        {
+            get => _isRenaming;
+            set
+            {
+                if (_isRenaming != value)
+                {
+                    _isRenaming = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsRenaming)));
+                }
+            }
+        }
+
         private bool _isSuggestedContext;
         [JsonIgnore]
         public bool IsSuggestedContext

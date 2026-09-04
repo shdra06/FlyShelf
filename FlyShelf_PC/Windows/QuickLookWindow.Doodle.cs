@@ -34,9 +34,9 @@ namespace FlyShelf.Windows
             }
             else
             {
-                if (_isPdfMode)
+                if (_isPdfMode || _isDocxMode)
                 {
-                    // For PDF, we enter doodle mode by rendering the first page 
+                    // For PDF and Word preview, we enter doodle mode by rendering the first page 
                     // (or the one they are looking at) to the ImageModeGrid
                     await RenderPdfPageToImage(0); // Default to first page for now
                     WebPreview.Visibility = Visibility.Collapsed;
@@ -63,8 +63,8 @@ namespace FlyShelf.Windows
             var da = new System.Windows.Ink.DrawingAttributes
             {
                 Color = Colors.White,
-                Width = 3,
-                Height = 3,
+                Width = 6,
+                Height = 6,
                 FitToCurve = true,
                 StylusTip = System.Windows.Ink.StylusTip.Ellipse,
                 IsHighlighter = false
@@ -181,7 +181,7 @@ namespace FlyShelf.Windows
         {
             await SafeAsyncHandler.RunAsync(async () =>
             {
-            if (_isPdfMode)
+            if (_isPdfMode || _isDocxMode)
             {
                 try
                 {

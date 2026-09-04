@@ -88,6 +88,15 @@ namespace FlyShelf.Classes
                     limit = 15;
                 }
 
+                // FIRST-CONNECT GUARD: If sinceMs is 0 (initial/reconnect), restrict to last 24h
+                // to prevent ancient clipboard history from flooding the mobile device.
+                if (sinceMs == 0)
+                {
+                    sinceMs = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeMilliseconds();
+                    limit = Math.Min(limit, 5); // Cap initial sync to 5 items max
+                    Logger.LogAction("SYNC-GET", $"Initial connect from {reqDevice} — restricting to last 24h, limit={limit}");
+                }
+
                 // PERF: Capture item count + references in a SINGLE Dispatcher.Invoke call.
                 List<(string? rawContent, string? fileName, string? filePath, string? extension,
                       ClipboardItemType itemType, DateTime dateCopied, bool isPassword)>? snapshot = null;
@@ -1088,15 +1097,17 @@ namespace FlyShelf.Classes
 
         private byte[]? _cachedNotesJson = null;
         private long _cachedNotesTimestamp = 0;
+        private string? _cachedNotesQuery = null; // Cache key: query string
         private const int NOTES_CACHE_TTL_MS = 2000;
 
-        private void ServeNotesData(HttpListenerResponse res)
+        private void ServeNotesData(HttpListenerRequest req, HttpListenerResponse res)
         {
             try
             {
+                string queryKey = req.Url?.Query ?? "";
                 long now = Environment.TickCount64;
                 var cached = _cachedNotesJson;
-                if (cached != null && (now - _cachedNotesTimestamp) < NOTES_CACHE_TTL_MS)
+                if (cached != null && (now - _cachedNotesTimestamp) < NOTES_CACHE_TTL_MS && _cachedNotesQuery == queryKey)
                 {
                     res.ContentType = "application/json; charset=utf-8";
                     res.ContentLength64 = cached.Length;
@@ -1111,10 +1122,33 @@ namespace FlyShelf.Classes
                     try { NoteManager.Load(); } catch { } // Best-effort: failure is acceptable
                 }
 
-                string json = NoteManager.GetSyncPayload();
+                // Parse date-range query params: ?days=N or ?date=YYYY-MM-DDT00:00:00
+                var queryParams = req.QueryString;
+                string? daysParam = queryParams["days"];
+                string? dateParam = queryParams["date"];
+
+                string json;
+                if (!string.IsNullOrEmpty(dateParam) && DateTime.TryParse(dateParam, out var targetDate))
+                {
+                    // Single date fetch — return only the matching day
+                    json = NoteManager.GetSyncPayloadFiltered(d => d.Date.Date == targetDate.Date);
+                }
+                else if (int.TryParse(daysParam, out int n) && n > 0)
+                {
+                    // Date range fetch — return last N days
+                    var cutoff = DateTime.Today.AddDays(-n);
+                    json = NoteManager.GetSyncPayloadFiltered(d => d.Date.Date >= cutoff);
+                }
+                else
+                {
+                    // No filter — return all (backwards compatible)
+                    json = NoteManager.GetSyncPayload();
+                }
+
                 byte[] data = Encoding.UTF8.GetBytes(json);
                 _cachedNotesJson = data;
                 _cachedNotesTimestamp = now;
+                _cachedNotesQuery = queryKey;
 
                 res.ContentType = "application/json; charset=utf-8";
                 res.ContentLength64 = data.Length;
@@ -1172,15 +1206,17 @@ namespace FlyShelf.Classes
 
         private byte[]? _cachedTodosJson = null;
         private long _cachedTodosTimestamp = 0;
+        private string? _cachedTodosQuery = null; // Cache key: query string
         private const int TODOS_CACHE_TTL_MS = 2000;
 
-        private void ServeTodosData(HttpListenerResponse res)
+        private void ServeTodosData(HttpListenerRequest req, HttpListenerResponse res)
         {
             try
             {
+                string queryKey = req.Url?.Query ?? "";
                 long now = Environment.TickCount64;
                 var cached = _cachedTodosJson;
-                if (cached != null && (now - _cachedTodosTimestamp) < TODOS_CACHE_TTL_MS)
+                if (cached != null && (now - _cachedTodosTimestamp) < TODOS_CACHE_TTL_MS && _cachedTodosQuery == queryKey)
                 {
                     res.ContentType = "application/json; charset=utf-8";
                     res.ContentLength64 = cached.Length;
@@ -1195,10 +1231,33 @@ namespace FlyShelf.Classes
                     try { TodoManager.Load(); } catch { } // Best-effort: failure is acceptable
                 }
 
-                string json = TodoManager.GetSyncPayload();
+                // Parse date-range query params: ?days=N or ?date=YYYY-MM-DDT00:00:00
+                var queryParams = req.QueryString;
+                string? daysParam = queryParams["days"];
+                string? dateParam = queryParams["date"];
+
+                string json;
+                if (!string.IsNullOrEmpty(dateParam) && DateTime.TryParse(dateParam, out var targetDate))
+                {
+                    // Single date fetch
+                    json = TodoManager.GetSyncPayloadFiltered(d => d.Date.Date == targetDate.Date);
+                }
+                else if (int.TryParse(daysParam, out int n) && n > 0)
+                {
+                    // Date range fetch — return last N days
+                    var cutoff = DateTime.Today.AddDays(-n);
+                    json = TodoManager.GetSyncPayloadFiltered(d => d.Date.Date >= cutoff);
+                }
+                else
+                {
+                    // No filter — return all (backwards compatible)
+                    json = TodoManager.GetSyncPayload();
+                }
+
                 byte[] data = Encoding.UTF8.GetBytes(json);
                 _cachedTodosJson = data;
                 _cachedTodosTimestamp = now;
+                _cachedTodosQuery = queryKey;
 
                 res.ContentType = "application/json; charset=utf-8";
                 res.ContentLength64 = data.Length;

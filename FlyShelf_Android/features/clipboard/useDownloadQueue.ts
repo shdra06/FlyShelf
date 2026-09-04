@@ -65,14 +65,20 @@ export function useDownloadQueue(params: {
         }
 
         // Show progress card
+        const isLargeFile = (item.expectedSize || 0) > 10 * 1024 * 1024; // >10MB
         setClips(prev => [{
           id: progressId, Title: `⬇️ ${item.title}`, Type: '_DownloadProgress',
-          Raw: `Downloading from ${item.sourceDevice} via ${item.source}...`,
+          Raw: isLargeFile
+            ? `Downloading from ${item.sourceDevice}... 0%`
+            : `Downloading from ${item.sourceDevice} via ${item.source}...`,
           Time: new Date().toLocaleTimeString(),
           _isTransient: true,
+          _downloadProgress: 0,
+          _downloadSpeed: '',
+          _downloadSize: item.expectedSize || 0,
         } as any, ...prev]);
 
-        syncLog('DL-QUEUE', `Downloading: ${item.title} via ${item.source}`);
+        syncLog('DL-QUEUE', `Downloading: ${item.title} via ${item.source}${isLargeFile ? ` (${((item.expectedSize || 0) / 1024 / 1024).toFixed(1)}MB)` : ''}`);
         const dlHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
         if (pairingKeyRef.current) dlHeaders['X-Pairing-Key'] = pairingKeyRef.current;
 
@@ -96,8 +102,46 @@ export function useDownloadQueue(params: {
             }
             // Scale timeout: minimum 60s, +1s per 256KB expected, capped at 600s
             const dlTimeoutMs = Math.max(60000, Math.min(600000, ((item as any).expectedSize || 0) / 256));
-            // Use DownloadResumable for cancellable downloads
-            const resumable = FileSystem.createDownloadResumable(currentFileUrl, item.destPath, { headers: dlHeaders });
+
+            // Progress tracking for large files
+            let dlStartTime = Date.now();
+            let lastProgressUpdate = 0;
+            const progressCallback = isLargeFile ? (downloadProgress: { totalBytesWritten: number; totalBytesExpectedToWrite: number }) => {
+              const now = Date.now();
+              // Throttle updates to every 500ms to avoid excessive re-renders
+              if (now - lastProgressUpdate < 500) return;
+              lastProgressUpdate = now;
+
+              const { totalBytesWritten, totalBytesExpectedToWrite } = downloadProgress;
+              const totalBytes = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : (item.expectedSize || 0);
+              const pct = totalBytes > 0 ? Math.round((totalBytesWritten / totalBytes) * 100) : 0;
+              const elapsed = (now - dlStartTime) / 1000; // seconds
+              const speedMBps = elapsed > 0 ? (totalBytesWritten / 1024 / 1024) / elapsed : 0;
+              const speedStr = speedMBps >= 1
+                ? `${speedMBps.toFixed(1)} MB/s`
+                : `${(speedMBps * 1024).toFixed(0)} KB/s`;
+              const downloadedMB = (totalBytesWritten / 1024 / 1024).toFixed(1);
+              const totalMB = totalBytes > 0 ? (totalBytes / 1024 / 1024).toFixed(1) : '?';
+
+              setClips(prev => prev.map(c =>
+                c.id === progressId
+                  ? {
+                      ...c,
+                      Raw: `${downloadedMB} / ${totalMB} MB • ${speedStr} • ${pct}%`,
+                      _downloadProgress: pct / 100,
+                      _downloadSpeed: speedStr,
+                    } as any
+                  : c
+              ));
+            } : undefined;
+
+            // Use DownloadResumable for cancellable downloads with progress
+            const resumable = FileSystem.createDownloadResumable(
+              currentFileUrl,
+              item.destPath,
+              { headers: dlHeaders },
+              progressCallback,
+            );
             const timeoutId = setTimeout(async () => {
               try { await resumable.cancelAsync(); } catch (e) { /* ignore */ }
             }, dlTimeoutMs);

@@ -1,10 +1,10 @@
-import { useAppTheme } from '../../hooks/useAppTheme';
 import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system/legacy';
 
+import { useAppTheme } from '../../hooks/useAppTheme';
 import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { getPdfPageInfo, extractPages } from '../../utils/pdfUtils';
 import { SelectedFile, PageEntry } from './types';
@@ -17,9 +17,10 @@ interface ExtractToolProps {
   onBack: () => void;
   onPickFile: () => Promise<SelectedFile[]>;
   saveRecent: (name: string, path: string, pages: number, tool: 'extract') => void;
+  onSendToPc?: (filePath: string) => void;
 }
 
-export default function ExtractTool({ onBack, onPickFile, saveRecent }: ExtractToolProps) {
+export default function ExtractTool({ onBack, onPickFile, saveRecent, onSendToPc }: ExtractToolProps) {
   const { colors, shadows } = useAppTheme();
   const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
 
@@ -90,7 +91,7 @@ export default function ExtractTool({ onBack, onPickFile, saveRecent }: ExtractT
           <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
           <Text style={s.modalTitle}>Success</Text>
         </View>
-        <ResultView path={resultPath} onDone={onBack} />
+        <ResultView path={resultPath} onDone={onBack} onSendToPc={onSendToPc} />
       </View>
     );
   }

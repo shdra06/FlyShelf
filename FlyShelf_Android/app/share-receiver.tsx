@@ -1,28 +1,27 @@
 /**
- * share-receiver.tsx — Share Intent Receiver (Popup Style)
+ * share-receiver.tsx — All-In-One Quick Share & Store Hub
  * ──────────────────────────────────────────────────────────
- * When FlyShelf is selected from the Android share sheet, this screen
- * appears as a translucent popup with two actions:
- *
- *   1. 🔒 Vault  — opens a naming/category sub-modal, then encrypts & stores
- *   2. 📤 Send   — immediately sends to paired PC devices
- *
- * Flow:
- *   Share sheet → FlyShelf → popup (Vault / Send)
- *                                ↓ (if Vault)
- *                           name + category picker → encrypt → done
+ * High-efficiency, compact popup when sharing from Android.
+ * Everything is visible in one unified view:
+ *   1. Compact preview & inline editable name
+ *   2. ⚡ 1-Tap Send to Paired Devices (All or specific device)
+ *   3. 📦 1-Tap Save to Vault Categories (instant save without sub-modals)
+ *   4. 📋 Quick Clipboard / Note actions
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ActivityIndicator, NativeModules, KeyboardAvoidingView, Platform,
+  ScrollView, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Haptics from 'expo-haptics';
+import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useAppTheme } from '../hooks/useAppTheme';
-import { font, space, radius } from '../styles/theme';
+import { font, radius } from '../styles/theme';
 import AppErrorBoundary from '../components/AppErrorBoundary';
 import { useVault } from '../features/vault/useVault';
 import { VaultCategory } from '../features/vault/vaultTypes';
@@ -36,13 +35,11 @@ interface SharedFile {
   uri: string;
   mimeType: string;
   fileName: string;
+  size?: number;
 }
 
-// ─── Popup steps ───
-type Step = 'choose' | 'vault-details' | 'sending' | 'done';
-
 function ShareReceiverInner() {
-  const { colors, shadows } = useAppTheme();
+  const { colors } = useAppTheme();
   const s = useMemo(() => createStyles(colors), [colors]);
   const { manifest, addFile } = useVault();
   const { pairingKey, pairedDevices, pcLocalIp, deviceName } = useSettings();
@@ -50,308 +47,453 @@ function ShareReceiverInner() {
   const [sharedFiles, setSharedFiles] = useState<SharedFile[]>([]);
   const [sharedText, setSharedText] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [step, setStep] = useState<Step>('choose');
 
-  // Vault sub-step state
-  const [fileName, setFileName] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<VaultCategory | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  // Editable file / note title
+  const [customTitle, setCustomTitle] = useState('');
+  const [activeActionId, setActiveActionId] = useState<string | null>(null);
+  const [successActionId, setSuccessActionId] = useState<string | null>(null);
 
-  // Send state
-  const [isSending, setIsSending] = useState(false);
-
-  // ─── Read shared intent ───
+  // Read intent payload
   useEffect(() => {
     (async () => {
       try {
-        if (!ShareIntent) { setIsLoading(false); return; }
+        if (!ShareIntent || typeof ShareIntent.getSharedFiles !== 'function') {
+          setIsLoading(false);
+          return;
+        }
         const result = await ShareIntent.getSharedFiles();
         if (result) {
           if (result.files?.length > 0) {
             setSharedFiles(result.files);
-            // Pre-fill name from first file
-            setFileName(result.files[0].fileName?.replace(/\.[^.]+$/, '') || 'Shared File');
+            const initialName = result.files[0].fileName?.replace(/\.[^.]+$/, '') || 'Shared File';
+            setCustomTitle(initialName);
           }
-          if (result.text) setSharedText(result.text);
+          if (result.text) {
+            setSharedText(result.text);
+            if (!result.files?.length) {
+              const preview = result.text.trim().slice(0, 32).replace(/\n/g, ' ');
+              setCustomTitle(preview || 'Shared Note');
+            }
+          }
         }
-      } catch {}
+      } catch (e: any) {
+        console.warn('ShareIntent read error:', e);
+      }
       setIsLoading(false);
     })();
-    return () => { ShareIntent?.clearIntent?.(); };
+
+    return () => {
+      try { ShareIntent?.clearIntent?.(); } catch {}
+    };
   }, []);
 
-  // Pre-select first category
-  useEffect(() => {
-    if (manifest?.categories?.length && !selectedCategory) {
-      setSelectedCategory(manifest.categories[0]);
-    }
-  }, [manifest]);
-
-  // ─── Close ───
   const close = () => {
-    ShareIntent?.clearIntent?.();
+    try { ShareIntent?.clearIntent?.(); } catch {}
     router.replace('/(tabs)' as any);
   };
 
-  // ─── Save to Vault ───
-  const handleVaultSave = useCallback(async () => {
-    if (!selectedCategory) { toast.error('Pick a category'); return; }
-    setIsSaving(true);
+  const safeHaptic = (type: 'impact' | 'success' | 'error' = 'impact') => {
     try {
-      for (const file of sharedFiles) {
-        const tempName = `share_${Date.now()}_${file.fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-        const tempUri = `${FileSystem.cacheDirectory}${tempName}`;
-        await FileSystem.copyAsync({ from: file.uri, to: tempUri });
-        const info = await FileSystem.getInfoAsync(tempUri);
+      if (type === 'success') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      else if (type === 'error') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      else Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {}
+  };
 
-        // Build final name: user-chosen name + original extension
-        const ext = file.fileName.includes('.') ? '.' + file.fileName.split('.').pop() : '';
-        const finalName = sharedFiles.length === 1
-          ? `${fileName.trim() || 'Untitled'}${ext}`
-          : file.fileName;
+  // ─── 1-Tap Save to Vault Category ───
+  const handleSaveToVault = useCallback(async (category: VaultCategory) => {
+    if (activeActionId) return;
+    setActiveActionId(`vault-${category.id}`);
+    safeHaptic('impact');
 
-        await addFile(tempUri, finalName, file.mimeType, selectedCategory.id, (info as any).size || 0);
-        try { await FileSystem.deleteAsync(tempUri, { idempotent: true }); } catch {}
-      }
+    try {
+      const titleToUse = customTitle.trim() || 'Shared File';
 
-      // Handle shared text as a text file
-      if (sharedText && !sharedFiles.length) {
+      if (sharedFiles.length > 0) {
+        for (const file of sharedFiles) {
+          const tempName = `share_${Date.now()}_${file.fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+          const tempUri = `${FileSystem.cacheDirectory}${tempName}`;
+          await FileSystem.copyAsync({ from: file.uri, to: tempUri });
+          const info = await FileSystem.getInfoAsync(tempUri);
+
+          const ext = file.fileName.includes('.') ? '.' + file.fileName.split('.').pop() : '';
+          const finalName = sharedFiles.length === 1
+            ? `${titleToUse}${ext}`
+            : file.fileName;
+
+          await addFile(tempUri, finalName, file.mimeType, category.id, (info as any).size || file.size || 0);
+          try { await FileSystem.deleteAsync(tempUri, { idempotent: true }); } catch {}
+        }
+      } else if (sharedText) {
         const textFile = `${FileSystem.cacheDirectory}shared_text_${Date.now()}.txt`;
         await FileSystem.writeAsStringAsync(textFile, sharedText);
-        const finalName = `${fileName.trim() || 'Shared Text'}.txt`;
-        await addFile(textFile, finalName, 'text/plain', selectedCategory.id, sharedText.length);
+        const finalName = `${titleToUse}.txt`;
+        await addFile(textFile, finalName, 'text/plain', category.id, sharedText.length);
         try { await FileSystem.deleteAsync(textFile, { idempotent: true }); } catch {}
       }
 
-      toast.success('Saved to Vault 🔒');
-      setStep('done');
-      setTimeout(close, 800);
+      setSuccessActionId(`vault-${category.id}`);
+      safeHaptic('success');
+      toast.success(`Saved to ${category.name} 🔒`);
+      setTimeout(close, 700);
     } catch (e: any) {
-      toast.error('Save Failed', e?.message || 'Could not encrypt file');
+      safeHaptic('error');
+      toast.error('Save Failed', e?.message || 'Could not save to Vault');
+      setActiveActionId(null);
     }
-    setIsSaving(false);
-  }, [sharedFiles, sharedText, fileName, selectedCategory, addFile]);
+  }, [sharedFiles, sharedText, customTitle, addFile, activeActionId]);
 
-  // ─── Send to PC ───
-  const handleSend = useCallback(async () => {
-    if (!pairingKey) {
-      toast.error('Not Paired', 'Pair with a PC first in Settings');
-      return;
-    }
-    const pcUrl = resolveBestPcUrl(pairedDevices, pcLocalIp);
-    if (!pcUrl) {
-      toast.error('PC Offline', 'No online PC found. Open FlyShelf on your PC.');
-      return;
-    }
+  // ─── 1-Tap Send to Specific PC or All Devices ───
+  const handleSendToDevice = useCallback(async (targetDevice?: any) => {
+    if (activeActionId) return;
+    const actionKey = targetDevice ? `device-${targetDevice.deviceId || targetDevice.deviceName}` : 'device-all';
+    setActiveActionId(actionKey);
+    safeHaptic('impact');
 
-    setStep('sending');
-    setIsSending(true);
     try {
-      let sent = 0;
-      for (const file of sharedFiles) {
-        const tempName = `send_${Date.now()}_${file.fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-        const tempUri = `${FileSystem.cacheDirectory}${tempName}`;
-        await FileSystem.copyAsync({ from: file.uri, to: tempUri });
+      if (!pairingKey) {
+        toast.error('Not Paired', 'Pair with a PC in FlyShelf Settings first.');
+        setActiveActionId(null);
+        return;
+      }
 
-        const res = await FileSystem.uploadAsync(`${pcUrl}/api/archive_upload`, tempUri, {
-          httpMethod: 'POST',
-          uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-          headers: {
-            'X-FlyShelf-Client': 'MobileCompanion',
-            'X-Pairing-Key': pairingKey,
-            'X-Original-Date': Date.now().toString(),
-            'X-File-Name': encodeURIComponent(file.fileName),
-            'X-Batch-Name': encodeURIComponent(`SharedFrom_${deviceName || 'Android'}`),
-            'X-Source-Device': deviceName || 'Android',
-          },
+      const candidateUrls: string[] = [];
+      if (targetDevice) {
+        const url = resolveBestPcUrl([targetDevice], pcLocalIp);
+        if (url) candidateUrls.push(url);
+      } else {
+        // Broadcast to all known paired devices
+        pairedDevices.forEach(d => {
+          const u = resolveBestPcUrl([d], pcLocalIp);
+          if (u && !candidateUrls.includes(u)) candidateUrls.push(u);
         });
-        if (res.status === 200) sent++;
-        try { await FileSystem.deleteAsync(tempUri, { idempotent: true }); } catch {}
+        if (candidateUrls.length === 0 && pcLocalIp) {
+          candidateUrls.push(`http://${pcLocalIp}:8765`);
+        }
       }
 
-      // Text → clipboard sync
-      if (sharedText && !sharedFiles.length) {
-        try {
-          const r = await fetch(`${pcUrl}/api/clipboard`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKey },
-            body: JSON.stringify({ text: sharedText, source: deviceName || 'Android', timestamp: Date.now() }),
+      if (candidateUrls.length === 0) {
+        toast.error('PC Offline', 'No active PC connection found. Make sure FlyShelf is open on PC.');
+        setActiveActionId(null);
+        return;
+      }
+
+      let sentCount = 0;
+      const titleToUse = customTitle.trim() || 'Shared';
+
+      for (const targetUrl of candidateUrls) {
+        // Send files
+        for (const file of sharedFiles) {
+          const tempName = `send_${Date.now()}_${file.fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+          const tempUri = `${FileSystem.cacheDirectory}${tempName}`;
+          await FileSystem.copyAsync({ from: file.uri, to: tempUri });
+
+          const ext = file.fileName.includes('.') ? '.' + file.fileName.split('.').pop() : '';
+          const finalName = sharedFiles.length === 1 ? `${titleToUse}${ext}` : file.fileName;
+
+          const res = await FileSystem.uploadAsync(`${targetUrl}/api/archive_upload`, tempUri, {
+            httpMethod: 'POST',
+            uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+            headers: {
+              'X-FlyShelf-Client': 'MobileCompanion',
+              'X-Pairing-Key': pairingKey,
+              'X-Original-Date': Date.now().toString(),
+              'X-File-Name': encodeURIComponent(finalName),
+              'X-Batch-Name': encodeURIComponent(`SharedFrom_${deviceName || 'Android'}`),
+              'X-Source-Device': deviceName || 'Android',
+            },
           });
-          if (r.ok) sent++;
-        } catch {}
+          if (res.status === 200) sentCount++;
+          try { await FileSystem.deleteAsync(tempUri, { idempotent: true }); } catch {}
+        }
+
+        // Send text
+        if (sharedText && !sharedFiles.length) {
+          try {
+            const r = await fetch(`${targetUrl}/api/clipboard`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-FlyShelf-Client': 'MobileCompanion',
+                'X-Pairing-Key': pairingKey,
+              },
+              body: JSON.stringify({
+                text: sharedText,
+                source: deviceName || 'Android',
+                timestamp: Date.now(),
+              }),
+            });
+            if (r.ok) sentCount++;
+          } catch {}
+        }
       }
 
-      if (sent > 0) toast.success(`Sent to PC ✅`, `${sent} item(s) transferred`);
-      else toast.error('Send Failed', 'Could not reach PC');
-
-      setStep('done');
-      setTimeout(close, 800);
+      if (sentCount > 0) {
+        setSuccessActionId(actionKey);
+        safeHaptic('success');
+        toast.success('Sent Successfully ⚡', `${sentCount} item(s) transferred`);
+        setTimeout(close, 700);
+      } else {
+        safeHaptic('error');
+        toast.error('Send Failed', 'Could not reach target device');
+        setActiveActionId(null);
+      }
     } catch (e: any) {
-      toast.error('Transfer Failed', e?.message || 'Could not send');
-      setStep('choose');
+      safeHaptic('error');
+      toast.error('Transfer Error', e?.message || 'Failed to send file');
+      setActiveActionId(null);
     }
-    setIsSending(false);
-  }, [sharedFiles, sharedText, pairingKey, pairedDevices, pcLocalIp, deviceName]);
+  }, [sharedFiles, sharedText, customTitle, pairingKey, pairedDevices, pcLocalIp, deviceName, activeActionId]);
 
-  // ─── Loading state ───
+  // ─── Quick Copy to Clipboard ───
+  const handleQuickCopy = async () => {
+    safeHaptic('impact');
+    if (sharedText) {
+      await Clipboard.setStringAsync(sharedText);
+      toast.clipboard('Copied to Clipboard 📋', sharedText);
+      setTimeout(close, 500);
+    } else if (sharedFiles[0]?.uri) {
+      try {
+        const b64 = await FileSystem.readAsStringAsync(sharedFiles[0].uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        await Clipboard.setImageAsync(b64);
+        toast.success('Image Copied to Clipboard 📋');
+        setTimeout(close, 500);
+      } catch {
+        toast.info('File Path Available', sharedFiles[0].fileName);
+      }
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={s.overlay}>
-        <View style={s.popup}>
+        <View style={s.card}>
           <ActivityIndicator size="small" color={colors.accent.primary} />
-          <Text style={s.loadingText}>Reading…</Text>
+          <Text style={s.loadingText}>Reading shared content…</Text>
         </View>
       </View>
     );
   }
 
-  const itemCount = sharedFiles.length + (sharedText && !sharedFiles.length ? 1 : 0);
-  const previewLabel = sharedFiles.length > 0
-    ? (sharedFiles.length === 1 ? sharedFiles[0].fileName : `${sharedFiles.length} files`)
-    : (sharedText ? `"${sharedText.slice(0, 50)}${sharedText.length > 50 ? '…' : ''}"` : 'Nothing shared');
+  const isImage = sharedFiles[0]?.mimeType?.startsWith('image/') || false;
+  const isDoc = sharedFiles[0]?.mimeType?.includes('pdf') || sharedFiles[0]?.mimeType?.includes('word') || sharedFiles[0]?.mimeType?.includes('sheet');
+  const previewUri = isImage ? sharedFiles[0]?.uri : null;
+  const totalItems = sharedFiles.length > 0 ? sharedFiles.length : (sharedText ? 1 : 0);
 
-  // ─── STEP: Choose action ───
-  if (step === 'choose') {
-    return (
-      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={close}>
-        <TouchableOpacity style={s.popup} activeOpacity={1} onPress={() => {}}>
-          {/* Preview badge */}
-          <View style={s.previewRow}>
-            <View style={[s.previewIcon, { backgroundColor: colors.accent.primaryDim }]}>
-              <Ionicons name={sharedFiles.length > 0 ? 'document' : 'text'} size={18} color={colors.accent.primary} />
-            </View>
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={s.previewName} numberOfLines={1}>{previewLabel}</Text>
-              <Text style={s.previewMeta}>{itemCount} item{itemCount !== 1 ? 's' : ''} received</Text>
-            </View>
-          </View>
+  // Available categories with fallback defaults
+  const categories: VaultCategory[] = manifest?.categories?.length ? manifest.categories : [
+    { id: 'cat-docs', name: 'Documents', icon: '📄', color: '#4A62EB', fileCount: 0 },
+    { id: 'cat-media', name: 'Media', icon: '🖼', color: '#10B981', fileCount: 0 },
+    { id: 'cat-work', name: 'Work', icon: '💼', color: '#F59E0B', fileCount: 0 },
+    { id: 'cat-finance', name: 'Finance', icon: '💳', color: '#8B5CF6', fileCount: 0 },
+    { id: 'cat-personal', name: 'Personal', icon: '🔐', color: '#EC4899', fileCount: 0 },
+    { id: 'cat-general', name: 'General', icon: '📦', color: '#6B7280', fileCount: 0 },
+  ];
 
-          <View style={s.divider} />
-
-          {/* Vault option */}
-          <TouchableOpacity style={s.optionRow} onPress={() => setStep('vault-details')} activeOpacity={0.7}>
-            <View style={[s.optionIcon, { backgroundColor: `${colors.accent.primary}15` }]}>
-              <Ionicons name="lock-closed" size={20} color={colors.accent.primary} />
-            </View>
-            <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={s.optionTitle}>Save to Vault</Text>
-              <Text style={s.optionSub}>Encrypt & store securely on device</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          {/* Send option */}
-          <TouchableOpacity style={s.optionRow} onPress={handleSend} activeOpacity={0.7}>
-            <View style={[s.optionIcon, { backgroundColor: `${colors.accent.success}15` }]}>
-              <Ionicons name="desktop-outline" size={20} color={colors.accent.success} />
-            </View>
-            <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={s.optionTitle}>Send to PC</Text>
-              <Text style={s.optionSub}>Transfer to paired computer now</Text>
-            </View>
-            <Ionicons name="send" size={14} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          {/* Cancel */}
-          <TouchableOpacity style={s.cancelBtn} onPress={close} activeOpacity={0.7}>
-            <Text style={s.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </TouchableOpacity>
-    );
-  }
-
-  // ─── STEP: Vault details (name + category) ───
-  if (step === 'vault-details') {
-    return (
-      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={close}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%', alignItems: 'center' }}>
-          <TouchableOpacity style={s.popup} activeOpacity={1} onPress={() => {}}>
-            {/* Header */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-              <TouchableOpacity onPress={() => setStep('choose')} style={{ padding: 4, marginRight: 10 }}>
-                <Ionicons name="chevron-back" size={20} color={colors.text.secondary} />
-              </TouchableOpacity>
-              <Text style={s.sectionTitle}>Save to Vault</Text>
-            </View>
-
-            {/* File name input */}
-            <Text style={s.fieldLabel}>NAME</Text>
-            <TextInput
-              value={fileName}
-              onChangeText={setFileName}
-              placeholder="Enter a name…"
-              placeholderTextColor={colors.text.tertiary}
-              style={s.nameInput}
-              autoFocus
-              selectTextOnFocus
-            />
-
-            {/* Category picker */}
-            <Text style={[s.fieldLabel, { marginTop: 16 }]}>CATEGORY</Text>
-            <View style={s.catGrid}>
-              {manifest?.categories.map(cat => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[
-                    s.catChip,
-                    selectedCategory?.id === cat.id && {
-                      borderColor: cat.color,
-                      backgroundColor: `${cat.color}18`,
-                    },
-                  ]}
-                  onPress={() => setSelectedCategory(cat)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={{ fontSize: 15 }}>{cat.icon}</Text>
-                  <Text style={[
-                    s.catChipText,
-                    selectedCategory?.id === cat.id && { color: cat.color, fontFamily: font.bold },
-                  ]}>
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Save button */}
-            <TouchableOpacity
-              style={[s.saveBtn, !selectedCategory && { opacity: 0.4 }]}
-              onPress={handleVaultSave}
-              disabled={isSaving || !selectedCategory}
-              activeOpacity={0.8}
-            >
-              {isSaving ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <>
-                  <Ionicons name="lock-closed" size={16} color="#FFF" />
-                  <Text style={s.saveBtnText}>Encrypt & Save</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </KeyboardAvoidingView>
-      </TouchableOpacity>
-    );
-  }
-
-  // ─── STEP: Sending / Done ───
   return (
     <View style={s.overlay}>
-      <View style={s.popup}>
-        {step === 'sending' ? (
-          <>
-            <ActivityIndicator size="small" color={colors.accent.success} />
-            <Text style={[s.loadingText, { marginTop: 12 }]}>Sending to PC…</Text>
-          </>
-        ) : (
-          <>
-            <Ionicons name="checkmark-circle" size={40} color={colors.accent.success} />
-            <Text style={[s.loadingText, { marginTop: 8, color: colors.accent.success }]}>Done!</Text>
-          </>
-        )}
-      </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={s.keyboardWrap}
+      >
+        <View style={s.card}>
+          {/* Header */}
+          <View style={s.headerRow}>
+            <View style={s.headerBadge}>
+              <Ionicons name="share-social" size={16} color={colors.accent.primary} />
+              <Text style={s.headerTitle}>Share & Store</Text>
+            </View>
+            <TouchableOpacity onPress={close} style={s.closeBtn} hitSlop={10}>
+              <Ionicons name="close" size={20} color={colors.text.secondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={s.scrollContent}
+          >
+            {/* Live Preview & Editable Title */}
+            <View style={s.previewBox}>
+              {previewUri ? (
+                <Image source={{ uri: previewUri }} style={s.thumbImage} resizeMode="cover" />
+              ) : (
+                <View style={[s.thumbIconWrap, { backgroundColor: `${colors.accent.primary}18` }]}>
+                  <Ionicons
+                    name={isDoc ? 'document-text' : (sharedFiles.length > 0 ? 'folder' : 'chatbox-ellipses')}
+                    size={22}
+                    color={colors.accent.primary}
+                  />
+                </View>
+              )}
+
+              <View style={s.previewDetails}>
+                <TextInput
+                  value={customTitle}
+                  onChangeText={setCustomTitle}
+                  placeholder="Item name…"
+                  placeholderTextColor={colors.text.tertiary}
+                  style={s.titleInput}
+                  numberOfLines={1}
+                />
+                <View style={s.metaRow}>
+                  <Text style={s.metaText}>
+                    {sharedFiles.length > 0
+                      ? `${totalItems} file${totalItems > 1 ? 's' : ''} • ${sharedFiles[0]?.mimeType?.split('/')[1] || 'binary'}`
+                      : `${sharedText?.length || 0} characters • Text`}
+                  </Text>
+                  <TouchableOpacity onPress={handleQuickCopy} style={s.miniCopyBtn}>
+                    <Ionicons name="copy-outline" size={12} color={colors.accent.primary} />
+                    <Text style={s.miniCopyText}>Copy</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            {/* SECTION 1: ⚡ SEND TO DEVICES */}
+            <View style={s.sectionWrap}>
+              <View style={s.sectionHeader}>
+                <Ionicons name="paper-plane" size={14} color={colors.accent.primary} />
+                <Text style={s.sectionLabel}>SEND TO DEVICES</Text>
+                {pairedDevices.length > 0 && (
+                  <Text style={s.sectionHint}>{pairedDevices.length} paired</Text>
+                )}
+              </View>
+
+              <View style={s.deviceChipGrid}>
+                {/* Broadcast to All */}
+                <TouchableOpacity
+                  style={[
+                    s.deviceChip,
+                    s.deviceChipAll,
+                    activeActionId === 'device-all' && s.chipActive,
+                    successActionId === 'device-all' && s.chipSuccess,
+                  ]}
+                  onPress={() => handleSendToDevice()}
+                  activeOpacity={0.7}
+                  disabled={Boolean(activeActionId)}
+                >
+                  {activeActionId === 'device-all' ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : successActionId === 'device-all' ? (
+                    <Ionicons name="checkmark-circle" size={16} color="#FFF" />
+                  ) : (
+                    <Ionicons name="radio" size={16} color="#FFF" />
+                  )}
+                  <Text style={s.deviceChipAllText}>
+                    {successActionId === 'device-all' ? 'Sent to All!' : 'All Devices'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Individual Paired Devices */}
+                {pairedDevices.map((dev, idx) => {
+                  const devKey = `device-${dev.deviceId || dev.deviceName || idx}`;
+                  const isActive = activeActionId === devKey;
+                  const isSuccess = successActionId === devKey;
+
+                  return (
+                    <TouchableOpacity
+                      key={devKey}
+                      style={[
+                        s.deviceChip,
+                        isActive && s.chipActive,
+                        isSuccess && s.chipSuccess,
+                      ]}
+                      onPress={() => handleSendToDevice(dev)}
+                      activeOpacity={0.7}
+                      disabled={Boolean(activeActionId)}
+                    >
+                      {isActive ? (
+                        <ActivityIndicator size="small" color={colors.accent.primary} />
+                      ) : isSuccess ? (
+                        <Ionicons name="checkmark-circle" size={16} color={colors.accent.success} />
+                      ) : (
+                        <Ionicons
+                          name={dev.deviceType === 'Mobile' ? 'phone-portrait-outline' : 'desktop-outline'}
+                          size={15}
+                          color={colors.text.primary}
+                        />
+                      )}
+                      <Text style={s.deviceChipText} numberOfLines={1}>
+                        {isSuccess ? 'Sent!' : (dev.deviceName || 'PC')}
+                      </Text>
+                      <View style={[s.onlineDot, { backgroundColor: colors.accent.success }]} />
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {pairedDevices.length === 0 && (
+                  <TouchableOpacity
+                    style={s.pairPromptBtn}
+                    onPress={() => {
+                      close();
+                      router.push('/(tabs)/settings' as any);
+                    }}
+                  >
+                    <Ionicons name="link-outline" size={14} color={colors.text.tertiary} />
+                    <Text style={s.pairPromptText}>No PC paired yet • Tap to connect</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* SECTION 2: 📦 1-TAP SAVE TO VAULT */}
+            <View style={s.sectionWrap}>
+              <View style={s.sectionHeader}>
+                <Ionicons name="cube-outline" size={14} color={colors.accent.info || '#8B5CF6'} />
+                <Text style={s.sectionLabel}>STORE IN VAULT (1-TAP)</Text>
+              </View>
+
+              <View style={s.vaultChipGrid}>
+                {categories.map((cat) => {
+                  const catKey = `vault-${cat.id}`;
+                  const isActive = activeActionId === catKey;
+                  const isSuccess = successActionId === catKey;
+
+                  return (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[
+                        s.vaultChip,
+                        { borderColor: `${cat.color || colors.accent.primary}40` },
+                        isActive && { backgroundColor: `${cat.color || colors.accent.primary}25` },
+                        isSuccess && { backgroundColor: colors.accent.success, borderColor: colors.accent.success },
+                      ]}
+                      onPress={() => handleSaveToVault(cat)}
+                      activeOpacity={0.7}
+                      disabled={Boolean(activeActionId)}
+                    >
+                      {isActive ? (
+                        <ActivityIndicator size="small" color={cat.color || colors.accent.primary} />
+                      ) : isSuccess ? (
+                        <Ionicons name="checkmark-circle" size={15} color="#FFF" />
+                      ) : (
+                        <Text style={s.vaultChipIcon}>{cat.icon || '📁'}</Text>
+                      )}
+                      <Text
+                        style={[
+                          s.vaultChipText,
+                          isSuccess && { color: '#FFF', fontFamily: font.bold },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {isSuccess ? 'Saved!' : cat.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </ScrollView>
+
+          {/* Bottom dismiss button */}
+          <TouchableOpacity style={s.cancelBar} onPress={close} activeOpacity={0.7}>
+            <Text style={s.cancelBarText}>Dismiss</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -368,149 +510,247 @@ export default function ShareReceiverScreen() {
 const createStyles = (c: any) => StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.72)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
   },
-  popup: {
+  keyboardWrap: {
     width: '100%',
-    maxWidth: 380,
+    maxWidth: 420,
+  },
+  card: {
     backgroundColor: c.bg.elevated,
     borderRadius: 24,
-    padding: 20,
+    padding: 16,
     borderWidth: 1,
     borderColor: c.border.medium,
+    maxHeight: '90%',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+  },
+  scrollContent: {
+    paddingBottom: 8,
   },
   loadingText: {
     color: c.text.secondary,
     fontSize: 13,
     fontFamily: font.medium,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 12,
   },
-  previewRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  previewIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: `${c.accent.primary}18`,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  headerTitle: {
+    color: c.accent.primary,
+    fontSize: 13,
+    fontFamily: font.bold,
+    letterSpacing: 0.3,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: c.bg.input,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  previewName: {
-    color: c.text.primary,
-    fontSize: 14,
-    fontFamily: font.semibold,
-  },
-  previewMeta: {
-    color: c.text.tertiary,
-    fontSize: 11,
-    fontFamily: font.medium,
-    marginTop: 1,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: c.border.subtle,
-    marginVertical: 14,
-  },
-  optionRow: {
+  previewBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 4,
-  },
-  optionIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  optionTitle: {
-    color: c.text.primary,
-    fontSize: 15,
-    fontFamily: font.bold,
-  },
-  optionSub: {
-    color: c.text.tertiary,
-    fontSize: 11,
-    fontFamily: font.medium,
-    marginTop: 1,
-  },
-  cancelBtn: {
-    alignItems: 'center',
-    paddingVertical: 14,
-    marginTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: c.border.subtle,
-  },
-  cancelText: {
-    color: c.text.secondary,
-    fontSize: 14,
-    fontFamily: font.semibold,
-  },
-  // ─── Vault details step ───
-  sectionTitle: {
-    color: c.text.primary,
-    fontSize: 17,
-    fontFamily: font.bold,
-  },
-  fieldLabel: {
-    color: c.text.tertiary,
-    fontSize: 10,
-    fontFamily: font.bold,
-    letterSpacing: 1.2,
-    marginBottom: 8,
-  },
-  nameInput: {
     backgroundColor: c.bg.input,
     borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: c.text.primary,
-    fontSize: 15,
-    fontFamily: font.medium,
+    padding: 10,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: c.border.subtle,
   },
-  catGrid: {
+  thumbImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: c.bg.secondary,
+  },
+  thumbIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewDetails: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  titleInput: {
+    color: c.text.primary,
+    fontSize: 14,
+    fontFamily: font.semibold,
+    paddingVertical: 2,
+    paddingHorizontal: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border.subtle,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  metaText: {
+    color: c.text.tertiary,
+    fontSize: 11,
+    fontFamily: font.medium,
+  },
+  miniCopyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: `${c.accent.primary}15`,
+  },
+  miniCopyText: {
+    color: c.accent.primary,
+    fontSize: 10,
+    fontFamily: font.bold,
+  },
+  sectionWrap: {
+    marginBottom: 14,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  sectionLabel: {
+    color: c.text.tertiary,
+    fontSize: 11,
+    fontFamily: font.bold,
+    letterSpacing: 0.8,
+  },
+  sectionHint: {
+    color: c.text.tertiary,
+    fontSize: 10,
+    fontFamily: font.medium,
+    marginLeft: 'auto',
+  },
+  deviceChipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 20,
   },
-  catChip: {
+  deviceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: c.bg.input,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border.subtle,
+  },
+  deviceChipAll: {
+    backgroundColor: c.accent.primary,
+    borderColor: c.accent.primary,
+  },
+  deviceChipAllText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontFamily: font.bold,
+  },
+  deviceChipText: {
+    color: c.text.primary,
+    fontSize: 12,
+    fontFamily: font.semibold,
+    maxWidth: 120,
+  },
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginLeft: 2,
+  },
+  chipActive: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  chipSuccess: {
+    backgroundColor: c.accent.success,
+    borderColor: c.accent.success,
+  },
+  pairPromptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: c.border.medium,
+    width: '100%',
+    justifyContent: 'center',
+  },
+  pairPromptText: {
+    color: c.text.secondary,
+    fontSize: 12,
+    fontFamily: font.medium,
+  },
+  vaultChipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  vaultChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    borderRadius: 50,
+    borderRadius: 12,
     backgroundColor: c.bg.input,
-    borderWidth: 1.5,
-    borderColor: c.border.subtle,
+    borderWidth: 1.2,
   },
-  catChipText: {
-    color: c.text.secondary,
+  vaultChipIcon: {
+    fontSize: 13,
+  },
+  vaultChipText: {
+    color: c.text.primary,
     fontSize: 12,
     fontFamily: font.semibold,
   },
-  saveBtn: {
-    flexDirection: 'row',
+  cancelBar: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: c.accent.primary,
-    borderRadius: radius.lg,
-    paddingVertical: 14,
+    paddingVertical: 10,
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: c.border.subtle,
   },
-  saveBtnText: {
-    color: '#FFF',
-    fontSize: 15,
-    fontFamily: font.bold,
+  cancelBarText: {
+    color: c.text.tertiary,
+    fontSize: 13,
+    fontFamily: font.medium,
   },
 });
+

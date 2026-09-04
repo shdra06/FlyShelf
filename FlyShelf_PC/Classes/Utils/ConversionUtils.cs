@@ -129,41 +129,52 @@ namespace FlyShelf.Classes
                     sourceFrame = converted;
                 }
 
-                // 5. Encode normalized image into high-quality JPEG stream for PDFsharp
-                using var jpegMs = new MemoryStream();
-                var encoder = new JpegBitmapEncoder { QualityLevel = 92 };
-                encoder.Frames.Add(BitmapFrame.Create(sourceFrame));
-                encoder.Save(jpegMs);
-                jpegMs.Position = 0;
-
-                // 6. Create PDF with PDFsharp matching the image's aspect ratio and dimensions
-                using (var doc = new PdfDocument())
+                // 5. Encode normalized image into high-quality JPEG for PDFsharp
+                //    PDFsharp 6.x has a known bug with XImage.FromStream on MemoryStreams
+                //    ("Cannot retrieve stream length"), so we write to a temp file instead.
+                string tempJpeg = Path.Combine(Path.GetTempPath(), $"flyshelf_img2pdf_{Guid.NewGuid():N}.jpg");
+                try
                 {
-                    doc.Info.Title = Path.GetFileNameWithoutExtension(imagePath);
-                    doc.Info.Creator = "FlyShelf PDF Engine";
-
-                    var page = doc.AddPage();
-                    using (var xImg = XImage.FromStream(jpegMs))
+                    using (var tempFs = new FileStream(tempJpeg, FileMode.Create, FileAccess.Write))
                     {
-                        double imgW = xImg.PointWidth;
-                        double imgH = xImg.PointHeight;
-
-                        if (imgW <= 0 || imgH <= 0)
-                        {
-                            imgW = sourceFrame.PixelWidth * 72.0 / 96.0;
-                            imgH = sourceFrame.PixelHeight * 72.0 / 96.0;
-                        }
-
-                        // Set page size exactly to image dimensions
-                        page.Width = XUnit.FromPoint(imgW);
-                        page.Height = XUnit.FromPoint(imgH);
-
-                        using (var gfx = XGraphics.FromPdfPage(page))
-                        {
-                            gfx.DrawImage(xImg, 0, 0, page.Width.Point, page.Height.Point);
-                        }
+                        var encoder = new JpegBitmapEncoder { QualityLevel = 92 };
+                        encoder.Frames.Add(BitmapFrame.Create(sourceFrame));
+                        encoder.Save(tempFs);
                     }
-                    doc.Save(outputPath);
+
+                    // 6. Create PDF with PDFsharp matching the image's aspect ratio and dimensions
+                    using (var doc = new PdfDocument())
+                    {
+                        doc.Info.Title = Path.GetFileNameWithoutExtension(imagePath);
+                        doc.Info.Creator = "FlyShelf PDF Engine";
+
+                        var page = doc.AddPage();
+                        using (var xImg = XImage.FromFile(tempJpeg))
+                        {
+                            double imgW = xImg.PointWidth;
+                            double imgH = xImg.PointHeight;
+
+                            if (imgW <= 0 || imgH <= 0)
+                            {
+                                imgW = sourceFrame.PixelWidth * 72.0 / 96.0;
+                                imgH = sourceFrame.PixelHeight * 72.0 / 96.0;
+                            }
+
+                            // Set page size exactly to image dimensions
+                            page.Width = XUnit.FromPoint(imgW);
+                            page.Height = XUnit.FromPoint(imgH);
+
+                            using (var gfx = XGraphics.FromPdfPage(page))
+                            {
+                                gfx.DrawImage(xImg, 0, 0, page.Width.Point, page.Height.Point);
+                            }
+                        }
+                        doc.Save(outputPath);
+                    }
+                }
+                finally
+                {
+                    try { if (File.Exists(tempJpeg)) File.Delete(tempJpeg); } catch { }
                 }
 
                 return File.Exists(outputPath) ? outputPath : null;

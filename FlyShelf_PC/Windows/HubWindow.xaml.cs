@@ -39,6 +39,7 @@ namespace FlyShelf.Windows
         private static readonly RoutedCommand Tab5Command = new RoutedCommand();
         private static readonly RoutedCommand Tab6Command = new RoutedCommand();
         private static readonly RoutedCommand Tab7Command = new RoutedCommand();
+        private static readonly RoutedCommand Tab8Command = new RoutedCommand();
 
         // ΓòÉΓòÉΓòÉ Hub Thumbnail Rendering ΓòÉΓòÉΓòÉ
         private System.Windows.Threading.DispatcherTimer? _hubScrollHighQualityTimer;
@@ -72,7 +73,8 @@ namespace FlyShelf.Windows
                 (Tab4Command, Key.D4, "Personalization"),
                 (Tab5Command, Key.D5, "Settings"),
                 (Tab6Command, Key.D6, "AI"),
-                (Tab7Command, Key.D7, "About")
+                (Tab7Command, Key.D7, "Logs"),
+                (Tab8Command, Key.D8, "About")
             };
             foreach (var t in tabs)
             {
@@ -103,6 +105,7 @@ namespace FlyShelf.Windows
 
             // Build hotkey keycaps for the settings tab
             BuildHotkeyKeycaps();
+            InitCleanupDefaults();
 
             // Auto-refresh device list when a new device pairs
             _devicePairedHandler = (deviceName) =>

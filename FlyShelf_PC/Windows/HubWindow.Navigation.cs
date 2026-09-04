@@ -99,7 +99,13 @@ namespace FlyShelf.Windows
             AnimateTabSwitch(PersonalizationGrid, tag == "Personalization");
             AnimateTabSwitch(SettingsGrid, tag == "Settings");
             AnimateTabSwitch(AiGrid, tag == "AI");
+            AnimateTabSwitch(LogsGrid, tag == "Logs");
             AnimateTabSwitch(AboutGrid, tag == "About");
+            
+            if (tag == "Logs")
+            {
+                LogsPageControl?.RefreshLogs();
+            }
             
             if (tag == "Personalization")
             {

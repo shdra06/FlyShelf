@@ -59,6 +59,17 @@ export async function cleanupOldPdfFiles(): Promise<number> {
 async function readPdfBytes(uri: string): Promise<Uint8Array> {
   // content:// URIs are handled directly by expo-file-system
   if (uri.startsWith('content://')) {
+    // Pre-read size guard for content:// URIs to prevent OOM
+    try {
+      const info = await FileSystem.getInfoAsync(uri);
+      if (info.exists && 'size' in info && typeof info.size === 'number') {
+        if (info.size > 30 * 1024 * 1024) {
+          throw new Error(`This PDF is too large (${(info.size / 1024 / 1024).toFixed(1)}MB). The maximum supported file size is 30MB. Please use a smaller file or split it first.`);
+        }
+      }
+    } catch (e: any) {
+      if (e?.message?.includes('too large')) throw e;
+    }
     let b64: string | null = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
     const bytes = base64ToUint8Array(b64);
     b64 = null; // Release for GC
@@ -86,6 +97,17 @@ async function readPdfBytes(uri: string): Promise<Uint8Array> {
 async function readImageBytes(uri: string): Promise<Uint8Array> {
   // content:// URIs are handled directly by expo-file-system
   if (uri.startsWith('content://')) {
+    // Pre-read size guard for content:// URIs to prevent OOM
+    try {
+      const info = await FileSystem.getInfoAsync(uri);
+      if (info.exists && 'size' in info && typeof info.size === 'number') {
+        if (info.size > 30 * 1024 * 1024) {
+          throw new Error(`This image is too large (${(info.size / 1024 / 1024).toFixed(1)}MB). The maximum supported file size is 30MB.`);
+        }
+      }
+    } catch (e: any) {
+      if (e?.message?.includes('too large')) throw e;
+    }
     let b64: string | null = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
     const bytes = base64ToUint8Array(b64);
     b64 = null; // Release for GC

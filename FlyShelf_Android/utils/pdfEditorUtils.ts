@@ -92,6 +92,12 @@ async function loadPdfBytes(uri: string): Promise<Uint8Array> {
     if ((info as any).size > MAX_PDF_SIZE_BYTES) {
       throw new Error(`PDF too large (${Math.round((info as any).size / 1_000_000)}MB). Maximum is 80MB.`);
     }
+  } else {
+    // Pre-read size guard for content:// URIs to prevent OOM
+    const info = await FileSystem.getInfoAsync(uri);
+    if (info.exists && 'size' in info && typeof (info as any).size === 'number' && (info as any).size > MAX_PDF_SIZE_BYTES) {
+      throw new Error(`PDF too large (${Math.round((info as any).size / 1_000_000)}MB). Maximum is 80MB.`);
+    }
   }
   let base64: string | null = await FileSystem.readAsStringAsync(uri, {
     encoding: FileSystem.EncodingType.Base64,

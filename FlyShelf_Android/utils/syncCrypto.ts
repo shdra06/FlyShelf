@@ -11,29 +11,137 @@
  */
 
 import { getSecureItem } from './secureStorage';
-import { syncLog } from './debugLog';
+import { syncLog, setCryptoStrategy } from './debugLog';
 import { Platform } from 'react-native';
 import { base64ToUint8Array, uint8ArrayToBase64 } from './networkHelpers';
 
+let _cryptoInstance: { subtle: SubtleCrypto; getRandomValues: (arr: Uint8Array) => Uint8Array } | null = null;
+let _cryptoStrategy = 'none';
+
+export const getCryptoStrategy = (): string => _cryptoStrategy;
+
 const getCrypto = (): { subtle: SubtleCrypto; getRandomValues: (arr: Uint8Array) => Uint8Array } => {
+  // Return cached instance if already resolved
+  if (_cryptoInstance) return _cryptoInstance;
+
   if (Platform.OS === 'web') {
     const w = typeof crypto !== 'undefined' ? crypto : (globalThis as any).crypto;
+    _cryptoInstance = w;
+    _cryptoStrategy = 'web-crypto';
     return w;
   }
+
   try {
-    // react-native-quick-crypto: named exports at module root
-    const { subtle, getRandomValues } = require('react-native-quick-crypto');
-    if (subtle && typeof subtle.importKey === 'function') {
-      return { subtle: subtle as SubtleCrypto, getRandomValues };
-    }
-    // Fallback: try .default
     const qc = require('react-native-quick-crypto');
-    const subtleObj = qc?.default?.subtle || qc?.subtle;
-    const grv = qc?.default?.getRandomValues || qc?.getRandomValues;
-    if (subtleObj) return { subtle: subtleObj as SubtleCrypto, getRandomValues: grv };
-  } catch {}
+    
+    // Strategy 0: Use install() to polyfill global.crypto — most reliable
+    if (typeof qc.install === 'function') {
+      try {
+        qc.install();
+        if ((globalThis as any).crypto?.subtle && typeof (globalThis as any).crypto.subtle.importKey === 'function') {
+          _cryptoInstance = { subtle: (globalThis as any).crypto.subtle, getRandomValues: (globalThis as any).crypto.getRandomValues?.bind((globalThis as any).crypto) || qc.getRandomValues };
+          _cryptoStrategy = 'install-polyfill';
+          syncLog('SYNC_CRYPTO', `✅ Crypto resolved via install() polyfill`);
+          setCryptoStrategy(_cryptoStrategy);
+          return _cryptoInstance;
+        }
+      } catch (installErr: any) {
+        syncLog('SYNC_CRYPTO', `install() failed: ${installErr?.message}`);
+      }
+    }
+    
+    // Strategy 1: Named export (works if bundler resolves ESM re-exports)
+    if (qc.subtle && typeof qc.subtle.importKey === 'function') {
+      _cryptoInstance = { subtle: qc.subtle as SubtleCrypto, getRandomValues: qc.getRandomValues };
+      _cryptoStrategy = 'named-export';
+      syncLog('SYNC_CRYPTO', `✅ Crypto resolved via named export .subtle`);
+      setCryptoStrategy(_cryptoStrategy);
+      return _cryptoInstance;
+    }
+    
+    // Strategy 2: Default export → .subtle
+    if (qc.default?.subtle && typeof qc.default.subtle.importKey === 'function') {
+      _cryptoInstance = { subtle: qc.default.subtle as SubtleCrypto, getRandomValues: qc.default.getRandomValues || qc.getRandomValues };
+      _cryptoStrategy = 'default-export';
+      syncLog('SYNC_CRYPTO', `✅ Crypto resolved via default.subtle`);
+      setCryptoStrategy(_cryptoStrategy);
+      return _cryptoInstance;
+    }
+    
+    // Strategy 3: Subtle class is spread into module — instantiate it
+    if (qc.Subtle && typeof qc.Subtle === 'function') {
+      try {
+        const subtleInstance = new qc.Subtle();
+        if (typeof subtleInstance.importKey === 'function') {
+          _cryptoInstance = { subtle: subtleInstance as SubtleCrypto, getRandomValues: qc.getRandomValues };
+          _cryptoStrategy = 'subtle-instantiate';
+          syncLog('SYNC_CRYPTO', `✅ Crypto resolved via new Subtle()`);
+          setCryptoStrategy(_cryptoStrategy);
+          return _cryptoInstance;
+        }
+      } catch {}
+    }
+    
+    // Strategy 4: Individual functions spread at top level
+    if (typeof qc.importKey === 'function' && typeof qc.deriveKey === 'function') {
+      const manualSubtle = {
+        importKey: qc.importKey.bind(qc),
+        deriveKey: qc.deriveKey.bind(qc),
+        encrypt: qc.encrypt?.bind(qc),
+        decrypt: qc.decrypt?.bind(qc),
+        deriveBits: qc.deriveBits?.bind(qc),
+        sign: qc.sign?.bind(qc),
+        verify: qc.verify?.bind(qc),
+        digest: qc.digest?.bind(qc),
+        generateKey: qc.generateKey?.bind(qc),
+        exportKey: qc.exportKey?.bind(qc),
+        wrapKey: qc.wrapKey?.bind(qc),
+        unwrapKey: qc.unwrapKey?.bind(qc),
+      } as unknown as SubtleCrypto;
+      _cryptoInstance = { subtle: manualSubtle, getRandomValues: qc.getRandomValues };
+      _cryptoStrategy = 'manual-top-level';
+      syncLog('SYNC_CRYPTO', `✅ Crypto resolved via top-level functions`);
+      setCryptoStrategy(_cryptoStrategy);
+      return _cryptoInstance;
+    }
+
+    // Strategy 5: Directly require the subtle submodule
+    try {
+      const subtleMod = require('react-native-quick-crypto/lib/commonjs/subtle');
+      if (subtleMod.subtle && typeof subtleMod.subtle.importKey === 'function') {
+        _cryptoInstance = { subtle: subtleMod.subtle as SubtleCrypto, getRandomValues: qc.getRandomValues };
+        _cryptoStrategy = 'direct-submodule';
+        syncLog('SYNC_CRYPTO', `✅ Crypto resolved via direct submodule require`);
+        setCryptoStrategy(_cryptoStrategy);
+        return _cryptoInstance;
+      }
+      if (subtleMod.Subtle && typeof subtleMod.Subtle === 'function') {
+        const inst = new subtleMod.Subtle();
+        if (typeof inst.importKey === 'function') {
+          _cryptoInstance = { subtle: inst as SubtleCrypto, getRandomValues: qc.getRandomValues };
+          _cryptoStrategy = 'direct-submodule-instantiate';
+          syncLog('SYNC_CRYPTO', `✅ Crypto resolved via direct submodule Subtle()`);
+          setCryptoStrategy(_cryptoStrategy);
+          return _cryptoInstance;
+        }
+      }
+    } catch {}
+
+    // Diagnostic: Log what keys are available so we can debug
+    const relevantKeys = Object.keys(qc).filter(k => !k.startsWith('_'));
+    syncLog('SYNC_CRYPTO', `❌ All ${relevantKeys.length} strategies failed. Module keys: ${relevantKeys.slice(0, 20).join(',')}`);
+    if (qc.subtle) syncLog('SYNC_CRYPTO', `subtle type=${typeof qc.subtle}, keys=${Object.keys(qc.subtle || {}).slice(0, 10).join(',')}`);
+  } catch (e: any) {
+    syncLog('SYNC_CRYPTO', `❌ quick-crypto load failed: ${e?.message}`);
+  }
   // Last resort: Web Crypto (works in Metro/Hermes dev)
-  if (typeof crypto !== 'undefined' && crypto.subtle) return crypto as any;
+  if (typeof crypto !== 'undefined' && (crypto as any).subtle) {
+    _cryptoInstance = crypto as any;
+    _cryptoStrategy = 'global-web-crypto';
+    setCryptoStrategy(_cryptoStrategy);
+    return _cryptoInstance!;
+  }
+  syncLog('SYNC_CRYPTO', `❌ No crypto implementation available`);
   throw new Error('No crypto implementation available');
 };
 

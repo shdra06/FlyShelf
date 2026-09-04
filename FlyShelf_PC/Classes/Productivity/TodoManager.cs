@@ -897,6 +897,61 @@ namespace FlyShelf.Classes
             return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = false });
         }
 
+        /// <summary>
+        /// Returns a sync payload filtered by the given predicate.
+        /// Uses the same anonymous-object projection as GetSyncPayload for consistent JSON format.
+        /// </summary>
+        public static string GetSyncPayloadFiltered(Func<TodoDay, bool> predicate)
+        {
+            List<TodoDay> snapshot;
+            lock (_lock)
+            {
+                try { snapshot = _days.Where(predicate).ToList(); } catch { return "[]"; }
+            }
+
+            var payload = snapshot.Select(day => {
+                long lastMod = 0;
+                foreach (var item in day.Items)
+                {
+                    long iTs = new DateTimeOffset(item.LastEdited).ToUnixTimeMilliseconds();
+                    if (iTs > lastMod) lastMod = iTs;
+                }
+                if (day.LastModified.HasValue && day.LastModified.Value > lastMod) lastMod = day.LastModified.Value;
+                if (lastMod == 0) lastMod = new DateTimeOffset(day.Date).ToUnixTimeMilliseconds();
+
+                return new {
+                    Date = day.Date.ToString("o", CultureInfo.InvariantCulture),
+                    Items = day.Items.Select(i => new {
+                        i.Id, i.Text, i.IsDone,
+                        CreatedAt = i.CreatedAt.ToString("o", CultureInfo.InvariantCulture),
+                        LastEdited = i.LastEdited.ToString("o", CultureInfo.InvariantCulture),
+                        Priority = (int)i.Priority,
+                        DueDate = i.DueDate?.ToString("o", CultureInfo.InvariantCulture),
+                        i.Tags, i.Color, i.Description,
+                        SubTasks = i.SubTasks.Select(s => new {
+                            s.Id, s.Text, s.IsDone,
+                            CreatedAt = s.CreatedAt.ToString("o", CultureInfo.InvariantCulture),
+                            LastEdited = s.LastEdited.ToString("o", CultureInfo.InvariantCulture),
+                            Priority = (int)s.Priority,
+                            DueDate = s.DueDate?.ToString("o", CultureInfo.InvariantCulture),
+                            s.Tags, s.Color, s.Description,
+                            SubTasks = new List<object>(),
+                            Recurrence = (int)s.Recurrence,
+                            s.SortOrder, s.TimerMinutes, s.ReminderAt
+                        }).ToList(),
+                        Recurrence = (int)i.Recurrence,
+                        i.SortOrder, i.TimerMinutes,
+                        i.CreatedByDevice, i.LastEditedByDevice,
+                        ReminderAt = i.ReminderAt?.ToString("o", CultureInfo.InvariantCulture)
+                    }).ToList(),
+                    DeletedItems = day.DeletedItems ?? new List<TodoTombstone>(),
+                    LastModified = lastMod
+                };
+            }).ToList();
+
+            return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = false });
+        }
+
         public static void MergeFromMobile(string json, string? deviceName = null)
         {
             if (string.IsNullOrWhiteSpace(json)) return;

@@ -60,6 +60,10 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
   // A-5 fix: guard against duplicate concurrent uploads
   const isSendingRef = useRef(false);
 
+  // H-11 fix: use ref for activeDevices to prevent stale closure during uploads
+  const activeDevicesRef = useRef(activeDevices);
+  useEffect(() => { activeDevicesRef.current = activeDevices; }, [activeDevices]);
+
   // A-7 fix: ref to avoid stale pendingUploadPayload closure
   const pendingPayloadRef = useRef(pendingUploadPayload);
   useEffect(() => { pendingPayloadRef.current = pendingUploadPayload; }, [pendingUploadPayload]);
@@ -255,7 +259,7 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
         await FileSystem.makeDirectoryAsync(`${FileSystem.cacheDirectory}FlyShelf_Upload/`, { intermediates: true }).catch(() => {});
         await FileSystem.copyAsync({ from: physicalPath, to: hydratedPath });
 
-        const pc = activeDevices.find((d: any) => d.DeviceType === 'PC');
+        const pc = activeDevicesRef.current.find((d: any) => d.DeviceType === 'PC');
         const target = (targetDeviceOrGlobal === 'Global' || !targetDeviceOrGlobal) ? pc : targetDeviceOrGlobal;
         let resolved = await resolveUrl(target);
         if (!resolved) {

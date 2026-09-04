@@ -10,7 +10,7 @@ import { useAppTheme } from '../hooks/useAppTheme';
 import createHomeStyles from '../styles/homeStyles';
 
 interface MaterialSearchBarProps {
-  connectionStatus: 'online' | 'cloud' | 'offline';
+  connectionStatus: 'online' | 'cloud' | 'offline' | 'reconnecting';
   onSearch: (query: string) => void;
   onSettingsPress: () => void;
   onConnectionPress: () => void;
@@ -34,6 +34,7 @@ export default function MaterialSearchBar({
     switch (connectionStatus) {
       case 'online': return colors.accent.success;
       case 'cloud': return colors.accent.warning;
+      case 'reconnecting': return colors.accent.warning;
       case 'offline': return colors.accent.error;
     }
   };

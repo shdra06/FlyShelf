@@ -81,6 +81,7 @@ export function useTodoTimers({ daysRef, selectedDayKey }: UseTodoTimersParams):
 
   // ─── Restore persisted timers on mount & clean up on unmount ─────────────
   useEffect(() => {
+    let mounted = true;
     const restoreTimers = async () => {
       try {
         const raw = await AsyncStorage.getItem(TIMERS_STORAGE_KEY);
@@ -104,7 +105,7 @@ export function useTodoTimers({ daysRef, selectedDayKey }: UseTodoTimersParams):
               Notifications.scheduleNotificationAsync({
                 content: { title: '⏱ Timer Complete', body: getItemText(taskId) },
                 trigger: null,
-              });
+              }).catch(() => {});
             } catch {}
           } else {
             // Resume countdown with remaining time
@@ -120,12 +121,13 @@ export function useTodoTimers({ daysRef, selectedDayKey }: UseTodoTimersParams):
                     Notifications.scheduleNotificationAsync({
                       content: { title: '⏱ Timer Complete', body: getItemText(taskId) },
                       trigger: null,
-                    });
+                    }).catch(() => {});
                   } catch {}
                   // Remove from AsyncStorage on completion
                   AsyncStorage.getItem(TIMERS_STORAGE_KEY).then(r => {
                     if (r) {
-                      const timers = JSON.parse(r);
+                      let timers: Record<string, any> = {};
+                      try { timers = JSON.parse(r); } catch { timers = {}; }
                       delete timers[taskId];
                       AsyncStorage.setItem(TIMERS_STORAGE_KEY, JSON.stringify(timers)).catch(() => {});
                     }
@@ -136,6 +138,7 @@ export function useTodoTimers({ daysRef, selectedDayKey }: UseTodoTimersParams):
                 return { ...prev, [taskId]: { ...timer, remaining: timer.remaining - 1 } };
               });
             }, 1000);
+            if (!mounted) return;
             setActiveTimers(prev => ({ ...prev, [taskId]: { remaining: remainingSec, intervalId } }));
           }
         }
@@ -150,6 +153,7 @@ export function useTodoTimers({ daysRef, selectedDayKey }: UseTodoTimersParams):
     restoreTimers();
 
     return () => {
+      mounted = false;
       // T-3 fix: clear interval handles from the ref (AsyncStorage data is kept
       // for restoration). The previous code cleared them inside a setActiveTimers
       // updater, but React does not invoke state updaters on unmounted
@@ -186,12 +190,13 @@ export function useTodoTimers({ daysRef, selectedDayKey }: UseTodoTimersParams):
             Notifications.scheduleNotificationAsync({
               content: { title: '⏱ Timer Complete', body: getItemText(itemId) },
               trigger: null,
-            });
+            }).catch(() => {});
           } catch {}
           // Remove from AsyncStorage on completion
           AsyncStorage.getItem(TIMERS_STORAGE_KEY).then(r => {
             if (r) {
-              const timers = JSON.parse(r);
+              let timers: Record<string, any> = {};
+              try { timers = JSON.parse(r); } catch { timers = {}; }
               delete timers[itemId];
               AsyncStorage.setItem(TIMERS_STORAGE_KEY, JSON.stringify(timers)).catch(() => {});
             }
@@ -217,7 +222,8 @@ export function useTodoTimers({ daysRef, selectedDayKey }: UseTodoTimersParams):
     // Remove from AsyncStorage
     AsyncStorage.getItem(TIMERS_STORAGE_KEY).then(raw => {
       if (raw) {
-        const timers = JSON.parse(raw);
+        let timers: Record<string, any> = {};
+        try { timers = JSON.parse(raw); } catch { timers = {}; }
         delete timers[itemId];
         AsyncStorage.setItem(TIMERS_STORAGE_KEY, JSON.stringify(timers)).catch(() => {});
       }

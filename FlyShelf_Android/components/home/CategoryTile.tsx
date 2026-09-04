@@ -64,7 +64,7 @@ export default function CategoryTile({
     >
       <View style={styles.tileTopRow}>
         <View style={[styles.tileIconWrap, { backgroundColor: `${iconColor}18` }]}>
-          <Ionicons name={icon as any} size={22} color={iconColor} />
+          <Ionicons name={icon as any} size={20} color={iconColor} />
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} style={{ opacity: 0.5 }} />
       </View>

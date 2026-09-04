@@ -536,7 +536,7 @@ namespace FlyShelf.Classes
                     });
 
                     // Step 2: Write to Firebase for OFFLINE peers to discover later
-                    _ = CloudDiscoveryManager.PushTunnelUrl(url, true, ServerUrl);
+                    _ = CloudDiscoveryManager.PushTunnelUrl(url, true, ServerUrl, forceWrite: true);
                 }
             };
             
@@ -545,16 +545,6 @@ namespace FlyShelf.Classes
                 if (e.PropertyName == nameof(AdvanceSettings.EnableGlobalCloudflare))
                 {
                     bool cfOn = SettingsManager.Current.EnableGlobalCloudflare;
-                    
-                    if (cfOn && !LicenseManager.CanUseCloudflare())
-                    {
-                        SettingsManager.Current.EnableGlobalCloudflare = false;
-                        SettingsManager.Save();
-                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            UpgradePrompt.ShowCloudflareLimit());
-                        return;
-                    }
-
                     bool lanOn = SettingsManager.Current.EnableLocalLAN;
                     
                     bool serverStartedJustNow = false;
@@ -589,6 +579,7 @@ namespace FlyShelf.Classes
                     else if (!cfOn)
                     {
                         _cfDaemon.Stop();
+                        CloudDiscoveryManager.CachedGlobalUrl = "";
                         // Notify peers we're going offline from cloud
                         _ = Task.Run(async () =>
                         {

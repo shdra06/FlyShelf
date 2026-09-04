@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AppErrorBoundary from '../../components/AppErrorBoundary';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, useWindowDimensions, Modal, Alert, ScrollView, Image, Platform, RefreshControl, ToastAndroid, Linking, TextInput, Pressable } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
-const FlashListCast = FlashList as React.ComponentType<any>;
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, useWindowDimensions, Modal, Alert, ScrollView, Image, Platform, RefreshControl, ToastAndroid, Linking, TextInput, Pressable, FlatList } from 'react-native';
 import { toast } from '../../context/ToastContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
@@ -22,8 +20,9 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fuzzyIsMatch } from '../../utils/textNormalize';
 import * as Haptics from 'expo-haptics';
-import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import Animated, { useSharedValue } from 'react-native-reanimated';
 import ScreenHeader from '../../components/ScreenHeader';
+import { mergePdfs } from '../../utils/pdfUtils';
 import {
   useArchiveSync,
   MediaAsset, FirebaseDevice, DeviceGroup, SourceFilter,
@@ -100,6 +99,33 @@ function FilesScreenInner() {
     autoScan(startDate, endDate);
   }, [hasPermission]);
 
+  // ─── Hooks that MUST be called before any conditional early returns ───
+  // (Rules of Hooks: hooks cannot be called after conditional returns)
+  const scrollY = useSharedValue(0);
+  const scrollHandler = (e: any) => {
+    const offsetY = e?.nativeEvent?.contentOffset?.y;
+    if (typeof offsetY === 'number') {
+      scrollY.value = offsetY;
+    }
+  };
+
+  const flatListData = useMemo(() => {
+    let items = [...getFilteredAssets(), ...browserFiles];
+    if (fileSearchText) items = items.filter(a => fuzzyIsMatch(fileSearchText, a.filename || ''));
+    return items;
+  }, [mediaAssets, activeTab, sourceFilter, browserFiles, fileSearchText]);
+
+  // ─── Connection status badge for header ───
+  const archiveConnectionBadge = useMemo(() => {
+    const pcUrl = resolveBestPcUrl(pairedDevices, pcLocalIp);
+    if (pcUrl) {
+      return pcUrl.includes('trycloudflare.com') ? '🟡 Cloud' : '🟢 LAN';
+    }
+    const hasOnlinePc = allFirebaseDevices.some(d => d.DeviceType === 'PC' && d.IsOnline);
+    return hasOnlinePc ? '🟡 Cloud' : '⚪ Offline';
+  }, [pairedDevices, pcLocalIp, allFirebaseDevices]);
+
+
   const saveGroupHandler = async (group: DeviceGroup) => {
     await saveGroupToFirebase(group);
   };
@@ -109,7 +135,12 @@ function FilesScreenInner() {
     const deviceNames = Array.from(selectedGroupDevices);
     if (deviceNames.length === 0) { Alert.alert('Error', 'Select at least one device'); return; }
     const groupId = editingGroup ? editingGroup.id : `grp_${Date.now()}`;
-    await saveGroupToFirebase({ id: groupId, name: newGroupName.trim(), deviceNames });
+    try {
+      await saveGroupToFirebase({ id: groupId, name: newGroupName.trim(), deviceNames });
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to save group');
+      return;
+    }
     setShowGroupModal(false);
     setEditingGroup(null);
     setNewGroupName('');
@@ -121,7 +152,11 @@ function FilesScreenInner() {
     Alert.alert('Delete Group', 'Are you sure?', [
       { text: 'Cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
-        await deleteGroupFromFirebase(groupId);
+        try {
+          await deleteGroupFromFirebase(groupId);
+        } catch (err: any) {
+          Alert.alert('Error', err?.message || 'Failed to delete group');
+        }
       }}
     ]);
   };
@@ -200,18 +235,22 @@ function FilesScreenInner() {
     }
 
     setIsPaused(false);
-    await executeTransfer(
-      targetNode,
-      targetQueue,
-      buildBatchName(),
-      useRelay,
-      resolvedUrl,
-      () => {
-        // onComplete callback — reset selection
-        setSelectedIds(new Set());
-        setBrowserFiles([]);
-      },
-    );
+    try {
+      await executeTransfer(
+        targetNode,
+        targetQueue,
+        buildBatchName(),
+        useRelay,
+        resolvedUrl,
+        () => {
+          // onComplete callback — reset selection
+          setSelectedIds(new Set());
+          setBrowserFiles([]);
+        },
+      );
+    } catch (err: any) {
+      Alert.alert('Transfer Failed', err?.message || 'An error occurred during transfer');
+    }
   };
 
   const toggleSelection = (id: string) => {
@@ -231,7 +270,7 @@ function FilesScreenInner() {
     });
   };
 
-  const getFilteredAssets = () => {
+  function getFilteredAssets() {
     let items = mediaAssets;
     // Source filter
     if (sourceFilter !== 'All') {
@@ -248,7 +287,7 @@ function FilesScreenInner() {
       });
     }
     return items;
-  };
+  }
 
   // ─── DEVICE CARD COMPONENT ───
   const DeviceCard = ({ device, type }: { device: any, type: 'local' | 'global' }) => {
@@ -567,25 +606,6 @@ function FilesScreenInner() {
 
 
 
-  const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler({ onScroll: (e) => { scrollY.value = e.contentOffset.y; } });
-
-  const flatListData = useMemo(() => {
-    let items = [...getFilteredAssets(), ...browserFiles];
-    if (fileSearchText) items = items.filter(a => fuzzyIsMatch(fileSearchText, a.filename || ''));
-    return items;
-  }, [mediaAssets, activeTab, sourceFilter, browserFiles, fileSearchText]);
-
-  // ─── Connection status badge for header ───
-  const archiveConnectionBadge = useMemo(() => {
-    const pcUrl = resolveBestPcUrl(pairedDevices, pcLocalIp);
-    if (pcUrl) {
-      return pcUrl.includes('trycloudflare.com') ? '🟡 Cloud' : '🟢 LAN';
-    }
-    const hasOnlinePc = allFirebaseDevices.some(d => d.DeviceType === 'PC' && d.IsOnline);
-    return hasOnlinePc ? '🟡 Cloud' : '⚪ Offline';
-  }, [pairedDevices, pcLocalIp, allFirebaseDevices]);
-
   // ─── MAIN SCREEN: Files Browser ───
   return (
     <LinearGradient colors={[colors.bg.base, colors.bg.baseEnd]} style={{ flex: 1 }}>
@@ -657,12 +677,18 @@ function FilesScreenInner() {
           <Text style={{ color: '#8A8F98', marginTop: 12, fontSize: 13 }}>Scanning device files...</Text>
         </View>
       ) : (
-        <FlashListCast
+        <FlatList
           data={flatListData}
           onScroll={scrollHandler}
+          scrollEventThrottle={16}
           keyExtractor={(item: any, idx: number) => item.id || `f_${idx}`}
-          estimatedItemSize={80}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: selectedIds.size > 0 ? 180 : 100 }}
+          initialNumToRender={15}
+          maxToRenderPerBatch={15}
+          windowSize={9}
+          removeClippedSubviews={Platform.OS === 'android'}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           refreshControl={
             <RefreshControl
               refreshing={isScanning}
@@ -724,22 +750,69 @@ function FilesScreenInner() {
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity style={{ flex: 1, backgroundColor: colors.accent.info, paddingVertical: 14, borderRadius: 14, alignItems: 'center' }} onPress={() => {
               const sel = flatListData.filter(a => selectedIds.has(a.id));
-              if (sel.length === 1) shareFile(sel[0]);
-              else Alert.alert('Share', 'Select a single file to share via Android.');
+              if (sel.length === 1) {
+                shareFile(sel[0]);
+              } else if (sel.length > 1) {
+                Alert.alert(
+                  'Multi-File Share',
+                  `Android native share sheet sends one file at a time. Share "${sel[0]?.filename || 'first file'}" or Send all ${sel.length} files to PC?`,
+                  [
+                    { text: 'Share First File', onPress: () => shareFile(sel[0]) },
+                    { text: `Send All ${sel.length} to Device`, onPress: () => {
+                      const onlineDevs = pairedDevices.filter(d => d.isOnline);
+                      if (onlineDevs.length > 0) {
+                        const target = { ...onlineDevs[0], resolvedUrl: onlineDevs[0].localUrl || onlineDevs[0].globalUrl, DeviceName: onlineDevs[0].deviceName };
+                        setSelectedTarget(target);
+                        handleTransfer(target);
+                      } else {
+                        Alert.alert('No Devices', 'Connect a PC or device in Settings to send all files.');
+                      }
+                    }},
+                    { text: 'Cancel', style: 'cancel' }
+                  ]
+                );
+              }
             }} accessibilityLabel="Share selected file" accessibilityRole="button">
               <Text style={{ color: colors.text.primary, fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📤 Share</Text>
             </TouchableOpacity>
             {(() => {
-              const selPdfs = flatListData.filter(a => selectedIds.has(a.id) && (a.mediaType === 'pdf' || a.mediaType === 'doc'));
+              const selPdfs = flatListData.filter(a => selectedIds.has(a.id) && a.mediaType === 'pdf');
               return selPdfs.length >= 2 ? (
-                <TouchableOpacity style={{ flex: 1, backgroundColor: colors.accent.warning, paddingVertical: 14, borderRadius: 14, alignItems: 'center' }} onPress={() => {
-                  const pc = pairedDevices.find(d => d.deviceType === 'PC' && d.isOnline);
-                  if (!pc) { Alert.alert('No PC', 'Connect to a PC to merge files.'); return; }
-                  const target = { ...pc, resolvedUrl: pc.localUrl || pc.globalUrl, DeviceName: pc.deviceName };
-                  setSelectedTarget(target);
-                  handleTransfer(target);
-                }} accessibilityLabel="Merge selected files on PC" accessibilityRole="button">
-                  <Text style={{ color: colors.bg.base, fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📑 Merge on PC</Text>
+                <TouchableOpacity style={{ flex: 1, backgroundColor: colors.accent.warning, paddingVertical: 14, borderRadius: 14, alignItems: 'center' }} onPress={async () => {
+                  const pc = pairedDevices.find(d => (d.deviceType || '').toLowerCase() === 'pc' && d.isOnline);
+                  const runLocalMerge = async () => {
+                    try {
+                      toast.info('Merging PDFs...', `Combining ${selPdfs.length} PDFs locally on phone`);
+                      const outDir = `${FileSystem.documentDirectory}FlyShelf/PDFTools/`;
+                      await FileSystem.makeDirectoryAsync(outDir, { intermediates: true }).catch(() => {});
+                      const outPath = `${outDir}merged_${Date.now()}.pdf`;
+                      await mergePdfs(selPdfs.map(f => f.uri), outPath);
+                      toast.success('Merge Complete', 'Combined PDF created successfully');
+                      await Sharing.shareAsync(outPath, { mimeType: 'application/pdf' });
+                    } catch (err: any) {
+                      Alert.alert('Merge Failed', err?.message || 'Could not merge PDFs locally.');
+                    }
+                  };
+
+                  if (pc) {
+                    Alert.alert('Merge Options', `Merge ${selPdfs.length} documents:`, [
+                      {
+                        text: 'Merge on PC',
+                        onPress: () => {
+                          const target = { ...pc, resolvedUrl: pc.localUrl || pc.globalUrl, DeviceName: pc.deviceName };
+                          setSelectedTarget(target);
+                          handleTransfer(target);
+                        }
+                      },
+                      { text: 'Merge on Phone', onPress: runLocalMerge },
+                      { text: 'Cancel', style: 'cancel' }
+                    ]);
+                  } else {
+                    // PC offline -> run local merge directly!
+                    await runLocalMerge();
+                  }
+                }} accessibilityLabel="Merge selected files" accessibilityRole="button">
+                  <Text style={{ color: colors.bg.base, fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📑 Merge</Text>
                 </TouchableOpacity>
               ) : null;
             })()}
@@ -752,14 +825,16 @@ function FilesScreenInner() {
                 handleTransfer(target); 
                 return; 
               }
-              Alert.alert('Send to:', '', onlineDevs.map(d => ({ 
-                text: `${d.deviceName} (${d.connectionType === 'LAN' ? 'LAN' : 'Cloud'})`, 
+              // Android supports max 3 Alert buttons — use first 2 + Cancel when needed
+              const devButtons = onlineDevs.slice(0, Platform.OS === 'android' ? 2 : onlineDevs.length).map(d => ({ 
+                text: `${d.deviceName || 'Unknown'} (${d.connectionType === 'LAN' ? 'LAN' : 'Cloud'})`, 
                 onPress: () => { 
                   const target = { ...d, resolvedUrl: d.localUrl || d.globalUrl, DeviceName: d.deviceName };
                   setSelectedTarget(target); 
                   handleTransfer(target); 
                 } 
-              })).concat([{ text: 'Cancel' } as any]));
+              }));
+              Alert.alert('Send to:', '', [...devButtons, { text: 'Cancel' } as any]);
             }} accessibilityLabel={`Send ${selectedIds.size} files to device`} accessibilityRole="button">
               <Text style={{ color: colors.text.primary, fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📡 Send</Text>
             </TouchableOpacity>
@@ -775,8 +850,8 @@ function FilesScreenInner() {
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }} activeOpacity={1} onPress={() => setUrlPopup(null)}>
           <View style={{ backgroundColor: colors.bg.card, borderRadius: 20, padding: 24, width: '85%', borderWidth: 1, borderColor: colors.border.subtle }}>
             <Text style={{ color: colors.text.primary, fontSize: 18, fontWeight: '800', marginBottom: 16 }}>{urlPopup?.device?.DeviceName}</Text>
-            {urlPopup?.localUrl ? (<View style={{ marginBottom: 16 }}><Text style={{ color: colors.accent.success, fontSize: 11, fontWeight: '700', marginBottom: 6 }}>⚡ LOCAL</Text><Text style={{ color: colors.text.secondary, fontSize: 12 }} selectable>{urlPopup.localUrl}</Text><TouchableOpacity onPress={() => { Linking.openURL(urlPopup!.localUrl); setUrlPopup(null); }} style={{ marginTop: 8, backgroundColor: colors.accent.success, padding: 10, borderRadius: 10, alignItems: 'center' }}><Text style={{ color: colors.text.primary, fontWeight: '700' }}>Open</Text></TouchableOpacity></View>) : null}
-            {urlPopup?.globalUrl ? (<View><Text style={{ color: colors.accent.info, fontSize: 11, fontWeight: '700', marginBottom: 6 }}>☁️ GLOBAL</Text><Text style={{ color: colors.text.secondary, fontSize: 12 }} selectable>{urlPopup.globalUrl}</Text><TouchableOpacity onPress={() => { Linking.openURL(urlPopup!.globalUrl); setUrlPopup(null); }} style={{ marginTop: 8, backgroundColor: colors.accent.info, padding: 10, borderRadius: 10, alignItems: 'center' }}><Text style={{ color: colors.text.primary, fontWeight: '700' }}>Open</Text></TouchableOpacity></View>) : null}
+            {urlPopup?.localUrl ? (<View style={{ marginBottom: 16 }}><Text style={{ color: colors.accent.success, fontSize: 11, fontWeight: '700', marginBottom: 6 }}>⚡ LOCAL</Text><Text style={{ color: colors.text.secondary, fontSize: 12 }} selectable>{urlPopup.localUrl}</Text><TouchableOpacity onPress={() => { Linking.openURL(urlPopup!.localUrl).catch(() => {}); setUrlPopup(null); }} style={{ marginTop: 8, backgroundColor: colors.accent.success, padding: 10, borderRadius: 10, alignItems: 'center' }}><Text style={{ color: colors.text.primary, fontWeight: '700' }}>Open</Text></TouchableOpacity></View>) : null}
+            {urlPopup?.globalUrl ? (<View><Text style={{ color: colors.accent.info, fontSize: 11, fontWeight: '700', marginBottom: 6 }}>☁️ GLOBAL</Text><Text style={{ color: colors.text.secondary, fontSize: 12 }} selectable>{urlPopup.globalUrl}</Text><TouchableOpacity onPress={() => { Linking.openURL(urlPopup!.globalUrl).catch(() => {}); setUrlPopup(null); }} style={{ marginTop: 8, backgroundColor: colors.accent.info, padding: 10, borderRadius: 10, alignItems: 'center' }}><Text style={{ color: colors.text.primary, fontWeight: '700' }}>Open</Text></TouchableOpacity></View>) : null}
           </View>
         </TouchableOpacity>
       </Modal>

@@ -109,9 +109,11 @@ namespace FlyShelf
                     return;
                 }
 
-                // Other buttons (delete, pin, etc.)
+                // Other buttons (delete, pin, etc.) or rename text box
                 if (sourceElement is System.Windows.Controls.Primitives.ButtonBase ||
-                    FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(sourceElement) != null)
+                    FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(sourceElement) != null ||
+                    sourceElement is System.Windows.Controls.TextBox ||
+                    FindVisualParent<System.Windows.Controls.TextBox>(sourceElement) != null)
                 {
                     return; 
                 }
@@ -128,6 +130,7 @@ namespace FlyShelf
                     var clipboardObj = itemContainer2.DataContext as ClipboardItem;
                     if (clipboardObj != null)
                     {
+                        if (clipboardObj.IsRenaming) return;
                         // ═══ Contextual Tip: Double-click to open ═══
                         // Show before paste+hide so the tip appears anchored to the card
                         if (!string.IsNullOrEmpty(clipboardObj.FilePath))
@@ -380,9 +383,11 @@ namespace FlyShelf
                     return;
                 }
 
-                // Don't interfere with other button clicks
+                // Don't interfere with other button clicks or rename text box
                 if (sourceElement is System.Windows.Controls.Primitives.ButtonBase ||
-                    FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(sourceElement) != null)
+                    FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(sourceElement) != null ||
+                    sourceElement is System.Windows.Controls.TextBox ||
+                    FindVisualParent<System.Windows.Controls.TextBox>(sourceElement) != null)
                 {
                     _shouldPreventDrag = true;
                     return;
@@ -862,7 +867,9 @@ namespace FlyShelf
             if (e.OriginalSource is DependencyObject sourceElement)
             {
                 if (sourceElement is System.Windows.Controls.Primitives.ButtonBase ||
-                    FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(sourceElement) != null)
+                    FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(sourceElement) != null ||
+                    sourceElement is System.Windows.Controls.TextBox ||
+                    FindVisualParent<System.Windows.Controls.TextBox>(sourceElement) != null)
                 {
                     e.Handled = true;
                     return;
@@ -872,6 +879,11 @@ namespace FlyShelf
             var listView = sender as System.Windows.Controls.ListView;
             if (listView?.SelectedItem is ClipboardItem item)
             {
+                if (item.IsRenaming)
+                {
+                    e.Handled = true;
+                    return;
+                }
                 item.Execute();
             }
         }

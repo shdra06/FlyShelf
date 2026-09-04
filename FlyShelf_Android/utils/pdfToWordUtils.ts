@@ -71,7 +71,7 @@ export async function convertPdfToDocx(
   }
 
   // 2. Standalone Client-Side OpenXML DOCX Generation
-  const fileUri = pdfUri.startsWith('file://') ? pdfUri : `file://${pdfUri}`;
+  const fileUri = pdfUri.startsWith('file://') || pdfUri.startsWith('content://') ? pdfUri : `file://${pdfUri}`;
   // Pre-flight size check to prevent OOM on large files
   const fileInfo = await FileSystem.getInfoAsync(fileUri);
   if (fileInfo.exists && 'size' in fileInfo && typeof fileInfo.size === 'number' && fileInfo.size > 20 * 1024 * 1024) {

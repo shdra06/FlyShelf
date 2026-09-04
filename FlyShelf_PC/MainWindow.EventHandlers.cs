@@ -1331,6 +1331,18 @@ namespace FlyShelf
 
         private void ShelfListView_KeyDown(object sender, KeyEventArgs e)
         {
+            if (ShelfListView.SelectedItem is ClipboardItem renamingItem && renamingItem.IsRenaming)
+            {
+                return;
+            }
+
+            if (e.Key == Key.F2 && ShelfListView.SelectedItem is ClipboardItem f2Item && f2Item.CanRename)
+            {
+                StartInlineRename(f2Item);
+                e.Handled = true;
+                return;
+            }
+
             if (e.Key == Key.Delete && ShelfListView.SelectedItems.Count > 0)
             {
                 if (_isNotesActive || _isTodoActive) return; // Prevent deleting clipboard items while in overlay panels
@@ -1416,6 +1428,21 @@ namespace FlyShelf
 
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
+            // ── ESC key: dismiss clipboard from anywhere (notes, todo, any panel) ──
+            if (e.Key == Key.Escape)
+            {
+                if (_isSearchActive)
+                {
+                    CloseSearch();
+                }
+                else
+                {
+                    AnimateAndHide();
+                }
+                e.Handled = true;
+                return;
+            }
+
             if (e.Key == Key.Up || e.Key == Key.Down)
             {
                 // Let the TextBox (SearchTextBox) handle its own cursor navigation/Enter/Down keys.

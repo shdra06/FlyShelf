@@ -196,17 +196,68 @@ namespace FlyShelf.Controls
             var results = NoteManager.Search(queryClean);
 
             // Build display items
-            var displayItems = results.Select(r => new NoteSearchResult
+            var displayItems = results.Select(r =>
             {
-                DateLabel = r.Day.DisplayDate,
-                Content = !string.IsNullOrEmpty(r.Bullet.Header) ? $"[{r.Bullet.Header}] {r.Bullet.Content}" : r.Bullet.Content,
-                Day = r.Day,
-                Bullet = r.Bullet
+                string pageLabel = "";
+                string? sectionId = null;
+
+                if (r.Bullet?.Id != null && r.Bullet.Id.StartsWith("section_", StringComparison.Ordinal))
+                {
+                    sectionId = r.Bullet.Id.Substring("section_".Length);
+                }
+
+                // Check if Header has a "Page X" prefix
+                string header = r.Bullet?.Header ?? "";
+                string contentText;
+
+                if (header.StartsWith("Page ", StringComparison.OrdinalIgnoreCase))
+                {
+                    int colonIdx = header.IndexOf(':');
+                    if (colonIdx > 0)
+                    {
+                        pageLabel = header.Substring(0, colonIdx).Trim();
+                        string titlePart = header.Substring(colonIdx + 1).Trim();
+                        contentText = string.IsNullOrEmpty(titlePart)
+                            ? (r.Bullet?.Content ?? "")
+                            : $"[{titlePart}] {r.Bullet?.Content}";
+                    }
+                    else
+                    {
+                        pageLabel = header.Trim();
+                        contentText = r.Bullet?.Content ?? "";
+                    }
+                }
+                else if (!string.IsNullOrEmpty(header))
+                {
+                    contentText = $"[{header}] {r.Bullet?.Content}";
+                }
+                else
+                {
+                    contentText = r.Bullet?.Content ?? "";
+                }
+
+                return new NoteSearchResult
+                {
+                    DateLabel = r.Day.DisplayDate,
+                    PageLabel = pageLabel,
+                    Content = contentText,
+                    Day = r.Day,
+                    Bullet = r.Bullet,
+                    SectionId = sectionId
+                };
             }).ToList();
 
             NotesSearchResultsList.ItemsSource = displayItems;
             NotesSearchResults.Visibility = Visibility.Visible;
             NotesContentArea.Visibility = Visibility.Collapsed;
+        }
+
+        /// <summary>
+        /// Select a specific day and optionally focus a specific section.
+        /// </summary>
+        public void SelectDay(NoteDay day, string? targetSectionId = null)
+        {
+            SelectNoteDay(day, targetSectionId);
         }
 
         /// <summary>

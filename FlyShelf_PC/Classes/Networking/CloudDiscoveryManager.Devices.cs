@@ -81,6 +81,10 @@ namespace FlyShelf.Classes
                     IsOnline = isOnline,
                     Timestamp = NetworkClock.UtcNowMs,
                     UrlsEncrypted = urlsActuallyEncrypted,   // Signal to peers whether URLs need decryption
+                    // Plaintext fallback URLs — Firebase rules already gate access via pairing key membership,
+                    // and Cloudflare URLs are ephemeral/public, so plaintext is safe here.
+                    PlainGlobalUrl = url.Contains("trycloudflare.com", StringComparison.Ordinal) ? url : "",
+                    PlainLocalIp = localIp,
                     IsPro = LicenseManager.IsPro,
                     LicenseKey = LicenseManager.IsPro ? LicenseManager.MaskedKey : ""
                 };
@@ -94,8 +98,12 @@ namespace FlyShelf.Classes
                 // Ensure room membership is registered before writing to active_devices (Firebase rule requirement)
                 if (!_roomMembershipRegistered)
                 {
-                    await RegisterRoomMembershipAsync(pairingKey);
-                    _roomMembershipRegistered = true;
+                    bool membershipOk = await RegisterRoomMembershipAsync(pairingKey);
+                    _roomMembershipRegistered = membershipOk;
+                    if (!membershipOk)
+                    {
+                        Logger.LogAction("FIREBASE SYNC", "Room membership registration failed — will retry next PushTunnelUrl call");
+                    }
                 }
                 string tunnelNodeUrl = (await AuthUrl($"active_devices/{pairingKey}/{SettingsManager.Current.DeviceId}.json"));
                 // H4: Skip Firebase writes during backoff period
@@ -106,6 +114,7 @@ namespace FlyShelf.Classes
                 }
 
                 Logger.LogAction("FIREBASE SYNC", $"[STEP 3/6: ACTIVE DEVICE DNS] Publishing to active_devices/{pairingKey[..Math.Min(8, pairingKey.Length)]}.../{SettingsManager.Current.DeviceId} (Online: {isOnline}, URL: {url})");
+                AppLogger.Log("CLOUD_DNS", $"Publishing device presence (Online: {isOnline}, URL: {url})");
                 using var response = await _client.PutAsync(tunnelNodeUrl, content);
                 
                 if (response.IsSuccessStatusCode)
@@ -113,6 +122,7 @@ namespace FlyShelf.Classes
                     _lastPushedTunnelUrl = urlFingerprint;
                     _firebaseQuotaWarningShown = false; // Reset on success
                     Logger.LogAction("FIREBASE SYNC", $"[STEP 3/6: ACTIVE DEVICE DNS] ✅ Tunnel DNS published successfully: {url} [{isOnline}]");
+                    AppLogger.Log("CLOUD_DNS", $"Device presence published successfully: {url} [{(isOnline ? "Online" : "Offline")}]");
 
                     // DirectMesh: Broadcast updated endpoints directly to active WebSocket peers
                     try

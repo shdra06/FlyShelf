@@ -38,13 +38,13 @@ namespace FlyShelf.Classes
         public int WidgetTaskbarAlignment { get => _widgetTaskbarAlignment; set => SetProperty(ref _widgetTaskbarAlignment, value); } // -1=Auto, 0=Far Left, 1=After Start, 2=Before Tray, 3=Custom Slider
         
         // Tier 1 Settings
-        private bool _enableLocalNetworkSync = false;
+        private bool _enableLocalNetworkSync = true;
         public bool EnableLocalNetworkSync { get => _enableLocalNetworkSync; set => SetProperty(ref _enableLocalNetworkSync, value); }
         
         private bool _enableLocalLAN = true;
         public bool EnableLocalLAN { get => _enableLocalLAN; set => SetProperty(ref _enableLocalLAN, value); }
         
-        private bool _enableGlobalCloudflare = false;
+        private bool _enableGlobalCloudflare = true;
         public bool EnableGlobalCloudflare { get => _enableGlobalCloudflare; set => SetProperty(ref _enableGlobalCloudflare, value); }
         
         private bool _enableCloudDiscovery = true;

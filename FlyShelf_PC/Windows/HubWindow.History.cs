@@ -1,8 +1,8 @@
-// ═══════════════════════════════════════════════════════════════════════
-// HubWindow.History.cs — Clipboard history management: duplicate sweeper,
+﻿// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// HubWindow.History.cs â€” Clipboard history management: duplicate sweeper,
 // advanced date-range + category-filtered cleanup, and retention settings.
 // Part of the HubWindow partial class split.
-// ═══════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 using System;
 using System.Collections.Generic;
@@ -29,7 +29,7 @@ namespace FlyShelf.Windows
             {
                 if (int.TryParse(selected.Tag.ToString(), out int days))
                 {
-                    // v7.2 FREE: Pro gate temporarily bypassed — uncomment to re-enable
+                    // v7.2 FREE: Pro gate temporarily bypassed â€” uncomment to re-enable
                     // if (days == 0 && !LicenseManager.IsPro)
                     // {
                     //     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
@@ -136,35 +136,88 @@ namespace FlyShelf.Windows
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // Advanced History Cleanup — Date Range + Category Filter
-        // ═══════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // Advanced History Cleanup â€” Chip Grid + Inline Date Inputs
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+        // Track chip selected state: Tag â†’ bool
+        private Dictionary<string, bool> _chipStates = new();
+        private bool _isDateSegmentUpdating = false;
 
         /// <summary>
-        /// All category checkboxes in the filter dropdown, used for iteration.
+        /// Initialize cleanup defaults: fill dates to current month, all chips enabled.
+        /// Call from HubWindow_Loaded or Dashboard_Loaded.
         /// </summary>
-        private CheckBox[] GetCategoryCheckboxes() => new[]
+        internal void InitCleanupDefaults()
         {
-            CatText, CatCode, CatUrl,
-            CatImage, CatQRCode,
-            CatDocument, CatPdf, CatPresentation,
-            CatVideo, CatAudio,
-            CatFile, CatArchive, CatFolder
+            try
+            {
+                var today = DateTime.Today;
+                var monthStart = new DateTime(today.Year, today.Month, 1);
+
+                SetDateSegments(FromDay, FromMonth, FromYear, monthStart);
+                SetDateSegments(ToDay, ToMonth, ToYear, today);
+                UpdateDateRangeSummary();
+
+                // Initialize all chips as selected
+                foreach (var chip in GetAllCategoryChips())
+                {
+                    string tag = chip.Tag?.ToString() ?? "";
+                    _chipStates[tag] = true;
+                }
+
+                UpdateCleanupMatchCount();
+            }
+            catch { }
+        }
+
+        private void SetDateSegments(TextBox? dayBox, TextBox? monthBox, TextBox? yearBox, DateTime date)
+        {
+            _isDateSegmentUpdating = true;
+            try
+            {
+                if (dayBox != null) dayBox.Text = date.Day.ToString("D2");
+                if (monthBox != null) monthBox.Text = date.Month.ToString("D2");
+                if (yearBox != null) yearBox.Text = date.Year.ToString("D4");
+            }
+            finally { _isDateSegmentUpdating = false; }
+        }
+
+        private DateTime? ParseDateFromSegments(TextBox? dayBox, TextBox? monthBox, TextBox? yearBox)
+        {
+            if (dayBox == null || monthBox == null || yearBox == null) return null;
+            if (!int.TryParse(dayBox.Text, out int d) || !int.TryParse(monthBox.Text, out int m) || !int.TryParse(yearBox.Text, out int y))
+                return null;
+            if (y < 2000 || y > 2099 || m < 1 || m > 12 || d < 1 || d > DateTime.DaysInMonth(y, m))
+                return null;
+            return new DateTime(y, m, d);
+        }
+
+        /// <summary>
+        /// Returns all category chip borders (excluding the "All" chip).
+        /// </summary>
+        private Border[] GetAllCategoryChips() => new Border[]
+        {
+            ChipText, ChipCode, ChipUrl,
+            ChipImage, ChipQRCode,
+            ChipDocument, ChipPdf, ChipPresentation,
+            ChipVideo, ChipAudio,
+            ChipFile, ChipArchive, ChipFolder
         };
 
+        private bool IsChipSelected(string tag) => _chipStates.TryGetValue(tag, out var s) && s;
+
         /// <summary>
-        /// Returns the set of ClipboardItemTypes currently selected in the category dropdown.
+        /// Returns the set of ClipboardItemTypes currently selected via chips.
         /// </summary>
         private HashSet<ClipboardItemType> GetSelectedCategories()
         {
             var selected = new HashSet<ClipboardItemType>();
-            foreach (var cb in GetCategoryCheckboxes())
+            foreach (var chip in GetAllCategoryChips())
             {
-                if (cb != null && cb.IsChecked == true && cb.Tag is string tagStr)
-                {
-                    if (Enum.TryParse<ClipboardItemType>(tagStr, true, out var parsed))
-                        selected.Add(parsed);
-                }
+                string tag = chip.Tag?.ToString() ?? "";
+                if (IsChipSelected(tag) && Enum.TryParse<ClipboardItemType>(tag, true, out var parsed))
+                    selected.Add(parsed);
             }
             return selected;
         }
@@ -174,16 +227,14 @@ namespace FlyShelf.Windows
         /// </summary>
         private List<ClipboardItem> GetFilteredCleanupItems()
         {
-            DateTime? fromDate = CleanupFromDate?.SelectedDate;
-            DateTime? toDate = CleanupToDate?.SelectedDate;
+            DateTime? fromDate = ParseDateFromSegments(FromDay, FromMonth, FromYear);
+            DateTime? toDate = ParseDateFromSegments(ToDay, ToMonth, ToYear);
 
-            // If no date range selected, return empty
             if (fromDate == null && toDate == null) return new List<ClipboardItem>();
 
             var selectedTypes = GetSelectedCategories();
             if (selectedTypes.Count == 0) return new List<ClipboardItem>();
 
-            // Use start of fromDate and end of toDate for inclusive date range
             DateTime rangeStart = fromDate?.Date ?? DateTime.MinValue;
             DateTime rangeEnd = toDate?.Date.AddDays(1).AddTicks(-1) ?? DateTime.MaxValue;
 
@@ -204,8 +255,8 @@ namespace FlyShelf.Windows
 
             try
             {
-                DateTime? fromDate = CleanupFromDate?.SelectedDate;
-                DateTime? toDate = CleanupToDate?.SelectedDate;
+                DateTime? fromDate = ParseDateFromSegments(FromDay, FromMonth, FromYear);
+                DateTime? toDate = ParseDateFromSegments(ToDay, ToMonth, ToYear);
 
                 if (fromDate == null && toDate == null)
                 {
@@ -232,7 +283,6 @@ namespace FlyShelf.Windows
                 }
                 else
                 {
-                    // Build a category summary of matched types
                     var typeCounts = matchedItems
                         .GroupBy(i => i.ItemType)
                         .OrderByDescending(g => g.Count())
@@ -240,12 +290,12 @@ namespace FlyShelf.Windows
                         .Select(g => $"{g.Count()} {g.Key}");
                     string typeSummary = string.Join(", ", typeCounts);
                     if (matchedItems.GroupBy(i => i.ItemType).Count() > 3)
-                        typeSummary += "…";
+                        typeSummary += "â€¦";
 
                     CleanupMatchCount.Text = $"{count} item{(count != 1 ? "s" : "")} match ({typeSummary})";
                     CleanupMatchCount.Foreground = new System.Windows.Media.SolidColorBrush(
-                        count > 100 ? System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)  // Red for large deletions
-                                    : System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81)); // Green for normal
+                        count > 100 ? System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)
+                                    : System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81));
                 }
             }
             catch
@@ -254,106 +304,228 @@ namespace FlyShelf.Windows
             }
         }
 
-        /// <summary>
-        /// Updates the category filter button label to reflect current selection.
-        /// </summary>
-        private void UpdateCategoryFilterLabel()
+        private void UpdateDateRangeSummary()
         {
-            if (CategoryFilterLabel == null) return;
+            if (DateRangeSummary == null) return;
+            DateTime? from = ParseDateFromSegments(FromDay, FromMonth, FromYear);
+            DateTime? to = ParseDateFromSegments(ToDay, ToMonth, ToYear);
 
-            var checkboxes = GetCategoryCheckboxes().Where(cb => cb != null).ToArray();
-            int total = checkboxes.Length;
-            if (total == 0) return;
-            int checkedCount = checkboxes.Count(cb => cb.IsChecked == true);
-
-            if (checkedCount == total)
-                CategoryFilterLabel.Text = "All Types";
-            else if (checkedCount == 0)
-                CategoryFilterLabel.Text = "No Types Selected";
-            else
+            if (from != null && to != null)
             {
-                // Show up to 2 selected type names, then "+N more"
-                var names = checkboxes
-                    .Where(cb => cb.IsChecked == true)
-                    .Select(cb => cb.Content?.ToString() ?? "")
-                    .Take(2)
-                    .ToList();
-                string label = string.Join(", ", names);
-                if (checkedCount > 2)
-                    label += $" +{checkedCount - 2} more";
-                CategoryFilterLabel.Text = label;
+                int days = (to.Value - from.Value).Days;
+                if (days >= 0)
+                    DateRangeSummary.Text = $"{from:MMM d, yyyy} â†’ {to:MMM d, yyyy}  ({days + 1} day{(days != 0 ? "s" : "")})";
+                else
+                    DateRangeSummary.Text = "âš  'From' must be before 'To'";
             }
+            else if (from != null)
+                DateRangeSummary.Text = $"From {from:MMM d, yyyy} onwards";
+            else if (to != null)
+                DateRangeSummary.Text = $"Up to {to:MMM d, yyyy}";
+            else
+                DateRangeSummary.Text = "";
         }
 
-        // ── Event Handlers ──
+        // â”€â”€ Event Handlers: Date Inputs â”€â”€
 
-        private void CleanupDateRange_Changed(object? sender, SelectionChangedEventArgs e)
+        private void DateSegment_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
         {
-            UpdateCleanupMatchCount();
-        }
+            if (sender is not TextBox tb) return;
+            string tag = tb.Tag?.ToString() ?? "";
 
-        private void CategoryFilter_ToggleDropdown(object sender, RoutedEventArgs e)
-        {
-            if (CategoryFilterPopup != null)
-                CategoryFilterPopup.IsOpen = !CategoryFilterPopup.IsOpen;
-        }
-
-        private void CategorySelectAll_Changed(object sender, RoutedEventArgs e)
-        {
-            if (_isCategoryBulkUpdate) return;
-            // Guard: This event fires during InitializeComponent() when XAML sets IsChecked,
-            // but the individual category checkboxes (CatText, CatCode, etc.) aren't created yet.
-            if (CategorySelectAll == null) return;
-            _isCategoryBulkUpdate = true;
-            try
+            if (e.Key == System.Windows.Input.Key.Up || e.Key == System.Windows.Input.Key.Down)
             {
-                bool isChecked = CategorySelectAll.IsChecked == true;
-                foreach (var cb in GetCategoryCheckboxes())
+                int delta = e.Key == System.Windows.Input.Key.Up ? 1 : -1;
+                if (int.TryParse(tb.Text, out int val))
                 {
-                    if (cb != null) cb.IsChecked = isChecked;
+                    int newVal = val + delta;
+
+                    if (tag.EndsWith("Day"))
+                        newVal = newVal < 1 ? 31 : newVal > 31 ? 1 : newVal;
+                    else if (tag.EndsWith("Month"))
+                        newVal = newVal < 1 ? 12 : newVal > 12 ? 1 : newVal;
+                    else if (tag.EndsWith("Year"))
+                        newVal = Math.Clamp(newVal, 2000, 2099);
+
+                    _isDateSegmentUpdating = true;
+                    tb.Text = tag.EndsWith("Year") ? newVal.ToString("D4") : newVal.ToString("D2");
+                    _isDateSegmentUpdating = false;
+                    tb.SelectAll();
+
+                    UpdateDateRangeSummary();
+                    UpdateCleanupMatchCount();
+                }
+                e.Handled = true;
+            }
+            else if (e.Key == System.Windows.Input.Key.Tab || e.Key == System.Windows.Input.Key.Right)
+            {
+                // Auto-advance to next segment on Tab or Right arrow at end
+                if (tb.CaretIndex >= tb.Text.Length || e.Key == System.Windows.Input.Key.Tab)
+                {
+                    var next = GetNextDateSegment(tag);
+                    if (next != null)
+                    {
+                        next.Focus();
+                        next.SelectAll();
+                        if (e.Key == System.Windows.Input.Key.Right) e.Handled = true;
+                    }
                 }
             }
-            finally
+            else if (e.Key == System.Windows.Input.Key.Left && tb.CaretIndex == 0)
             {
-                _isCategoryBulkUpdate = false;
+                var prev = GetPrevDateSegment(tag);
+                if (prev != null)
+                {
+                    prev.Focus();
+                    prev.SelectAll();
+                    e.Handled = true;
+                }
             }
-            UpdateCategoryFilterLabel();
-            UpdateCleanupMatchCount();
         }
 
-        private void CategoryItem_Changed(object sender, RoutedEventArgs e)
+        private TextBox? GetNextDateSegment(string tag) => tag switch
         {
-            if (_isCategoryBulkUpdate) return;
-            if (CategorySelectAll == null) return;
+            "FromDay" => FromMonth,
+            "FromMonth" => FromYear,
+            "FromYear" => ToDay,
+            "ToDay" => ToMonth,
+            "ToMonth" => ToYear,
+            _ => null
+        };
 
-            // Sync the "Select All" checkbox state
-            _isCategoryBulkUpdate = true;
-            try
+        private TextBox? GetPrevDateSegment(string tag) => tag switch
+        {
+            "FromMonth" => FromDay,
+            "FromYear" => FromMonth,
+            "ToDay" => FromYear,
+            "ToMonth" => ToDay,
+            "ToYear" => ToMonth,
+            _ => null
+        };
+
+        private void DateSegment_GotFocus(object sender, RoutedEventArgs e)
+        {
+            if (sender is TextBox tb)
+                tb.Dispatcher.BeginInvoke(new Action(() => tb.SelectAll()), System.Windows.Threading.DispatcherPriority.Input);
+        }
+
+        private void DateSegment_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (sender is not TextBox tb) return;
+            string tag = tb.Tag?.ToString() ?? "";
+
+            // Pad with leading zero
+            if (int.TryParse(tb.Text, out int val))
             {
-                var checkboxes = GetCategoryCheckboxes().Where(cb => cb != null).ToArray();
-                if (checkboxes.Length == 0) return;
-                int checkedCount = checkboxes.Count(cb => cb.IsChecked == true);
-                if (checkedCount == checkboxes.Length)
-                    CategorySelectAll.IsChecked = true;
-                else if (checkedCount == 0)
-                    CategorySelectAll.IsChecked = false;
-                else
-                    CategorySelectAll.IsChecked = null; // Indeterminate
+                _isDateSegmentUpdating = true;
+                tb.Text = tag.EndsWith("Year") ? val.ToString("D4") : val.ToString("D2");
+                _isDateSegmentUpdating = false;
             }
-            finally
+        }
+
+        private void DateSegment_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_isDateSegmentUpdating) return;
+            UpdateDateRangeSummary();
+            UpdateCleanupMatchCount();
+
+            // Auto-advance when segment is fully typed (2 digits for day/month, 4 for year)
+            if (sender is TextBox tb)
             {
-                _isCategoryBulkUpdate = false;
+                string tag = tb.Tag?.ToString() ?? "";
+                int maxLen = tag.EndsWith("Year") ? 4 : 2;
+                if (tb.Text.Length >= maxLen)
+                {
+                    var next = GetNextDateSegment(tag);
+                    if (next != null)
+                    {
+                        next.Focus();
+                        next.SelectAll();
+                    }
+                }
             }
-            UpdateCategoryFilterLabel();
+        }
+
+        // â”€â”€ Event Handlers: Quick Presets â”€â”€
+
+        private void QuickDatePreset_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement fe) return;
+            string preset = fe.Tag?.ToString() ?? "";
+
+            var today = DateTime.Today;
+            DateTime from, to = today;
+
+            switch (preset)
+            {
+                case "today":
+                    from = today;
+                    break;
+                case "7d":
+                    from = today.AddDays(-6);
+                    break;
+                case "30d":
+                    from = today.AddDays(-29);
+                    break;
+                case "month":
+                    from = new DateTime(today.Year, today.Month, 1);
+                    break;
+                default:
+                    return;
+            }
+
+            SetDateSegments(FromDay, FromMonth, FromYear, from);
+            SetDateSegments(ToDay, ToMonth, ToYear, to);
+            UpdateDateRangeSummary();
             UpdateCleanupMatchCount();
         }
+
+        // â”€â”€ Event Handlers: Category Chips â”€â”€
+
+        private void TypeChip_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (sender is not Border chip) return;
+            string tag = chip.Tag?.ToString() ?? "";
+
+            if (tag == "All")
+            {
+                // Toggle all chips
+                bool anyDeselected = GetAllCategoryChips().Any(c => !IsChipSelected(c.Tag?.ToString() ?? ""));
+                foreach (var c in GetAllCategoryChips())
+                {
+                    string t = c.Tag?.ToString() ?? "";
+                    _chipStates[t] = anyDeselected;
+                    UpdateChipVisual(c, anyDeselected);
+                }
+                UpdateChipVisual(ChipAll, anyDeselected);
+            }
+            else
+            {
+                bool newState = !IsChipSelected(tag);
+                _chipStates[tag] = newState;
+                UpdateChipVisual(chip, newState);
+
+                // Update "All" chip visual
+                bool allSelected = GetAllCategoryChips().All(c => IsChipSelected(c.Tag?.ToString() ?? ""));
+                UpdateChipVisual(ChipAll, allSelected);
+            }
+
+            UpdateCleanupMatchCount();
+        }
+
+        private void UpdateChipVisual(Border chip, bool selected)
+        {
+            chip.Opacity = selected ? 1.0 : 0.35;
+        }
+
+        // â”€â”€ Event Handlers: Cleanup Action â”€â”€
 
         private void AdvancedCleanup_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                DateTime? fromDate = CleanupFromDate?.SelectedDate;
-                DateTime? toDate = CleanupToDate?.SelectedDate;
+                DateTime? fromDate = ParseDateFromSegments(FromDay, FromMonth, FromYear);
+                DateTime? toDate = ParseDateFromSegments(ToDay, ToMonth, ToYear);
 
                 if (fromDate == null && toDate == null)
                 {
@@ -361,7 +533,6 @@ namespace FlyShelf.Windows
                     return;
                 }
 
-                // Validate date order
                 if (fromDate != null && toDate != null && fromDate > toDate)
                 {
                     ToastWindow.ShowToast("\"From\" date must be before \"To\" date.");
@@ -383,22 +554,21 @@ namespace FlyShelf.Windows
                     return;
                 }
 
-                // Build description for confirmation
                 string dateDesc;
                 if (fromDate != null && toDate != null)
-                    dateDesc = $"{fromDate:MMM d, yyyy} → {toDate:MMM d, yyyy}";
+                    dateDesc = $"{fromDate:MMM d, yyyy} â†’ {toDate:MMM d, yyyy}";
                 else if (fromDate != null)
                     dateDesc = $"from {fromDate:MMM d, yyyy} onwards";
                 else
                     dateDesc = $"up to {toDate:MMM d, yyyy}";
 
                 int typeCount = selectedTypes.Count;
-                int totalTypes = GetCategoryCheckboxes().Length;
+                int totalTypes = GetAllCategoryChips().Length;
                 string typeDesc = typeCount == totalTypes ? "all types" : $"{typeCount} selected type{(typeCount != 1 ? "s" : "")}";
 
                 var confirm = MessageBox.Show(
                     $"This will permanently delete {itemsToDelete.Count} unpinned clipboard item{(itemsToDelete.Count != 1 ? "s" : "")} from {dateDesc} matching {typeDesc}.\n\nPinned items will remain safe and untouched.\n\nAre you sure you want to proceed?",
-                    "Advanced History Cleanup",
+                    "History Cleanup",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Warning);
 
@@ -408,7 +578,6 @@ namespace FlyShelf.Windows
 
                 ToastWindow.ShowToast($"Successfully deleted {itemsToDelete.Count} item{(itemsToDelete.Count != 1 ? "s" : "")}!");
 
-                // Refresh the match count after deletion
                 UpdateCleanupMatchCount();
             }
             catch (Exception ex)

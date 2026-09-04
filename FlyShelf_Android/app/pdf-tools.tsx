@@ -1,5 +1,5 @@
 // PDF Tools — Modularized Suite for FlyShelf Android
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, Pressable, SafeAreaView, Alert, TextInput, TouchableOpacity,
 } from 'react-native';
@@ -8,12 +8,17 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { space, radius, font } from '../styles/theme';
 import { createPdfToolsStyles } from '../styles/pdfToolsStyles';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSettings } from '../context/SettingsContext';
+import { toast } from '../context/ToastContext';
+import { resolveBestPcUrl } from '../utils/networkHelpers';
 
 import { cleanupOldPdfFiles } from '../utils/pdfToolsUtils';
 import { ToolId, SelectedFile, RecentPdf } from '../components/pdf/types';
@@ -53,13 +58,14 @@ const CATEGORIES: { id: CategoryId; label: string; icon: string }[] = [
   { id: 'create', label: 'Create', icon: 'add-circle-outline' },
   { id: 'conversions', label: 'Convert', icon: 'swap-horizontal-outline' },
   { id: 'edit', label: 'Edit & Pages', icon: 'create-outline' },
-  { id: 'security', label: 'Security & Info', icon: 'shield-checkmark-outline' },
+  { id: 'security', label: 'Document Info', icon: 'information-circle-outline' },
 ];
 
 export default function PdfToolsScreen() {
   const { colors, shadows } = useAppTheme();
   const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
   const insets = useSafeAreaInsets();
+  const { pairedDevices, pcLocalIp, pairingKey, deviceName } = useSettings();
 
   const TOOLS: ToolDef[] = useMemo(() => [
     { id: 'scanToPdf', icon: 'scan-outline', iconLib: 'ion', color: colors.accent.success, label: 'Scan to PDF', desc: 'Camera scanner', category: 'create' },
@@ -72,7 +78,6 @@ export default function PdfToolsScreen() {
     { id: 'editPages', icon: 'document-text-outline', iconLib: 'ion', color: colors.accent.success, label: 'Edit Pages', desc: 'Reorder & rotate', category: 'edit' },
     { id: 'extract', icon: 'cut-outline', iconLib: 'ion', color: colors.accent.warning, label: 'Extract', desc: 'Pick single pages', category: 'edit' },
     { id: 'watermark', icon: 'water-outline', iconLib: 'ion', color: colors.type.image, label: 'Watermark', desc: 'Add text stamp', category: 'security' },
-    { id: 'password', icon: 'lock-closed-outline', iconLib: 'ion', color: colors.accent.error, label: 'Password', desc: 'Protect document', category: 'security' },
     { id: 'metadata', icon: 'information-circle-outline', iconLib: 'ion', color: colors.type.ppt, label: 'Metadata', desc: 'Edit title & author', category: 'security' },
     { id: 'info', icon: 'analytics-outline', iconLib: 'ion', color: colors.text.secondary, label: 'PDF Info', desc: 'Inspect properties', category: 'security' },
   ], [colors]);
@@ -81,6 +86,88 @@ export default function PdfToolsScreen() {
   const [recentPdfs, setRecentPdfs] = useState<RecentPdf[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSendToPc = useCallback(async (filePath: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const pcUrl = resolveBestPcUrl(pairedDevices, pcLocalIp);
+    if (!pcUrl) {
+      Alert.alert(
+        'No Paired PC Found',
+        'Please pair a PC or ensure your PC is connected in Settings to send files directly.'
+      );
+      return;
+    }
+    toast.info('Sending to PC...', 'Transferring document to your computer');
+    try {
+      const fileName = filePath.split('/').pop() || 'document.pdf';
+      const uploadUrl = `${pcUrl}/api/archive_upload`;
+      const response = await FileSystem.uploadAsync(uploadUrl, filePath, {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers: {
+          'X-FlyShelf-Client': 'MobileCompanion',
+          'X-Pairing-Key': pairingKey || '',
+          'X-Original-Date': Date.now().toString(),
+          'X-File-Name': encodeURIComponent(fileName),
+          'X-Batch-Name': encodeURIComponent('PDF_Tools'),
+          'X-Source-Device': deviceName || 'Android',
+        },
+      });
+      if (response.status === 200) {
+        toast.success('Sent to PC', `${fileName} is now on your PC!`);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        throw new Error(`Upload failed with status ${response.status}`);
+      }
+    } catch (err: any) {
+      Alert.alert('Send to PC Failed', err?.message || 'Could not send document to PC. Check Wi-Fi or Cloudflare connection.');
+    }
+  }, [pairedDevices, pcLocalIp, pairingKey, deviceName]);
+
+  const handleRecentPress = useCallback((pdf: RecentPdf) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert(
+      pdf.name,
+      `Tool: ${pdf.tool} • ${pdf.pages || 1} pages\nSaved to device storage`,
+      [
+        {
+          text: '📖 Open / Share',
+          onPress: async () => {
+            try {
+              if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(pdf.path, { mimeType: 'application/pdf' });
+              } else {
+                Alert.alert('Error', 'Sharing not available on this device');
+              }
+            } catch (err: any) {
+              Alert.alert('Error', 'Could not open document: ' + (err?.message || 'file might have been moved'));
+            }
+          },
+        },
+        {
+          text: '💻 Send to PC',
+          onPress: () => handleSendToPc(pdf.path),
+        },
+        {
+          text: '🛠️ Re-open Tool',
+          onPress: () => setActiveTool(pdf.tool),
+        },
+        {
+          text: '🗑️ Remove from Recents',
+          style: 'destructive',
+          onPress: () => {
+            setRecentPdfs(prev => {
+              const updated = prev.filter(r => r.path !== pdf.path);
+              AsyncStorage.setItem(RECENT_KEY, JSON.stringify(updated)).catch(() => {});
+              return updated;
+            });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  }, [handleSendToPc]);
 
   useEffect(() => {
     AsyncStorage.getItem(RECENT_KEY).then(data => {
@@ -231,14 +318,14 @@ export default function PdfToolsScreen() {
         // If no PDF selected yet, trigger picker
         openPdfEditor();
         return null;
-      case 'pdfToWord': return <PdfToWordTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} />;
-      case 'merge': return <MergeTool onBack={back} onPickFiles={() => pickPdf(true)} saveRecent={saveRecent} />;
-      case 'split': return <SplitTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} />;
-      case 'editPages': return <EditPagesTool onBack={back} onPickFile={() => pickPdf(false)} onPickImages={pickImages} saveRecent={saveRecent} />;
-      case 'compress': return <CompressTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} />;
-      case 'imagesToPdf': return <ImagesToPdfTool onBack={back} onPickImages={pickImages} saveRecent={saveRecent} />;
-      case 'extract': return <ExtractTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} />;
-      case 'watermark': return <WatermarkTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} />;
+      case 'pdfToWord': return <PdfToWordTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} onSendToPc={handleSendToPc} />;
+      case 'merge': return <MergeTool onBack={back} onPickFiles={() => pickPdf(true)} saveRecent={saveRecent} onSendToPc={handleSendToPc} />;
+      case 'split': return <SplitTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} onSendToPc={handleSendToPc} />;
+      case 'editPages': return <EditPagesTool onBack={back} onPickFile={() => pickPdf(false)} onPickImages={pickImages} saveRecent={saveRecent} onSendToPc={handleSendToPc} />;
+      case 'compress': return <CompressTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} onSendToPc={handleSendToPc} />;
+      case 'imagesToPdf': return <ImagesToPdfTool onBack={back} onPickImages={pickImages} saveRecent={saveRecent} onSendToPc={handleSendToPc} />;
+      case 'extract': return <ExtractTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} onSendToPc={handleSendToPc} />;
+      case 'watermark': return <WatermarkTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} onSendToPc={handleSendToPc} />;
       case 'password': return <PasswordTool onBack={back} onPickFile={() => pickPdf(false)} />;
       case 'metadata': return <MetadataTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} />;
       case 'info': return <InfoTool onBack={back} onPickFile={() => pickPdf(false)} saveRecent={saveRecent} />;
@@ -422,7 +509,7 @@ export default function PdfToolsScreen() {
                 <Pressable
                   key={pdf.path}
                   style={s.recentItem}
-                  onPress={() => { setActiveTool(pdf.tool); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                  onPress={() => handleRecentPress(pdf)}
                 >
                   <Ionicons name="time-outline" size={20} color={colors.text.tertiary} />
                   <View style={s.recentInfo}>

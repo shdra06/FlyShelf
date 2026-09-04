@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { decrypt as aesDecrypt } from './syncCrypto';
+import { syncLog } from './debugLog';
 import { getSecureItem } from './secureStorage';
 // @ts-ignore — export names differ between type definitions and runtime API
 import { decode as quickDecode, encode as quickEncode } from 'react-native-quick-base64';
@@ -123,29 +124,72 @@ export const decryptDevice = async (device: ActiveDeviceInfo, specificPairingKey
   if (!device) return device;
   if (device.DeviceType === 'PC' && device.UrlsEncrypted) {
     const decrypted = { ...device };
+    
+    // ═══ FAST PATH: Use plaintext fields if PC wrote them (v4.1+) ═══
+    // These bypass crypto entirely — most reliable path
+    const plainGlobal = device.PlainGlobalUrl;
+    const plainLocal = device.PlainLocalIp;
+    
+    if (plainGlobal && typeof plainGlobal === 'string' && plainGlobal.includes('trycloudflare.com')) {
+      decrypted.GlobalUrl = plainGlobal;
+      syncLog('FIREBASE', `✅ Using PlainGlobalUrl (no decrypt needed): ${plainGlobal.substring(0, 50)}...`);
+    }
+    if (plainLocal && typeof plainLocal === 'string' && plainLocal.length > 0 && !plainLocal.includes('=')) {
+      // PlainLocalIp is a real IP, not encrypted (encrypted strings contain = or /+)
+      decrypted.LocalIp = plainLocal;
+    }
+    
+    // ═══ DECRYPT PATH: Try AES-GCM decryption for remaining fields ═══
     try {
-      if (decrypted.LocalIp) {
+      // GlobalUrl — only decrypt if plaintext wasn't available
+      if (!decrypted.GlobalUrl?.includes?.('trycloudflare.com') && device.GlobalUrl) {
+        const dec = await aesDecrypt(device.GlobalUrl, specificPairingKey);
+        if (dec && dec.includes('trycloudflare.com')) {
+          decrypted.GlobalUrl = dec;
+        } else if (!decrypted.GlobalUrl?.includes?.('trycloudflare.com')) {
+          // Decrypt failed AND no plaintext — try persisted URL
+          try {
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            const saved = await getSecureItem('pairedGlobalUrl') || await AsyncStorage.getItem('pairedGlobalUrl');
+            if (saved && saved.includes('trycloudflare.com')) {
+              decrypted.GlobalUrl = saved;
+              syncLog('FIREBASE', `⚠️ GlobalUrl decrypt failed — using saved URL: ${saved.substring(0, 40)}...`);
+            } else {
+              decrypted.GlobalUrl = '';
+            }
+          } catch {
+            decrypted.GlobalUrl = '';
+          }
+        }
+      }
+      
+      // LocalIp — clear if decrypt fails (NEVER keep encrypted garbage as URL)
+      if (!plainLocal && decrypted.LocalIp) {
         const dec = await aesDecrypt(decrypted.LocalIp, specificPairingKey);
         decrypted.LocalIp = dec || '';
       }
-      if (decrypted.GlobalUrl) {
-        const dec = await aesDecrypt(decrypted.GlobalUrl, specificPairingKey);
-        decrypted.GlobalUrl = dec || '';
-      }
+      
+      // Url — clear if decrypt fails
       if (decrypted.Url) {
         const dec = await aesDecrypt(decrypted.Url, specificPairingKey);
         decrypted.Url = dec || '';
       }
+      
+      // TlsUrl — clear if decrypt fails
       if (decrypted.TlsUrl) {
         const dec = await aesDecrypt(decrypted.TlsUrl, specificPairingKey);
         decrypted.TlsUrl = dec || '';
       }
+      
       decrypted.UrlsEncrypted = false;
     } catch (err) {
-      // Decryption failed — return the ORIGINAL device with UrlsEncrypted unchanged
-      // so downstream code doesn't try to use half-decrypted / garbled URLs.
-      console.warn('[decryptDevice] Decryption failed, preserving original encrypted device:', err);
-      return device;
+      // Decryption threw — clear all encrypted fields to prevent garbage URLs
+      syncLog('FIREBASE', `⚠️ Device decryption failed: ${(err as any)?.message}`);
+      if (!decrypted.GlobalUrl?.includes?.('trycloudflare.com')) decrypted.GlobalUrl = '';
+      if (!plainLocal) decrypted.LocalIp = '';
+      decrypted.Url = '';
+      decrypted.TlsUrl = '';
+      decrypted.UrlsEncrypted = false;
     }
     return decrypted;
   }
@@ -370,8 +414,8 @@ export const resolveLivePcUrl = async (pairedDevices?: PairedDevice[], manualIp?
       }
     }
 
-    // Standard emulator fallbacks
-    lanCandidates.push('http://10.0.2.2:8999', 'http://10.0.2.2:8080');
+    // Standard emulator fallbacks (dev only)
+    if (__DEV__) lanCandidates.push('http://10.0.2.2:8999', 'http://10.0.2.2:8080');
 
     const probe = async (url: string, timeoutMs = 1500): Promise<string> => {
       let clean = url.trim().replace(/\/$/, '');
@@ -418,9 +462,9 @@ export const resolveLivePcUrl = async (pairedDevices?: PairedDevice[], manualIp?
       }
     } catch { }
 
-    // Fallbacks
-    if (uniqueLan.length > 0 && uniqueLan[0].startsWith('http')) return uniqueLan[0];
+    // Fallbacks: prefer cloud over potentially dead LAN IPs
     if (uniqueCloud.length > 0) return uniqueCloud[0];
+    if (uniqueLan.length > 0 && uniqueLan[0].startsWith('http')) return uniqueLan[0];
   } catch {}
   return null;
 };
@@ -658,5 +702,9 @@ export async function safeFetchJson<T = any>(url: string, options?: RequestInit 
   const contentLength = parseInt(response.headers.get('Content-Length') || '0', 10);
   if (contentLength > maxBodyBytes) throw new Error(`Response too large: ${contentLength} bytes (max ${maxBodyBytes})`);
   // H-7: Use response.json() directly — avoids holding both raw text string AND parsed object in memory
-  return await response.json() as T;
+  try {
+    return await response.json() as T;
+  } catch (parseErr) {
+    throw new Error(`Failed to parse JSON response from ${url}: ${parseErr}`);
+  }
 }

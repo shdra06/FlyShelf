@@ -99,6 +99,50 @@ namespace FlyShelf.Controls
         }
 
         /// <summary>
+        /// Focus a specific freeform section's TextBox by its Section Id and scroll it into view.
+        /// </summary>
+        private void FocusFreeformSectionById(string sectionId)
+        {
+            if (_selectedNoteDay == null || _selectedNoteDay.FreeformSections.Count == 0 || string.IsNullOrEmpty(sectionId)) return;
+
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (_selectedNoteDay == null || _selectedNoteDay.FreeformSections.Count == 0) return;
+
+                var targetSection = _selectedNoteDay.FreeformSections.FirstOrDefault(s => s.Id == sectionId);
+                if (targetSection == null)
+                {
+                    FocusFreeformLastSection();
+                    return;
+                }
+
+                void TryBringIntoViewAndFocus()
+                {
+                    var container = NotesFreeformSectionsList.ItemContainerGenerator.ContainerFromItem(targetSection);
+                    if (container is FrameworkElement fe)
+                    {
+                        fe.BringIntoView();
+                        var tb = FindVisualChild<TextBox>(fe, "FreeformSectionTextBox");
+                        if (tb != null)
+                        {
+                            tb.Focus();
+                            Keyboard.Focus(tb);
+                        }
+                    }
+                }
+
+                TryBringIntoViewAndFocus();
+
+                // If container was not yet realized by VirtualizingStackPanel, retry once when layout finishes
+                var testContainer = NotesFreeformSectionsList.ItemContainerGenerator.ContainerFromItem(targetSection);
+                if (testContainer == null)
+                {
+                    Dispatcher.InvokeAsync(TryBringIntoViewAndFocus, System.Windows.Threading.DispatcherPriority.ContextIdle);
+                }
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        /// <summary>
         /// Get the currently focused freeform section TextBox, or the last one if none focused.
         /// </summary>
         private TextBox? GetActiveFreeformTextBox()

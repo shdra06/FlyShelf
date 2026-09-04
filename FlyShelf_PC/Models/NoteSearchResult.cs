@@ -8,8 +8,11 @@ namespace FlyShelf.Models
     public class NoteSearchResult
     {
         public string DateLabel { get; set; } = "";
+        public string PageLabel { get; set; } = "";
+        public bool HasPageLabel => !string.IsNullOrEmpty(PageLabel);
         public string Content { get; set; } = "";
         public FlyShelf.Classes.NoteDay Day { get; set; } = null!;
         public FlyShelf.Classes.NoteBullet Bullet { get; set; } = null!;
+        public string? SectionId { get; set; }
     }
 }

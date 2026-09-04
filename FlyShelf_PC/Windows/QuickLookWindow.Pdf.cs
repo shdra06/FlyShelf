@@ -569,7 +569,7 @@ namespace FlyShelf.Windows
         private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             double scale = e.NewValue;
-            if (_isPdfMode && !_isPdfEditorMode && WebPreview != null && WebPreview.CoreWebView2 != null)
+            if ((_isPdfMode || _isDocxMode) && !_isPdfEditorMode && WebPreview != null && WebPreview.CoreWebView2 != null)
             {
                 WebPreview.ZoomFactor = scale;
             }
@@ -594,7 +594,7 @@ namespace FlyShelf.Windows
         {
             try
             {
-                var file = await StorageFile.GetFileFromPathAsync(_item.FilePath);
+                var file = await StorageFile.GetFileFromPathAsync(EffectivePdfPath);
                 var pdfDoc = await WinPdf.PdfDocument.LoadFromFileAsync(file);
                 if (pageIndex >= pdfDoc.PageCount) return;
 
@@ -631,7 +631,7 @@ namespace FlyShelf.Windows
             {
                 try
                 {
-                    var file = await StorageFile.GetFileFromPathAsync(_item.FilePath);
+                    var file = await StorageFile.GetFileFromPathAsync(EffectivePdfPath);
                     var pdfDoc = await WinPdf.PdfDocument.LoadFromFileAsync(file);
                     using (var page = pdfDoc.GetPage((uint)pageIndex))
                     {

@@ -7,8 +7,7 @@ import {
 } from 'react-native';
 import { toast } from '../../context/ToastContext';
 
-import { FlashList } from '@shopify/flash-list';
-const FlashListCast = FlashList as any;
+
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
@@ -31,7 +30,7 @@ import { useAppTheme } from '../../hooks/useAppTheme';
 import { font, space } from '../../styles/theme';
 import { fuzzyIsMatch } from '../../utils/textNormalize';
 import { Ionicons } from '@expo/vector-icons';
-import RAnimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import RAnimated, { useSharedValue } from 'react-native-reanimated';
 import ScreenHeader from '../../components/ScreenHeader';
 
 // ═══════════════════════════════════════════════════════════
@@ -251,7 +250,9 @@ function TodoScreenInner() {
         setDays(parsed);
         await EncryptedStorage.setItem(TODOS_STORAGE_KEY, JSON.stringify(parsed));
       }
-    } catch {}
+    } catch (e) {
+      console.error('Todo loadLocal failed:', e);
+    }
   }, []);
 
   // ─── Save to AsyncStorage ──────────────────────────────
@@ -290,8 +291,8 @@ function TodoScreenInner() {
 
       // 2. Union items by Id (newer LastEdited wins)
       const items = new Map<string, TodoItem>();
-      for (const li of existing.Items) items.set(li.Id, li);
-      for (const ri of rd.Items) {
+      for (const li of existing.Items || []) items.set(li.Id, li);
+      for (const ri of rd.Items || []) {
         const ex = items.get(ri.Id);
         if (!ex || ts(ri.LastEdited) > ts(ex.LastEdited)) items.set(ri.Id, ri);
       }
@@ -416,7 +417,7 @@ function TodoScreenInner() {
     const results: { day: TodoDay; item: TodoItem }[] = [];
     for (const day of days) {
       for (const item of day.Items) {
-        const haystack = [item.Text, item.Description || '', ...item.Tags].join(' ');
+        const haystack = [item.Text, item.Description || '', ...(item.Tags || [])].join(' ');
         if (fuzzyIsMatch(q, haystack)) {
           results.push({ day, item });
         }
@@ -456,10 +457,6 @@ function TodoScreenInner() {
     const [day, withDay] = getOrCreateDay(selectedDayKey, daysRef.current);
     const updatedDay = { ...day, Items: [...day.Items, item] };
     const updated = withDay.map(d => d.Date === selectedDayKey ? updatedDay : d);
-    // If getOrCreateDay added a new day, and it's not yet in the list
-    if (!withDay.some(d => d.Date === selectedDayKey)) {
-      updated.push(updatedDay);
-    }
     markModified(selectedDayKey, updated);
     setNewTodoText('');
   }, [newTodoText, selectedDayKey, getOrCreateDay, markModified, deviceName]);
@@ -504,7 +501,7 @@ function TodoScreenInner() {
 
       const newItem = createTodoItem(toggledItem.Text);
       newItem.Description = toggledItem.Description;
-      newItem.Tags = [...toggledItem.Tags];
+      newItem.Tags = [...(toggledItem.Tags || [])];
       newItem.Color = toggledItem.Color;
       newItem.Priority = toggledItem.Priority;
       newItem.Recurrence = toggledItem.Recurrence;
@@ -518,9 +515,6 @@ function TodoScreenInner() {
       const [targetDay, withTargetDay] = getOrCreateDay(nextDayKey, latestDays);
       const updatedTargetDay = { ...targetDay, Items: [newItem, ...targetDay.Items] };
       let finalDays = withTargetDay.map(d => d.Date === nextDayKey ? updatedTargetDay : d);
-      if (!withTargetDay.some(d => d.Date === nextDayKey)) {
-        finalDays.push(updatedTargetDay);
-      }
       markModified(nextDayKey, finalDays);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -718,9 +712,6 @@ function TodoScreenInner() {
     const [day, withDay] = getOrCreateDay(selectedDayKey, daysRef.current);
     const updatedDay = { ...day, Items: [...day.Items, ...newItems] };
     const updated = withDay.map(d => d.Date === selectedDayKey ? updatedDay : d);
-    if (!withDay.some(d => d.Date === selectedDayKey)) {
-      updated.push(updatedDay);
-    }
     markModified(selectedDayKey, updated);
     setShowTemplateModal(false);
     toast.success('Template Applied', `Added ${newItems.length} tasks to ${selectedDayKey}`);
@@ -1190,7 +1181,7 @@ function TodoScreenInner() {
   };
 
   // ─── Render single todo item ───────────────────────────
-  const renderTodoItem = useCallback(({ item }: { item: TodoItem }) => {
+  const renderTodoItem = ({ item }: { item: TodoItem }) => {
     const isExpanded = expandedItemId === item.Id;
     const isEditing = editingItemId === item.Id;
     const overdue = isOverdue(item);
@@ -1333,21 +1324,19 @@ function TodoScreenInner() {
         {renderExpandedArea(item)}
       </TouchableOpacity>
     );
-  }, [
-    expandedItemId, editingItemId, handleToggleDone, handleDeleteItem,
-    handleUpdateItem, handleCyclePriority, handleOpenDatePicker,
-    handleCycleRecurrence, getCheckboxScale, showColorPicker, tagInputItemId,
-    tagInputText, todoItems, editingSubtaskId, selectedDayKey,
-    activeTimers, handleCycleTimer, startTimer, cancelTimer,
-    handleOpenReminderPicker,
-  ]);
+  };
 
   // ═══════════════════════════════════════════════════════
   // MAIN RENDER
   // ═══════════════════════════════════════════════════════
 
   const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler({ onScroll: (e) => { scrollY.value = e.contentOffset.y; } });
+  const scrollHandler = (e: any) => {
+    const offsetY = e?.nativeEvent?.contentOffset?.y;
+    if (typeof offsetY === 'number') {
+      scrollY.value = offsetY;
+    }
+  };
 
   return (
     <LinearGradient
@@ -1471,6 +1460,8 @@ function TodoScreenInner() {
                   data={searchResults}
                   keyExtractor={(r, idx) => r.item.Id + idx}
                   showsVerticalScrollIndicator={false}
+                  onScroll={scrollHandler}
+                  scrollEventThrottle={16}
                   renderItem={({ item: result }) => {
                     const dayDate = new Date(result.day.Date);
                     return (
@@ -1528,14 +1519,21 @@ function TodoScreenInner() {
                 </Text>
               </View>
             ) : (
-              <FlashListCast
+              <FlatList
                 data={todoItems}
                 renderItem={renderTodoItem}
-                estimatedItemSize={90}
                 keyExtractor={(item: TodoItem) => item.Id}
                 contentContainerStyle={s.listContent}
                 showsVerticalScrollIndicator={false}
                 extraData={extraDataMemo}
+                onScroll={scrollHandler}
+                scrollEventThrottle={16}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                initialNumToRender={15}
+                maxToRenderPerBatch={15}
+                windowSize={7}
+                removeClippedSubviews={Platform.OS === 'android'}
               />
             )}
           </View>

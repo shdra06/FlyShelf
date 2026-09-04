@@ -138,8 +138,22 @@ export function useDeviceSync(params: {
   const shortcutSyncTimestampRef = useRef<number>(0); // Throttle: sync shortcuts every 60s
   const lastSyncTimestampRef = useRef<number>(0); // Incremental delta sync timestamp
   const isFirstSyncRef = useRef<boolean>(true); // Initial pairing sync tracker
+
+  // Restore last sync timestamp from storage to prevent re-flooding on app restart
+  useEffect(() => {
+    AsyncStorage.getItem('flyshelf_lastSyncTimestamp').then(v => {
+      const ts = parseInt(v || '0', 10);
+      if (ts > 0) {
+        lastSyncTimestampRef.current = ts;
+        isFirstSyncRef.current = false; // Already paired before — skip initial flood
+        syncLog('PC-POLL', `Restored lastSyncTimestamp from storage: ${ts}`);
+      }
+    }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     const pollFn = async () => {
+      if (isTornDown) return; // Prevent execution after unmount
       if (pollLockRef.current) return; // Already running — skip this invocation
       // BUG FIX #1: Skip poll if pairing key hasn't loaded from SecureStorage yet.
       // Without this, the first poll fires with empty X-Pairing-Key → PC rejects → URL cache destroyed.
@@ -166,8 +180,8 @@ export function useDeviceSync(params: {
         return;
       }
       if (Platform.OS === 'android' && AdvanceOverlay && targetUrl) {
-        try { AdvanceOverlay.setPcUrl(targetUrl); } catch(e) {}
-        try { if (deviceName) AdvanceOverlay.setDeviceName(deviceName); } catch(e) {}
+        try { if (typeof AdvanceOverlay.setPcUrl === 'function') AdvanceOverlay.setPcUrl(targetUrl); } catch(e) {}
+        try { if (deviceName && typeof AdvanceOverlay.setDeviceName === 'function') AdvanceOverlay.setDeviceName(deviceName); } catch(e) {}
       }
       try {
         const timeout = targetUrl.includes('trycloudflare.com') ? 5000 : 2000;
@@ -181,23 +195,55 @@ export function useDeviceSync(params: {
         const pollStart = performance.now();
         const syncUrl = lastSyncTimestampRef.current > 0
           ? `${targetUrl}/api/sync?since=${lastSyncTimestampRef.current}`
-          : `${targetUrl}/api/sync?limit=3`;
+          : `${targetUrl}/api/sync?limit=5`;
         // DEV DEBUG: Log every poll attempt
         syncLog('PC-POLL', `[STEP 5/6: SYNC POLL 1/3] → ${syncUrl.replace(targetUrl, '')} (Target: ${targetUrl}, Timeout: ${timeout}ms, Retries: ${pollRetryCountRef.current})`);
         const response = await fetchWithTimeout(syncUrl, { headers: syncHeaders }, timeout);
         if (!response.ok) {
           // DEV DEBUG: Log failure details
           syncLog('PC-POLL', `[STEP 5/6: SYNC POLL 1/3 ERROR] ❌ HTTP ${response.status} ${response.statusText} | url=${targetUrl}`);
-          cachedPcUrlRef.current = null;
-          // Track Cloudflare failures for forced re-resolution (Issue #7)
-          if (targetUrl.includes('trycloudflare.com')) {
-            if (recordCloudflareFailureRef.current()) {
-              removeSecureItem('lastCloudflareUrl').catch(() => {});
-              removeSecureItem('pairedGlobalUrl').catch(() => {});
+          pollRetryCountRef.current++;
+          // Require 5+ consecutive failures before declaring offline
+          // This prevents momentary Cloudflare 502s or network blips from causing flicker
+          if (pollRetryCountRef.current >= 5) {
+            // DON'T wipe cachedPcUrlRef — keep using the same URL for retries
+            // DON'T wipe stored URLs from SecureStore — they're the fallback lifeline
+            // Only re-query Firebase for a NEW URL if Cloudflare fails consistently
+            if (targetUrl.includes('trycloudflare.com')) {
+              if (recordCloudflareFailureRef.current()) {
+                try {
+                  const { decryptDeviceList } = require('../../utils/networkHelpers');
+                  const snapshot = await get(ref(database, `active_devices/${pairingKeyRef.current}`));
+                  if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    const filtered = Object.keys(data).map(k => ({ ...data[k], _key: k })).filter(d => d.IsOnline !== false);
+                    const rawDevices = await decryptDeviceList(filtered, pairingKeyRef.current);
+                    const pcDev = rawDevices.find((d: any) => d.DeviceType === 'PC');
+                    if (pcDev && pcDev.GlobalUrl && pcDev.GlobalUrl.includes('trycloudflare.com')) {
+                      const newUrl = pcDev.GlobalUrl.trim().replace(/\/$/, '');
+                      if (newUrl !== targetUrl) {
+                        // Found a genuinely NEW URL — update everything
+                        setSecureItem('lastCloudflareUrl', newUrl).catch(() => {});
+                        setSecureItem('pairedGlobalUrl', newUrl).catch(() => {});
+                        AsyncStorage.setItem('lastCloudflareUrl', newUrl).catch(() => {});
+                        AsyncStorage.setItem('pairedGlobalUrl', newUrl).catch(() => {});
+                        cachedPcUrlRef.current = newUrl;
+                        pollRetryCountRef.current = 0; // Reset — try new URL immediately
+                        syncLog('PC-POLL', `Firebase re-read found NEW Cloudflare URL: ${newUrl}`);
+                      }
+                      // If same URL, do NOT delete it — the tunnel may be temporarily down
+                    }
+                  }
+                } catch (e) {
+                  syncLog('PC-POLL', `Firebase re-query failed: ${(e as any)?.message || e}`);
+                  // Do NOT delete stored URLs on error
+                }
+              }
             }
+            markPcUnreachableRef.current();
+            // Keep connectionInfo showing last known type but mark as reconnecting
+            // (don't set to null — that causes the "PC Offline" banner to flash)
           }
-          markPcUnreachableRef.current();
-          setConnectionInfoRef.current(null); // Clear stale status — subtitle goes back to "Searching..."
           return;
         }
         {
@@ -232,6 +278,8 @@ export function useDeviceSync(params: {
           });
           // Mark this URL as proven-working for the image sweep to use
           lastWorkingPcUrlRef.current = targetUrl;
+          // Persist for background sync task access
+          AsyncStorage.setItem('lastWorkingPcUrl', targetUrl).catch(() => {});
           // Phase 4: Read X-Global-Url header — PC sends its current Cloudflare URL in every response
           try {
             const globalUrl = response.headers.get('X-Global-Url');
@@ -251,19 +299,40 @@ export function useDeviceSync(params: {
             pollLockRef.current = false;
             return;
           }
-          const data = await response.json();
+          let data: any;
+          try {
+            data = await response.json();
+          } catch {
+            syncLog('PC-POLL', 'Malformed JSON body — skipping');
+            pollLockRef.current = false;
+            return;
+          }
           if (Array.isArray(data) && data.length > 0) {
+            // Always advance lastSyncTimestamp to the NEWEST item in the FULL response
+            // This ensures delta sync picks up from the true latest point even if we cap items below
             for (const item of data) {
               if (item.Timestamp && item.Timestamp > lastSyncTimestampRef.current) {
                 lastSyncTimestampRef.current = item.Timestamp;
               }
             }
+            // Persist timestamp so app restart doesn't re-flood
+            AsyncStorage.setItem('flyshelf_lastSyncTimestamp', String(lastSyncTimestampRef.current)).catch(() => {});
 
             const isInitialPair = isFirstSyncRef.current;
             isFirstSyncRef.current = false;
 
-            // On initial pair, process all 3 initial items chronologically (oldest to newest)
-            const itemsToProcess = isInitialPair ? [...data].reverse() : data;
+            // CLIENT-SIDE CAP: Enforce max items even if PC server ignores the limit param
+            // First pair: 5 newest items. Reconnect: 3 newest items. Delta sync: all new items.
+            const maxItems = isInitialPair ? 5 : (lastSyncTimestampRef.current === 0 ? 3 : data.length);
+            // Sort by timestamp descending so we always get the NEWEST items
+            const sorted = [...data].sort((a, b) => (b.Timestamp || 0) - (a.Timestamp || 0));
+            const capped = sorted.slice(0, maxItems);
+            if (data.length > maxItems) {
+              syncLog('PC-POLL', `Client-side cap: received ${data.length} items, processing ${maxItems} (${isInitialPair ? 'first pair' : 'reconnect'})`);
+            }
+
+            // Process capped items chronologically (oldest first → newest appears on top)
+            const itemsToProcess = [...capped].reverse();
 
             for (const latest of itemsToProcess) {
               // Guard: skip oversized items to prevent OOM
@@ -299,7 +368,7 @@ export function useDeviceSync(params: {
                     const normCurrent = normalizeTextForFingerprint(currentContent);
                     const normLatest = normalizeTextForFingerprint(latestRaw);
                     if (normCurrent !== normLatest) {
-                      if (Platform.OS === 'android' && AdvanceOverlay) {
+                      if (Platform.OS === 'android' && AdvanceOverlay && typeof AdvanceOverlay.setClipboardSuppressed === 'function') {
                         try { AdvanceOverlay.setClipboardSuppressed(latestRaw); } catch(e) { await Clipboard.setStringAsync(latestRaw); }
                       } else { await Clipboard.setStringAsync(latestRaw); }
                       setLastCopiedTextRef.current(latestRaw);
@@ -317,7 +386,7 @@ export function useDeviceSync(params: {
                       Time: latest.Time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                       SourceDeviceName: latest.SourceDeviceName || 'PC',
                       SourceDeviceType: latest.SourceDeviceType || 'PC',
-                      _receivedVia: 'LAN' as const,
+                      _receivedVia: (cachedPcUrlRef.current?.includes('trycloudflare.com') ? 'Cloud' : 'LAN') as 'Cloud' | 'LAN',
                     };
 
                     setClipsRef.current(prev => {
@@ -356,7 +425,7 @@ export function useDeviceSync(params: {
                     }
                     // Genuinely new item — prepend and scroll
                     scrollToTopRef.current();
-                    return [{ ...resolvedItem, _needsDownload: true, _receivedVia: 'LAN' as const } as any, ...prev];
+                    return [{ ...resolvedItem, _needsDownload: true, _receivedVia: (cachedPcUrlRef.current?.includes('trycloudflare.com') ? 'Cloud' : 'LAN') as 'Cloud' | 'LAN' } as any, ...prev];
                   });
                 } else if (['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation'].includes(latest.Type)) {
                   // Dedup by filename+timestamp (same key used by Firebase listener path)
@@ -487,12 +556,12 @@ export function useDeviceSync(params: {
                     }
                     // Genuinely new item — prepend and scroll
                     scrollToTopRef.current();
-                    return [{ ...latest, Raw: latest.Title || latest.Raw, Timestamp: NetworkClock.now(), _receivedVia: 'LAN' as const } as any, ...prev];
+                    return [{ ...latest, Raw: latest.Title || latest.Raw, Timestamp: NetworkClock.now(), _receivedVia: (cachedPcUrlRef.current?.includes('trycloudflare.com') ? 'Cloud' : 'LAN') as 'Cloud' | 'LAN' } as any, ...prev];
                   });
                   // REMOVED: UN-DELETE logic that brought back deleted items
                   // If user deleted an item locally, it stays deleted even if PC re-sends it
                 }
-                if (Platform.OS === 'android' && AdvanceOverlay && isFloatingBallEnabledRef.current) {
+                if (Platform.OS === 'android' && AdvanceOverlay && isFloatingBallEnabledRef.current && typeof AdvanceOverlay.pushClipToNativeDB === 'function') {
                   try {
                     if (latest.Type === 'Image' || latest.Type === 'ImageLink' || latest.Type === 'QRCode') {
                       const imgRaw = latest.PreviewUrl?.startsWith('/') ? `${targetUrl}${latest.PreviewUrl}` : latest.DownloadUrl?.startsWith('/') ? `${targetUrl}${latest.DownloadUrl}` : latest.Raw?.startsWith('http') ? latest.Raw : '';
@@ -723,7 +792,11 @@ export function useDeviceSync(params: {
               if (scRes.ok) {
                 const scData = await scRes.json();
                 if (Array.isArray(scData)) {
-                  try { AdvanceOverlay.syncShortcuts(JSON.stringify(scData)); } catch(e) {}
+                  try {
+                    if (typeof AdvanceOverlay?.syncShortcuts === 'function') {
+                      AdvanceOverlay.syncShortcuts(JSON.stringify(scData));
+                    }
+                  } catch(e) {}
                   syncLog('SHORTCUTS', `Synced ${scData.length} shortcuts to overlay`);
                 }
               }
@@ -732,13 +805,16 @@ export function useDeviceSync(params: {
         }
       } catch (e) {
         syncLog('PC-POLL', `Poll failed: ${(e as any)?.message || e}`);
-        pollRetryCountRef.current = Math.min(pollRetryCountRef.current + 1, 4); // Capped at 4 for fast recovery
+        pollRetryCountRef.current = Math.min(pollRetryCountRef.current + 1, 6); // Capped at 6 for fast recovery
         
-        // Invalidate in-memory cache so next poll runs fresh resolution (checking Firebase if needed)
-        cachedPcUrlRef.current = null;
-        recordCloudflareFailureRef.current();
-        markPcUnreachableRef.current();
-        setConnectionInfoRef.current(null);
+        // Require 5+ consecutive failures before declaring offline
+        // This prevents momentary timeouts from causing Cloud→Offline flickering
+        if (pollRetryCountRef.current >= 5) {
+          // DON'T wipe cachedPcUrlRef — keep using the same URL for retries
+          recordCloudflareFailureRef.current();
+          markPcUnreachableRef.current();
+          // DON'T set connectionInfo to null — keep showing last known state
+        }
       }
       } finally { pollLockRef.current = false; }
     };
@@ -758,9 +834,10 @@ export function useDeviceSync(params: {
     pollFn();
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
     const schedulePoll = () => {
+      if (isTornDown) return; // Prevent orphaned timers after cleanup
       pollTimer = setTimeout(async () => {
         await pollFn();
-        if (pollTimer !== null) schedulePoll(); // Re-evaluate interval each cycle
+        if (pollTimer !== null && !isTornDown) schedulePoll(); // Re-evaluate interval each cycle
       }, getAdaptiveInterval());
     };
     schedulePoll();

@@ -10,6 +10,7 @@ import {
   Platform,
   ActivityIndicator,
   Pressable,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -78,21 +79,28 @@ export default function SendTextModal({
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
         style={styles.overlay}
       >
         <Pressable style={styles.backdrop} onPress={onClose} />
 
-        <View
-          style={[
-            styles.container,
-            {
-              backgroundColor: colors.bg.elevated,
-              borderColor: colors.border.subtle,
-              ...shadows.elevated,
-            },
-          ]}
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 0 }}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+          showsVerticalScrollIndicator={false}
         >
+          <View
+            style={[
+              styles.container,
+              {
+                backgroundColor: colors.bg.elevated,
+                borderColor: colors.border.subtle,
+                ...shadows.elevated,
+              },
+            ]}
+          >
           {/* Drag Handle */}
           <View style={[styles.handle, { backgroundColor: colors.border.medium }]} />
 
@@ -194,6 +202,7 @@ export default function SendTextModal({
             )}
           </TouchableOpacity>
         </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );

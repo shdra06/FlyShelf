@@ -583,9 +583,7 @@ namespace FlyShelf.Classes.Utils
         {
             try
             {
-                var fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                state.DeferredDisposables.Add(fs);
-                var xImg = XImage.FromStream(fs);
+                var xImg = XImage.FromFile(imagePath);
                 state.DeferredDisposables.Add(xImg);
 
                 double w = xImg.PointWidth;

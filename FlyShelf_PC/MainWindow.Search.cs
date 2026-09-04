@@ -638,6 +638,29 @@ namespace FlyShelf
         private void SearchNoteResult_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
+            if (sender is FrameworkElement fe && fe.DataContext is { } ctx)
+            {
+                var dayProp = ctx.GetType().GetProperty("Day");
+                var bulletProp = ctx.GetType().GetProperty("Bullet");
+                var day = dayProp?.GetValue(ctx) as Classes.NoteDay;
+                var bullet = bulletProp?.GetValue(ctx) as Classes.NoteBullet;
+
+                CloseSearch();
+                if (!_isNotesActive)
+                {
+                    NotesToggle_Click(null, null);
+                }
+
+                if (day != null && NotesContent != null)
+                {
+                    string? secId = bullet?.Id != null && bullet.Id.StartsWith("section_", StringComparison.Ordinal)
+                        ? bullet.Id.Substring("section_".Length)
+                        : null;
+                    NotesContent.SelectDay(day, secId);
+                }
+                return;
+            }
+
             CloseSearch();
             // Open notes panel — user can navigate from there
             if (!_isNotesActive)

@@ -715,63 +715,16 @@ namespace FlyShelf.Controls
 
         private void NotesModeToggle_Click(object sender, MouseButtonEventArgs e)
         {
-            // If in Month View (no specific day selected), navigate to the most recent day
-            if (_selectedNoteDay == null)
-            {
-                if (_selectedMonth != -1 && _selectedYear != -1)
-                {
-                    var newestDay = NoteManager.Days
-                        .Where(d => d.Date.Month == _selectedMonth && d.Date.Year == _selectedYear)
-                        .OrderByDescending(d => d.Date)
-                        .FirstOrDefault();
-                    if (newestDay != null) SelectNoteDay(newestDay);
-                }
-                return;
-            }
-            ToggleNotesMode();
+            // Bullet mode removed — no-op, notes always use freeform mode
         }
 
         /// <summary>
-        /// Flips the current note day between Bullet mode and Freeform mode.
-        /// Called by the mode-toggle button AND by Shift+Enter from any notes TextBox.
+        /// Previously flipped between Bullet mode and Freeform mode.
+        /// Bullet mode has been removed — notes always use freeform mode now.
         /// </summary>
         private void ToggleNotesMode()
         {
-            if (_selectedNoteDay == null) return;
-            _freeformBulletMode = false; // Reset inline-bullet mode on any mode switch
-
-            _selectedNoteDay.IsFreeformMode = !_selectedNoteDay.IsFreeformMode;
-            NoteManager.MarkDirty();
-
-            if (_selectedNoteDay.IsFreeformMode)
-            {
-                NotesBulletList.Visibility = Visibility.Collapsed;
-                NotesFreeformArea.Visibility = Visibility.Visible;
-                NotesModeToggleText.Text = "Bullets";
-
-                ActivateWindowRequested?.Invoke(this, EventArgs.Empty);
-                Dispatcher.InvokeAsync(() =>
-                {
-                    FocusFreeformLastSection();
-                }, System.Windows.Threading.DispatcherPriority.Input);
-            }
-            else
-            {
-                NotesBulletList.Visibility = Visibility.Visible;
-                NotesFreeformArea.Visibility = Visibility.Collapsed;
-                NotesModeToggleText.Text = "Freeform";
-
-                ActivateWindowRequested?.Invoke(this, EventArgs.Empty);
-                if (_selectedNoteDay.Bullets.Count == 0)
-                {
-                    _lastBulletAddedTime = DateTime.MinValue;
-                    AddNewBulletAndFocus();
-                }
-                else
-                {
-                    FocusActiveTextBox();
-                }
-            }
+            // No-op: bullet mode removed
         }
     }
 }

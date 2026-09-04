@@ -16,9 +16,10 @@ interface CompressToolProps {
   onBack: () => void;
   onPickFile: () => Promise<SelectedFile[]>;
   saveRecent: (name: string, path: string, pages: number, tool: 'compress') => void;
+  onSendToPc?: (filePath: string) => void;
 }
 
-export default function CompressTool({ onBack, onPickFile, saveRecent }: CompressToolProps) {
+export default function CompressTool({ onBack, onPickFile, saveRecent, onSendToPc }: CompressToolProps) {
   const { colors, shadows } = useAppTheme();
   const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
 
@@ -95,7 +96,7 @@ export default function CompressTool({ onBack, onPickFile, saveRecent }: Compres
               </Text>
             </View>
           )}
-          <ResultView path={resultPath} onDone={onBack} />
+          <ResultView path={resultPath} onDone={onBack} onSendToPc={onSendToPc} />
         </ScrollView>
       </View>
     );

@@ -3,11 +3,9 @@ import AppErrorBoundary from '../../components/AppErrorBoundary';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Alert,
   Animated, Keyboard, Platform, ToastAndroid, Share, Modal,
-  ActivityIndicator,
+  ActivityIndicator, FlatList,
 } from 'react-native';
 // SafeAreaView import removed — unused
-import { FlashList } from '@shopify/flash-list';
-const FlashListCast = FlashList as React.ComponentType<any>;
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,7 +26,7 @@ import { font, component } from '../../styles/theme';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { Ionicons } from '@expo/vector-icons';
 import { fuzzyIsMatch, fuzzyScore } from '../../utils/textNormalize';
-import { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import { useSharedValue } from 'react-native-reanimated';
 import ScreenHeader from '../../components/ScreenHeader';
 
 // ═══════════════════════════════════════════════════════════
@@ -85,6 +83,14 @@ const generateRecentDates = (count: number): string[] => {
     dates.push(d.toISOString().split('T')[0] + 'T00:00:00');
   }
   return dates;
+};
+
+/** Normalize PC date keys like "2026-09-03T00:00:00.0000000+05:30" to "2026-09-03T00:00:00" */
+const normalizeDateKey = (dateStr: string): string => {
+  if (!dateStr) return dateStr;
+  // Extract just YYYY-MM-DD from any ISO format
+  const datePart = dateStr.split('T')[0];
+  return datePart + 'T00:00:00';
 };
 
 /** Find or create a NoteDay for a given date key */
@@ -349,7 +355,7 @@ function NotesScreenInner() {
         return {
           ...day,
           LastModified: NetworkClock.now(),
-          Bullets: day.Bullets.map(b => b.Id === bulletId ? updater({ ...b, LastEdited: new Date().toISOString(), LastEditedByDevice: deviceName || 'Android' }) : b),
+          Bullets: (day.Bullets || []).map(b => b.Id === bulletId ? updater({ ...b, LastEdited: new Date().toISOString(), LastEditedByDevice: deviceName || 'Android' }) : b),
         };
       });
     }, selectedDateKey);
@@ -405,7 +411,7 @@ function NotesScreenInner() {
     newBullet.LastEditedByDevice = deviceName || 'Android';
     updateDays(prev => {
       const { days: updated, day, idx } = ensureDay(prev, selectedDateKey);
-      const sorted = [...day.Bullets, { ...newBullet, SortOrder: day.Bullets.length }];
+      const sorted = [...(day.Bullets || []), { ...newBullet, SortOrder: (day.Bullets || []).length }];
       updated[idx] = { ...day, Bullets: sorted, LastModified: NetworkClock.now() };
       return updated;
     }, selectedDateKey);
@@ -435,7 +441,7 @@ function NotesScreenInner() {
         return {
           ...day,
           LastModified: NetworkClock.now(),
-          Bullets: day.Bullets.filter(b => b.Id !== bulletId),
+          Bullets: (day.Bullets || []).filter(b => b.Id !== bulletId),
         };
       });
     }, selectedDateKey);
@@ -470,7 +476,7 @@ function NotesScreenInner() {
     safeHaptic();
     updateBullet(bulletId, b => ({
       ...b,
-      SubBullets: b.SubBullets.map(s =>
+      SubBullets: (b.SubBullets || []).map(s =>
         s.Id === subId ? { ...s, IsDone: !s.IsDone } : s
       ),
     }));
@@ -481,14 +487,14 @@ function NotesScreenInner() {
     const sub: SubBulletItem = { Id: generateId(), Text: '', IsDone: false };
     updateBullet(bulletId, b => ({
       ...b,
-      SubBullets: [...b.SubBullets, sub],
+      SubBullets: [...(b.SubBullets || []), sub],
     }));
   }, [updateBullet]);
 
   const handleUpdateSubBulletText = useCallback((bulletId: string, subId: string, text: string) => {
     updateBullet(bulletId, b => ({
       ...b,
-      SubBullets: b.SubBullets.map(s =>
+      SubBullets: (b.SubBullets || []).map(s =>
         s.Id === subId ? { ...s, Text: text } : s
       ),
     }));
@@ -558,7 +564,7 @@ function NotesScreenInner() {
     safeHaptic(Haptics.ImpactFeedbackStyle.Medium);
     updateDays(prev => {
       const { days: updated, day, idx } = ensureDay(prev, selectedDateKey);
-      const existingCount = day.Bullets.length;
+      const existingCount = (day.Bullets || []).length;
       const newBullets = template.bullets.map((text, i) => {
         const b = createNoteBullet(text);
         b.Header = text;
@@ -566,7 +572,7 @@ function NotesScreenInner() {
         b.SortOrder = existingCount + i;
         return b;
       });
-      updated[idx] = { ...day, Bullets: [...day.Bullets, ...newBullets], LastModified: NetworkClock.now() };
+      updated[idx] = { ...day, Bullets: [...(day.Bullets || []), ...newBullets], LastModified: NetworkClock.now() };
       return updated;
     }, selectedDateKey);
     setShowTemplates(false);
@@ -905,10 +911,17 @@ function NotesScreenInner() {
           onDebouncedChange(sectionId, text);
         }, 300);
       }, [sectionId, onDebouncedChange]);
-      // Flush on unmount
+      // Flush on unmount only — use ref to avoid re-running effect on every keystroke
+      const latestTextRef = React.useRef(localText);
+      React.useEffect(() => { latestTextRef.current = localText; }, [localText]);
       React.useEffect(() => {
-        return () => { if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current); };
-      }, []);
+        return () => {
+          if (debounceTimerRef.current) {
+            onDebouncedChange(sectionId, latestTextRef.current);
+            clearTimeout(debounceTimerRef.current);
+          }
+        };
+      }, [sectionId, onDebouncedChange]);
       return (
         <TextInput
           style={style}
@@ -998,7 +1011,7 @@ function NotesScreenInner() {
           const hasContent = days.some(
             day => day.Date === dateKey &&
             ((day.Bullets && day.Bullets.length > 0) ||
-             (day.FreeformSections && day.FreeformSections.some(s => s.Content.trim())))
+             (day.FreeformSections && day.FreeformSections.some(s => s.Content?.trim())))
           );
 
           return (
@@ -1129,6 +1142,8 @@ function NotesScreenInner() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
       >
         {groups.map(([dateKey, items]) => {
           const dayIdx = recentDates.indexOf(dateKey);
@@ -1181,7 +1196,12 @@ function NotesScreenInner() {
   };
 
   const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler({ onScroll: (e) => { scrollY.value = e.contentOffset.y; } });
+  const scrollHandler = (e: any) => {
+    const offsetY = e?.nativeEvent?.contentOffset?.y;
+    if (typeof offsetY === 'number') {
+      scrollY.value = offsetY;
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -1345,14 +1365,19 @@ function NotesScreenInner() {
               freeformData.length === 0 ? (
                 renderEmpty()
               ) : (
-                <FlashListCast
+                <FlatList
                   data={freeformData}
                   renderItem={renderFreeformCard}
                   keyExtractor={(item: FreeformSection) => item.Id}
-                  estimatedItemSize={160}
                   contentContainerStyle={styles.listContent}
                   showsVerticalScrollIndicator={false}
+                  onScroll={scrollHandler}
+                  scrollEventThrottle={16}
                   keyboardShouldPersistTaps="handled"
+                  initialNumToRender={10}
+                  maxToRenderPerBatch={10}
+                  windowSize={7}
+                  removeClippedSubviews={Platform.OS === 'android'}
                 />
               )
             ) : (
@@ -1360,16 +1385,20 @@ function NotesScreenInner() {
               sortedBullets.length === 0 ? (
                 renderEmpty()
               ) : (
-                <FlashListCast
+                <FlatList
                   data={sortedBullets}
                   renderItem={renderBulletCard}
                   keyExtractor={(item: NoteBullet) => item.Id}
-                  estimatedItemSize={200}
                   extraData={`${deletingBulletId}-${editingTagBulletId}-${showColorPicker}-${noteZoom}`}
                   contentContainerStyle={styles.listContent}
                   showsVerticalScrollIndicator={false}
                   onScroll={scrollHandler}
+                  scrollEventThrottle={16}
                   keyboardShouldPersistTaps="handled"
+                  initialNumToRender={12}
+                  maxToRenderPerBatch={12}
+                  windowSize={7}
+                  removeClippedSubviews={Platform.OS === 'android'}
                 />
               )
             )}

@@ -667,9 +667,18 @@ namespace FlyShelf.Classes.Utils
                 var normalizedMs = NormalizeImageStream(imagePart);
                 if (normalizedMs == null || normalizedMs.Length == 0) return false;
 
-                var xImage = XImage.FromStream(normalizedMs);
-                state.DeferredDisposables.Add(normalizedMs);
+                // PDFsharp 6.x: XImage.FromStream has a known "Cannot retrieve stream length" bug
+                // with MemoryStreams. Write to temp file and use XImage.FromFile instead.
+                string tempImg = Path.Combine(Path.GetTempPath(), $"flyshelf_docx_{Guid.NewGuid():N}.jpg");
+                using (var tmpFs = new FileStream(tempImg, FileMode.Create, FileAccess.Write))
+                {
+                    normalizedMs.CopyTo(tmpFs);
+                }
+                normalizedMs.Dispose();
+
+                var xImage = XImage.FromFile(tempImg);
                 state.DeferredDisposables.Add(xImage);
+                state.TempFiles.Add(tempImg);
 
                 double imgW = xImage.PointWidth;
                 double imgH = xImage.PointHeight;
@@ -736,9 +745,17 @@ namespace FlyShelf.Classes.Utils
                 var normalizedMs = NormalizeImageStream(imagePart);
                 if (normalizedMs == null || normalizedMs.Length == 0) return false;
 
-                var xImage = XImage.FromStream(normalizedMs);
-                state.DeferredDisposables.Add(normalizedMs);
+                // PDFsharp 6.x: XImage.FromStream has a known "Cannot retrieve stream length" bug
+                string tempImg = Path.Combine(Path.GetTempPath(), $"flyshelf_vml_{Guid.NewGuid():N}.jpg");
+                using (var tmpFs = new FileStream(tempImg, FileMode.Create, FileAccess.Write))
+                {
+                    normalizedMs.CopyTo(tmpFs);
+                }
+                normalizedMs.Dispose();
+
+                var xImage = XImage.FromFile(tempImg);
                 state.DeferredDisposables.Add(xImage);
+                state.TempFiles.Add(tempImg);
                 double imgW = xImage.PointWidth;
                 double imgH = xImage.PointHeight;
 
@@ -877,6 +894,9 @@ namespace FlyShelf.Classes.Utils
             // C1 fix: Track image resources so they stay alive until pdfDoc.Save() completes
             public List<IDisposable> DeferredDisposables = new List<IDisposable>();
 
+            // Track temp files created for PDFsharp 6.x XImage.FromFile workaround
+            public List<string> TempFiles = new List<string>();
+
             public void NewPage()
             {
                 var page = Doc.AddPage();
@@ -894,6 +914,13 @@ namespace FlyShelf.Classes.Utils
                     try { d?.Dispose(); } catch { }
                 }
                 DeferredDisposables.Clear();
+
+                // Clean up temp image files
+                foreach (var f in TempFiles)
+                {
+                    try { if (File.Exists(f)) File.Delete(f); } catch { }
+                }
+                TempFiles.Clear();
             }
         }
 

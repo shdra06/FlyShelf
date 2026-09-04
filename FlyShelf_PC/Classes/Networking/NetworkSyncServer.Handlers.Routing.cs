@@ -683,9 +683,9 @@ namespace FlyShelf.Classes
                     else if (path == "/api/logs" && req.HttpMethod == "POST") { await HandleRemoteLogPost(req, res); }
                     else if (path == "/api/network/dashboard" && req.HttpMethod == "GET") { ServeNetworkDashboard(res); }
                     else if (path == "/api/speedtest" && req.HttpMethod == "POST") { await HandleSpeedTest(req, res); }
-                    else if (path == "/api/notes" && req.HttpMethod == "GET") { ServeNotesData(res); }
+                    else if (path == "/api/notes" && req.HttpMethod == "GET") { ServeNotesData(req, res); }
                     else if (path == "/api/notes" && req.HttpMethod == "POST") { await HandleNotesUpdate(req, res); }
-                    else if (path == "/api/todos" && req.HttpMethod == "GET") { ServeTodosData(res); }
+                    else if (path == "/api/todos" && req.HttpMethod == "GET") { ServeTodosData(req, res); }
                     else if (path == "/api/todos" && req.HttpMethod == "POST") { await HandleTodosUpdate(req, res); }
                     else if (path == "/api/shortcuts" && req.HttpMethod == "GET") { ServeShortcutsData(res); }
                     // ═══ Android REST Transfer Endpoints ═══

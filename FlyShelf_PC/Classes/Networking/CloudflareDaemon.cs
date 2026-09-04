@@ -44,6 +44,7 @@ namespace FlyShelf.Classes
             _localPort = localPort;
             _consecutiveFailures = 0;
             _stopped = false;
+            AppLogger.Log("CLOUDFLARE", $"Starting Cloudflare tunnel on local port {localPort}...");
             await StartTunnelCore();
         }
 
@@ -67,6 +68,7 @@ namespace FlyShelf.Classes
         {
             if (_stopped) return;
             if (!await _startLock.WaitAsync(0)) { Logger.LogAction("CLOUDFLARE", "StartTunnelCore already in progress — skipping duplicate call"); return; }
+            AppLogger.Log("CLOUDFLARE", "Initiating Cloudflare tunnel process...");
             try
             {
                 try
@@ -223,6 +225,7 @@ namespace FlyShelf.Classes
                             _consecutiveFailures = 0; // Reset on success
                             Interlocked.Exchange(ref _quicErrorCount, 0); // Reset QUIC error count on new URL
                             Logger.LogAction("CLOUDFLARE", $"🚀 Tunnel URL received: {GlobalUrl} — publishing immediately to Firebase");
+                            AppLogger.Log("CLOUDFLARE", $"Tunnel URL established: {GlobalUrl}");
                             GlobalUrlUpdated?.Invoke(GlobalUrl);
                         }
                     }
@@ -442,15 +445,29 @@ namespace FlyShelf.Classes
             Logger.LogAction("CLOUDFLARE HEALTH", "Force health check triggered (post-sleep)");
             try
             {
+                if (_cfProcess == null || _cfProcess.HasExited)
+                {
+                    throw new InvalidOperationException("Cloudflare process is not running");
+                }
+
                 var client = _healthClient;
                 using var resp = await client.GetAsync($"http://localhost:{_localPort}/api/health");
                 if (resp.IsSuccessStatusCode)
                 {
-                    Logger.LogAction("CLOUDFLARE HEALTH", "Force check passed — tunnel is alive");
-                    Interlocked.Exchange(ref _healthFailCount, 0);
-                    return;
+                    // Also verify the public URL edge is alive
+                    try
+                    {
+                        using var publicResp = await client.GetAsync(GlobalUrl + "/api/health");
+                        if (publicResp.IsSuccessStatusCode)
+                        {
+                            Logger.LogAction("CLOUDFLARE HEALTH", "Force check passed — tunnel and public URL are alive");
+                            Interlocked.Exchange(ref _healthFailCount, 0);
+                            return;
+                        }
+                    }
+                    catch { /* Edge dead after sleep — fall through to restart */ }
                 }
-                Logger.LogAction("CLOUDFLARE HEALTH", $"Force check failed: HTTP {(int)resp.StatusCode}");
+                Logger.LogAction("CLOUDFLARE HEALTH", "Force check failed: endpoint unreachable after sleep");
             }
             catch (Exception ex)
             {
@@ -586,16 +603,21 @@ namespace FlyShelf.Classes
             GlobalUrl = "Offline";
             GlobalUrlUpdated?.Invoke(GlobalUrl);
             Logger.LogAction("CLOUDFLARE", "Global Tunnel Terminated.");
+            AppLogger.Log("CLOUDFLARE", "Global Tunnel Terminated.");
         }
 
         private void KillExisting()
         {
             try
             {
-                if (_cfProcess != null && !_cfProcess.HasExited)
+                if (_cfProcess != null)
                 {
-                    try { _cfProcess.Kill(); } catch { } // Best-effort: failure is acceptable
-                    _cfProcess.Dispose();
+                    try { _cfProcess.EnableRaisingEvents = false; } catch { }
+                    if (!_cfProcess.HasExited)
+                    {
+                        try { _cfProcess.Kill(); } catch { } // Best-effort: failure is acceptable
+                    }
+                    try { _cfProcess.Dispose(); } catch { }
                     _cfProcess = null;
                 }
 

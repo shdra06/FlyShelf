@@ -74,6 +74,11 @@ type SettingsContextType = {
   setSyncPreference: (deviceId: string, category: keyof DeviceSyncPrefs, enabled: boolean) => Promise<void>;
   getSyncPrefsForDevice: (deviceId: string) => DeviceSyncPrefs;
   setAllSyncPrefsForDevice: (deviceId: string, prefs: DeviceSyncPrefs) => Promise<void>;
+  // ── Customization & Navigation ──
+  defaultHomeCard: string;
+  setDefaultHomeCard: (card: string) => Promise<void>;
+  showBottomHomeSwitcher: boolean;
+  setShowBottomHomeSwitcher: (val: boolean) => Promise<void>;
 };
 
 const SettingsContext = createContext<SettingsContextType>({
@@ -108,8 +113,12 @@ const SettingsContext = createContext<SettingsContextType>({
   setIsFcmSilentWakeEnabled: async () => {},
   syncPreferences: {},
   setSyncPreference: async () => {},
-  getSyncPrefsForDevice: () => DEFAULT_SYNC_PREFS,
+  getSyncPrefsForDevice: () => ({ ...DEFAULT_SYNC_PREFS }),
   setAllSyncPrefsForDevice: async () => {},
+  defaultHomeCard: 'home',
+  setDefaultHomeCard: async () => {},
+  showBottomHomeSwitcher: true,
+  setShowBottomHomeSwitcher: async () => {},
 });
 
 export const useSettings = () => useContext(SettingsContext);
@@ -137,8 +146,20 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [pairedDevices, setPairedDevicesState] = useState<PairedDevice[]>([]);
   const [pairingKey, setPairingKeyState] = useState('');
   const [syncPreferences, setSyncPreferencesState] = useState<SyncPreferences>({});
+  const [defaultHomeCard, setDefaultHomeCardState] = useState('home');
+  const [showBottomHomeSwitcher, setShowBottomHomeSwitcherState] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const pairedDevicesHydrated = useRef(false);
+
+  const setDefaultHomeCard = useCallback(async (val: string) => {
+    setDefaultHomeCardState(val);
+    await AsyncStorage.setItem('@defaultHomeCard', val).catch(() => {});
+  }, []);
+
+  const setShowBottomHomeSwitcher = useCallback(async (val: boolean) => {
+    setShowBottomHomeSwitcherState(val);
+    await AsyncStorage.setItem('@showBottomHomeSwitcher', String(val)).catch(() => {});
+  }, []);
 
   const setAutoSyncTop5 = useCallback(async (val: boolean) => {
     setAutoSyncTop5State(val);
@@ -169,6 +190,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const fcmStored = await AsyncStorage.getItem('@isFcmSilentWakeEnabled');
         if (fcmStored !== null) setIsFcmSilentWakeEnabledState(fcmStored === 'true');
 
+        const defaultCardStored = await AsyncStorage.getItem('@defaultHomeCard');
+        if (defaultCardStored) setDefaultHomeCardState(defaultCardStored);
+
+        const switcherStored = await AsyncStorage.getItem('@showBottomHomeSwitcher');
+        if (switcherStored !== null) setShowBottomHomeSwitcherState(switcherStored === 'true');
+
         const keys = [
           '@pcLocalIp', '@deviceName', '@isCloudDiscoveryEnabled', '@isGlobalSyncEnabled',
           '@isFloatingBallEnabled', '@defaultTargetDeviceName', '@floatingBallSize',
@@ -178,7 +205,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const values = Object.fromEntries(results);
 
         if (values['@pcLocalIp']) setPcLocalIpState(values['@pcLocalIp']!);
-        if (values['@deviceName']) setDeviceNameState(values['@deviceName']!);
+        if (values['@deviceName']) {
+          setDeviceNameState(values['@deviceName']!);
+        } else {
+          const rawDev = (await AsyncStorage.getItem('@deviceName')) || (await AsyncStorage.getItem('deviceName'));
+          if (rawDev) setDeviceNameState(rawDev);
+        }
 
         const globalSync = values['@isCloudDiscoveryEnabled'] ?? values['@isGlobalSyncEnabled'];
         if (globalSync !== null && globalSync !== undefined) setGlobalSyncEnabledState(globalSync === 'true');
@@ -264,6 +296,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const setDeviceName = useCallback(async (name: string) => {
     setDeviceNameState(name);
     await EncryptedStorage.setItem('@deviceName', name);
+    await AsyncStorage.setItem('@deviceName', name).catch(() => {});
   }, []);
 
   const setGlobalSyncEnabled = useCallback(async (val: boolean) => {
@@ -336,6 +369,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
    */
   const pendingStatusRef = useRef<Map<string, { isOnline?: boolean; connectionType?: ConnectionType; latencyMs?: number; lastSeen?: number; localUrl?: string; globalUrl?: string }>>(new Map());
   const statusFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (statusFlushTimerRef.current) clearTimeout(statusFlushTimerRef.current);
+    };
+  }, []);
 
   const flushDeviceStatus = useCallback(() => {
     const pending = pendingStatusRef.current;
@@ -425,6 +464,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     isOfflineOutboxEnabled, setIsOfflineOutboxEnabled,
     isFcmSilentWakeEnabled, setIsFcmSilentWakeEnabled,
     syncPreferences, setSyncPreference, getSyncPrefsForDevice, setAllSyncPrefsForDevice,
+    defaultHomeCard, setDefaultHomeCard, showBottomHomeSwitcher, setShowBottomHomeSwitcher,
   }), [
     pcLocalIp, setPcLocalIp, deviceName, setDeviceName, deviceId, isLoading,
     isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, setFloatingBallEnabled,
@@ -435,6 +475,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     isOfflineOutboxEnabled, setIsOfflineOutboxEnabled,
     isFcmSilentWakeEnabled, setIsFcmSilentWakeEnabled,
     syncPreferences, setSyncPreference, getSyncPrefsForDevice, setAllSyncPrefsForDevice,
+    defaultHomeCard, setDefaultHomeCard, showBottomHomeSwitcher, setShowBottomHomeSwitcher,
   ]);
 
   return (

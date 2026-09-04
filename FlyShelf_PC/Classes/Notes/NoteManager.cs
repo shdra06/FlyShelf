@@ -567,6 +567,74 @@ namespace FlyShelf.Classes
         // NM-15b FIX: Cap search results to prevent UI freezes on large note histories
         private const int MAX_SEARCH_RESULTS = 200;
 
+        /// <summary>
+        /// Extracts a contextual snippet of text surrounding the search query.
+        /// Normalizes line breaks and whitespace for card preview.
+        /// </summary>
+        public static string GetSmartSnippet(string? text, string query, int maxLen = 180)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+
+            // Normalize newlines and excessive spaces for compact preview
+            string cleaned = System.Text.RegularExpressions.Regex.Replace(text.Trim(), @"[\r\n]+", " ");
+            cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"\s{2,}", " ");
+
+            if (cleaned.Length <= maxLen) return cleaned;
+
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                return string.Concat(cleaned.AsSpan(0, maxLen).TrimEnd(), "…");
+            }
+
+            // Find match location (exact query, or individual tokens)
+            int matchIdx = cleaned.IndexOf(query, StringComparison.OrdinalIgnoreCase);
+            if (matchIdx < 0)
+            {
+                var words = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var w in words)
+                {
+                    if (w.Length >= 2)
+                    {
+                        matchIdx = cleaned.IndexOf(w, StringComparison.OrdinalIgnoreCase);
+                        if (matchIdx >= 0) break;
+                    }
+                }
+            }
+
+            if (matchIdx < 0)
+            {
+                return string.Concat(cleaned.AsSpan(0, maxLen).TrimEnd(), "…");
+            }
+
+            // Center the snippet around the match
+            int leadChars = Math.Min(35, maxLen / 4);
+            int start = Math.Max(0, matchIdx - leadChars);
+
+            // Snap forward to word boundary if not at start
+            if (start > 0)
+            {
+                int spaceIdx = cleaned.IndexOf(' ', start);
+                if (spaceIdx >= 0 && spaceIdx < matchIdx)
+                {
+                    start = spaceIdx + 1;
+                }
+            }
+
+            int length = Math.Min(maxLen, cleaned.Length - start);
+            string snippet = cleaned.Substring(start, length).Trim();
+
+            if (start > 0)
+            {
+                snippet = "…" + snippet;
+            }
+            if (start + length < cleaned.Length)
+            {
+                snippet = snippet.TrimEnd('.', ' ', ',') + "…";
+            }
+
+            return snippet;
+        }
+
         public static List<(NoteDay Day, NoteBullet Bullet)> Search(string query)
         {
             if (string.IsNullOrWhiteSpace(query)) return new();
@@ -576,61 +644,125 @@ namespace FlyShelf.Classes
             lock (_lock) { snapshot = _days.ToList(); }
 
             var results = new List<(NoteDay Day, NoteBullet Bullet, double Score)>();
+            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var day in snapshot)
             {
-                foreach (var bullet in day.Bullets)
+                // 1. Primary: Search modern freeform sections ("pages")
+                bool hasFreeformSections = day.FreeformSections != null && day.FreeformSections.Count > 0;
+                if (hasFreeformSections)
                 {
-                    bool matchContent = FuzzyMatcher.IsMatch(q, bullet.Content ?? "");
-                    bool matchHeader = FuzzyMatcher.IsMatch(q, bullet.Header ?? "");
-                    bool matchTags = bullet.Tags.Any(t => FuzzyMatcher.IsMatch(q, t));
-                    bool matchSub = bullet.SubBullets.Any(sb => FuzzyMatcher.IsMatch(q, sb.Text ?? ""));
-                    if (matchContent || matchHeader || matchTags || matchSub)
+                    int totalSections = day.FreeformSections!.Count;
+                    for (int secIdx = 0; secIdx < totalSections; secIdx++)
                     {
-                        double score = Math.Max(
-                            FuzzyMatcher.Score(q, bullet.Content ?? ""),
-                            FuzzyMatcher.Score(q, bullet.Header ?? "")
-                        );
-                        results.Add((day, bullet, score));
-                        if (results.Count >= MAX_SEARCH_RESULTS) break;
-                    }
-                }
-
-                // Search modern freeform sections
-                if (day.FreeformSections != null)
-                {
-                    foreach (var sec in day.FreeformSections)
-                    {
+                        var sec = day.FreeformSections[secIdx];
                         string content = sec.Content ?? "";
                         string title = sec.Title ?? "";
-                        if (FuzzyMatcher.IsMatch(q, content) || (!string.IsNullOrEmpty(title) && FuzzyMatcher.IsMatch(q, title)))
+
+                        bool matchContent = FuzzyMatcher.IsMatch(q, content);
+                        bool matchTitle = !string.IsNullOrEmpty(title) && FuzzyMatcher.IsMatch(q, title);
+
+                        // Check subnotes in this section
+                        bool matchSubnotes = false;
+                        string matchingSubnoteSnippet = "";
+                        if (sec.SubNotes != null)
                         {
+                            foreach (var sn in sec.SubNotes)
+                            {
+                                if (FuzzyMatcher.IsMatch(q, sn.Content ?? "") || (!string.IsNullOrEmpty(sn.Title) && FuzzyMatcher.IsMatch(q, sn.Title)))
+                                {
+                                    matchSubnotes = true;
+                                    if (string.IsNullOrEmpty(matchingSubnoteSnippet))
+                                    {
+                                        string subTitle = string.IsNullOrEmpty(sn.Title) ? "" : $"[{sn.Title}] ";
+                                        matchingSubnoteSnippet = subTitle + (sn.Content ?? "");
+                                    }
+                                }
+                            }
+                        }
+
+                        if (matchContent || matchTitle || matchSubnotes)
+                        {
+                            string dedupKey = $"{day.Date:yyyyMMdd}_sec_{sec.Id}";
+                            if (!seenKeys.Add(dedupKey)) continue;
+
+                            int pageNum = secIdx + 1;
+                            string headerText;
+                            if (totalSections > 1)
+                            {
+                                // Multi-page note: clearly label the page number
+                                headerText = string.IsNullOrEmpty(title) ? $"Page {pageNum}" : $"Page {pageNum}: {title}";
+                            }
+                            else
+                            {
+                                // Single-page note: keep title clean
+                                headerText = title;
+                            }
+
+                            string snippetSource = matchContent ? content : (matchSubnotes ? matchingSubnoteSnippet : content);
+                            string snippet = GetSmartSnippet(snippetSource, q, 180);
+
                             var virtualBullet = new NoteBullet
                             {
                                 Id = "section_" + sec.Id,
-                                Header = title,
-                                Content = content.Length > 200 ? string.Concat(content.AsSpan(0, 200), "...") : content,
+                                Header = headerText,
+                                Content = snippet,
                                 CreatedAt = day.Date
                             };
+
                             double score = Math.Max(FuzzyMatcher.Score(q, content), FuzzyMatcher.Score(q, title));
+                            if (matchSubnotes)
+                            {
+                                score = Math.Max(score, FuzzyMatcher.Score(q, matchingSubnoteSnippet));
+                            }
+
                             results.Add((day, virtualBullet, score));
                             if (results.Count >= MAX_SEARCH_RESULTS) break;
                         }
                     }
                 }
-
-                // Also search legacy freeform content — create a virtual bullet for display
-                if (!string.IsNullOrEmpty(day.FreeformContent) && FuzzyMatcher.IsMatch(q, day.FreeformContent))
+                else if (day.Bullets != null && day.Bullets.Count > 0)
                 {
-                    var virtualBullet = new NoteBullet
+                    // 2. Fallback: Search legacy bullets (only if no freeform sections exist)
+                    foreach (var bullet in day.Bullets)
                     {
-                        Id = "freeform_" + day.Date.Ticks.ToString(CultureInfo.InvariantCulture),
-                        Content = day.FreeformContent.Length > 200 ? string.Concat(day.FreeformContent.AsSpan(0, 200), "...") : day.FreeformContent,
-                        CreatedAt = day.Date
-                    };
-                    double score = FuzzyMatcher.Score(q, day.FreeformContent);
-                    results.Add((day, virtualBullet, score));
-                    if (results.Count >= MAX_SEARCH_RESULTS) break;
+                        bool matchContent = FuzzyMatcher.IsMatch(q, bullet.Content ?? "");
+                        bool matchHeader = FuzzyMatcher.IsMatch(q, bullet.Header ?? "");
+                        bool matchTags = bullet.Tags.Any(t => FuzzyMatcher.IsMatch(q, t));
+                        bool matchSub = bullet.SubBullets.Any(sb => FuzzyMatcher.IsMatch(q, sb.Text ?? ""));
+                        if (matchContent || matchHeader || matchTags || matchSub)
+                        {
+                            string dedupKey = $"{day.Date:yyyyMMdd}_bullet_{bullet.Id}";
+                            if (!seenKeys.Add(dedupKey)) continue;
+
+                            double score = Math.Max(
+                                FuzzyMatcher.Score(q, bullet.Content ?? ""),
+                                FuzzyMatcher.Score(q, bullet.Header ?? "")
+                            );
+                            results.Add((day, bullet, score));
+                            if (results.Count >= MAX_SEARCH_RESULTS) break;
+                        }
+                    }
                 }
+                else if (!string.IsNullOrEmpty(day.FreeformContent) && FuzzyMatcher.IsMatch(q, day.FreeformContent))
+                {
+                    // 3. Fallback: Unmigrated legacy freeform content (only if no sections and no bullets exist)
+                    string dedupKey = $"{day.Date:yyyyMMdd}_legacy";
+                    if (seenKeys.Add(dedupKey))
+                    {
+                        var virtualBullet = new NoteBullet
+                        {
+                            Id = "freeform_" + day.Date.Ticks.ToString(CultureInfo.InvariantCulture),
+                            Content = GetSmartSnippet(day.FreeformContent, q, 180),
+                            CreatedAt = day.Date
+                        };
+                        double score = FuzzyMatcher.Score(q, day.FreeformContent);
+                        results.Add((day, virtualBullet, score));
+                        if (results.Count >= MAX_SEARCH_RESULTS) break;
+                    }
+                }
+
+                if (results.Count >= MAX_SEARCH_RESULTS) break;
             }
 
             // Rank results by match score (highest score first)
@@ -737,6 +869,56 @@ namespace FlyShelf.Classes
             }
 
             // Build sync-safe payload
+            var payload = snapshot.Select(day => {
+                long lastMod = 0;
+                foreach (var b in day.Bullets)
+                {
+                    long bTs = new DateTimeOffset(b.LastEdited).ToUnixTimeMilliseconds();
+                    if (bTs > lastMod) lastMod = bTs;
+                }
+                foreach (var s in day.FreeformSections)
+                {
+                    long sTs = new DateTimeOffset(s.CreatedAt).ToUnixTimeMilliseconds();
+                    if (sTs > lastMod) lastMod = sTs;
+                }
+                if (lastMod == 0) lastMod = new DateTimeOffset(day.Date).ToUnixTimeMilliseconds();
+
+                return new {
+                    Date = day.Date.ToString("o", CultureInfo.InvariantCulture),
+                    IsFreeformMode = day.IsFreeformMode,
+                    Bullets = day.Bullets.Select(b => new {
+                        b.Id, b.Header, b.Content, b.IsCollapsed,
+                        b.ImageDisplayWidth, b.ImageDisplayWidth2,
+                        CreatedAt = b.CreatedAt.ToString("o", CultureInfo.InvariantCulture),
+                        LastEdited = b.LastEdited.ToString("o", CultureInfo.InvariantCulture),
+                        b.Tags, b.Color, b.IsPinned, b.SortOrder,
+                        b.CreatedByDevice, b.LastEditedByDevice,
+                        SubBullets = b.SubBullets.Select(sb => new { sb.Id, sb.Text, sb.IsDone }).ToList()
+                    }).ToList(),
+                    FreeformSections = day.FreeformSections.Select(s => new {
+                        s.Id, s.Title, s.Content, CreatedAt = s.CreatedAt.ToString("o", CultureInfo.InvariantCulture),
+                        ImageCount = s.Images?.Count ?? 0
+                    }).ToList(),
+                    LastModified = lastMod
+                };
+            }).ToList();
+
+            return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = false });
+        }
+
+        /// <summary>
+        /// Returns a sync payload filtered by the given predicate.
+        /// Uses the same anonymous-object projection as GetSyncPayload for consistent JSON format.
+        /// </summary>
+        public static string GetSyncPayloadFiltered(Func<NoteDay, bool> predicate)
+        {
+            List<NoteDay> snapshot;
+            lock (_lock)
+            {
+                if (!_isLoaded) return "[]";
+                try { snapshot = _days.Where(predicate).ToList(); } catch { return "[]"; }
+            }
+
             var payload = snapshot.Select(day => {
                 long lastMod = 0;
                 foreach (var b in day.Bullets)

@@ -18,9 +18,10 @@ interface MergeToolProps {
   onBack: () => void;
   onPickFiles: () => Promise<SelectedFile[]>;
   saveRecent: (name: string, path: string, pages: number, tool: 'merge') => void;
+  onSendToPc?: (filePath: string) => Promise<void>;
 }
 
-export default function MergeTool({ onBack, onPickFiles, saveRecent }: MergeToolProps) {
+export default function MergeTool({ onBack, onPickFiles, saveRecent, onSendToPc }: MergeToolProps) {
   const { colors, shadows } = useAppTheme();
   const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
 
@@ -56,12 +57,14 @@ export default function MergeTool({ onBack, onPickFiles, saveRecent }: MergeTool
   };
 
   const moveFile = (idx: number, dir: -1 | 1) => {
-    const ni = idx + dir;
-    if (ni < 0 || ni >= files.length) return;
-    const arr = [...files];
-    [arr[idx], arr[ni]] = [arr[ni], arr[idx]];
-    setFiles(arr);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFiles(prev => {
+      const ni = idx + dir;
+      if (ni < 0 || ni >= prev.length) return prev;
+      const arr = [...prev];
+      [arr[idx], arr[ni]] = [arr[ni], arr[idx]];
+      return arr;
+    });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   };
 
   const removeFile = (idx: number) => {
@@ -76,7 +79,7 @@ export default function MergeTool({ onBack, onPickFiles, saveRecent }: MergeTool
           <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
           <Text style={s.modalTitle}>Success</Text>
         </View>
-        <ResultView path={resultPath} onDone={onBack} />
+        <ResultView path={resultPath} onDone={onBack} onSendToPc={onSendToPc} />
       </View>
     );
   }

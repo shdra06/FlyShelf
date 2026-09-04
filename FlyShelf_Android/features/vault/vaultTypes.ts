@@ -13,7 +13,7 @@ export interface VaultEntry {
   fileSize: number;
   categoryId: string;
   dateAdded: number;
-  iv: string; // encryption IV for this file
+  iv?: string; // encryption IV for legacy encrypted files (optional for direct safe files)
   thumbnailBase64?: string; // small thumbnail for images
 }
 export interface VaultManifest {

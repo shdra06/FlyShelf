@@ -5,33 +5,35 @@
         xmlns:avalonEdit="http://icsharpcode.net/sharpdevelop/avalonedit"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="Quick Look" Height="500" Width="400"
-        WindowStyle="None" AllowsTransparency="False" Background="{DynamicResource ThemeWindowFallback}"
-        Topmost="False" ResizeMode="CanResize"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="False" ResizeMode="CanResize" MinWidth="280" MinHeight="180"
         WindowStartupLocation="CenterScreen" 
         MouseLeftButtonDown="Window_MouseLeftButtonDown"
         MouseDoubleClick="Window_MouseDoubleClick"
         MouseMove="Window_MouseMove" Deactivated="Window_Deactivated"
         Loaded="Window_Loaded"
         Icon="/Resources/FlyShelfLogo.ico"
-        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True"
+        SizeChanged="Window_SizeChanged">
     <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="0" ResizeBorderThickness="8" CornerRadius="12" GlassFrameThickness="-1" />
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="8" CornerRadius="12" GlassFrameThickness="0" />
     </WindowChrome.WindowChrome>
     <Grid>
         <!-- Dynamic Frame -->
-        <Border x:Name="OuterBorder" CornerRadius="12" Background="{DynamicResource ThemeWindowFallback}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" ClipToBounds="True">
+        <Border x:Name="OuterBorder" CornerRadius="12" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" ClipToBounds="True">
             <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="40" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
+                <!-- Content fills entire area -->
+                <!-- Header overlays on top via ZIndex -->
                 
-                <!-- Header Bar -->
-                <Grid x:Name="HeaderGrid" Grid.Row="0" Background="{DynamicResource ThemeOverlayBg}" MouseLeftButtonDown="Window_MouseLeftButtonDown">
+                <!-- Header Bar (floating semi-transparent overlay, on top of everything) -->
+                <Grid x:Name="HeaderGrid" VerticalAlignment="Top" Height="40" Panel.ZIndex="100" Background="#CC181825" MouseLeftButtonDown="Window_MouseLeftButtonDown">
+                    <Grid.Effect>
+                        <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.3" Color="Black" Direction="270"/>
+                    </Grid.Effect>
                     <TextBlock x:Name="HeaderTitle" Text="Quick Look" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="14,0,0,0" FontWeight="Medium" FontSize="11.5" IsHitTestVisible="False"/>
                     
                     <!-- Action Buttons (right side) -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
+                    <StackPanel x:Name="HeaderButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
                         <!-- Copy Image Button (image only) -->
                         <ui:Button x:Name="CopyImageBtn" Click="CopyImageButton_Click" Appearance="Secondary" 
                                    Foreground="{DynamicResource GeminiAccentColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Copy image to clipboard"
@@ -149,13 +151,29 @@
                                    Visibility="Collapsed" AutomationProperties.Name="Save markdown changes">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Save24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
-                        <!-- Save DOCX Button -->
-                        <ui:Button x:Name="DocxSaveBtn" Click="DocxSave_Click" Appearance="Primary" 
-                                   Foreground="White" Padding="5,3" Margin="0,0,4,0" ToolTip="Save DOCX (Ctrl+S)"
-                                   Visibility="Collapsed" AutomationProperties.Name="Save DOCX document">
+                        <!-- Word Document Toolbar Actions -->
+                        <ui:Button x:Name="DocxOpenNativeBtn" Click="DocxOpenNative_Click" Appearance="Secondary" 
+                                   Foreground="#38BDF8" Padding="5,3" Margin="0,0,4,0" ToolTip="Open in Microsoft Word (or default app)"
+                                   Visibility="Collapsed" AutomationProperties.Name="Open in native application">
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="Save24" Filled="True" FontSize="14"/>
-                                <TextBlock Text="Save" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                <ui:SymbolIcon Symbol="Open24" FontSize="14"/>
+                                <TextBlock Text="Word" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ui:Button>
+                        <ui:Button x:Name="DocxExportPdfBtn" Click="DocxExportPdf_Click" Appearance="Secondary" 
+                                   Foreground="#F472B6" Padding="5,3" Margin="0,0,4,0" ToolTip="Export as PDF (Ctrl+S)"
+                                   Visibility="Collapsed" AutomationProperties.Name="Export document as PDF">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="DocumentPdf24" Filled="True" FontSize="14"/>
+                                <TextBlock Text="PDF" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ui:Button>
+                        <ui:Button x:Name="DocxCopyTextBtn" Click="DocxCopyText_Click" Appearance="Secondary" 
+                                   Foreground="{DynamicResource GeminiAccentColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Copy document text"
+                                   Visibility="Collapsed" AutomationProperties.Name="Copy document text">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Copy24" Filled="True" FontSize="14"/>
+                                <TextBlock Text="Text" FontSize="10.5" FontWeight="Medium" Margin="4,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                         </ui:Button>
                         <!-- Zoom Reset Button (markdown only) -->
@@ -251,7 +269,7 @@
                     </StackPanel>
                 </Grid>
 
-                <Grid Grid.Row="1" Background="Transparent">
+                <Grid x:Name="ContentGrid" Background="Transparent">
                     <ProgressBar IsIndeterminate="True" x:Name="LoadingProgress" VerticalAlignment="Top" Height="3" Background="Transparent" Foreground="{DynamicResource ThemeAccentLight}" BorderThickness="0" Visibility="Collapsed" Panel.ZIndex="10" />
                     <!-- Image Mode Grid -->
                     <Grid x:Name="ImageModeGrid" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
@@ -328,7 +346,7 @@
 
                                 <!-- Brush size -->
                                 <TextBlock Text="Size" Foreground="#8894A3B8" FontSize="9" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <Slider x:Name="DoodleSizeSlider" Width="70" Minimum="2" Maximum="16" Value="6" VerticalAlignment="Center"
+                                <Slider x:Name="DoodleSizeSlider" Width="70" Minimum="2" Maximum="15" Value="6" VerticalAlignment="Center"
                                         ValueChanged="DoodleSizeChanged" IsSnapToTickEnabled="True" TickFrequency="1"/>
                                 <TextBlock x:Name="DoodleSizeLabel" Text="6" Foreground="#94A3B8" FontSize="9" VerticalAlignment="Center" Margin="4,0,8,0" MinWidth="12"/>
 

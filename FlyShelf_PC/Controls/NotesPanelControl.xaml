@@ -15,15 +15,16 @@
                     BorderBrush="#2A2A45" BorderThickness="0,0,0,1">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/> <!-- Primary row: Back + Breadcrumb + Actions -->
-                        <RowDefinition Height="Auto"/> <!-- Secondary row: View switcher + Mode toggle (compact) -->
+                        <RowDefinition Height="Auto"/> <!-- Single compact row: Back + Breadcrumb + View Switcher + Actions -->
                     </Grid.RowDefinitions>
 
-                    <!-- ─── PRIMARY ROW: Back + Breadcrumb + Quick Actions ─── -->
+                    <!-- ─── SINGLE ROW: Back + Breadcrumb + View Switcher + Quick Actions ─── -->
                     <Grid Grid.Row="0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/> <!-- Back -->
                             <ColumnDefinition Width="*"/>    <!-- Breadcrumb path -->
+                            <ColumnDefinition Width="Auto"/> <!-- Folders/Journal -->
+                            <ColumnDefinition Width="Auto"/> <!-- Templates -->
                             <ColumnDefinition Width="Auto"/> <!-- Add -->
                             <ColumnDefinition Width="Auto"/> <!-- Undo -->
                             <ColumnDefinition Width="Auto"/> <!-- More menu -->
@@ -85,62 +86,8 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <!-- Add card -->
-                        <Border Grid.Column="2" CornerRadius="6" Cursor="Hand" MouseLeftButtonDown="NotesAddBullet_Click" Padding="5,3" Margin="0,0,3,0"
-                                Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" ToolTip="Add Note">
-                            <ui:SymbolIcon Symbol="Add24" Foreground="#A78BFA" FontSize="12"/>
-                        </Border>
-
-                        <!-- Undo -->
-                        <Border x:Name="NotesUndoBtn" Grid.Column="3" CornerRadius="6" Cursor="Hand" MouseLeftButtonDown="NotesUndo_Click" Padding="5,3" Margin="0,0,3,0"
-                                ToolTip="Undo last change" Visibility="Collapsed">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Setter Property="Background" Value="#18F59E0B"/>
-                                    <Setter Property="BorderBrush" Value="#30F59E0B"/>
-                                    <Setter Property="BorderThickness" Value="1"/>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#30F59E0B"/>
-                                            <Setter Property="BorderBrush" Value="#60F59E0B"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <ui:SymbolIcon Symbol="ArrowUndo24" Foreground="#F59E0B" FontSize="12"/>
-                        </Border>
-
-                        <!-- More options (Sort, Export, Templates, Trash) -->
-                        <Border Grid.Column="4" CornerRadius="6" Cursor="Hand" MouseLeftButtonDown="NotesHeaderMenu_Click" Padding="5,3"
-                                ToolTip="More options">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Setter Property="Background" Value="#0AFFFFFF"/>
-                                    <Setter Property="BorderBrush" Value="#12FFFFFF"/>
-                                    <Setter Property="BorderThickness" Value="1"/>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#18FFFFFF"/>
-                                            <Setter Property="BorderBrush" Value="#30FFFFFF"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <ui:SymbolIcon Symbol="MoreHorizontal24" Foreground="#9090B0" FontSize="12"/>
-                        </Border>
-                    </Grid>
-
-                    <!-- ─── SECONDARY ROW: View Switcher + Mode Toggle ─── -->
-                    <Grid Grid.Row="1" Margin="0,4,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/> <!-- View switcher -->
-                            <ColumnDefinition Width="*"/>    <!-- Spacer -->
-                            <ColumnDefinition Width="Auto"/> <!-- Mode toggle -->
-                            <ColumnDefinition Width="Auto"/> <!-- Templates -->
-                        </Grid.ColumnDefinitions>
-
-                        <!-- View switcher: Folders / Daily Journal -->
-                        <Border Grid.Column="0" CornerRadius="6" Background="#0CFFFFFF" BorderBrush="#14FFFFFF" BorderThickness="1" Padding="1">
+                        <!-- View switcher: Folders / Daily Journal (moved from secondary row) -->
+                        <Border Grid.Column="2" CornerRadius="6" Background="#0CFFFFFF" BorderBrush="#14FFFFFF" BorderThickness="1" Padding="1" Margin="0,0,3,0">
                             <StackPanel Orientation="Horizontal">
                                 <!-- Folders view button -->
                                 <Border x:Name="ViewFoldersBtn" CornerRadius="5" Cursor="Hand" Padding="6,2" Margin="0"
@@ -181,34 +128,55 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Mode toggle: Bullets ↔ Freeform -->
-                        <Border Grid.Column="2" CornerRadius="6" Cursor="Hand" MouseLeftButtonDown="NotesModeToggle_Click" Padding="6,2" Margin="0,0,3,0"
-                                ToolTip="Toggle Bullets / Freeform">
+                        <!-- Templates (moved from secondary row) -->
+                        <Border x:Name="NotesTemplatesBtn" Grid.Column="3" CornerRadius="6" Cursor="Hand" MouseLeftButtonDown="NotesTemplates_Click" Padding="5,2" Margin="0,0,3,0"
+                                Background="#0CFFFFFF" BorderBrush="#14FFFFFF" BorderThickness="1" 
+                                ToolTip="Note Templates">
+                            <ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#8B8BA8" FontSize="11"/>
+                        </Border>
+
+                        <!-- Add card -->
+                        <Border Grid.Column="4" CornerRadius="6" Cursor="Hand" MouseLeftButtonDown="NotesAddBullet_Click" Padding="5,3" Margin="0,0,3,0"
+                                Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" ToolTip="Add Note">
+                            <ui:SymbolIcon Symbol="Add24" Foreground="#A78BFA" FontSize="12"/>
+                        </Border>
+
+                        <!-- Undo -->
+                        <Border x:Name="NotesUndoBtn" Grid.Column="5" CornerRadius="6" Cursor="Hand" MouseLeftButtonDown="NotesUndo_Click" Padding="5,3" Margin="0,0,3,0"
+                                ToolTip="Undo last change" Visibility="Collapsed">
                             <Border.Style>
                                 <Style TargetType="Border">
-                                    <Setter Property="Background" Value="#108B5CF6"/>
-                                    <Setter Property="BorderBrush" Value="#208B5CF6"/>
+                                    <Setter Property="Background" Value="#18F59E0B"/>
+                                    <Setter Property="BorderBrush" Value="#30F59E0B"/>
                                     <Setter Property="BorderThickness" Value="1"/>
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#208B5CF6"/>
-                                            <Setter Property="BorderBrush" Value="#408B5CF6"/>
+                                            <Setter Property="Background" Value="#30F59E0B"/>
+                                            <Setter Property="BorderBrush" Value="#60F59E0B"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
-                            <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon x:Name="NotesModeToggleIcon" Symbol="TextBulletListSquare24" FontSize="11" Foreground="#A78BFA" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <TextBlock x:Name="NotesModeToggleText" Text="Freeform" FontSize="9.5" FontWeight="SemiBold" 
-                                           Foreground="#C4B5FD" VerticalAlignment="Center"/>
-                            </StackPanel>
+                            <ui:SymbolIcon Symbol="ArrowUndo24" Foreground="#F59E0B" FontSize="12"/>
                         </Border>
 
-                        <!-- Templates -->
-                        <Border x:Name="NotesTemplatesBtn" Grid.Column="3" CornerRadius="6" Cursor="Hand" MouseLeftButtonDown="NotesTemplates_Click" Padding="5,2"
-                                Background="#0CFFFFFF" BorderBrush="#14FFFFFF" BorderThickness="1" 
-                                ToolTip="Note Templates">
-                            <ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#8B8BA8" FontSize="11"/>
+                        <!-- More options (Sort, Export, Templates, Trash) -->
+                        <Border Grid.Column="6" CornerRadius="6" Cursor="Hand" MouseLeftButtonDown="NotesHeaderMenu_Click" Padding="5,3"
+                                ToolTip="More options">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#0AFFFFFF"/>
+                                    <Setter Property="BorderBrush" Value="#12FFFFFF"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#18FFFFFF"/>
+                                            <Setter Property="BorderBrush" Value="#30FFFFFF"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <ui:SymbolIcon Symbol="MoreHorizontal24" Foreground="#9090B0" FontSize="12"/>
                         </Border>
                     </Grid>
                 </Grid>
@@ -1145,21 +1113,54 @@
                                     <!-- Search result card: date sidebar + content -->
                                     <Border CornerRadius="8" Margin="6,0,6,4" Padding="0" Cursor="Hand" ClipToBounds="True"
                                             MouseLeftButtonDown="NotesSearchResult_Click"
-                                            BorderThickness="1" BorderBrush="#2A2A45" Background="#222240">
+                                            BorderThickness="1">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="#222240"/>
+                                                <Setter Property="BorderBrush" Value="#2A2A45"/>
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="#2A2A4E"/>
+                                                        <Setter Property="BorderBrush" Value="#4A3F7A"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="42"/> <!-- Date column -->
+                                                <ColumnDefinition Width="48"/> <!-- Date column -->
                                                 <ColumnDefinition Width="*"/>  <!-- Content -->
                                             </Grid.ColumnDefinitions>
-                                            <!-- Date badge -->
-                                            <Border Grid.Column="0" Background="#158B5CF6" Padding="4,6">
-                                                <TextBlock Text = "{Binding DateLabel}" FontSize="9" FontWeight="Bold" 
-                                                           Foreground="#C4B5FD" TextAlignment="Center" TextWrapping="Wrap"/>
+                                            <!-- Date badge + optional Page badge -->
+                                            <Border Grid.Column="0" Background="#158B5CF6" Padding="3,6">
+                                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                    <TextBlock Text="{Binding DateLabel}" FontSize="9" FontWeight="Bold" 
+                                                               Foreground="#C4B5FD" TextAlignment="Center" TextWrapping="Wrap"/>
+                                                    <!-- Page pill badge (visible only if note has multiple pages/sections) -->
+                                                    <Border CornerRadius="3" Background="#2A8B5CF6" Margin="0,3,0,0" Padding="3,1"
+                                                            HorizontalAlignment="Center">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding PageLabel}" Value="">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding PageLabel}" Value="{x:Null}">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock Text="{Binding PageLabel}" FontSize="7.5" FontWeight="SemiBold"
+                                                                   Foreground="#A78BFA" TextAlignment="Center"/>
+                                                    </Border>
+                                                </StackPanel>
                                             </Border>
                                             <!-- Content preview -->
-                                            <TextBlock Grid.Column="1" Text = "{Binding Content}" FontSize="11" TextTrimming="CharacterEllipsis" 
-                                                       MaxHeight="42" TextWrapping="Wrap" Margin="8,6" 
-                                                       Foreground="#E8E8F0"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Content}" FontSize="11" TextTrimming="CharacterEllipsis" 
+                                                       MaxHeight="46" TextWrapping="Wrap" Margin="8,6" 
+                                                       Foreground="#E8E8F0" VerticalAlignment="Center"/>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

@@ -466,6 +466,10 @@ public partial class App : Application
             catch { /* will trigger safe mode via outer handler */ throw; }
         }
 
+        // Auto-enable Cloudflare global tunnel on every launch so it is immediately ready with public URL
+        FlyShelf.Classes.SettingsManager.Current.EnableGlobalCloudflare = true;
+        FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync = true;
+
         try { FlyShelf.Classes.LicenseManager.Load(); }
         catch (Exception ex)
         {

@@ -269,13 +269,24 @@ namespace FlyShelf.Windows
             {
                 if (CloudUrlText == null || CloudStatusText == null) return;
                 bool cloudEnabled = SettingsManager.Current.EnableGlobalCloudflare;
+                
                 string globalUrl = CloudDiscoveryManager.CachedGlobalUrl ?? "";
+                if (string.IsNullOrEmpty(globalUrl) || !globalUrl.Contains("trycloudflare.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    string daemonUrl = _viewModel?.LocalServer?.GlobalUrl ?? "";
+                    if (!string.IsNullOrEmpty(daemonUrl) && daemonUrl.Contains("trycloudflare.com", StringComparison.OrdinalIgnoreCase))
+                    {
+                        globalUrl = daemonUrl;
+                    }
+                }
 
                 // Show/hide disabled row
                 if (CloudDisabledRow != null)
                     CloudDisabledRow.Visibility = cloudEnabled ? Visibility.Collapsed : Visibility.Visible;
 
-                if (cloudEnabled && !string.IsNullOrEmpty(globalUrl))
+                bool isLive = cloudEnabled && !string.IsNullOrEmpty(globalUrl) && globalUrl.Contains("trycloudflare.com", StringComparison.OrdinalIgnoreCase);
+
+                if (isLive)
                 {
                     // Tunnel active with URL
                     CloudUrlText.Text = globalUrl;
@@ -287,12 +298,18 @@ namespace FlyShelf.Windows
                 }
                 else if (cloudEnabled)
                 {
+                    string statusMsg = _viewModel?.LocalServer?.GlobalUrl;
+                    if (string.IsNullOrEmpty(statusMsg) || statusMsg == "Offline")
+                    {
+                        statusMsg = "Starting tunnel...";
+                    }
+
                     // Cloudflare enabled but URL not yet ready
-                    CloudUrlText.Text = "Starting tunnel...";
+                    CloudUrlText.Text = statusMsg;
                     CloudUrlText.Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#F59E0B"));
                     if (CopyCloudUrlBtn != null) CopyCloudUrlBtn.Visibility = Visibility.Collapsed;
                     if (CloudStatusDot != null) CloudStatusDot.Background = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#F59E0B"));
-                    CloudStatusText.Text = "Starting tunnel...";
+                    CloudStatusText.Text = statusMsg;
                     CloudStatusText.Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#F59E0B"));
                 }
             }
@@ -304,10 +321,15 @@ namespace FlyShelf.Windows
             try
             {
                 string url = CloudDiscoveryManager.CachedGlobalUrl ?? "";
-                if (!string.IsNullOrEmpty(url))
+                if (string.IsNullOrEmpty(url) || !url.Contains("trycloudflare.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    url = _viewModel?.LocalServer?.GlobalUrl ?? "";
+                }
+                if (!string.IsNullOrEmpty(url) && url.Contains("trycloudflare.com", StringComparison.OrdinalIgnoreCase))
                 {
                     ClipboardHelper.SafeSetText(url);
                     Logger.LogAction("COPY", $"Cloud URL copied: {url}");
+                    ToastWindow.ShowToast("Cloud URL copied to clipboard!");
                 }
             }
             catch (Exception ex) { Logger.LogAction("COPY", $"Cloud URL copy failed: {ex.Message}"); }
@@ -321,11 +343,16 @@ namespace FlyShelf.Windows
             {
                 if (PairingQRImage == null) return;
                 string localUrl = _viewModel.LocalServer?.DisplayUrl ?? "";
-                string globalUrl = _viewModel.LocalServer?.GlobalUrl ?? "";
-                string pin = SettingsManager.Current.WebClientPinToken;
+                string globalUrl = CloudDiscoveryManager.CachedGlobalUrl ?? "";
+                if (string.IsNullOrEmpty(globalUrl) || !globalUrl.Contains("trycloudflare.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    globalUrl = _viewModel.LocalServer?.GlobalUrl ?? "";
+                }
+                bool hasCloud = !string.IsNullOrEmpty(globalUrl) && globalUrl.Contains("trycloudflare.com", StringComparison.OrdinalIgnoreCase);
+                if (!hasCloud) globalUrl = "";
 
+                string pin = SettingsManager.Current.WebClientPinToken;
                 bool hasLan = !string.IsNullOrEmpty(localUrl);
-                bool hasCloud = !string.IsNullOrEmpty(globalUrl);
                 bool cloudEnabled = SettingsManager.Current.EnableGlobalCloudflare;
 
                 Logger.LogAction("QR", $"Refresh: LAN={hasLan} ({localUrl}), Cloud={hasCloud} ({globalUrl}), CloudEnabled={cloudEnabled}");

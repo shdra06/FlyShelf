@@ -272,6 +272,12 @@ export function usePairingFlow(params: UsePairingFlowParams) {
       } finally {
         if ((timeoutSignal as any)?._clearTimeout) (timeoutSignal as any)._clearTimeout();
       }
+      if (!res.ok) {
+        setIsPairing(false);
+        syncLog('PAIR', `[STEP 4/6: PAIR JOIN ERROR] ❌ Server returned status ${res.status}`);
+        Alert.alert('Connection Error', `Server returned status ${res.status}. Please try again.`);
+        return;
+      }
       const data = await res.json();
       if (!data) {
         setIsPairing(false);

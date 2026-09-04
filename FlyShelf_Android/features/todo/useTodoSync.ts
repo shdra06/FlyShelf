@@ -65,6 +65,16 @@ export function useTodoSync({
   const syncFailCountRef = useRef(0);
   const todoPollFailCountRef = useRef(0);
 
+  // ── Stable refs for callbacks to avoid infinite re-render loops ──
+  const mergeDaysRef = useRef(mergeDays);
+  useEffect(() => { mergeDaysRef.current = mergeDays; }, [mergeDays]);
+  const saveLocalRef = useRef(saveLocal);
+  useEffect(() => { saveLocalRef.current = saveLocal; }, [saveLocal]);
+  const onDaysMergedRef = useRef(onDaysMerged);
+  useEffect(() => { onDaysMergedRef.current = onDaysMerged; }, [onDaysMerged]);
+  const onStatusChangeRef = useRef(onStatusChange);
+  useEffect(() => { onStatusChangeRef.current = onStatusChange; }, [onStatusChange]);
+
   // Resolve PC URL
   const resolvePcUrl = useCallback(async () => {
     try {
@@ -85,7 +95,7 @@ export function useTodoSync({
   // Push changed days to PC
   const pushChangedDays = useCallback(async () => {
     if (!mountedRef.current) return;
-    if (!pcUrlRef.current || !pairingKey) { onStatusChange('offline'); return; }
+    if (!pcUrlRef.current || !pairingKey) { onStatusChangeRef.current('offline'); return; }
     const keysToSync = new Set(changedDayKeysRef.current);
     const keys = Array.from(keysToSync);
     if (keys.length === 0) return;
@@ -94,7 +104,7 @@ export function useTodoSync({
     if (payload.length === 0) return;
 
     try {
-      onStatusChange('syncing');
+      onStatusChangeRef.current('syncing');
       const res = await fetchWithTimeout(
         `${pcUrlRef.current}/api/todos`,
         {
@@ -111,12 +121,12 @@ export function useTodoSync({
       if (res.ok) {
         // Only clear the keys we successfully synced
         for (const k of keysToSync) changedDayKeysRef.current.delete(k);
-        onStatusChange('connected');
+        onStatusChangeRef.current('connected');
         syncFailCountRef.current = 0;
       } else {
         // Re-add failed keys for retry
         for (const k of keysToSync) changedDayKeysRef.current.add(k);
-        onStatusChange('offline');
+        onStatusChangeRef.current('offline');
       }
     } catch {
       // Re-add failed keys
@@ -129,7 +139,7 @@ export function useTodoSync({
         await EncryptedStorage.setItem('@flyshelf_pending_todo_sync', JSON.stringify(pending));
       } catch {}
     }
-  }, [pairingKey, deviceName, daysRef, changedDayKeysRef, mountedRef, onStatusChange]);
+  }, [pairingKey, deviceName, daysRef, changedDayKeysRef, mountedRef]);
 
   // Debounced push (public)
   const schedulePush = useCallback((dayKey: string) => {
@@ -146,10 +156,10 @@ export function useTodoSync({
       await resolvePcUrl();
     }
 
-    if (!pcUrlRef.current || !pairingKey) { onStatusChange('offline'); return; }
+    if (!pcUrlRef.current || !pairingKey) { onStatusChangeRef.current('offline'); return; }
     try {
       const resp = await fetchWithTimeout(
-        `${pcUrlRef.current}/api/todos`,
+        `${pcUrlRef.current}/api/todos?days=15`,
         {
           method: 'GET',
           headers: {
@@ -161,11 +171,17 @@ export function useTodoSync({
       );
       if (resp.ok) {
         const remote: TodoDay[] = await resp.json();
-        const merged = mergeDays(daysRef.current, remote);
+        // Normalize PC date keys: "2026-09-03T00:00:00.0000000+05:30" → "2026-09-03T00:00:00"
+        for (const rd of remote) {
+          if (rd.Date && rd.Date.includes('+')) {
+            rd.Date = rd.Date.split('T')[0] + 'T00:00:00';
+          }
+        }
+        const merged = mergeDaysRef.current(daysRef.current, remote);
         daysRef.current = merged;
-        onDaysMerged(merged);
-        saveLocal(merged);
-        onStatusChange('connected');
+        onDaysMergedRef.current(merged);
+        saveLocalRef.current(merged);
+        onStatusChangeRef.current('connected');
         syncFailCountRef.current = 0;
         todoPollFailCountRef.current = 0;
 
@@ -192,17 +208,17 @@ export function useTodoSync({
         syncFailCountRef.current++;
         todoPollFailCountRef.current++;
         if (syncFailCountRef.current >= 3) {
-          onStatusChange('offline');
+          onStatusChangeRef.current('offline');
         }
       }
     } catch {
       syncFailCountRef.current++;
       todoPollFailCountRef.current++;
       if (syncFailCountRef.current >= 3) {
-        onStatusChange('offline');
+        onStatusChangeRef.current('offline');
       }
     }
-  }, [pairingKey, deviceName, mergeDays, saveLocal, resolvePcUrl, daysRef, onDaysMerged, onStatusChange]);
+  }, [pairingKey, deviceName, resolvePcUrl, daysRef]);
 
   // Lifecycle: init polling with adaptive backoff, clean up on unmount
   useEffect(() => {

@@ -142,7 +142,7 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
 
   // ─── Native ScreenshotObserver poll ───
   const pollAndSyncScreenshot = useCallback(async () => {
-    if (Platform.OS !== 'android' || !AdvanceOverlay) return;
+    if (Platform.OS !== 'android' || !AdvanceOverlay || typeof AdvanceOverlay.getLatestScreenshot !== 'function') return;
     try {
       const result = await AdvanceOverlay.getLatestScreenshot();
       const screenshotPath = typeof result === 'string' ? result : result?.path;
@@ -192,9 +192,17 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
               } else {
                 toast.syncLan('Screenshot Synced to PC', undefined, '⚡ LAN');
               }
+            } else {
+              // Upload returned non-200 — clear fingerprint so next poll retries
+              syncLog('SCREENSHOT', `Upload returned status ${upRes.status} — will retry`);
+              sentContentFingerprintsRef.current.delete(`screenshot::${fileName}`);
+              lastSyncedScreenshotRef.current = '';
             }
           } catch (e: any) {
-            syncLog('SCREENSHOT', `Upload failed: ${e?.message}`);
+            syncLog('SCREENSHOT', `Upload failed: ${e?.message} — will retry`);
+            // Clear fingerprint + path so next poll cycle retries the upload
+            sentContentFingerprintsRef.current.delete(`screenshot::${fileName}`);
+            lastSyncedScreenshotRef.current = '';
           }
         }
       }
@@ -270,7 +278,7 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
               });
               scrollToTop();
 
-              if (Platform.OS === 'android' && AdvanceOverlay && isFloatingBallEnabled) {
+              if (Platform.OS === 'android' && AdvanceOverlay && isFloatingBallEnabled && typeof AdvanceOverlay.pushClipToNativeDB === 'function') {
                 try { AdvanceOverlay.pushClipToNativeDB(previewUri, deviceName || 'Phone'); } catch {}
               }
 

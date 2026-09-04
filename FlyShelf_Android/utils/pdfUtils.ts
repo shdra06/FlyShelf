@@ -141,6 +141,8 @@ function isPdfFile(uri: string): boolean {
  * Scale image dimensions to fit within MAX_PDF_PAGE_DIMENSION while preserving aspect ratio.
  */
 function clampDimensions(width: number, height: number): { width: number; height: number } {
+  // Guard against zero/negative dimensions from corrupted images — fallback to A4
+  if (width <= 0 || height <= 0) return { width: 595, height: 842 };
   if (width <= MAX_PDF_PAGE_DIMENSION && height <= MAX_PDF_PAGE_DIMENSION) {
     return { width, height };
   }

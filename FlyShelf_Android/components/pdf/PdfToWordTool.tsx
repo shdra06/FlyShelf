@@ -17,9 +17,10 @@ interface PdfToWordToolProps {
   onBack: () => void;
   onPickFile: () => Promise<SelectedFile[]>;
   saveRecent: (name: string, path: string, pages: number, tool: 'pdfToWord') => void;
+  onSendToPc?: (filePath: string) => void;
 }
 
-export default function PdfToWordTool({ onBack, onPickFile, saveRecent }: PdfToWordToolProps) {
+export default function PdfToWordTool({ onBack, onPickFile, saveRecent, onSendToPc }: PdfToWordToolProps) {
   const { colors, shadows } = useAppTheme();
   const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
 
@@ -90,7 +91,7 @@ export default function PdfToWordTool({ onBack, onPickFile, saveRecent }: PdfToW
                 : '📄 Generated via Standalone OpenXML Converter'}
             </Text>
           </View>
-          <ResultView path={resultPath} onDone={onBack} />
+          <ResultView path={resultPath} onDone={onBack} onSendToPc={onSendToPc} />
         </ScrollView>
       </View>
     );

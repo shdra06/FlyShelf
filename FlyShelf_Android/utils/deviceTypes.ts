@@ -15,6 +15,8 @@ export interface ActiveDeviceInfo {
   IsOnline?: boolean;
   Timestamp?: number;
   UrlsEncrypted?: boolean;
+  PlainGlobalUrl?: string;   // Plaintext Cloudflare URL (v4.1+ PC writes this alongside encrypted)
+  PlainLocalIp?: string;     // Plaintext LAN IP (v4.1+ PC writes this alongside encrypted)
   _isOffline?: boolean;
   [key: string]: any;  // Allow additional Firebase fields
 }

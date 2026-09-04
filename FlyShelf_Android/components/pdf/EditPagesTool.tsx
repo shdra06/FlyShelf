@@ -1,10 +1,10 @@
-import { useAppTheme } from '../../hooks/useAppTheme';
 import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
+import { useAppTheme } from '../../hooks/useAppTheme';
 import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { getPdfPageInfo } from '../../utils/pdfUtils';
 import { editPdfPages, addImagePages } from '../../utils/pdfToolsUtils';
@@ -17,9 +17,10 @@ interface EditPagesToolProps {
   onPickFile: () => Promise<SelectedFile[]>;
   onPickImages: () => Promise<SelectedFile[]>;
   saveRecent: (name: string, path: string, pages: number, tool: 'editPages') => void;
+  onSendToPc?: (filePath: string) => void;
 }
 
-export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRecent }: EditPagesToolProps) {
+export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRecent, onSendToPc }: EditPagesToolProps) {
   const { colors, shadows } = useAppTheme();
   const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
 
@@ -116,7 +117,7 @@ export default function EditPagesTool({ onBack, onPickFile, onPickImages, saveRe
           <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
           <Text style={s.modalTitle}>Success</Text>
         </View>
-        <ResultView path={resultPath} onDone={onBack} />
+        <ResultView path={resultPath} onDone={onBack} onSendToPc={onSendToPc} />
       </View>
     );
   }

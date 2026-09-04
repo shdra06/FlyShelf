@@ -60,35 +60,40 @@ namespace FlyShelf.Classes
         /// Registers room presence under members/{pairingKey}/{uid} = true.
         /// Authenticates the path and makes a PUT request to secure membership in the room.
         /// </summary>
-        public static async Task RegisterRoomMembershipAsync(string pairingKey)
+        public static async Task<bool> RegisterRoomMembershipAsync(string pairingKey)
         {
-            if (string.IsNullOrEmpty(pairingKey)) return;
+            if (string.IsNullOrEmpty(pairingKey)) return false;
             try
             {
                 string uid = await FirebaseAuthManager.GetUidAsync();
                 if (string.IsNullOrEmpty(uid))
                 {
                     Logger.LogAction("ROOM_MEMBER", "[STEP 2/6: ROOM MEMBERSHIP ERROR] Cannot register room membership: UID is empty.");
-                    return;
+                    return false;
                 }
 
                 Logger.LogAction("ROOM_MEMBER", $"[STEP 2/6: ROOM MEMBERSHIP] Registering members/{pairingKey[..Math.Min(8, pairingKey.Length)]}.../{uid[..Math.Min(8, uid.Length)]}...");
+                AppLogger.Log("CLOUD_DISCOVERY", $"Registering room membership for {pairingKey[..Math.Min(8, pairingKey.Length)]}...");
                 string url = await AuthUrl($"members/{pairingKey}/{uid}.json");
                 var content = new StringContent("true", Encoding.UTF8, "application/json");
                 using var response = await _client.PutAsync(url, content);
                 if (response.IsSuccessStatusCode)
                 {
                     Logger.LogAction("ROOM_MEMBER", $"[STEP 2/6: ROOM MEMBERSHIP] ✅ Registered room membership successfully for key: {pairingKey[..Math.Min(8, pairingKey.Length)]}...");
+                    AppLogger.Log("CLOUD_DISCOVERY", "Room membership registered successfully.");
+                    return true;
                 }
                 else
                 {
                     string body = await response.Content.ReadAsStringAsync();
                     Logger.LogAction("ROOM_MEMBER", $"[STEP 2/6: ROOM MEMBERSHIP ERROR] ❌ Room membership registration failed: HTTP {(int)response.StatusCode} - {body}");
+                    return false;
                 }
             }
             catch (Exception ex)
             {
                 Logger.LogAction("ROOM_MEMBER", $"[STEP 2/6: ROOM MEMBERSHIP ERROR] ❌ Room membership error: {ex.Message}");
+                return false;
             }
         }
 
@@ -146,6 +151,7 @@ namespace FlyShelf.Classes
 
             try
             {
+                AppLogger.Log("CLOUD_SYNC", $"Syncing {item.ItemType} item across network...");
                 // ═━═━═━ v5 PEER-ONLY: Push directly to connected peers ═━═━═━
                 // PeerManager sends text/files directly via LAN or Cloudflare.
                 // Mobile devices pull via /api/sync and receive real-time notifications via WebSocket/long-poll.
@@ -183,10 +189,12 @@ namespace FlyShelf.Classes
                 if (delivered > 0 || mobileCount > 0)
                 {
                     Logger.LogAction("PEER SYNC", $"Staged/Delivered: {delivered} PC peer(s), {mobileCount} mobile companion(s)");
+                    AppLogger.Log("CLOUD_SYNC", $"Delivered {item.ItemType} to {delivered} peer(s), {mobileCount} companion(s)");
                 }
                 else
                 {
                     Logger.LogAction("PEER SYNC", "Staged for pull-based sync (no active peers connected at this moment)");
+                    AppLogger.Log("CLOUD_SYNC", $"Staged {item.ItemType} for pull-based sync (no active peers connected)");
                 }
             }
             catch (Exception ex)

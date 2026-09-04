@@ -673,6 +673,10 @@ namespace FlyShelf.ViewModels
             // the main UI Constructor thread so FlyShelf can bootstrap in under 50ms natively!
             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
+                // Auto-enable Cloudflare global tunnel on every launch so it is immediately ready with public URL
+                FlyShelf.Classes.SettingsManager.Current.EnableGlobalCloudflare = true;
+                FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync = true;
+
                 // Auto-reconcile: server should be up if either transport is on
                 bool lanOn = FlyShelf.Classes.SettingsManager.Current.EnableLocalLAN;
                 bool cfOn = FlyShelf.Classes.SettingsManager.Current.EnableGlobalCloudflare;

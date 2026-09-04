@@ -1,9 +1,9 @@
-import { useAppTheme } from '../../hooks/useAppTheme';
 import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
+import { useAppTheme } from '../../hooks/useAppTheme';
 import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { getPdfPageInfo } from '../../utils/pdfUtils';
 import { splitPdf } from '../../utils/pdfToolsUtils';
@@ -15,9 +15,10 @@ interface SplitToolProps {
   onBack: () => void;
   onPickFile: () => Promise<SelectedFile[]>;
   saveRecent?: (name: string, path: string, pages: number, tool: 'split') => void;
+  onSendToPc?: (filePath: string) => void;
 }
 
-export default function SplitTool({ onBack, onPickFile, saveRecent }: SplitToolProps) {
+export default function SplitTool({ onBack, onPickFile, saveRecent, onSendToPc }: SplitToolProps) {
   const { colors, shadows } = useAppTheme();
   const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
 
@@ -108,7 +109,7 @@ export default function SplitTool({ onBack, onPickFile, saveRecent }: SplitToolP
           <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
           <Text style={s.modalTitle}>Success</Text>
         </View>
-        <ResultView paths={resultPaths} onDone={onBack} />
+        <ResultView paths={resultPaths} onDone={onBack} onSendToPc={onSendToPc} />
       </View>
     );
   }

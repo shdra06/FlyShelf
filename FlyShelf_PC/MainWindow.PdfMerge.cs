@@ -49,6 +49,7 @@ namespace FlyShelf
             if (checkedDocs.Count > 0)
             {
                 FlyShelf.Windows.ToastWindow.ShowToast($"Converting {checkedDocs.Count} DOC file(s) to PDF...");
+                FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ShowConversionNotification("DOC", "PDF");
                 string[] docs = checkedDocs.Select(d => d.FilePath).ToArray();
                 string[] results = await ConversionUtils.ConvertDocsToPdfsAsync(docs);
                 convertedPdfPaths.AddRange(results);
@@ -68,6 +69,8 @@ namespace FlyShelf
                 {
                     try
                     {
+                        string ext = System.IO.Path.GetExtension(img.FilePath)?.TrimStart('.').ToUpperInvariant() ?? "PNG";
+                        FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ShowConversionNotification(ext, "PDF");
                         string pdfPath = await System.Threading.Tasks.Task.Run(() => ConversionUtils.ConvertImageToPdf(img.FilePath));
                         if (!string.IsNullOrEmpty(pdfPath) && System.IO.File.Exists(pdfPath))
                         {
@@ -80,6 +83,12 @@ namespace FlyShelf
                         FlyShelf.Classes.Logger.LogAction("IMAGE2PDF_ERR", ex.ToString());
                     }
                 }
+            }
+
+            // Show success on widget after conversions
+            if (checkedDocs.Count > 0 || checkedImages.Count > 0)
+            {
+                FlyShelf.Controls.FlyShelfWidgetControl.Instance?.CompleteMiniNotification();
             }
 
             // If only DOCs/Images selected and no merge needed (only 1 output item)
@@ -167,6 +176,11 @@ namespace FlyShelf
                 FlyShelf.Windows.ToastWindow.ShowToast($"Instant Merging {items.Count} files...");
                 LoadingProgress.Visibility = Visibility.Visible;
 
+                // Show widget conversion animation — detect dominant source format
+                string sourceFormat = items.Any(i => i.ItemType == ClipboardItemType.Image) ? "PNG" :
+                                      items.Any(i => i.IsDocPreview) ? "DOC" : "PDF";
+                FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ShowConversionNotification(sourceFormat, "PDF");
+
                 await System.Threading.Tasks.Task.Run(async () =>
                 {
                     try
@@ -177,6 +191,8 @@ namespace FlyShelf
                         var docItems = items.Where(i => i.IsDocPreview).ToList();
                         if (docItems.Count > 0)
                         {
+                            await Dispatcher.InvokeAsync(() =>
+                                FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ShowConversionNotification("DOC", "PDF"));
                             string[] docs = docItems.Select(d => d.FilePath).ToArray();
                             string[] results = await ConversionUtils.ConvertDocsToPdfsAsync(docs);
                             pdfPaths.AddRange(results);
@@ -188,12 +204,27 @@ namespace FlyShelf
                             if (item.IsPdfPreview) pdfPaths.Add(item.FilePath);
                             else if (item.ItemType == ClipboardItemType.Image)
                             {
-                                string p = ConversionUtils.ConvertImageToPdf(item.FilePath);
-                                if (!string.IsNullOrEmpty(p)) pdfPaths.Add(p);
+                                try
+                                {
+                                    // Show image→PDF animation
+                                    string ext = System.IO.Path.GetExtension(item.FilePath)?.TrimStart('.').ToUpperInvariant() ?? "PNG";
+                                    await Dispatcher.InvokeAsync(() =>
+                                        FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ShowConversionNotification(ext, "PDF"));
+                                    string p = ConversionUtils.ConvertImageToPdf(item.FilePath);
+                                    if (!string.IsNullOrEmpty(p)) pdfPaths.Add(p);
+                                }
+                                catch (Exception imgEx)
+                                {
+                                    Logger.LogAction("INSTANT_MERGE_IMG_ERR", $"{item.FileName}: {imgEx.Message}");
+                                }
                             }
                         }
 
                         if (pdfPaths.Count < 2) throw new Exception("Not enough files could be converted for merging.");
+
+                        // Show merge animation (PDF → PDF for the merge step)
+                        await Dispatcher.InvokeAsync(() =>
+                            FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ShowConversionNotification("PDF", "PDF"));
 
                         // Perform the merge using PDFSharp directly (Instant)
                         string outputDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Merged");
@@ -223,17 +254,23 @@ namespace FlyShelf
                             Classes.ClipboardHistoryManager.AppendToJournal(newItem);
                             _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                             FlyShelf.Windows.ToastWindow.ShowToast("Instant Merge complete!");
+                            FlyShelf.Controls.FlyShelfWidgetControl.Instance?.CompleteMiniNotification();
                         });
                     }
                     catch (Exception ex)
                     {
-                        await Dispatcher.InvokeAsync(() => FlyShelf.Windows.ToastWindow.ShowToast($"Instant Merge failed: {ex.Message}"));
+                        await Dispatcher.InvokeAsync(() =>
+                        {
+                            FlyShelf.Windows.ToastWindow.ShowToast($"Instant Merge failed: {ex.Message}");
+                            FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ErrorMiniNotification();
+                        });
                     }
                 });
             }
             catch (Exception ex)
             {
                 FlyShelf.Windows.ToastWindow.ShowToast($"Error: {ex.Message}");
+                FlyShelf.Controls.FlyShelfWidgetControl.Instance?.ErrorMiniNotification();
             }
             finally
             {
@@ -626,220 +663,132 @@ namespace FlyShelf
         }
 
         /// <summary>
-        /// Renames the display name of a file-backed item in FlyShelf.
-        /// The actual file on disk is NOT modified — only the in-app label changes.
+        /// Initiates in-place renaming of a file-backed item on the card itself,
+        /// exactly like Windows File Explorer.
         /// </summary>
         private void RenameItem_Click(object sender, RoutedEventArgs e)
         {
             var item = GetClipItemFromSender(sender);
+            if (item == null || !item.CanRename) return;
+            StartInlineRename(item);
+        }
+
+        private void StartInlineRename(ClipboardItem item)
+        {
             if (item == null) return;
 
-            // Extract current display name with extension
-            string initialName = item.FileName ?? (string.IsNullOrEmpty(item.FilePath) ? "" : System.IO.Path.GetFileName(item.FilePath));
-
-            // Build a simple inline rename dialog
-            var dlg = new Window
+            // Dismiss any other currently renaming items first
+            if (_viewModel?.DroppedItems != null)
             {
-                WindowStyle = WindowStyle.None,
-                AllowsTransparency = true,
-                Background = System.Windows.Media.Brushes.Transparent,
-                Width = 380,
-                SizeToContent = SizeToContent.Height,
-                WindowStartupLocation = WindowStartupLocation.CenterScreen,
-                Topmost = true,
-                ShowInTaskbar = false,
-                ResizeMode = ResizeMode.NoResize
-            };
-
-            var outerBorder = new System.Windows.Controls.Border
-            {
-                CornerRadius = new CornerRadius(14),
-                Padding = new Thickness(18, 16, 18, 16),
-                Background = (System.Windows.Media.Brush)FindResource("ThemeOverflowBg"),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("ThemeOverflowBorder"),
-                BorderThickness = new Thickness(1),
-                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                foreach (var other in _viewModel.DroppedItems)
                 {
-                    BlurRadius = 25, ShadowDepth = 4, Opacity = 0.25, Color = System.Windows.Media.Colors.Black
-                }
-            };
-
-            var stack = new System.Windows.Controls.StackPanel();
-
-            // Title
-            var title = new System.Windows.Controls.TextBlock
-            {
-                Text = "Rename File",
-                FontSize = 14,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (System.Windows.Media.Brush)FindResource("ThemeTextPrimary"),
-                Margin = new Thickness(2, 0, 0, 8)
-            };
-            stack.Children.Add(title);
-
-            // TextBox template overrides OS default styles to guarantee theming consistency
-            var tbTemplate = new ControlTemplate(typeof(System.Windows.Controls.TextBox));
-            var borderFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.Border));
-            borderFactory.Name = "Border";
-            borderFactory.SetValue(System.Windows.Controls.Border.CornerRadiusProperty, new CornerRadius(6));
-            borderFactory.SetValue(System.Windows.Controls.Border.BackgroundProperty, new TemplateBindingExtension(System.Windows.Controls.TextBox.BackgroundProperty));
-            borderFactory.SetValue(System.Windows.Controls.Border.BorderBrushProperty, new TemplateBindingExtension(System.Windows.Controls.TextBox.BorderBrushProperty));
-            borderFactory.SetValue(System.Windows.Controls.Border.BorderThicknessProperty, new TemplateBindingExtension(System.Windows.Controls.TextBox.BorderThicknessProperty));
-            borderFactory.SetValue(System.Windows.Controls.Border.PaddingProperty, new TemplateBindingExtension(System.Windows.Controls.TextBox.PaddingProperty));
-
-            var scrollFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.ScrollViewer));
-            scrollFactory.Name = "PART_ContentHost";
-            borderFactory.AppendChild(scrollFactory);
-            tbTemplate.VisualTree = borderFactory;
-
-            // TextBox
-            var tb = new System.Windows.Controls.TextBox
-            {
-                Text = initialName,
-                FontSize = 12.5,
-                Padding = new Thickness(10, 8, 10, 8),
-                Background = (System.Windows.Media.Brush)FindResource("ThemeOverlayBg"),
-                Foreground = (System.Windows.Media.Brush)FindResource("ThemeTextPrimary"),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("ThemeOverlayBorder"),
-                BorderThickness = new Thickness(1),
-                CaretBrush = (System.Windows.Media.Brush)FindResource("ThemeTextPrimary"),
-                SelectionBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x50, 0xF5, 0x9E, 0x0B)),
-                Template = tbTemplate
-            };
-            stack.Children.Add(tb);
-
-            // File Path display
-            if (!string.IsNullOrEmpty(item.FilePath))
-            {
-                var pathLabel = new System.Windows.Controls.TextBlock
-                {
-                    Text = item.FilePath,
-                    FontSize = 10,
-                    Foreground = (System.Windows.Media.Brush)FindResource("ThemeTextMuted"),
-                    Margin = new Thickness(2, 6, 2, 0),
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    ToolTip = item.FilePath
-                };
-                stack.Children.Add(pathLabel);
-            }
-
-            // Buttons row
-            var btnPanel = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 14, 0, 0)
-            };
-
-            // Button ControlTemplate (eliminates standard Windows border/shading defaults)
-            var btnTemplate = new ControlTemplate(typeof(System.Windows.Controls.Button));
-            var btnBorderFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.Border));
-            btnBorderFactory.SetValue(System.Windows.Controls.Border.CornerRadiusProperty, new CornerRadius(6));
-            btnBorderFactory.SetValue(System.Windows.Controls.Border.BackgroundProperty, new TemplateBindingExtension(System.Windows.Controls.Button.BackgroundProperty));
-            btnBorderFactory.SetValue(System.Windows.Controls.Border.BorderBrushProperty, new TemplateBindingExtension(System.Windows.Controls.Button.BorderBrushProperty));
-            btnBorderFactory.SetValue(System.Windows.Controls.Border.BorderThicknessProperty, new TemplateBindingExtension(System.Windows.Controls.Button.BorderThicknessProperty));
-            btnBorderFactory.SetValue(System.Windows.Controls.Border.PaddingProperty, new TemplateBindingExtension(System.Windows.Controls.Button.PaddingProperty));
-
-            var contentFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.ContentPresenter));
-            contentFactory.SetValue(System.Windows.Controls.ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
-            contentFactory.SetValue(System.Windows.Controls.ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
-            btnBorderFactory.AppendChild(contentFactory);
-            btnTemplate.VisualTree = btnBorderFactory;
-
-            var triggerHover = new Trigger { Property = System.Windows.Controls.Button.IsMouseOverProperty, Value = true };
-            triggerHover.Setters.Add(new Setter(System.Windows.Controls.Button.BackgroundProperty, (System.Windows.Media.Brush)FindResource("ThemeOverlayBgHover")));
-            btnTemplate.Triggers.Add(triggerHover);
-
-            var cancelBtn = new System.Windows.Controls.Button
-            {
-                Content = "Cancel",
-                Padding = new Thickness(16, 6, 16, 6),
-                FontSize = 12,
-                Margin = new Thickness(0, 0, 8, 0),
-                Cursor = System.Windows.Input.Cursors.Hand,
-                Background = System.Windows.Media.Brushes.Transparent,
-                Foreground = (System.Windows.Media.Brush)FindResource("ThemeTextSecondary"),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("ThemeOverlayBorder"),
-                BorderThickness = new Thickness(1),
-                Template = btnTemplate
-            };
-            cancelBtn.Click += (_, __) => dlg.Close();
-
-            var saveBtnTemplate = new ControlTemplate(typeof(System.Windows.Controls.Button));
-            var saveBorderFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.Border));
-            saveBorderFactory.SetValue(System.Windows.Controls.Border.CornerRadiusProperty, new CornerRadius(6));
-            saveBorderFactory.SetValue(System.Windows.Controls.Border.BackgroundProperty, new TemplateBindingExtension(System.Windows.Controls.Button.BackgroundProperty));
-            saveBorderFactory.SetValue(System.Windows.Controls.Border.PaddingProperty, new TemplateBindingExtension(System.Windows.Controls.Button.PaddingProperty));
-            
-            var saveContentFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.ContentPresenter));
-            saveContentFactory.SetValue(System.Windows.Controls.ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
-            saveContentFactory.SetValue(System.Windows.Controls.ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
-            saveBorderFactory.AppendChild(saveContentFactory);
-            saveBtnTemplate.VisualTree = saveBorderFactory;
-
-            var saveBtn = new System.Windows.Controls.Button
-            {
-                Content = "Save",
-                Padding = new Thickness(20, 6, 20, 6),
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                Cursor = System.Windows.Input.Cursors.Hand,
-                Background = (System.Windows.Media.Brush)FindResource("ThemeAccentBg"),
-                Foreground = System.Windows.Media.Brushes.White,
-                BorderThickness = new Thickness(0),
-                Template = saveBtnTemplate
-            };
-
-            bool saved = false;
-            saveBtn.Click += (_, __) => { saved = true; dlg.Close(); };
-
-            btnPanel.Children.Add(cancelBtn);
-            btnPanel.Children.Add(saveBtn);
-            stack.Children.Add(btnPanel);
-
-            outerBorder.Child = stack;
-            dlg.Content = outerBorder;
-
-            // Allow Enter to save, Escape to cancel
-            dlg.PreviewKeyDown += (_, ke) =>
-            {
-                if (ke.Key == System.Windows.Input.Key.Enter) { saved = true; dlg.Close(); ke.Handled = true; }
-                else if (ke.Key == System.Windows.Input.Key.Escape) { dlg.Close(); ke.Handled = true; }
-            };
-
-            // Allow dragging the dialog
-            outerBorder.MouseLeftButtonDown += (_, me) => { try { dlg.DragMove(); } catch { } /* Best-effort: failure is acceptable */ };
-
-            // Focus and select only the filename part (ignoring extension) on load
-            dlg.ContentRendered += (_, __) =>
-            {
-                tb.Focus();
-                string text = tb.Text;
-                if (!string.IsNullOrEmpty(text))
-                {
-                    int lastDot = text.LastIndexOf('.');
-                    if (lastDot > 0 && lastDot < text.Length - 1)
+                    if (other != item && other.IsRenaming)
                     {
-                        tb.Select(0, lastDot);
-                    }
-                    else
-                    {
-                        tb.SelectAll();
+                        other.IsRenaming = false;
                     }
                 }
-            };
+            }
 
-            WindowHelper.ShowDialogInForeground(dlg, this);
-
-            if (saved)
+            // Ensure this item is selected in the active list view
+            if (ShelfListView != null && ShelfListView.SelectedItem != item)
             {
-                string newName = tb.Text?.Trim() ?? "";
-                if (!string.IsNullOrEmpty(newName))
+                ShelfListView.SelectedItem = item;
+            }
+            if (AltShelfListView != null && AltShelfListView.SelectedItem != item)
+            {
+                AltShelfListView.SelectedItem = item;
+            }
+
+            item.IsRenaming = true;
+        }
+
+        private void RenameTextBox_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is TextBox tb && tb.IsVisible && tb.DataContext is ClipboardItem item && item.IsRenaming)
+            {
+                Dispatcher.InvokeAsync(() =>
                 {
-                    item.FileName = newName;
-                    FlyShelf.Windows.ToastWindow.ShowToast($"Renamed to \"{newName}\"");
+                    SetupRenameTextBox(tb, item);
+                }, System.Windows.Threading.DispatcherPriority.Input);
+            }
+        }
+
+        private void RenameTextBox_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            if (sender is TextBox tb && (bool)e.NewValue && tb.DataContext is ClipboardItem item && item.IsRenaming)
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    SetupRenameTextBox(tb, item);
+                }, System.Windows.Threading.DispatcherPriority.Input);
+            }
+        }
+
+        private void SetupRenameTextBox(TextBox tb, ClipboardItem item)
+        {
+            if (!item.IsRenaming || !tb.IsVisible) return;
+
+            string currentName = item.FileName ?? (string.IsNullOrEmpty(item.FilePath) ? "" : System.IO.Path.GetFileName(item.FilePath));
+            tb.Text = currentName;
+            tb.Focus();
+            Keyboard.Focus(tb);
+
+            if (!string.IsNullOrEmpty(currentName))
+            {
+                int lastDot = currentName.LastIndexOf('.');
+                if (lastDot > 0 && lastDot < currentName.Length - 1)
+                {
+                    tb.Select(0, lastDot);
+                }
+                else
+                {
+                    tb.SelectAll();
                 }
             }
+        }
+
+        private void RenameTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (sender is not TextBox tb || tb.DataContext is not ClipboardItem item) return;
+
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                CommitRename(tb, item);
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                CancelRename(item);
+            }
+        }
+
+        private void RenameTextBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (sender is TextBox tb && tb.DataContext is ClipboardItem item && item.IsRenaming)
+            {
+                CommitRename(tb, item);
+            }
+        }
+
+        private void CommitRename(TextBox tb, ClipboardItem item)
+        {
+            if (!item.IsRenaming) return;
+            item.IsRenaming = false;
+
+            string newName = tb.Text?.Trim() ?? "";
+            string oldName = item.FileName ?? (string.IsNullOrEmpty(item.FilePath) ? "" : System.IO.Path.GetFileName(item.FilePath));
+
+            if (!string.IsNullOrEmpty(newName) && !string.Equals(newName, oldName, StringComparison.Ordinal))
+            {
+                item.FileName = newName;
+                FlyShelf.Windows.ToastWindow.ShowToast($"Renamed to \"{newName}\"");
+            }
+        }
+
+        private void CancelRename(ClipboardItem item)
+        {
+            item.IsRenaming = false;
         }
 
         private void RenamePasswordLabel_Click(object sender, RoutedEventArgs e)

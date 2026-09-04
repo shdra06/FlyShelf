@@ -350,9 +350,11 @@ export function useFirebaseSync(params: {
 
         syncLog('FIREBASE', `[STEP 3/6: ACTIVE DEVICES] Subscribing to active_devices/${pk.substring(0, 8)}...`);
         // Instant snapshot + real-time listener
-        get(peerDevicesRef).then(processDevicesSnapshot).catch((e) => {
-          syncLog('FIREBASE', `[STEP 3/6: ACTIVE DEVICES ERROR] ⚠️ Initial snapshot error: ${e?.message || e}`);
-        });
+        if (!isCancelled) {
+          get(peerDevicesRef).then(processDevicesSnapshot).catch((e) => {
+            syncLog('FIREBASE', `[STEP 3/6: ACTIVE DEVICES ERROR] ⚠️ Initial snapshot error: ${e?.message || e}`);
+          });
+        }
         if (unsubscribeDevices) unsubscribeDevices();
 
         unsubscribeDevices = onValue(peerDevicesRef, processDevicesSnapshot, (error) => {
@@ -373,6 +375,7 @@ export function useFirebaseSync(params: {
 
     return () => {
       isCancelled = true;
+      if (debounceTimer) clearTimeout(debounceTimer);
       if (unsubscribeDevices) unsubscribeDevices();
     };
   // AC-3: Stabilize pairedDevices dependency with useMemo to avoid inline JSON.stringify

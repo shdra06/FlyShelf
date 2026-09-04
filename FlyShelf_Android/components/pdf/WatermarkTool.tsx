@@ -1,9 +1,9 @@
-import { useAppTheme } from '../../hooks/useAppTheme';
 import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
+import { useAppTheme } from '../../hooks/useAppTheme';
 import { createPdfToolsStyles } from '../../styles/pdfToolsStyles';
 import { addWatermark } from '../../utils/pdfToolsUtils';
 import { getPdfPageInfo } from '../../utils/pdfUtils';
@@ -15,6 +15,7 @@ interface WatermarkToolProps {
   onBack: () => void;
   onPickFile: () => Promise<SelectedFile[]>;
   saveRecent: (name: string, path: string, pages: number, tool: 'watermark') => void;
+  onSendToPc?: (filePath: string) => void;
 }
 
 /** Color preset for watermark */
@@ -31,7 +32,7 @@ const COLOR_PRESETS: ColorPreset[] = [
   { label: 'Black', hex: '#1A1A1A', value: { r: 0.1, g: 0.1, b: 0.1 } },
 ];
 
-export default function WatermarkTool({ onBack, onPickFile, saveRecent }: WatermarkToolProps) {
+export default function WatermarkTool({ onBack, onPickFile, saveRecent, onSendToPc }: WatermarkToolProps) {
   const { colors, shadows } = useAppTheme();
   const s = useMemo(() => createPdfToolsStyles(colors, shadows), [colors, shadows]);
 
@@ -105,7 +106,7 @@ export default function WatermarkTool({ onBack, onPickFile, saveRecent }: Waterm
           <Pressable style={s.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back"><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></Pressable>
           <Text style={s.modalTitle}>Success</Text>
         </View>
-        <ResultView path={resultPath} onDone={onBack} />
+        <ResultView path={resultPath} onDone={onBack} onSendToPc={onSendToPc} />
       </View>
     );
   }

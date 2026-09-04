@@ -195,6 +195,7 @@ export function useLanPresence(params: {
 
   const announceCountRef = useRef(0);
   const isMountedRef = useRef(false);
+  const ipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isEnabled || !deviceId) return;
@@ -254,13 +255,15 @@ export function useLanPresence(params: {
     // Re-announce on network change
     const unsubscribe = NetInfo.addEventListener(state => {
       if (state.isConnected && state.type === 'wifi' && isMountedRef.current) {
-        setTimeout(() => { if (isMountedRef.current) announcePresence(); }, 2000);
+        if (ipTimerRef.current) clearTimeout(ipTimerRef.current);
+        ipTimerRef.current = setTimeout(() => { if (isMountedRef.current) announcePresence(); }, 2000);
       }
     });
 
     return () => {
       isMountedRef.current = false; // M15: Prevent callbacks from firing after cleanup
       clearInterval(timer);
+      if (ipTimerRef.current) clearTimeout(ipTimerRef.current);
       unsubscribe();
     };
   }, [isEnabled, deviceId, deviceName]);

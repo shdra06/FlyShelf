@@ -26,6 +26,7 @@ const PLAINTEXT_KEYS = new Set([
   '@floatingBallSize',
   '@floatingBallAutoHide',
   '@deviceId',
+  '@deviceName',
   'last_crash_error',
 ]);
 
@@ -44,7 +45,15 @@ const EncryptedStorage = {
   async getItem(key: string): Promise<string | null> {
     const raw = await AsyncStorage.getItem(key);
     if (raw === null) return null;
-    if (PLAINTEXT_KEYS.has(key)) return raw;
+    if (PLAINTEXT_KEYS.has(key)) {
+      if (raw && raw.includes(':') && raw.split(':').length === 3) {
+        try {
+          const decrypted = decrypt(raw);
+          if (decrypted) return decrypted;
+        } catch {}
+      }
+      return raw;
+    }
     try {
       const decrypted = decrypt(raw);
       // decrypt returns null if both keys fail but format matches encrypted
@@ -84,7 +93,16 @@ const EncryptedStorage = {
     const results = await AsyncStorage.multiGet(keys);
     return Promise.all(
       results.map(async ([key, raw]) => {
-        if (raw === null || PLAINTEXT_KEYS.has(key)) return [key, raw] as [string, string | null];
+        if (raw === null) return [key, null] as [string, string | null];
+        if (PLAINTEXT_KEYS.has(key)) {
+          if (raw && raw.includes(':') && raw.split(':').length === 3) {
+            try {
+              const decrypted = decrypt(raw);
+              if (decrypted) return [key, decrypted] as [string, string | null];
+            } catch {}
+          }
+          return [key, raw] as [string, string | null];
+        }
         try {
           return [key, decrypt(raw)] as [string, string | null];
         } catch {

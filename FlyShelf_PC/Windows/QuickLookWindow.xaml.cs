@@ -74,6 +74,13 @@ namespace FlyShelf.Windows
         private bool _isDocxMode = false;
         private bool _isCodeEditMode = false;
 
+        // ═══════════════════════════════════════════════════════════
+        // ASPECT-RATIO RESIZE CONSTRAINT (image mode)
+        // ═══════════════════════════════════════════════════════════
+        private bool _isImageAspectLocked = false;
+        private double _imageAspectRatio = 1.0; // width / height
+        private System.Windows.Interop.HwndSource _hwndSource;
+
         public QuickLookWindow(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null, bool autoTriggerOcr = false)
         {
             InitializeComponent();
@@ -408,8 +415,32 @@ namespace FlyShelf.Windows
 
             try
             {
+                // Default: opaque themed background for non-image content (text, code, PDF, etc.)
+                // The image branch below will override this to transparent.
+                var themeBg = TryFindResource("ThemeWindowFallback") as System.Windows.Media.Brush
+                              ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x18, 0x18, 0x25));
+                OuterBorder.Background = themeBg;
+                OuterBorder.BorderBrush = TryFindResource("ThemeOverlayBorder") as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Transparent;
+                OuterBorder.BorderThickness = new Thickness(1);
+                // Push content below the overlay header for non-image modes
+                if (ContentGrid != null) ContentGrid.Margin = new Thickness(0, 40, 0, 0);
+                // Make header fully opaque for non-image modes
+                HeaderGrid.Background = TryFindResource("ThemeOverlayBg") as System.Windows.Media.Brush
+                                        ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x18, 0x18, 0x25));
+
                 if (_item.ItemType == FlyShelf.ViewModels.ClipboardItemType.Image || _item.ItemType == FlyShelf.ViewModels.ClipboardItemType.QRCode)
                 {
+                    // Transparent window — image defines the window shape
+                    // CRITICAL: Reset window.Background that was overridden by ApplyWindowBackdropAndBackground
+                    this.Background = System.Windows.Media.Brushes.Transparent;
+                    OuterBorder.Background = System.Windows.Media.Brushes.Transparent;
+                    OuterBorder.BorderBrush = System.Windows.Media.Brushes.Transparent;
+                    OuterBorder.BorderThickness = new Thickness(0);
+                    // Image fills entire window — header overlays on top
+                    if (ContentGrid != null) ContentGrid.Margin = new Thickness(0);
+                    HeaderGrid.Background = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromArgb(0xCC, 0x18, 0x18, 0x25)); // Semi-transparent
+
                     PreviewImage.Visibility = Visibility.Visible;
                     if (ImageModeGrid != null) ImageModeGrid.Visibility = Visibility.Visible;
                     
@@ -481,22 +512,21 @@ namespace FlyShelf.Windows
                             targetW = targetH * aspect;
                         }
 
-                        // Minimum size to keep controls visible — absolute floor
-                        // For very thin images (e.g., 1920×100 banners), the aspect-ratio
-                        // scaling can produce tiny windows. Enforce a usable floor.
-                        double minW = 400;
-                        double minH = 300;
+                        // Minimum size — keep controls usable but much smaller
+                        // for transparent image mode (no visible background to hide gaps)
+                        double minW = 200;
+                        double minH = 120;
                         if (targetW < minW || targetH < minH)
                         {
                             if (aspect >= 1.0)
                             {
                                 targetW = Math.Max(targetW, minW);
-                                targetH = Math.Max(targetW / aspect, minH);
+                                targetH = targetW / aspect;
                             }
                             else
                             {
                                 targetH = Math.Max(targetH, minH);
-                                targetW = Math.Max(targetH * aspect, minW);
+                                targetW = targetH * aspect;
                             }
                             // Re-cap to work area after floor enforcement
                             if (targetW > maxW) targetW = maxW;
@@ -506,13 +536,13 @@ namespace FlyShelf.Windows
                         this.Width = targetW;
                         if (_item.ItemType == FlyShelf.ViewModels.ClipboardItemType.QRCode)
                         {
-                            this.Height = targetH + 80; // Add header and QR content bar height back
+                            this.Height = targetH + 40; // QR content bar at bottom
                             if (QrContentBar != null) QrContentBar.Visibility = Visibility.Visible;
                             if (QrContentText != null) QrContentText.Text = _item.RawContent;
                         }
                         else
                         {
-                            this.Height = targetH + 40; // Add header height back
+                            this.Height = targetH; // Header overlays image, no extra space needed
                         }
 
                         // Center on screen after dynamic sizing
@@ -530,6 +560,13 @@ namespace FlyShelf.Windows
                             if (CopyAllOcrBtn != null) CopyAllOcrBtn.Visibility = Visibility.Visible;
                             RenderOcrOverlay();
                         }
+
+                        // ═══ Enable aspect-ratio-locked resize ═══
+                        // This prevents black gaps from appearing during resize by
+                        // constraining the window to match the image's aspect ratio.
+                        _imageAspectRatio = aspect;
+                        _isImageAspectLocked = true;
+                        InstallAspectRatioHook();
                     }
                 }
                 else if (ext == ".pdf")
@@ -779,77 +816,9 @@ namespace FlyShelf.Windows
                     _isImageLoaded = true;
                     if (CodeEditBtn != null) CodeEditBtn.Visibility = Visibility.Visible;
                 }
-                else if (ext == ".docx")
+                else if (ext is ".docx" or ".doc" or ".rtf" or ".odt")
                 {
-                    TextPreviewScroll.Visibility = Visibility.Visible;
-                    TextPreview.IsReadOnly = false;
-                    _isDocxMode = true;
-                    if (DocxSaveBtn != null) DocxSaveBtn.Visibility = Visibility.Visible;
-
-                    string detectedFont = "Calibri";
-                    string textResult = await System.Threading.Tasks.Task.Run(() =>
-                    {
-                        try 
-                        {
-                            using (var archive = System.IO.Compression.ZipFile.OpenRead(_item.FilePath))
-                            {
-                                // Detect document font if present
-                                var fontEntry = archive.GetEntry("word/fontTable.xml");
-                                if (fontEntry != null)
-                                {
-                                    using var fStream = fontEntry.Open();
-                                    using var fReader = new System.IO.StreamReader(fStream);
-                                    string fXml = fReader.ReadToEnd();
-                                    var fMatch = System.Text.RegularExpressions.Regex.Match(fXml, @"w:name=""([^""]+)""");
-                                    if (fMatch.Success) detectedFont = fMatch.Groups[1].Value;
-                                }
-
-                                var entry = archive.GetEntry("word/document.xml");
-                                if (entry != null)
-                                {
-                                    using (var stream = entry.Open())
-                                    using (var reader = new System.IO.StreamReader(stream))
-                                    {
-                                        string xml = reader.ReadToEnd();
-                                        var paragraphs = System.Text.RegularExpressions.Regex.Matches(xml, @"<w:p(?:\s[^>]*)?>(.*?)</w:p>", System.Text.RegularExpressions.RegexOptions.Singleline);
-                                        if (paragraphs.Count > 0)
-                                        {
-                                            var sb = new System.Text.StringBuilder();
-                                            foreach (System.Text.RegularExpressions.Match p in paragraphs)
-                                            {
-                                                string pXml = p.Groups[1].Value;
-                                                string pText = System.Text.RegularExpressions.Regex.Replace(pXml, @"<[^>]+>", "");
-                                                sb.AppendLine(System.Net.WebUtility.HtmlDecode(pText).Trim());
-                                            }
-                                            return sb.ToString().TrimEnd();
-                                        }
-                                        else
-                                        {
-                                            string rawText = System.Text.RegularExpressions.Regex.Replace(xml, @"<[^>]+>", " ");
-                                            return System.Text.RegularExpressions.Regex.Replace(rawText, @"\s+", " ").Trim();
-                                        }
-                                    }
-                                }
-                            }
-                        } 
-                        catch { } // Best-effort: failure is acceptable
-                        return null;
-                    });
-
-                    if (textResult != null)
-                    {
-                        TextPreview.Text = textResult;
-                        try { TextPreview.FontFamily = new System.Windows.Media.FontFamily($"{detectedFont}, Calibri, Segoe UI, sans-serif"); } catch { }
-                        TextPreview.FontSize = 14;
-                    }
-                    else
-                    {
-                        TextPreview.Text = "[FlyShelf Codec Error: Cannot extract raw string payload from this artifact natively]";
-                    }
-
-                    this.Width = 640;
-                    this.Height = 720;
-                    _isImageLoaded = true; // allow native dragging for textual representations
+                    await LoadWordDocumentAsync();
                 }
                 else if (ext == ".txt" || ext == ".log")
                 {
@@ -976,6 +945,52 @@ namespace FlyShelf.Windows
 
             this.Left = newLeft;
             this.Top = newTop;
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // RESPONSIVE HEADER — Compact mode for narrow windows
+        // When the window is too narrow, button text labels collapse
+        // leaving only icons for a clean, usable toolbar.
+        // ═══════════════════════════════════════════════════════════
+        private bool _isHeaderCompact = false;
+
+        private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            UpdateHeaderCompactMode();
+        }
+
+        private void UpdateHeaderCompactMode()
+        {
+            const double compactThreshold = 480;
+            bool shouldBeCompact = this.ActualWidth < compactThreshold;
+
+            if (shouldBeCompact == _isHeaderCompact) return; // No change needed
+            _isHeaderCompact = shouldBeCompact;
+
+            // Hide/show title text
+            if (HeaderTitle != null)
+                HeaderTitle.Visibility = shouldBeCompact ? Visibility.Collapsed : Visibility.Visible;
+
+            // Iterate header buttons and collapse/show their label TextBlocks
+            if (HeaderButtonsPanel == null) return;
+            foreach (var child in HeaderButtonsPanel.Children)
+            {
+                if (child is Wpf.Ui.Controls.Button btn)
+                {
+                    // Buttons with StackPanel content containing icon + label
+                    if (btn.Content is StackPanel sp)
+                    {
+                        foreach (var item in sp.Children)
+                        {
+                            // Label TextBlocks have FontSize 10.5 — icon TextBlocks use larger sizes
+                            if (item is TextBlock tb && tb.FontSize <= 11.0)
+                            {
+                                tb.Visibility = shouldBeCompact ? Visibility.Collapsed : Visibility.Visible;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -1290,83 +1305,150 @@ namespace FlyShelf.Windows
             }
         }
 
-        private async void DocxSave_Click(object sender, RoutedEventArgs e)
-        {
-            if (string.IsNullOrEmpty(_item?.FilePath) || !File.Exists(_item.FilePath)) return;
+        public string EffectivePdfPath => _currentDocxPdfPath ?? _item?.FilePath ?? "";
 
+        private void DocxSave_Click(object sender, RoutedEventArgs e)
+        {
+            DocxExportPdf_Click(sender, e);
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // WM_SIZING HOOK — Aspect-ratio-locked resize for image mode
+        // Intercepts the Windows resize message BEFORE the window is
+        // redrawn, so the user never sees any black gap / dead space.
+        // ═══════════════════════════════════════════════════════════
+        private const int WM_SIZING = 0x0214;
+        private const int WMSZ_LEFT = 1;
+        private const int WMSZ_RIGHT = 2;
+        private const int WMSZ_TOP = 3;
+        private const int WMSZ_TOPLEFT = 4;
+        private const int WMSZ_TOPRIGHT = 5;
+        private const int WMSZ_BOTTOM = 6;
+        private const int WMSZ_BOTTOMLEFT = 7;
+        private const int WMSZ_BOTTOMRIGHT = 8;
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct RECT
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        private void InstallAspectRatioHook()
+        {
             try
             {
-                if (DocxSaveBtn != null) DocxSaveBtn.IsEnabled = false;
-                string updatedText = TextPreview.Text ?? "";
-
-                bool success = await System.Threading.Tasks.Task.Run(() =>
-                {
-                    try
-                    {
-                        using (var archive = System.IO.Compression.ZipFile.Open(_item.FilePath, System.IO.Compression.ZipArchiveMode.Update))
-                        {
-                            var entry = archive.GetEntry("word/document.xml");
-                            if (entry != null)
-                            {
-                                string originalXml;
-                                using (var stream = entry.Open())
-                                using (var reader = new System.IO.StreamReader(stream))
-                                {
-                                    originalXml = reader.ReadToEnd();
-                                }
-
-                                var bodyMatch = System.Text.RegularExpressions.Regex.Match(originalXml, @"^(.*?<w:body>)(.*?)(</w:body>.*)$", System.Text.RegularExpressions.RegexOptions.Singleline);
-                                string prefix = bodyMatch.Success ? bodyMatch.Groups[1].Value : @"<?xml version=""1.0"" encoding=""UTF-8"" standalone=""yes""?><w:document xmlns:w=""http://schemas.openxmlformats.org/wordprocessingml/2006/main""><w:body>";
-                                string suffix = bodyMatch.Success ? bodyMatch.Groups[3].Value : @"</w:body></w:document>";
-
-                                var sb = new System.Text.StringBuilder();
-                                sb.Append(prefix);
-                                string[] lines = updatedText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-                                foreach (string line in lines)
-                                {
-                                    string escaped = System.Security.SecurityElement.Escape(line);
-                                    sb.Append($"<w:p><w:r><w:t xml:space=\"preserve\">{escaped}</w:t></w:r></w:p>");
-                                }
-                                sb.Append(suffix);
-
-                                entry.Delete();
-                                var newEntry = archive.CreateEntry("word/document.xml", System.IO.Compression.CompressionLevel.Optimal);
-                                using (var writer = new System.IO.StreamWriter(newEntry.Open(), System.Text.Encoding.UTF8))
-                                {
-                                    writer.Write(sb.ToString());
-                                }
-                                return true;
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Classes.Logger.LogAction("DOCX_SAVE_ERROR", ex.Message);
-                    }
-                    return false;
-                });
-
-                if (DocxSaveBtn != null) DocxSaveBtn.IsEnabled = true;
-                if (success)
-                {
-                    _item.RawContent = updatedText;
-                    FlyShelf.Windows.ToastWindow.ShowToast($"DOCX document saved! 💾 {Path.GetFileName(_item.FilePath)}");
-                }
-                else
-                {
-                    FlyShelf.Windows.ToastWindow.ShowToast("Failed to save DOCX ❌");
-                }
+                var helper = new System.Windows.Interop.WindowInteropHelper(this);
+                if (helper.Handle == IntPtr.Zero) return;
+                _hwndSource = System.Windows.Interop.HwndSource.FromHwnd(helper.Handle);
+                _hwndSource?.AddHook(AspectRatioWndProc);
             }
-            catch (Exception ex)
+            catch { } // Best-effort
+        }
+
+        private IntPtr AspectRatioWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == WM_SIZING && _isImageAspectLocked && _imageAspectRatio > 0)
             {
-                if (DocxSaveBtn != null) DocxSaveBtn.IsEnabled = true;
-                FlyShelf.Windows.ToastWindow.ShowToast($"Error saving DOCX: {ex.Message} ❌");
+                // Get the current DPI scale factor for accurate pixel-to-DIP conversion
+                double dpiScale = 1.0;
+                try
+                {
+                    var source = PresentationSource.FromVisual(this);
+                    if (source?.CompositionTarget != null)
+                        dpiScale = source.CompositionTarget.TransformToDevice.M11;
+                }
+                catch { }
+
+                var rect = System.Runtime.InteropServices.Marshal.PtrToStructure<RECT>(lParam);
+                int edge = wParam.ToInt32();
+
+                int width = rect.Right - rect.Left;
+                int height = rect.Bottom - rect.Top;
+
+                // Calculate desired dimensions maintaining aspect ratio
+                // The aspect ratio is width/height of the image content
+                double aspect = _imageAspectRatio;
+
+                switch (edge)
+                {
+                    case WMSZ_LEFT:
+                    case WMSZ_RIGHT:
+                        // Width changed — adjust height
+                        int newH = (int)(width / aspect);
+                        rect.Bottom = rect.Top + newH;
+                        break;
+
+                    case WMSZ_TOP:
+                    case WMSZ_BOTTOM:
+                        // Height changed — adjust width
+                        int newW = (int)(height * aspect);
+                        rect.Right = rect.Left + newW;
+                        break;
+
+                    case WMSZ_TOPLEFT:
+                        // Dragging top-left — anchor bottom-right
+                        if ((double)width / height > aspect)
+                        {
+                            rect.Top = rect.Bottom - (int)(width / aspect);
+                        }
+                        else
+                        {
+                            rect.Left = rect.Right - (int)(height * aspect);
+                        }
+                        break;
+
+                    case WMSZ_TOPRIGHT:
+                        // Dragging top-right — anchor bottom-left
+                        if ((double)width / height > aspect)
+                        {
+                            rect.Top = rect.Bottom - (int)(width / aspect);
+                        }
+                        else
+                        {
+                            rect.Right = rect.Left + (int)(height * aspect);
+                        }
+                        break;
+
+                    case WMSZ_BOTTOMLEFT:
+                        // Dragging bottom-left — anchor top-right
+                        if ((double)width / height > aspect)
+                        {
+                            rect.Bottom = rect.Top + (int)(width / aspect);
+                        }
+                        else
+                        {
+                            rect.Left = rect.Right - (int)(height * aspect);
+                        }
+                        break;
+
+                    case WMSZ_BOTTOMRIGHT:
+                        // Dragging bottom-right — anchor top-left
+                        if ((double)width / height > aspect)
+                        {
+                            rect.Bottom = rect.Top + (int)(width / aspect);
+                        }
+                        else
+                        {
+                            rect.Right = rect.Left + (int)(height * aspect);
+                        }
+                        break;
+                }
+
+                System.Runtime.InteropServices.Marshal.StructureToPtr(rect, lParam, false);
+                handled = true;
             }
+            return IntPtr.Zero;
         }
 
         protected override void OnClosed(EventArgs e)
         {
             _cts.Cancel();
+
+            // Remove WM_SIZING aspect-ratio hook
+            try { _hwndSource?.RemoveHook(AspectRatioWndProc); } catch { }
 
             if (_isImageLoaded)
             {

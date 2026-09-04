@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AppErrorBoundary from '../../components/AppErrorBoundary';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, AppState, Modal, NativeModules, ScrollView, Share, RefreshControl, Animated, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, AppState, Modal, NativeModules, ScrollView, Share, RefreshControl, Animated, StyleSheet, FlatList } from 'react-native';
 // SafeAreaView removed — ScreenHeader handles safe area
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FlashList } from '@shopify/flash-list';
-const FlashListCast = FlashList as React.ComponentType<any>;
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
@@ -28,6 +26,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import EncryptedStorage from '../../utils/EncryptedStorage';
 import NetInfo from '@react-native-community/netinfo';
 import { toast } from '../../context/ToastContext';
+import * as Haptics from 'expo-haptics';
 
 
 // ═══ Extracted Modules ═══
@@ -39,7 +38,7 @@ import { createSyncStyles } from '../../styles/syncStyles';
 import { font, radius, space } from '../../styles/theme';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import AnimatedCard from '../../components/AnimatedCard';
-import { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import { useSharedValue } from 'react-native-reanimated';
 import ScreenHeader from '../../components/ScreenHeader';
 
 import CachedImage from '../../components/CachedImage';
@@ -60,9 +59,10 @@ import { useDeviceSync } from '../../features/sync/useDeviceSync';
 import { useHeavyUpload } from '../../features/sync/useHeavyUpload';
 import { usePairingFlow } from '../../features/sync/usePairingFlow';
 import { useScreenshotSync } from '../../features/sync/useScreenshotSync';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused, useFocusEffect } from '@react-navigation/native';
 import { normalizeTextForFingerprint, fuzzyIsMatch } from '../../utils/textNormalize';
 import { router } from 'expo-router';
+import { useVault } from '../../features/vault/useVault';
 
 // ═══ Home Dashboard Components ═══
 import MaterialSearchBar from '../../components/MaterialSearchBar';
@@ -84,12 +84,14 @@ const SkeletonLoader = () => {
   const opacity = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
         Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true })
       ])
-    ).start();
+    );
+    anim.start();
+    return () => anim.stop();
   }, []);
 
   return (
@@ -114,7 +116,7 @@ function SyncScreenInner() {
   const { colors, shadows, isDark } = useAppTheme();
   const styles = useMemo(() => createSyncStyles(colors, shadows), [colors, shadows]);
   const homeStyles = useMemo(() => createHomeStyles(colors, shadows), [colors, shadows]);
-  const { pcLocalIp, deviceName, setDeviceName, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, addPairedDevice, pairedDevices, updatePairedDeviceLicensing, updateDeviceStatus, pairingKey: contextPairingKey, regeneratePairingKey, getSyncPrefsForDevice, autoSyncTop5, isOfflineOutboxEnabled } = useSettings();
+  const { pcLocalIp, deviceName, setDeviceName, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, addPairedDevice, pairedDevices, updatePairedDeviceLicensing, updateDeviceStatus, pairingKey: contextPairingKey, regeneratePairingKey, getSyncPrefsForDevice, autoSyncTop5, isOfflineOutboxEnabled, defaultHomeCard, showBottomHomeSwitcher, isLoading: settingsLoading } = useSettings();
 
   const isPairedPcPro = pairedDevices.some(d => d.deviceType === 'PC' && d.isPro);
 
@@ -123,13 +125,41 @@ function SyncScreenInner() {
   const [viewMode, setViewMode] = useState<ViewMode>('home');
   const insets = useSafeAreaInsets();
 
+  const defaultCardAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!defaultCardAppliedRef.current && defaultHomeCard && defaultHomeCard !== 'home') {
+      defaultCardAppliedRef.current = true;
+      if (defaultHomeCard === 'clipboard') {
+        setViewMode('clipboard');
+      } else if (defaultHomeCard === 'archive') {
+        router.push('/(tabs)/archive');
+      } else if (defaultHomeCard === 'vault') {
+        router.push('/(tabs)/vault' as any);
+      } else if (defaultHomeCard === 'notes') {
+        router.push('/(tabs)/notes');
+      } else if (defaultHomeCard === 'todo') {
+        router.push('/(tabs)/todo');
+      } else if (defaultHomeCard === 'settings') {
+        router.push('/(tabs)/settings');
+      }
+    }
+  }, [defaultHomeCard]);
+
   // A-10 fix: detect when this tab is not focused to skip screenshot polling
   const isFocused = useIsFocused();
 
   useEffect(() => {
     if (Platform.OS === 'android' && AdvanceOverlay) {
-      AdvanceOverlay.startOverlay();
-      try { AdvanceOverlay.setBallVisible?.(isFloatingBallEnabled); } catch (e) {}
+      try {
+        if (typeof AdvanceOverlay.startOverlay === 'function') {
+          AdvanceOverlay.startOverlay();
+        }
+      } catch (e) {}
+      try {
+        if (typeof AdvanceOverlay.setBallVisible === 'function') {
+          AdvanceOverlay.setBallVisible(isFloatingBallEnabled);
+        }
+      } catch (e) {}
     }
   }, [isFloatingBallEnabled]);
 
@@ -149,6 +179,37 @@ function SyncScreenInner() {
   const clipsStateRef = useRef<ClipItem[]>([]);
   useEffect(() => { clipsStateRef.current = clips; }, [clips]);
   const feedListRef = useRef<any>(null);
+
+  // ─── Smart Recent Activity Cross-Data State ───
+  const { manifest } = useVault();
+  const [recentNotes, setRecentNotes] = useState<any[]>([]);
+  const [recentTodos, setRecentTodos] = useState<any[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      (async () => {
+        try {
+          let rawNotes = await EncryptedStorage.getItem('@flyshelf_notes');
+          if (!rawNotes) rawNotes = await AsyncStorage.getItem('@flyshelf_notes');
+          if (rawNotes && isMounted) {
+            const parsedNotes = JSON.parse(rawNotes);
+            if (Array.isArray(parsedNotes)) setRecentNotes(parsedNotes);
+          }
+        } catch {}
+
+        try {
+          let rawTodos = await EncryptedStorage.getItem('@flyshelf_todos');
+          if (!rawTodos) rawTodos = await AsyncStorage.getItem('@flyshelf_todos');
+          if (rawTodos && isMounted) {
+            const parsedTodos = JSON.parse(rawTodos);
+            if (Array.isArray(parsedTodos)) setRecentTodos(parsedTodos);
+          }
+        } catch {}
+      })();
+      return () => { isMounted = false; };
+    }, [])
+  );
   // ─── Feed Filter State ───
   type FeedCategory = 'All' | 'Text' | 'Images' | 'Docs';
   const [feedCategory, setFeedCategory] = useState<FeedCategory>('All');
@@ -215,9 +276,9 @@ function SyncScreenInner() {
     if (clipPersistTimerRef.current) clearTimeout(clipPersistTimerRef.current);
     clipPersistTimerRef.current = setTimeout(async () => {
       try {
-        // Keep last 50 items max, exclude transient download progress items
+        // Keep last 1000 items max, exclude transient download progress items
         const persistable = clipsToSave.filter(c => !(c as any)._isTransient && c.Type !== '_DownloadProgress');
-        const toSave = persistable.slice(0, 50).map(c => ({
+        const toSave = persistable.slice(0, 1000).map(c => ({
           id: c.id, Title: c.Title, Type: c.Type, Raw: c.Raw,
           Time: c.Time, Timestamp: c.Timestamp,
           SourceDeviceName: c.SourceDeviceName, SourceDeviceType: c.SourceDeviceType,
@@ -227,9 +288,11 @@ function SyncScreenInner() {
           IsPinned: c.IsPinned || undefined,
         }));
         const jsonStr = JSON.stringify(toSave);
+        const diskClipsBackup = `${FileSystem.documentDirectory}flyshelf_clips_backup.json`;
         await Promise.all([
           EncryptedStorage.setItem(CLIPS_STORAGE_KEY, jsonStr).catch(() => {}),
           AsyncStorage.setItem(CLIPS_STORAGE_KEY, jsonStr).catch(() => {}),
+          FileSystem.writeAsStringAsync(diskClipsBackup, jsonStr).catch(() => {}),
         ]);
       } catch (e) { syncLog('PERSIST', `Clip persist failed: ${(e as any)?.message || e}`); }
     }, 800);
@@ -252,7 +315,7 @@ function SyncScreenInner() {
     // Load pairing timestamp — items older than this are from before we paired
     AsyncStorage.getItem('pairingTimestamp').then(val => {
       if (val) pairingTimestampRef.current = parseInt(val, 10) || 0;
-    });
+    }).catch(() => {});
   }, []);
 
   // Load persisted clips on startup + validate CachedUri files
@@ -260,8 +323,17 @@ function SyncScreenInner() {
     let mounted = true; // A-13: Guard against state updates after unmount
     (async () => {
       try {
-        const stored = await EncryptedStorage.getItem(CLIPS_STORAGE_KEY).catch(() => null)
+        const diskClipsBackup = `${FileSystem.documentDirectory}flyshelf_clips_backup.json`;
+        let stored = await EncryptedStorage.getItem(CLIPS_STORAGE_KEY).catch(() => null)
           || await AsyncStorage.getItem(CLIPS_STORAGE_KEY).catch(() => null);
+        if (!stored) {
+          try {
+            const bInfo = await FileSystem.getInfoAsync(diskClipsBackup);
+            if (bInfo.exists) {
+              stored = await FileSystem.readAsStringAsync(diskClipsBackup);
+            }
+          } catch {}
+        }
         if (stored && mounted) {
           const parsed: ClipItem[] = JSON.parse(stored);
           // Validate CachedUri: check if the local file still exists
@@ -321,7 +393,7 @@ function SyncScreenInner() {
         pairingKeyRef.current = k!;
         if (Platform.OS === 'android' && AdvanceOverlay?.setPairingKey) AdvanceOverlay.setPairingKey(k!);
       }
-    });
+    }).catch(() => {});
   }, []);
   // Keep ref in sync when context key changes (e.g. after pairing or regeneration)
   useEffect(() => {
@@ -370,7 +442,7 @@ function SyncScreenInner() {
           }).map(c => {
             let rawData = c.Raw;
             if (c.Type === 'Pdf' || c.Type === 'Document' || c.Type === 'Archive') {
-              const safeName = c.Title.replace(/[^a-zA-Z0-9.-]/g, '_');
+              const safeName = (c.Title || '').replace(/[^a-zA-Z0-9.-]/g, '_');
               rawData = DOWNLOAD_BASE + safeName;
             }
             return {
@@ -395,18 +467,23 @@ function SyncScreenInner() {
   }, [clips, isFloatingBallEnabled, localWipeTimestamp, localDeletedIds]);
 
   // ─── Bidirectional Overlay Sync ───
+  const overlayTxCountRef = useRef(0); // Track how many overlay items sent to PC this session
   useEffect(() => {
     if (Platform.OS !== 'android' || !AdvanceOverlay || !isFloatingBallEnabled || !deviceName) return;
+    // Reset counter on effect restart (e.g. settings change)
+    overlayTxCountRef.current = 0;
     // Immediately configure overlay with PC URL for seamless sync
     (async () => {
       try {
         const targetUrl = await getCachedPcUrl();
-        if (targetUrl) AdvanceOverlay.setPcUrl(targetUrl);
-        if (deviceName) AdvanceOverlay.setDeviceName(deviceName);
+        if (targetUrl && typeof AdvanceOverlay.setPcUrl === 'function') AdvanceOverlay.setPcUrl(targetUrl);
+        if (deviceName && typeof AdvanceOverlay.setDeviceName === 'function') AdvanceOverlay.setDeviceName(deviceName);
       } catch (e) { syncLog('OVERLAY', `Overlay URL config failed: ${(e as any)?.message || e}`); }
     })();
+    const OVERLAY_TX_INITIAL_CAP = 3; // Max items sent to PC on initial overlay sync
     const pollInterval = setInterval(async () => {
       try {
+        if (typeof AdvanceOverlay.getLastCopiedFromOverlay !== 'function') return;
         const copiedText = await AdvanceOverlay.getLastCopiedFromOverlay();
         if (copiedText && copiedText.trim().length > 0) {
           // Fingerprint to prevent echo back from Firebase
@@ -421,7 +498,20 @@ function SyncScreenInner() {
           };
           setClips(prev => { const next = [newItem, ...prev]; return next.length > MAX_CLIPS_IN_MEMORY ? [...next.filter(c => c.IsPinned), ...next.filter(c => !c.IsPinned)].slice(0, MAX_CLIPS_IN_MEMORY) : next; });
           scrollToTop();
-          transmitTextSecurely(copiedText).catch(() => {});
+          // LEAKAGE FIX: Only send first 3 items to PC on initial overlay sync.
+          // After that, only genuinely NEW user-copied items are transmitted (not echoes of PC items).
+          overlayTxCountRef.current++;
+          // Check if this item was received FROM PC (echo-back detection)
+          const isEchoFromPc = clipsStateRef.current.some(c =>
+            c._receivedVia === 'LAN' && (c.Raw === copiedText || c.Title === copiedText)
+          );
+          if (!isEchoFromPc && overlayTxCountRef.current <= OVERLAY_TX_INITIAL_CAP) {
+            transmitTextSecurelyRef.current(copiedText).catch(() => {});
+          } else if (!isEchoFromPc && overlayTxCountRef.current > OVERLAY_TX_INITIAL_CAP) {
+            // After initial cap, still transmit genuinely new user copies
+            transmitTextSecurelyRef.current(copiedText).catch(() => {});
+          }
+          // Items that ARE echoes from PC are kept local-only — never sent back
         }
       } catch(e) { syncLog('OVERLAY', `Overlay poll error: ${(e as any)?.message || e}`); }
     }, 1500);
@@ -477,12 +567,14 @@ function SyncScreenInner() {
     
     const isPaired = pairedDevices.length > 0;
     if (isPaired) {
-      if (isRefreshing) {
+      // Check if Firebase sees PC online — show "Reconnecting" not "Offline"
+      const firebaseSeesPC = pairedDevices.some(d => d.deviceType === 'PC' && d.isOnline);
+      if (isRefreshing || firebaseSeesPC) {
         return (
-          <View style={{ height: 28, width: '100%', backgroundColor: 'rgba(158, 158, 158, 0.1)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+          <TouchableOpacity onPress={onRefresh} style={{ height: 28, width: '100%', backgroundColor: 'rgba(255, 152, 0, 0.1)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator size={10} color={colors.text.secondary} style={{ marginRight: 6 }} />
-            <Text style={{ fontSize: 11, color: colors.text.secondary }}>Connecting...</Text>
-          </View>
+            <Text style={{ fontSize: 11, color: colors.text.secondary }}>Reconnecting to PC...</Text>
+          </TouchableOpacity>
         );
       }
       return (
@@ -499,6 +591,7 @@ function SyncScreenInner() {
   const [isSending, setIsSending] = useState(false);
   const [lastCopiedText, setLastCopiedText] = useState('');
   const [setupName, setSetupName] = useState('');
+  useEffect(() => { if (deviceName) setSetupName(deviceName); }, [deviceName]);
   const [isSendTextModalVisible, setIsSendTextModalVisible] = useState(false);
   const { isTargetModalVisible, setIsTargetModalVisible, isCameraOptionsVisible, setIsCameraOptionsVisible, isQRScannerActive, setIsQRScannerActive, expandedImage, setExpandedImage, isMergeModalVisible, setIsMergeModalVisible, mergeQueue, setMergeQueue, isForceSyncModalVisible, setIsForceSyncModalVisible, forceSyncDevices, setForceSyncDevices, isConnectModalVisible, setIsConnectModalVisible } = useModals();
   const [connectionInfo, setConnectionInfo] = useState<{ url: string; latencyMs: number; type: 'LAN' | 'Cloud' } | null>(null);
@@ -528,11 +621,11 @@ function SyncScreenInner() {
   useEffect(() => {
     AsyncStorage.getItem('localWipeTimestamp').then(val => {
       if (val) { setLocalWipeTimestamp(parseInt(val, 10) || 0); }
-      else { setLocalWipeTimestamp(0); AsyncStorage.setItem('localWipeTimestamp', '0'); }
-    });
+      else { setLocalWipeTimestamp(0); AsyncStorage.setItem('localWipeTimestamp', '0').catch(() => {}); }
+    }).catch(() => {});
     EncryptedStorage.getItem('localDeletedIds').then(val => {
       if (val) { try { const arr = JSON.parse(val); setLocalDeletedIds(new Set(arr.slice(-500))); } catch(e) { console.warn('Load localDeletedIds: error', (e as any)?.message || e); } }
-    });
+    }).catch(() => {});
     (async () => {
       if (!(await AsyncStorage.getItem('@flyshelf_onboarding_done'))) setShowOnboarding(true);
     })();
@@ -625,41 +718,52 @@ function SyncScreenInner() {
       if (state === 'active') {
         registerSelf();
         // Returning to foreground — stop native sync and merge any clips received while backgrounded
-        if (Platform.OS === 'android' && AdvanceOverlay?.setSyncEnabled) {
-          AdvanceOverlay.setSyncEnabled(false);
-          AdvanceOverlay.getPendingClips?.()
-            .then((json: string) => {
-              try {
-                const pending = JSON.parse(json || '[]') as Array<{ Raw?: string; Title?: string; Type?: string; SourceDeviceName?: string }>;
-                if (pending.length > 0) {
-                  setClips(prev => {
-                    const newItems: ClipItem[] = pending
-                      .filter(p => p.Raw && p.Raw.trim().length > 0)
-                      .map(p => ({
-                        Title: (p.Title || (p.Raw || '').substring(0, 80)),
-                        Type: p.Type || 'Text',
-                        Raw: p.Raw!,
-                        Time: new Date().toLocaleString(),
-                        SourceDeviceName: p.SourceDeviceName || 'PC',
-                        SourceDeviceType: 'Desktop' as const,
-                        Timestamp: NetworkClock.now(),
-                        _receivedVia: 'LAN' as const,
-                      }));
-                    // Dedup: skip items whose Raw already exists at the top of the feed
-                    const existingRaws = new Set(prev.slice(0, 20).map(c => c.Raw));
-                    const unique = newItems.filter(n => !existingRaws.has(n.Raw));
-                    if (unique.length === 0) return prev;
-                    return [...unique, ...prev];
-                  });
-                }
-              } catch (_) {}
-            })
-            .catch(() => {});
+        if (Platform.OS === 'android' && AdvanceOverlay) {
+          try {
+            if (typeof AdvanceOverlay.setSyncEnabled === 'function') {
+              AdvanceOverlay.setSyncEnabled(false);
+            }
+          } catch {}
+          if (typeof AdvanceOverlay.getPendingClips === 'function') {
+            try {
+              const pendingPromise = AdvanceOverlay.getPendingClips();
+              if (pendingPromise && typeof pendingPromise.then === 'function') {
+                pendingPromise.then((json: string) => {
+                  try {
+                    const pending = JSON.parse(json || '[]') as Array<{ Raw?: string; Title?: string; Type?: string; SourceDeviceName?: string }>;
+                    if (pending.length > 0) {
+                      setClips(prev => {
+                        const newItems: ClipItem[] = pending
+                          .filter(p => p.Raw && p.Raw.trim().length > 0)
+                          .map(p => ({
+                            Title: (p.Title || (p.Raw || '').substring(0, 80)),
+                            Type: p.Type || 'Text',
+                            Raw: p.Raw!,
+                            Time: new Date().toLocaleString(),
+                            SourceDeviceName: p.SourceDeviceName || 'PC',
+                            SourceDeviceType: 'Desktop' as const,
+                            Timestamp: NetworkClock.now(),
+                            _receivedVia: (cachedPcUrlRef.current?.includes('trycloudflare.com') ? 'Cloud' : 'LAN') as 'Cloud' | 'LAN',
+                          }));
+                        // Dedup: skip items whose Raw already exists at the top of the feed
+                        const existingRaws = new Set(prev.slice(0, 20).map(c => c.Raw));
+                        const unique = newItems.filter(n => !existingRaws.has(n.Raw));
+                        if (unique.length === 0) return prev;
+                        return [...unique, ...prev];
+                      });
+                    }
+                  } catch (_) {}
+                }).catch(() => {});
+              }
+            } catch {}
+          }
         }
       } else if (state === 'background') {
         // Going to background — enable native sync so the foreground service keeps syncing
-        if (Platform.OS === 'android' && AdvanceOverlay?.setSyncEnabled) {
-          AdvanceOverlay.setSyncEnabled(true);
+        if (Platform.OS === 'android' && AdvanceOverlay && typeof AdvanceOverlay.setSyncEnabled === 'function') {
+          try {
+            AdvanceOverlay.setSyncEnabled(true);
+          } catch {}
         }
       }
     });
@@ -897,7 +1001,7 @@ function SyncScreenInner() {
           if (autoTargetTypes.includes(item.Type) && finalMediaUrl.startsWith('http')) {
             try {
               if (Platform.OS === 'web') return;
-              const safeName = item.Title.replace(/[^a-zA-Z0-9.-]/g, '_');
+              const safeName = (item.Title || '').replace(/[^a-zA-Z0-9.-]/g, '_');
               const localUri = DOWNLOAD_BASE + safeName;
               const transferId = item.id || safeName;
               const fileInfo = await FileSystem.getInfoAsync(localUri);
@@ -1389,7 +1493,7 @@ function SyncScreenInner() {
             // Media/File item: check if cached locally
             let localPath = item.CachedUri || (item.Raw && item.Raw.startsWith('file://') ? item.Raw : '');
             if (!localPath && item.Title) {
-              const safeName = item.Title.replace(/[^a-zA-Z0-9._-]/g, '_');
+              const safeName = (item.Title || '').replace(/[^a-zA-Z0-9._-]/g, '_');
               const subfolder = item.Type === 'Pdf' ? 'PDFs' : item.Type === 'Video' ? 'Videos' : item.Type === 'Audio' ? 'Audio' : 'Documents';
               const candidate = `${DOWNLOAD_BASE}${subfolder}/${safeName}`;
               const exists = await FileSystem.getInfoAsync(candidate);
@@ -1455,7 +1559,7 @@ function SyncScreenInner() {
       // Auto-send to PC via LAN/Cloudflare with fallback chain
       const pc = activeDevices.find((d: any) => d.DeviceType === 'PC');
       executeHeavyUpload(pc || 'Global', payload);
-    } catch (err) { Alert.alert('Upload Failed'); }
+    } catch (err: any) { Alert.alert('Upload Failed', err?.message || 'Could not send file to PC. Check your connection in Settings.'); }
   };
   const launchDirectCamera = async () => {
     setIsCameraOptionsVisible(false);
@@ -1494,7 +1598,25 @@ function SyncScreenInner() {
       Alert.alert('Image Picker Error', pickErr?.message || 'Failed to open image library');
     }
   };
-  const launchQRScanner = async () => { setIsConnectModalVisible(false); setIsCameraOptionsVisible(false); if (!cameraPermission?.granted) { const perm = await requestCameraPermission(); if (!perm.granted) { Alert.alert("Permission Required"); return; } } setIsQRScannerActive(true); };
+  const launchQRScanner = async () => { 
+    setIsConnectModalVisible(false); 
+    setIsCameraOptionsVisible(false); 
+    if (!cameraPermission?.granted) { 
+      const perm = await requestCameraPermission(); 
+      if (!perm.granted) { 
+        Alert.alert(
+          'Camera Permission Required', 
+          'Camera access is needed to scan FlyShelf pairing QR codes. Please allow camera access in Settings.',
+          [
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        ); 
+        return; 
+      } 
+    } 
+    setIsQRScannerActive(true); 
+  };
 
 
   // ─── Clip Visibility Filter (with category + search) ───
@@ -1816,21 +1938,33 @@ function SyncScreenInner() {
 
   // ════════════════════════════════════════════════════════
   const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler({ onScroll: (e) => { scrollY.value = e.contentOffset.y; } });
+  const scrollHandler = (e: any) => {
+    const offsetY = e?.nativeEvent?.contentOffset?.y;
+    if (typeof offsetY === 'number') {
+      scrollY.value = offsetY;
+    }
+  };
 
   // ── Connection status for search bar ──
-  const connectionStatus = useMemo((): 'online' | 'cloud' | 'offline' => {
+  const connectionStatus = useMemo((): 'online' | 'cloud' | 'reconnecting' | 'offline' => {
+    // Priority 1: If the actual HTTP poll has recently succeeded, trust that
+    if (connectionInfo) {
+      return connectionInfo.type === 'LAN' ? 'online' : 'cloud';
+    }
+    // Priority 2: Firebase says PC is online but HTTP poll hasn't confirmed it yet
     const onlinePcs = pairedDevices.filter(d => d.deviceType === 'PC' && d.isOnline);
     if (onlinePcs.length > 0) {
-      const connType = onlinePcs[0]?.connectionType;
-      return connType === 'LAN' ? 'online' : 'cloud';
+      return 'reconnecting'; // Firebase sees PC but we haven't reached it directly yet
     }
     return 'offline';
-  }, [pairedDevices]);
+  }, [pairedDevices, connectionInfo]);
 
-  // ── Recent activity items from clips ──
+  // ── Unified Smart Recent Activity Feed (Clips, Notes, Tasks, Vault) ──
   const recentActivityItems = useMemo((): ActivityItem[] => {
-    return clips.slice(0, 15).map((clip, i) => {
+    const combined: ActivityItem[] = [];
+
+    // 1. Recent Clipboard Items
+    clips.slice(0, 15).forEach((clip, i) => {
       let icon: string = 'clipboard-outline';
       let iconColor: string = colors.accent.primary;
       const t = clip.Type || 'Text';
@@ -1840,18 +1974,102 @@ function SyncScreenInner() {
       else if (t === 'URL') { icon = 'link-outline'; iconColor = colors.type.url; }
       else if (t === 'Code') { icon = 'code-slash-outline'; iconColor = colors.type.code; }
       else if (t === 'File' || t === 'Archive') { icon = 'folder-outline'; iconColor = colors.accent.warning; }
-      else { icon = 'clipboard-outline'; iconColor = colors.accent.primary; }
 
-      return {
-        id: clip.id || `clip-${i}`,
-        type: 'clipboard' as const,
+      combined.push({
+        id: `clip-${clip.id || i}`,
+        type: 'clipboard',
         title: clip.Title || (clip.Raw || '').substring(0, 60) || 'Clipboard item',
+        subtitle: `Clip • ${t}`,
         timestamp: clip.Timestamp || Date.now(),
         icon,
         iconColor,
-      };
+        rawPayload: clip,
+      });
     });
-  }, [clips, colors]);
+
+    // 2. Recent Notes (Bullets and sections)
+    if (Array.isArray(recentNotes)) {
+      recentNotes.forEach(day => {
+        const dayTime = day.LastModified || (day.Date ? new Date(day.Date).getTime() : 0);
+        if (Array.isArray(day.Bullets) && day.Bullets.length > 0) {
+          day.Bullets.forEach((bullet: any) => {
+            if (!bullet.Text?.trim()) return;
+            const bulletTime = bullet.LastEdited ? new Date(bullet.LastEdited).getTime() : (bullet.Timestamp || dayTime);
+            combined.push({
+              id: `note-${bullet.Id || Math.random()}`,
+              type: 'note',
+              title: bullet.Text.trim().replace(/^[-*•]\s*/, ''),
+              subtitle: `Note • ${day.Date || 'Daily note'}`,
+              timestamp: bulletTime || Date.now(),
+              icon: 'create-outline',
+              iconColor: '#F59E0B',
+              rawPayload: { date: day.Date, bulletId: bullet.Id },
+            });
+          });
+        }
+      });
+    }
+
+    // 3. Recent Tasks / Todos
+    if (Array.isArray(recentTodos)) {
+      recentTodos.forEach(day => {
+        if (Array.isArray(day.Items)) {
+          day.Items.forEach((task: any) => {
+            if (!task.Text?.trim()) return;
+            const taskTime = task.CompletedTimestamp || task.CreatedTimestamp || (day.Date ? new Date(day.Date).getTime() : 0);
+            combined.push({
+              id: `todo-${task.Id || Math.random()}`,
+              type: 'task',
+              title: task.Text.trim(),
+              subtitle: task.Completed ? 'Task completed' : 'Active task',
+              timestamp: taskTime || Date.now(),
+              icon: task.Completed ? 'checkmark-circle-outline' : 'checkbox-outline',
+              iconColor: task.Completed ? '#10B981' : '#6366F1',
+              rawPayload: { taskId: task.Id, date: day.Date },
+            });
+          });
+        }
+      });
+    }
+
+    // 4. Recent Vault / Storage Entries
+    if (Array.isArray(manifest?.entries)) {
+      manifest.entries.forEach(entry => {
+        combined.push({
+          id: `vault-${entry.id}`,
+          type: 'vault',
+          title: entry.originalName || 'Storage file',
+          subtitle: `Storage • ${entry.mimeType?.split('/')[1] || 'File'}`,
+          timestamp: entry.dateAdded || Date.now(),
+          icon: 'cube-outline',
+          iconColor: '#8B5CF6',
+          rawPayload: entry,
+        });
+      });
+    }
+
+    // Chronologically sort all interactions: most recent first
+    combined.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    return combined.slice(0, 30);
+  }, [clips, recentNotes, recentTodos, manifest, colors]);
+
+  // ── Smart Navigation Handler for Recent Activity ──
+  const handleActivityItemPress = useCallback((item: ActivityItem) => {
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+    if (item.type === 'clipboard') {
+      setViewMode('clipboard');
+      if (item.rawPayload?.Raw) {
+        Clipboard.setStringAsync(item.rawPayload.Raw).catch(() => {});
+        toast.clipboard('Copied from Activity', item.rawPayload.Raw);
+      }
+    } else if (item.type === 'note') {
+      router.push('/(tabs)/notes');
+    } else if (item.type === 'task') {
+      router.push('/(tabs)/todo');
+    } else if (item.type === 'vault') {
+      router.push('/(tabs)/vault' as any);
+    }
+  }, []);
 
   // ── Render Home Dashboard ──
   const renderHomeDashboard = () => (
@@ -1860,6 +2078,8 @@ function SyncScreenInner() {
         style={homeStyles.container}
         contentContainerStyle={[homeStyles.scrollContent, { paddingTop: insets.top + 12 }]}
         showsVerticalScrollIndicator={false}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
       >
         {/* Greeting Header */}
         <View style={{ paddingHorizontal: 20, marginBottom: 6 }}>
@@ -1868,16 +2088,16 @@ function SyncScreenInner() {
           </Text>
           <Text style={{ fontSize: 13, fontFamily: font.medium, color: colors.text.tertiary, marginTop: 2 }}>
             {deviceName || 'FlyShelf'}
-            {connectionStatus === 'online' ? ' • 🟢 Connected' : connectionStatus === 'cloud' ? ' • 🟡 Cloud' : ' • Offline'}
+            {connectionStatus === 'online' ? ' • 🟢 Connected' : connectionStatus === 'cloud' ? ' • 🟡 Cloud' : connectionStatus === 'reconnecting' ? ' • 🟡 Reconnecting...' : ' • Offline'}
           </Text>
         </View>
 
-        {/* Category Tiles FIRST — 2×2 Grid */}
+        {/* Category Tiles FIRST — 2×3 Compact Grid */}
         <View style={homeStyles.tilesGrid}>
           <CategoryTile
             icon="clipboard-outline"
             label="Clipboard"
-            subtitle={`${clips.length} item${clips.length !== 1 ? 's' : ''}`}
+            subtitle={`${filteredClips.length} item${filteredClips.length !== 1 ? 's' : ''}`}
             iconColor={colors.accent.primary}
             onPress={() => setViewMode('clipboard')}
           />
@@ -1887,6 +2107,13 @@ function SyncScreenInner() {
             subtitle="Browse files"
             iconColor={colors.type.image}
             onPress={() => router.push('/(tabs)/archive')}
+          />
+          <CategoryTile
+            icon="cube-outline"
+            label="Storage"
+            subtitle="Offline files"
+            iconColor={colors.accent.info}
+            onPress={() => router.push('/(tabs)/vault' as any)}
           />
           <CategoryTile
             icon="document-text-outline"
@@ -1901,6 +2128,13 @@ function SyncScreenInner() {
             subtitle="Manage tasks"
             iconColor={colors.accent.warning}
             onPress={() => router.push('/(tabs)/todo')}
+          />
+          <CategoryTile
+            icon="settings-outline"
+            label="Settings"
+            subtitle="Preferences"
+            iconColor={colors.text.secondary}
+            onPress={() => router.push('/(tabs)/settings')}
           />
         </View>
 
@@ -1924,7 +2158,7 @@ function SyncScreenInner() {
         {/* Recent Activity Feed */}
         <RecentActivityFeed
           items={recentActivityItems}
-          onItemPress={(item) => { setViewMode('clipboard'); }}
+          onItemPress={handleActivityItemPress}
           onSeeAll={() => setViewMode('clipboard')}
         />
       </ScrollView>
@@ -1946,14 +2180,16 @@ function SyncScreenInner() {
   return (
     <LinearGradient colors={[colors.bg.base, colors.bg.baseEnd]} style={{ flex: 1 }}>
     <View style={[styles.container, { backgroundColor: 'transparent' }]}>
-      {/* Device Name Setup Modal */}
-      <Modal visible={!deviceName} animationType="fade" transparent={true}>
-        <View style={styles.modalOverlay}><View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Name this Device</Text>
-          <Text style={styles.modalSubtitle}>Identify this device in the FlyShelf network.</Text>
-          <TextInput style={styles.modalInput} value={setupName} onChangeText={setSetupName} placeholder="e.g. Galaxy S23" placeholderTextColor="#4C5361" autoFocus accessibilityLabel="Device name" accessibilityRole="text" />
-          <TouchableOpacity style={styles.modalButton} onPress={() => { if(setupName.trim()) setDeviceName(setupName.trim()); }} accessibilityLabel="Get started" accessibilityRole="button"><Text style={styles.modalButtonText}>Get Started</Text></TouchableOpacity>
-        </View></View>
+      {/* Device Name Setup Modal — only show after settings are loaded from storage */}
+      <Modal visible={!settingsLoading && !deviceName} animationType="fade" transparent={true}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Name this Device</Text>
+            <Text style={styles.modalSubtitle}>Identify this device in the FlyShelf network.</Text>
+            <TextInput style={styles.modalInput} value={setupName} onChangeText={setSetupName} placeholder="e.g. Galaxy S23" placeholderTextColor="#4C5361" autoFocus accessibilityLabel="Device name" accessibilityRole="text" />
+            <TouchableOpacity style={styles.modalButton} onPress={() => { if(setupName.trim()) setDeviceName(setupName.trim()); }} accessibilityLabel="Get started" accessibilityRole="button"><Text style={styles.modalButtonText}>Get Started</Text></TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Target Device Selection Modal */}
@@ -2004,73 +2240,77 @@ function SyncScreenInner() {
 
       {/* Connect Device Modal */}
       <Modal visible={isConnectModalVisible} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}><View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Connect Device</Text>
-          <Text style={styles.modalSubtitle}>Pair once — stays connected forever</Text>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <ScrollView contentContainerStyle={{ flexGrow: 0 }} keyboardShouldPersistTaps="handled" bounces={false}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Connect Device</Text>
+              <Text style={styles.modalSubtitle}>Pair once — stays connected forever</Text>
 
-          {/* Option 1: Scan QR */}
-          <TouchableOpacity style={styles.targetOption} onPress={launchQRScanner}>
-            <Ionicons name="qr-code-outline" size={24} color={colors.type.image} />
-            <View style={{marginLeft: 12}}>
-              <Text style={{color: '#FFF', fontSize: 16, fontWeight: '600'}}>Scan QR Code</Text>
-              <Text style={{color: '#8A8F98', fontSize: 12}}>Point camera at QR on your PC</Text>
-            </View>
-          </TouchableOpacity>
+              {/* Option 1: Scan QR */}
+              <TouchableOpacity style={styles.targetOption} onPress={launchQRScanner}>
+                <Ionicons name="qr-code-outline" size={24} color={colors.type.image} />
+                <View style={{marginLeft: 12}}>
+                  <Text style={{color: '#FFF', fontSize: 16, fontWeight: '600'}}>Scan QR Code</Text>
+                  <Text style={{color: '#8A8F98', fontSize: 12}}>Point camera at QR on your PC</Text>
+                </View>
+              </TouchableOpacity>
 
-          {/* Option 2: Enter Code */}
-          <View style={{marginTop: 16}}>
-            <Text style={{color: '#8A8F98', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginBottom: 8}}>Or Enter Code</Text>
-            <View style={{flexDirection: 'row', gap: 10}}>
-              <TextInput
-                style={{flex: 1, backgroundColor: '#0F1115', color: '#FFF', fontSize: 22, fontWeight: '800',
-                  borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1,
-                  borderColor: '#2A2F3A', textAlign: 'center', letterSpacing: 6}}
-                value={pairingCodeInput}
-                onChangeText={setPairingCodeInput}
-                placeholder="A7K9M2"
-                placeholderTextColor="#4C5361"
-                maxLength={6}
-                autoCapitalize="characters"
-              />
-              <TouchableOpacity
-                style={{backgroundColor: isPairing ? '#4C5361' : '#4A62EB', borderRadius: 12, paddingHorizontal: 20, justifyContent: 'center'}}
-                onPress={() => { if (pairingCodeInput.length === 6) connectByCode(pairingCodeInput); }}
-                disabled={isPairing}
-              >
-                {isPairing ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{color: '#FFF', fontWeight: '700', fontSize: 14}}>Connect</Text>}
+              {/* Option 2: Enter Code */}
+              <View style={{marginTop: 16}}>
+                <Text style={{color: '#8A8F98', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginBottom: 8}}>Or Enter Code</Text>
+                <View style={{flexDirection: 'row', gap: 10}}>
+                  <TextInput
+                    style={{flex: 1, backgroundColor: '#0F1115', color: '#FFF', fontSize: 22, fontWeight: '800',
+                      borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1,
+                      borderColor: '#2A2F3A', textAlign: 'center', letterSpacing: 6}}
+                    value={pairingCodeInput}
+                    onChangeText={setPairingCodeInput}
+                    placeholder="A7K9M2"
+                    placeholderTextColor="#4C5361"
+                    maxLength={6}
+                    autoCapitalize="characters"
+                  />
+                  <TouchableOpacity
+                    style={{backgroundColor: isPairing ? '#4C5361' : '#4A62EB', borderRadius: 12, paddingHorizontal: 20, justifyContent: 'center'}}
+                    onPress={() => { if (pairingCodeInput.length === 6) connectByCode(pairingCodeInput); }}
+                    disabled={isPairing}
+                  >
+                    {isPairing ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{color: '#FFF', fontWeight: '700', fontSize: 14}}>Connect</Text>}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* This phone's code */}
+              <View style={{marginTop: 20, padding: 14, backgroundColor: '#0F1115', borderRadius: 12, borderWidth: 1, borderColor: '#10B98133'}}>
+                <Text style={{color: '#10B981', fontSize: 12, fontWeight: '700', marginBottom: 6}}>Your Phone's Code</Text>
+                {myPairingCode ? (
+                  <Text style={{color: '#FFF', fontSize: 28, fontWeight: '900', letterSpacing: 8, textAlign: 'center'}}>{myPairingCode}</Text>
+                ) : (
+                  <TouchableOpacity
+                    style={{backgroundColor: '#10B98122', borderRadius: 10, paddingVertical: 10, alignItems: 'center'}}
+                    onPress={generateMyPairingCode}
+                  >
+                    <Text style={{color: '#10B981', fontWeight: '700', fontSize: 14}}>🔑 Generate Code</Text>
+                  </TouchableOpacity>
+                )}
+                <Text style={{color: '#8A8F98', fontSize: 11, marginTop: 6, textAlign: 'center'}}>Enter this code on your PC to connect</Text>
+              </View>
+
+              {/* Connected status */}
+              {pairedPcName && (
+                <View style={{marginTop: 12, padding: 10, backgroundColor: '#10B98111', borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                  <View style={{width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981'}} />
+                  <Text style={{color: '#10B981', fontSize: 13, fontWeight: '600'}}>Paired with {pairedPcName}{isPairedPcPro ? ' (Pro)' : ' (Free)'}</Text>
+                </View>
+              )}
+
+              <TouchableOpacity style={[styles.modalButton, {backgroundColor: '#2A2F3A', marginTop: 16}]}
+                onPress={() => { setIsConnectModalVisible(false); setPairingCodeInput(''); }}>
+                <Text style={styles.modalButtonText}>Close</Text>
               </TouchableOpacity>
             </View>
-          </View>
-
-          {/* This phone's code */}
-          <View style={{marginTop: 20, padding: 14, backgroundColor: '#0F1115', borderRadius: 12, borderWidth: 1, borderColor: '#10B98133'}}>
-            <Text style={{color: '#10B981', fontSize: 12, fontWeight: '700', marginBottom: 6}}>Your Phone's Code</Text>
-            {myPairingCode ? (
-              <Text style={{color: '#FFF', fontSize: 28, fontWeight: '900', letterSpacing: 8, textAlign: 'center'}}>{myPairingCode}</Text>
-            ) : (
-              <TouchableOpacity
-                style={{backgroundColor: '#10B98122', borderRadius: 10, paddingVertical: 10, alignItems: 'center'}}
-                onPress={generateMyPairingCode}
-              >
-                <Text style={{color: '#10B981', fontWeight: '700', fontSize: 14}}>🔑 Generate Code</Text>
-              </TouchableOpacity>
-            )}
-            <Text style={{color: '#8A8F98', fontSize: 11, marginTop: 6, textAlign: 'center'}}>Enter this code on your PC to connect</Text>
-          </View>
-
-          {/* Connected status */}
-          {pairedPcName && (
-            <View style={{marginTop: 12, padding: 10, backgroundColor: '#10B98111', borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 8}}>
-              <View style={{width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981'}} />
-              <Text style={{color: '#10B981', fontSize: 13, fontWeight: '600'}}>Paired with {pairedPcName}{isPairedPcPro ? ' (Pro)' : ' (Free)'}</Text>
-            </View>
-          )}
-
-          <TouchableOpacity style={[styles.modalButton, {backgroundColor: '#2A2F3A', marginTop: 16}]}
-            onPress={() => { setIsConnectModalVisible(false); setPairingCodeInput(''); }}>
-            <Text style={styles.modalButtonText}>Close</Text>
-          </TouchableOpacity>
-        </View></View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* QR Scanner — Enhanced with High-Tech Viewfinder & Torch Control */}
@@ -2184,10 +2424,10 @@ function SyncScreenInner() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
               <View style={{
                 width: 7, height: 7, borderRadius: 4,
-                backgroundColor: connectionStatus === 'online' ? '#34D399' : connectionStatus === 'cloud' ? '#FBBF24' : '#F87171'
+                backgroundColor: connectionStatus === 'online' ? '#34D399' : connectionStatus === 'cloud' ? '#FBBF24' : connectionStatus === 'reconnecting' ? '#FBBF24' : '#F87171'
               }} />
               <Text style={{ fontSize: 11, fontFamily: font.medium, color: colors.text.tertiary }}>
-                {clips.length} item{clips.length !== 1 ? 's' : ''} • {connectionStatus === 'online' ? 'LAN' : connectionStatus === 'cloud' ? 'Cloud' : 'Offline'}
+                {filteredClips.length} item{filteredClips.length !== 1 ? 's' : ''} • {connectionStatus === 'online' ? 'LAN' : connectionStatus === 'cloud' ? 'Cloud' : connectionStatus === 'reconnecting' ? 'Reconnecting...' : 'Offline'}
               </Text>
             </View>
           </View>
@@ -2308,16 +2548,19 @@ function SyncScreenInner() {
               )}
             </View>
           ) : filteredClips.length === 0 ? null : (
-            // @ts-ignore
-            <FlashListCast
+            <FlatList
               ref={feedListRef}
               refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#6384FF" colors={['#6384FF']} />}
               data={filteredClips}
               keyExtractor={(item: any, index: number) => item.id ? item.id : index.toString()}
               showsVerticalScrollIndicator={false}
-              drawDistance={300}
-              estimatedItemSize={120}
               contentContainerStyle={{ paddingBottom: 110 }}
+              initialNumToRender={12}
+              maxToRenderPerBatch={12}
+              windowSize={9}
+              removeClippedSubviews={Platform.OS === 'android'}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
               onScroll={(e: any) => {
                 const offsetY = e?.nativeEvent?.contentOffset?.y || 0;
                 isScrolledDownRef.current = offsetY > 200;
@@ -2396,77 +2639,77 @@ function SyncScreenInner() {
           </View>
         )}
 
-        {/* PDF Merge Modal */}
-        <Modal visible={isMergeModalVisible} animationType="slide" transparent={true}>
-          <View style={styles.modalOverlay}><View style={[styles.modalContent, {maxHeight: '80%'}]}>
-            <Text style={styles.modalTitle}>Arrange & Merge PDFs</Text>
-            <Text style={styles.modalSubtitle}>Drag items up/down to reorder before merging.</Text>
-            <ScrollView style={{maxHeight: 350, marginTop: 12}}>
-              {mergeQueue.map((item, idx) => (
-                <View key={idx} style={{flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg.cardHover, borderRadius: 12, padding: 12, marginBottom: 8}}>
-                  <View style={{width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent.error, alignItems: 'center', justifyContent: 'center', marginRight: 10}}><Text style={{color: '#FFF', fontSize: 12, fontWeight: '800'}}>{idx + 1}</Text></View>
-                  <Text style={{color: '#FFF', fontSize: 13, flex: 1, fontWeight: '500'}} numberOfLines={1}>{item.Title}</Text>
-                  <View style={{flexDirection: 'row', gap: 6}}>
-                    <TouchableOpacity onPress={() => moveMergeItem(idx, idx - 1)} style={{backgroundColor: colors.bg.card, width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center'}}><Ionicons name="chevron-up" size={14} color="#FFF" /></TouchableOpacity>
-                    <TouchableOpacity onPress={() => moveMergeItem(idx, idx + 1)} style={{backgroundColor: colors.bg.card, width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center'}}><Ionicons name="chevron-down" size={14} color="#FFF" /></TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-            <TouchableOpacity style={{backgroundColor: colors.accent.error, paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 16}} onPress={executePdfMerge} accessibilityLabel={`Merge ${mergeQueue.length} PDFs`} accessibilityRole="button"><Text style={{color: '#FFF', fontSize: 16, fontWeight: '800'}}>Merge {mergeQueue.length} PDFs</Text></TouchableOpacity>
-            <TouchableOpacity style={{backgroundColor: colors.bg.cardHover, paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 8}} onPress={() => setIsMergeModalVisible(false)} accessibilityLabel="Cancel merge" accessibilityRole="button"><Text style={{color: '#FFF', fontSize: 14, fontWeight: '600'}}>Cancel</Text></TouchableOpacity>
-          </View></View>
-        </Modal>
-
-        {/* PDF Page Editor */}
-        <PdfPageEditor
-          visible={pageEditorVisible}
-          onClose={closePageEditor}
-          pdfUri={pageEditorUri}
-          pdfTitle={pageEditorTitle}
-          outputDir={CONVERTED_BASE}
-          onSaved={(newUri, title) => {
-            const newItem: ClipItem = {
-              Title: title, Type: 'Pdf', Raw: newUri,
-              Time: new Date().toLocaleString(), SourceDeviceName: deviceName || 'Phone',
-              SourceDeviceType: 'Mobile', Timestamp: NetworkClock.now(), CachedUri: newUri,
-              _receivedVia: 'Local',
-            };
-            setClips(prev => { const next = [newItem, ...prev]; return next.length > MAX_CLIPS_IN_MEMORY ? [...next.filter(c => c.IsPinned), ...next.filter(c => !c.IsPinned)].slice(0, MAX_CLIPS_IN_MEMORY) : next; });
-            scrollToTop();
-          }}
-        />
-
-        {/* Force Sync Modal */}
-        <Modal visible={isForceSyncModalVisible} animationType="slide" transparent={true}>
-          <View style={styles.modalOverlay}><View style={[styles.modalContent, {maxHeight: '80%'}]}>
-            <Text style={styles.modalTitle}>⚡ Force Sync</Text>
-            <Text style={styles.modalSubtitle}>Push {selectedItemIds.size} items to selected devices.</Text>
-            <TouchableOpacity style={{backgroundColor: colors.accent.primary, paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 12, flexDirection: 'row', justifyContent: 'center', gap: 6}} onPress={() => executeForcedSync(forceSyncDevices.map(d => d.key))} accessibilityLabel={`Force sync to all ${forceSyncDevices.length} devices`} accessibilityRole="button"><Ionicons name="flash" size={16} color="#FFF" /><Text style={{color: '#FFF', fontSize: 15, fontWeight: '800'}}>Force to ALL ({forceSyncDevices.length})</Text></TouchableOpacity>
-            <Text style={{color: colors.text.secondary, fontSize: 12, marginTop: 16, marginBottom: 8, fontWeight: '700', textTransform: 'uppercase'}}>Or Select Individual Devices</Text>
-            <ScrollView style={{maxHeight: 250}}>
-              {forceSyncDevices.map((device, i) => (
-                <TouchableOpacity key={i} style={[styles.targetOption, {marginBottom: 8}]} onPress={() => executeForcedSync([device.key])}>
-                  <View style={{width: 10, height: 10, borderRadius: 5, backgroundColor: device.IsOnline ? colors.accent.success : colors.text.tertiary, marginRight: 10}} />
-                  <Ionicons name={device.DeviceType === 'PC' ? 'laptop-outline' : 'phone-portrait-outline'} size={22} color={device.IsOnline ? colors.accent.success : colors.text.tertiary} />
-                  <View style={{marginLeft: 10, flex: 1}}>
-                    <Text style={{color: '#FFF', fontSize: 15, fontWeight: '600'}}>{device.DeviceName || device.key}</Text>
-                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2}}>
-                      <View style={{backgroundColor: connectionColors[getConnectionType(device, pcLocalIp)] + '22', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1}}><Text style={{color: connectionColors[getConnectionType(device, pcLocalIp)], fontSize: 10, fontWeight: '700'}}>{getConnectionType(device, pcLocalIp)}</Text></View>
-                      <Text style={{color: device.IsOnline ? colors.accent.success : colors.text.secondary, fontSize: 11}}>{device.IsOnline ? 'Online' : 'Offline'}</Text>
-                    </View>
-                  </View>
-                  <Ionicons name="flash" size={16} color={colors.accent.warning} />
-                </TouchableOpacity>
-              ))}
-              {forceSyncDevices.length === 0 && <Text style={{color: colors.text.secondary, textAlign: 'center', marginTop: 20}}>No devices registered yet.</Text>}
-            </ScrollView>
-            <TouchableOpacity style={{backgroundColor: colors.bg.cardHover, paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 12}} onPress={() => setIsForceSyncModalVisible(false)} accessibilityLabel="Cancel" accessibilityRole="button"><Text style={{color: '#FFF', fontSize: 14, fontWeight: '600'}}>Cancel</Text></TouchableOpacity>
-          </View></View>
-        </Modal>
-
         </KeyboardAvoidingView>
       )}
+
+      {/* PDF Merge Modal */}
+      <Modal visible={isMergeModalVisible} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}><View style={[styles.modalContent, {maxHeight: '80%'}]}>
+          <Text style={styles.modalTitle}>Arrange & Merge PDFs</Text>
+          <Text style={styles.modalSubtitle}>Drag items up/down to reorder before merging.</Text>
+          <ScrollView style={{maxHeight: 350, marginTop: 12}}>
+            {mergeQueue.map((item, idx) => (
+              <View key={idx} style={{flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg.cardHover, borderRadius: 12, padding: 12, marginBottom: 8}}>
+                <View style={{width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent.error, alignItems: 'center', justifyContent: 'center', marginRight: 10}}><Text style={{color: '#FFF', fontSize: 12, fontWeight: '800'}}>{idx + 1}</Text></View>
+                <Text style={{color: '#FFF', fontSize: 13, flex: 1, fontWeight: '500'}} numberOfLines={1}>{item.Title}</Text>
+                <View style={{flexDirection: 'row', gap: 6}}>
+                  <TouchableOpacity onPress={() => moveMergeItem(idx, idx - 1)} style={{backgroundColor: colors.bg.card, width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center'}}><Ionicons name="chevron-up" size={14} color="#FFF" /></TouchableOpacity>
+                  <TouchableOpacity onPress={() => moveMergeItem(idx, idx + 1)} style={{backgroundColor: colors.bg.card, width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center'}}><Ionicons name="chevron-down" size={14} color="#FFF" /></TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+          <TouchableOpacity style={{backgroundColor: colors.accent.error, paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 16}} onPress={executePdfMerge} accessibilityLabel={`Merge ${mergeQueue.length} PDFs`} accessibilityRole="button"><Text style={{color: '#FFF', fontSize: 16, fontWeight: '800'}}>Merge {mergeQueue.length} PDFs</Text></TouchableOpacity>
+          <TouchableOpacity style={{backgroundColor: colors.bg.cardHover, paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 8}} onPress={() => setIsMergeModalVisible(false)} accessibilityLabel="Cancel merge" accessibilityRole="button"><Text style={{color: '#FFF', fontSize: 14, fontWeight: '600'}}>Cancel</Text></TouchableOpacity>
+        </View></View>
+      </Modal>
+
+      {/* PDF Page Editor */}
+      <PdfPageEditor
+        visible={pageEditorVisible}
+        onClose={closePageEditor}
+        pdfUri={pageEditorUri}
+        pdfTitle={pageEditorTitle}
+        outputDir={CONVERTED_BASE}
+        onSaved={(newUri, title) => {
+          const newItem: ClipItem = {
+            Title: title, Type: 'Pdf', Raw: newUri,
+            Time: new Date().toLocaleString(), SourceDeviceName: deviceName || 'Phone',
+            SourceDeviceType: 'Mobile', Timestamp: NetworkClock.now(), CachedUri: newUri,
+            _receivedVia: 'Local',
+          };
+          setClips(prev => { const next = [newItem, ...prev]; return next.length > MAX_CLIPS_IN_MEMORY ? [...next.filter(c => c.IsPinned), ...next.filter(c => !c.IsPinned)].slice(0, MAX_CLIPS_IN_MEMORY) : next; });
+          scrollToTop();
+        }}
+      />
+
+      {/* Force Sync Modal */}
+      <Modal visible={isForceSyncModalVisible} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}><View style={[styles.modalContent, {maxHeight: '80%'}]}>
+          <Text style={styles.modalTitle}>⚡ Force Sync</Text>
+          <Text style={styles.modalSubtitle}>Push {selectedItemIds.size} items to selected devices.</Text>
+          <TouchableOpacity style={{backgroundColor: colors.accent.primary, paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 12, flexDirection: 'row', justifyContent: 'center', gap: 6}} onPress={() => executeForcedSync(forceSyncDevices.map(d => d.key))} accessibilityLabel={`Force sync to all ${forceSyncDevices.length} devices`} accessibilityRole="button"><Ionicons name="flash" size={16} color="#FFF" /><Text style={{color: '#FFF', fontSize: 15, fontWeight: '800'}}>Force to ALL ({forceSyncDevices.length})</Text></TouchableOpacity>
+          <Text style={{color: colors.text.secondary, fontSize: 12, marginTop: 16, marginBottom: 8, fontWeight: '700', textTransform: 'uppercase'}}>Or Select Individual Devices</Text>
+          <ScrollView style={{maxHeight: 250}}>
+            {forceSyncDevices.map((device, i) => (
+              <TouchableOpacity key={i} style={[styles.targetOption, {marginBottom: 8}]} onPress={() => executeForcedSync([device.key])}>
+                <View style={{width: 10, height: 10, borderRadius: 5, backgroundColor: device.IsOnline ? colors.accent.success : colors.text.tertiary, marginRight: 10}} />
+                <Ionicons name={device.DeviceType === 'PC' ? 'laptop-outline' : 'phone-portrait-outline'} size={22} color={device.IsOnline ? colors.accent.success : colors.text.tertiary} />
+                <View style={{marginLeft: 10, flex: 1}}>
+                  <Text style={{color: '#FFF', fontSize: 15, fontWeight: '600'}}>{device.DeviceName || device.key}</Text>
+                  <View style={{flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2}}>
+                    <View style={{backgroundColor: connectionColors[getConnectionType(device, pcLocalIp)] + '22', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1}}><Text style={{color: connectionColors[getConnectionType(device, pcLocalIp)], fontSize: 10, fontWeight: '700'}}>{getConnectionType(device, pcLocalIp)}</Text></View>
+                    <Text style={{color: device.IsOnline ? colors.accent.success : colors.text.secondary, fontSize: 11}}>{device.IsOnline ? 'Online' : 'Offline'}</Text>
+                  </View>
+                </View>
+                <Ionicons name="flash" size={16} color={colors.accent.warning} />
+              </TouchableOpacity>
+            ))}
+            {forceSyncDevices.length === 0 && <Text style={{color: colors.text.secondary, textAlign: 'center', marginTop: 20}}>No devices registered yet.</Text>}
+          </ScrollView>
+          <TouchableOpacity style={{backgroundColor: colors.bg.cardHover, paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 12}} onPress={() => setIsForceSyncModalVisible(false)} accessibilityLabel="Cancel" accessibilityRole="button"><Text style={{color: '#FFF', fontSize: 14, fontWeight: '600'}}>Cancel</Text></TouchableOpacity>
+        </View></View>
+      </Modal>
 
       {/* Expanded Image Modal */}
       <Modal visible={!!expandedImage} transparent={true} animationType="fade" onRequestClose={() => setExpandedImage(null)}>
@@ -2508,6 +2751,9 @@ function SyncScreenInner() {
           )}
         </View>
       </Modal>
+
+      {/* Lower Home Switcher Floating Button — REMOVED: overlapped bottom tab bar */}
+
       <NetworkDashboard
         visible={showNetworkDashboard}
         onClose={() => setShowNetworkDashboard(false)}

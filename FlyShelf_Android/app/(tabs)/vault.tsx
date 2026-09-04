@@ -10,19 +10,29 @@ import { useVault } from '../../features/vault/useVault';
 import { VaultCategory, VaultEntry } from '../../features/vault/vaultTypes';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Haptics from 'expo-haptics';
+import Animated, { useSharedValue } from 'react-native-reanimated';
 import { toast } from '../../context/ToastContext';
+import { useSettings } from '../../context/SettingsContext';
+import { resolveBestPcUrl } from '../../utils/networkHelpers';
 
 function VaultScreenInner() {
   const { colors, shadows } = useAppTheme();
   const s = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
   
-  const { manifest, isLoading, addFile, removeFile, openFile, shareFile, getEntriesForCategory, searchEntries } = useVault();
+  const { manifest, isLoading, addFile, removeFile, openFile, shareFile, getDecryptedFilePath, getEntriesForCategory, searchEntries } = useVault();
+  const { pairedDevices, pcLocalIp, pairingKey, deviceName } = useSettings();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<VaultCategory | null>(null);
   const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler({ onScroll: (e) => { scrollY.value = e.contentOffset.y; } });
+  const scrollHandler = (e: any) => {
+    const offsetY = e?.nativeEvent?.contentOffset?.y;
+    if (typeof offsetY === 'number') {
+      scrollY.value = offsetY;
+    }
+  };
 
   const handlePickDocument = async () => {
     if (!selectedCategory) {
@@ -33,7 +43,7 @@ function VaultScreenInner() {
       const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const file = result.assets[0];
-        toast.info('Encrypting...', 'Securing your file');
+        toast.info('Saving...', 'Adding to storage');
         await addFile(file.uri, file.name, file.mimeType || 'application/octet-stream', selectedCategory.id, file.size || 0);
       }
     } catch (e) {
@@ -56,7 +66,7 @@ function VaultScreenInner() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const file = result.assets[0];
         const filename = file.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
-        toast.info('Encrypting...', 'Securing your photo');
+        toast.info('Saving...', 'Adding photo to storage');
         await addFile(file.uri, filename, 'image/jpeg', selectedCategory.id, file.fileSize || 0);
       }
     } catch (e) {
@@ -65,19 +75,54 @@ function VaultScreenInner() {
   };
 
   const showAddOptions = () => {
-    Alert.alert('Add to Vault', 'Select source', [
-      { text: 'Pick Document', onPress: handlePickDocument },
-      { text: 'Take Photo', onPress: handleTakePhoto },
+    Alert.alert('Add File', 'Choose source', [
+      { text: '📄 Pick Document', onPress: handlePickDocument },
+      { text: '📸 Take Photo', onPress: handleTakePhoto },
       { text: 'Cancel', style: 'cancel' }
     ]);
   };
 
+  const sendEntryToPc = async (entry: VaultEntry) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const pcUrl = resolveBestPcUrl(pairedDevices, pcLocalIp);
+    if (!pcUrl) {
+      Alert.alert('No Paired PC Found', 'Connect or pair a PC in FlyShelf settings to send files directly.');
+      return;
+    }
+    toast.info('Sending to PC...', `Transferring ${entry.originalName}`);
+    try {
+      const filePath = await getDecryptedFilePath(entry);
+      const uploadUrl = `${pcUrl}/api/archive_upload`;
+      const response = await FileSystem.uploadAsync(uploadUrl, filePath, {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers: {
+          'X-FlyShelf-Client': 'MobileCompanion',
+          'X-Pairing-Key': pairingKey || '',
+          'X-Original-Date': Date.now().toString(),
+          'X-File-Name': encodeURIComponent(entry.originalName),
+          'X-Batch-Name': encodeURIComponent('Quick_Storage'),
+          'X-Source-Device': deviceName || 'Android',
+        },
+      });
+      if (response.status === 200) {
+        toast.success('Sent to PC', `${entry.originalName} is now on your PC!`);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        throw new Error(`Upload failed with status ${response.status}`);
+      }
+    } catch (err: any) {
+      Alert.alert('Send Failed', err?.message || 'Could not send file to PC.');
+    }
+  };
+
   const handleFileOptions = (entry: VaultEntry) => {
-    Alert.alert('File Options', entry.originalName, [
-      { text: 'Open', onPress: () => openFile(entry) },
-      { text: 'Share', onPress: () => shareFile(entry) },
-      { text: 'Delete', style: 'destructive', onPress: () => {
-        Alert.alert('Confirm Delete', 'This will permanently remove the encrypted file.', [
+    Alert.alert(entry.originalName, 'File actions', [
+      { text: '📖 Open', onPress: () => openFile(entry) },
+      { text: '💻 Send to PC', onPress: () => sendEntryToPc(entry) },
+      { text: '📤 Share', onPress: () => shareFile(entry) },
+      { text: '🗑️ Delete', style: 'destructive', onPress: () => {
+        Alert.alert('Delete File', `Remove "${entry.originalName}"?`, [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Delete', style: 'destructive', onPress: () => removeFile(entry.id) }
         ]);
@@ -90,7 +135,7 @@ function VaultScreenInner() {
     return (
       <LinearGradient colors={[colors.bg.base, colors.bg.baseEnd]} style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={colors.accent.primary} />
-        <Text style={{ color: colors.text.secondary, marginTop: 12 }}>Unlocking Vault...</Text>
+        <Text style={{ color: colors.text.secondary, marginTop: 12 }}>Loading storage...</Text>
       </LinearGradient>
     );
   }
@@ -130,8 +175,8 @@ function VaultScreenInner() {
     <LinearGradient colors={[colors.bg.base, colors.bg.baseEnd]} style={{ flex: 1 }}>
       <SafeAreaView style={s.container}>
         <ScreenHeader 
-          title={selectedCategory ? selectedCategory.name : 'Secure Vault'}
-          subtitle={selectedCategory ? `${selectedCategory.fileCount} files` : 'AES-256 Encrypted Storage'}
+          title={selectedCategory ? selectedCategory.name : 'Storage Shelf'}
+          subtitle={selectedCategory ? `${selectedCategory.fileCount} files` : 'Quick offline files & documents'}
           scrollY={scrollY}
           leftAction={selectedCategory ? (
             <TouchableOpacity onPress={() => setSelectedCategory(null)} style={{ padding: 8 }}>
@@ -139,8 +184,8 @@ function VaultScreenInner() {
             </TouchableOpacity>
           ) : undefined}
           rightActions={!selectedCategory ? (
-            <View style={[s.lockIconWrapper, { backgroundColor: colors.accent.successDim }]}>
-              <Ionicons name="lock-closed" size={20} color={colors.accent.success} />
+            <View style={[s.lockIconWrapper, { backgroundColor: colors.accent.primary + '22' }]}>
+              <Ionicons name="folder-outline" size={20} color={colors.accent.primary} />
             </View>
           ) : undefined}
         />
@@ -151,7 +196,7 @@ function VaultScreenInner() {
             <TextInput 
               value={searchQuery} 
               onChangeText={setSearchQuery} 
-              placeholder="Search encrypted files..." 
+              placeholder="Search files..." 
               placeholderTextColor={colors.text.tertiary} 
               style={s.searchInput} 
             />
@@ -165,6 +210,10 @@ function VaultScreenInner() {
             keyExtractor={item => item.id}
             renderItem={renderFileItem}
             contentContainerStyle={s.listContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
             ListEmptyComponent={<View style={s.emptyState}><Ionicons name="search-outline" size={48} color={colors.text.tertiary} /><Text style={s.emptyText}>No matching files found</Text></View>}
           />
         ) : selectedCategory ? (
@@ -173,11 +222,15 @@ function VaultScreenInner() {
             keyExtractor={item => item.id}
             renderItem={renderFileItem}
             contentContainerStyle={s.listContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
             ListEmptyComponent={<View style={s.emptyState}><Ionicons name="folder-open-outline" size={48} color={colors.text.tertiary} /><Text style={s.emptyText}>No files in this category</Text></View>}
           />
         ) : (
-          <ScrollView contentContainerStyle={s.gridContainer} onScroll={scrollHandler} scrollEventThrottle={16}>
-            {manifest?.categories.map(cat => (
+          <ScrollView contentContainerStyle={s.gridContainer} keyboardShouldPersistTaps="handled" onScroll={scrollHandler} scrollEventThrottle={16}>
+            {manifest?.categories?.map(cat => (
               <TouchableOpacity key={cat.id} style={s.categoryCard} onPress={() => setSelectedCategory(cat)} activeOpacity={0.8}>
                 <View style={[s.catIconWrapper, { backgroundColor: `${cat.color}15` }]}>
                   <Text style={s.catIcon}>{cat.icon}</Text>

@@ -1,6 +1,6 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter, useSegments } from 'expo-router';
 import React, { useMemo, useEffect } from 'react';
-import { View, StyleSheet, ViewStyle, Platform } from 'react-native';
+import { View, StyleSheet, ViewStyle, Platform, BackHandler } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 
@@ -69,6 +69,22 @@ export default function TabLayout() {
       });
     }
   }, []);
+
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // If on any tab other than the home tab, navigate to home instead of exiting
+      const currentTab = segments[segments.length - 1];
+      if (currentTab && currentTab !== '(tabs)') {
+        router.navigate('/');
+        return true; // Prevent default (exit app)
+      }
+      return false; // Default behavior (exit app on home)
+    });
+    return () => sub.remove();
+  }, [segments, router]);
 
   const tabBarStyle: ViewStyle = useMemo(() => ({
     position: 'absolute',

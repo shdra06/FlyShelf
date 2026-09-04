@@ -2120,7 +2120,61 @@
                             <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Margin="0,4,0,4">
                                 <TextBlock Name="TitleText" 
                                            Text="{Binding DisplayText}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" FontFamily="Segoe UI Emoji, Segoe UI" FontWeight="Medium" FontSize="{StaticResource TypeSubtitle}" LineHeight="19" TextWrapping="Wrap" 
-                                           TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" />
+                                           TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsRenaming}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
+                                <!-- In-place Rename TextBox (File Explorer style) -->
+                                <TextBox x:Name="RenameTextBox"
+                                         Visibility="{Binding IsRenaming, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                         Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                                         FontFamily="Segoe UI Emoji, Segoe UI"
+                                         FontWeight="Medium"
+                                         FontSize="{StaticResource TypeSubtitle}"
+                                         CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                                         SelectionBrush="{DynamicResource ThemeAccentColor}"
+                                         Padding="4,2,4,2"
+                                         Margin="-4,0,4,0"
+                                         VerticalAlignment="Center"
+                                         HorizontalAlignment="Stretch"
+                                         Loaded="RenameTextBox_Loaded"
+                                         IsVisibleChanged="RenameTextBox_IsVisibleChanged"
+                                         PreviewKeyDown="RenameTextBox_PreviewKeyDown"
+                                         LostFocus="RenameTextBox_LostFocus">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox">
+                                            <Setter Property="Background" Value="{DynamicResource ThemeOverlayBg}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentColor}"/>
+                                            <Setter Property="BorderThickness" Value="1"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="TextBox">
+                                                        <Border x:Name="Border"
+                                                                Background="{TemplateBinding Background}"
+                                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                                CornerRadius="4"
+                                                                Padding="{TemplateBinding Padding}">
+                                                            <ScrollViewer x:Name="PART_ContentHost"
+                                                                          Background="Transparent"
+                                                                          Focusable="False"
+                                                                          VerticalAlignment="Center"
+                                                                          HorizontalAlignment="Stretch"/>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
 
                                 <!-- ═══ Phased Progressive Disclosure Footer (500-word batches for 10K+ line texts) ═══ -->
                                 <Border Visibility="{Binding HasPhasedExpansion, Converter={StaticResource BooleanToVisibilityConverter}}"
@@ -3070,7 +3124,57 @@
                                         <!-- TEXT BODY -->
                                         <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="2,5,4,5">
                                             <Border CornerRadius="{StaticResource RadiusSM}" ClipToBounds="True" Margin="0,0,8,4" HorizontalAlignment="Stretch"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Image Source="{Binding Icon}" Height="90" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="HighQuality"/></Border>
-                                            <TextBlock Text="{Binding FileName}" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextTrimming="CharacterEllipsis" MaxHeight="18" LineHeight="18"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                                            <TextBlock Text="{Binding FileName}" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextTrimming="CharacterEllipsis" MaxHeight="18" LineHeight="18">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsRenaming}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBox Visibility="{Binding IsRenaming, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                     Foreground="{DynamicResource AltTextPrimary}"
+                                                     FontFamily="Segoe UI Emoji, Segoe UI"
+                                                     FontWeight="SemiBold"
+                                                     FontSize="{StaticResource TypeSubtitle}"
+                                                     CaretBrush="{DynamicResource AltTextPrimary}"
+                                                     SelectionBrush="{DynamicResource ThemeAccentColor}"
+                                                     Padding="4,1,4,1"
+                                                     Margin="-4,0,4,0"
+                                                     VerticalAlignment="Center"
+                                                     HorizontalAlignment="Stretch"
+                                                     Loaded="RenameTextBox_Loaded"
+                                                     IsVisibleChanged="RenameTextBox_IsVisibleChanged"
+                                                     PreviewKeyDown="RenameTextBox_PreviewKeyDown"
+                                                     LostFocus="RenameTextBox_LostFocus">
+                                                <TextBox.Style>
+                                                    <Style TargetType="TextBox">
+                                                        <Setter Property="Background" Value="{DynamicResource ThemeOverlayBg}"/>
+                                                        <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentColor}"/>
+                                                        <Setter Property="BorderThickness" Value="1"/>
+                                                        <Setter Property="Template">
+                                                            <Setter.Value>
+                                                                <ControlTemplate TargetType="TextBox">
+                                                                    <Border Background="{TemplateBinding Background}"
+                                                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                                                            CornerRadius="4"
+                                                                            Padding="{TemplateBinding Padding}">
+                                                                        <ScrollViewer x:Name="PART_ContentHost"
+                                                                                      Background="Transparent"
+                                                                                      Focusable="False"
+                                                                                      VerticalAlignment="Center"
+                                                                                      HorizontalAlignment="Stretch"/>
+                                                                    </Border>
+                                                                </ControlTemplate>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </Style>
+                                                </TextBox.Style>
+                                            </TextBox>
                                             <TextBlock Text="{Binding DisplayText}" FontSize="{StaticResource TypeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" LineHeight="18"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                                             <TextBlock Text="{Binding FormatIdentifier}" FontSize="{StaticResource TypeSmall}" Margin="0,2,0,0" Foreground="{DynamicResource AltSubtitleFg}" TextTrimming="CharacterEllipsis" MaxHeight="15" LineHeight="15" Opacity="0.7"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                                         </StackPanel>

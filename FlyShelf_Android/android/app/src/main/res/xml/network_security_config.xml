@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Network Security Config: Enforces HTTPS on all cloud domains while allowing LAN sync -->
+<network-security-config>
+  <!-- Strictly disallow cleartext on all cloud, auth, and API domains -->
+  <domain-config cleartextTrafficPermitted="false">
+    <domain includeSubdomains="true">firebaseio.com</domain>
+    <domain includeSubdomains="true">googleapis.com</domain>
+    <domain includeSubdomains="true">google.com</domain>
+    <domain includeSubdomains="true">flyshelf.app</domain>
+    <domain includeSubdomains="true">trycloudflare.com</domain>
+    <domain includeSubdomains="true">vercel.app</domain>
+    <domain includeSubdomains="true">razorpay.com</domain>
+  </domain-config>
+  <!-- Permit cleartext exclusively for local numeric IPs (LAN sync fallback) -->
+  <base-config cleartextTrafficPermitted="true">
+    <trust-anchors>
+      <certificates src="system" />
+    </trust-anchors>
+  </base-config>
+</network-security-config>

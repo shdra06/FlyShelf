@@ -46,18 +46,14 @@ const showToast = (msg: string) => {
   toast.warning('Notes Sync Deferred', 'PC offline — your notes are safely saved and will sync automatically upon reconnection');
 };
 
-// A-16 FIX: Shared helper for offline queue persist with simple lock
-let isQueueingDates = false;
+// A-16 FIX: Shared helper for offline queue persist with simple lock removed
 const queueFailedDates = async (failedDates: string[]) => {
-  if (isQueueingDates) return; // Simple lock to prevent interleaving
-  isQueueingDates = true;
   try {
     const stored = await EncryptedStorage.getItem(PENDING_NOTES_SYNC_KEY) || await AsyncStorage.getItem(PENDING_NOTES_SYNC_KEY);
     const existing: string[] = stored ? JSON.parse(stored) : [];
     const mergedDates = [...new Set([...existing, ...failedDates])];
     await EncryptedStorage.setItem(PENDING_NOTES_SYNC_KEY, JSON.stringify(mergedDates));
   } catch {} // Best-effort
-  finally { isQueueingDates = false; }
 };
 
 // ─── Hook ──────────────────────────────────────────────────────
@@ -155,7 +151,7 @@ export function useNotesSync() {
     try {
       // Snapshot modified dates before fetch to avoid race condition
       const dirtySnapshot = new Set(modifiedDatesRef.current);
-      const res = await fetchWithTimeout(`${pcUrlRef.current}/api/notes`, {
+      const res = await fetchWithTimeout(`${pcUrlRef.current}/api/notes?days=15`, {
         method: 'GET',
         headers: {
           'X-FlyShelf-Client': 'MobileCompanion',
@@ -182,6 +178,14 @@ export function useNotesSync() {
         return;
       }
 
+      // Normalize PC date keys: "2026-09-03T00:00:00.0000000+05:30" → "2026-09-03T00:00:00"
+      // Without this, findIndex with === fails because PC includes timezone offset
+      for (const rd of remoteDays) {
+        if (rd.Date && rd.Date.includes('+')) {
+          rd.Date = rd.Date.split('T')[0] + 'T00:00:00';
+        }
+      }
+
       // Per-bullet merge: iterate each remote day, merge individual bullets by Id.
       // Each bullet's LastEdited timestamp is compared independently — the most recent edit wins.
       // New bullets from either side are preserved. This prevents data loss on concurrent edits.
@@ -193,8 +197,8 @@ export function useNotesSync() {
             const localDay = merged[localIdx];
             // Merge bullets by Id: most-recently-edited wins per bullet
             const bulletMap = new Map<string, NoteBullet>();
-            for (const lb of localDay.Bullets) bulletMap.set(lb.Id, lb);
-            for (const rb of remote.Bullets) {
+            for (const lb of localDay.Bullets || []) bulletMap.set(lb.Id, lb);
+            for (const rb of remote.Bullets || []) {
               const existing = bulletMap.get(rb.Id);
               if (!existing) {
                 // New from remote — add it
@@ -210,15 +214,15 @@ export function useNotesSync() {
               }
             }
             // Preserve order: remote order for remote bullets, append local-only bullets at end
-            const remoteIds = new Set(remote.Bullets.map(b => b.Id));
+            const remoteIds = new Set((remote.Bullets || []).map(b => b.Id));
             const orderedBullets: NoteBullet[] = [];
             // First: follow remote ordering for all bullets that exist in remote
-            for (const rb of remote.Bullets) {
+            for (const rb of remote.Bullets || []) {
               const resolved = bulletMap.get(rb.Id);
               if (resolved) orderedBullets.push(resolved);
             }
             // Then: append local-only bullets (not in remote)
-            for (const lb of localDay.Bullets) {
+            for (const lb of localDay.Bullets || []) {
               if (!remoteIds.has(lb.Id)) orderedBullets.push(lb);
             }
             // Use the later LastModified for the day
@@ -231,11 +235,7 @@ export function useNotesSync() {
         daysRef.current = merged;
         // Persist after merge
         queueMicrotask(() => {
-          if (isPersistingRef.current) return;
-          isPersistingRef.current = true;
-          EncryptedStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(merged))
-            .catch(() => {})
-            .finally(() => { isPersistingRef.current = false; });
+          EncryptedStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(merged)).catch(() => {});
         });
         return merged;
       });
@@ -311,6 +311,9 @@ export function useNotesSync() {
       const toPost = currentDays.filter(d => modifiedDates.has(d.Date));
       if (toPost.length === 0) return;
 
+      const datesToSync = toPost.map(d => d.Date);
+      for (const d of datesToSync) modifiedDatesRef.current.delete(d);
+
       try {
         setSyncStatus('syncing');
         const res = await fetchWithTimeout(`${pcUrlRef.current}/api/notes`, {
@@ -325,27 +328,28 @@ export function useNotesSync() {
         }, 5000);
 
         if (res.ok) {
-          // M-7 Fix: Only remove the dates we successfully posted, not all modified dates
-          for (const d of toPost) modifiedDatesRef.current.delete(d.Date);
+          // (Already deleted before fetch to avoid race conditions)
           setSyncStatus('synced');
           syncFailCountRef.current = 0;
           // Clear pending offline queue on success
           EncryptedStorage.removeItem(PENDING_NOTES_SYNC_KEY).catch(() => {});
           AsyncStorage.removeItem(PENDING_NOTES_SYNC_KEY).catch(() => {});
         } else {
+          for (const d of datesToSync) modifiedDatesRef.current.add(d);
           setSyncStatus('offline');
           syncFailCountRef.current++;
           // A-16 FIX: Use shared helper instead of duplicated inline persist
-          queueFailedDates(toPost.map(d => d.Date));
+          queueFailedDates(datesToSync);
           if (syncFailCountRef.current === 2) {
             showToast('Notes sync offline — PC may be unreachable');
           }
         }
       } catch {
+        for (const d of datesToSync) modifiedDatesRef.current.add(d);
         setSyncStatus('offline');
         syncFailCountRef.current++;
         // A-16 FIX: Use shared helper instead of duplicated inline persist
-        queueFailedDates(toPost.map(d => d.Date));
+        queueFailedDates(datesToSync);
         if (syncFailCountRef.current === 2) {
           showToast('Notes sync offline — PC may be unreachable');
         }
@@ -355,6 +359,72 @@ export function useNotesSync() {
 
   // Keep ref in sync for offline queue flush inside fetchRemoteNotes
   useEffect(() => { schedulePostRef.current = schedulePost; }, [schedulePost]);
+
+  // ═══════════════════════════════════════════════════════════
+  // ON-DEMAND: Fetch a single date's notes from PC (for older dates)
+  // ═══════════════════════════════════════════════════════════
+  const fetchNotesForDate = useCallback(async (dateKey: string) => {
+    if (!pcUrlRef.current || !pairingKey) return;
+    try {
+      const res = await fetchWithTimeout(
+        `${pcUrlRef.current}/api/notes?date=${encodeURIComponent(dateKey)}`,
+        {
+          method: 'GET',
+          headers: {
+            'X-FlyShelf-Client': 'MobileCompanion',
+            'X-Pairing-Key': pairingKey,
+          },
+        },
+        5000,
+      );
+      if (!res.ok) return;
+      const remoteDays: NoteDay[] = await res.json();
+      if (!Array.isArray(remoteDays) || remoteDays.length === 0) return;
+
+      // Merge the fetched date into local state using the same per-bullet logic
+      setDays(prev => {
+        const merged = [...prev];
+        for (const remote of remoteDays) {
+          const localIdx = merged.findIndex(d => d.Date === remote.Date);
+          if (localIdx >= 0) {
+            const localDay = merged[localIdx];
+            const bulletMap = new Map<string, NoteBullet>();
+            for (const lb of localDay.Bullets || []) bulletMap.set(lb.Id, lb);
+            for (const rb of remote.Bullets || []) {
+              const existing = bulletMap.get(rb.Id);
+              if (!existing) {
+                bulletMap.set(rb.Id, rb);
+              } else {
+                const localTs = new Date(existing.LastEdited || existing.CreatedAt).getTime();
+                const remoteTs = new Date(rb.LastEdited || rb.CreatedAt).getTime();
+                if (remoteTs > localTs) bulletMap.set(rb.Id, rb);
+              }
+            }
+            const remoteIds = new Set((remote.Bullets || []).map(b => b.Id));
+            const orderedBullets: NoteBullet[] = [];
+            for (const rb of remote.Bullets || []) {
+              const resolved = bulletMap.get(rb.Id);
+              if (resolved) orderedBullets.push(resolved);
+            }
+            for (const lb of localDay.Bullets || []) {
+              if (!remoteIds.has(lb.Id)) orderedBullets.push(lb);
+            }
+            const dayTs = Math.max(localDay.LastModified || 0, remote.LastModified || 0);
+            merged[localIdx] = { ...localDay, Bullets: orderedBullets, LastModified: dayTs };
+          } else {
+            merged.push(remote);
+          }
+        }
+        daysRef.current = merged;
+        queueMicrotask(() => {
+          EncryptedStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(merged)).catch(() => {});
+        });
+        return merged;
+      });
+    } catch {
+      // Silent — on-demand fetch is best-effort
+    }
+  }, [pairingKey]);
 
   return {
     days,
@@ -370,5 +440,7 @@ export function useNotesSync() {
     daysRef,
     /** AsyncStorage key, exported so callers can persist edits via the same key. */
     NOTES_STORAGE_KEY,
+    /** Fetch a single date's notes from PC on demand (for older dates beyond 15-day window). */
+    fetchNotesForDate,
   };
 }

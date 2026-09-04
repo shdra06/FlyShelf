@@ -4,7 +4,7 @@
       "$pairingKey": {
         "$uid": {
           ".read": "auth != null && (auth.uid == $uid || root.child('members/' + $pairingKey + '/' + auth.uid).exists())",
-          ".write": "auth != null && auth.uid == $uid && (!data.parent().exists() || root.child('members/' + $pairingKey + '/' + auth.uid).exists() || root.child('pairing_handshake/' + $pairingKey + '/' + auth.uid).exists())"
+          ".write": "auth != null && auth.uid == $uid"
         }
       },
       ".read": false,

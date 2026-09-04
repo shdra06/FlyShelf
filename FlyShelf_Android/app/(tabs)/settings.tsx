@@ -1,18 +1,22 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import AppErrorBoundary from '../../components/AppErrorBoundary';
 import * as Haptics from 'expo-haptics';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Switch, NativeModules, ScrollView, ActivityIndicator, Linking } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Switch, NativeModules, ScrollView, ActivityIndicator, Linking, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import Animated, { useSharedValue } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import EncryptedStorage from '../../utils/EncryptedStorage';
 import { DOWNLOAD_BASE, SYNC_CACHE_BASE, IMAGE_CACHE_BASE, CONVERTED_BASE } from '../../utils/clipTypes';
 import { useSettings, DeviceSyncPrefs } from '../../context/SettingsContext';
+import { toast } from '../../context/ToastContext';
+import { getDebugLogs, getNetworkLogsText, getNetworkLogCount, clearDebugLogs, clearNetworkLogs, getFormattedReport } from '../../utils/debugLog';
+import * as Clipboard from 'expo-clipboard';
 
 
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import { font, radius, shadows, space } from '../../styles/theme';
 import { useAppTheme } from '../../hooks/useAppTheme';
 
@@ -28,10 +32,153 @@ const VERSION_URL = 'https://raw.githubusercontent.com/shdra06/FlyShelf/main/ver
 
 function SettingsScreenInner() {
   const { colors } = useAppTheme();
+  const router = useRouter();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { pcLocalIp, setPcLocalIp, isGlobalSyncEnabled, setGlobalSyncEnabled, deviceName, setDeviceName, isFloatingBallEnabled, setFloatingBallEnabled, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, syncPreferences, setSyncPreference, getSyncPrefsForDevice, autoSyncTop5, setAutoSyncTop5, isOfflineOutboxEnabled, setIsOfflineOutboxEnabled, isFcmSilentWakeEnabled, setIsFcmSilentWakeEnabled } = useSettings();
+  const { pcLocalIp, setPcLocalIp, isGlobalSyncEnabled, setGlobalSyncEnabled, deviceName, setDeviceName, isFloatingBallEnabled, setFloatingBallEnabled, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, syncPreferences, setSyncPreference, getSyncPrefsForDevice, autoSyncTop5, setAutoSyncTop5, isOfflineOutboxEnabled, setIsOfflineOutboxEnabled, isFcmSilentWakeEnabled, setIsFcmSilentWakeEnabled, defaultHomeCard, setDefaultHomeCard, showBottomHomeSwitcher, setShowBottomHomeSwitcher } = useSettings();
   const [localIpInput, setLocalIpInput] = useState(pcLocalIp);
   const [deviceNameInput, setDeviceNameInput] = useState(deviceName);
+
+  // ═══ Junk Cleaner State ═══
+  const [showJunkCleaner, setShowJunkCleaner] = useState(false);
+  const [junkAgeFilter, setJunkAgeFilter] = useState<'all' | '24h' | '3d' | '7d' | '30d'>('7d');
+  const [cleanDuplicates, setCleanDuplicates] = useState(true);
+  const [cleanWhitespace, setCleanWhitespace] = useState(true);
+  const [cleanMicroSnips, setCleanMicroSnips] = useState(true);
+  const [protectPinned, setProtectPinned] = useState(true);
+  const [cleanBrokenFiles, setCleanBrokenFiles] = useState(true);
+  const [junkPreviewCount, setJunkPreviewCount] = useState<number | null>(null);
+  const [totalClipsCount, setTotalClipsCount] = useState<number>(0);
+
+  const analyzeJunk = useCallback(async () => {
+    try {
+      const raw = await EncryptedStorage.getItem('@flyshelf_clips') || await AsyncStorage.getItem('@flyshelf_clips');
+      if (!raw) {
+        setJunkPreviewCount(0);
+        setTotalClipsCount(0);
+        return;
+      }
+      const list = JSON.parse(raw);
+      if (!Array.isArray(list)) return;
+      setTotalClipsCount(list.length);
+
+      const now = Date.now();
+      const ageCutoff = junkAgeFilter === '24h' ? now - (24 * 60 * 60 * 1000)
+        : junkAgeFilter === '3d' ? now - (3 * 24 * 60 * 60 * 1000)
+        : junkAgeFilter === '7d' ? now - (7 * 24 * 60 * 60 * 1000)
+        : junkAgeFilter === '30d' ? now - (30 * 24 * 60 * 60 * 1000)
+        : 0;
+
+      const seenContent = new Set<string>();
+      let junkCount = 0;
+
+      for (const item of list) {
+        if (protectPinned && item.IsPinned) continue;
+
+        let isJunk = false;
+        if (ageCutoff > 0 && (item.Timestamp || 0) < ageCutoff) isJunk = true;
+        const text = (item.Raw || item.Title || '').trim();
+        if (cleanWhitespace && !text) isJunk = true;
+        if (cleanMicroSnips && text.length > 0 && text.length <= 2) isJunk = true;
+        if (cleanDuplicates && text) {
+          if (seenContent.has(text)) isJunk = true;
+          else seenContent.add(text);
+        }
+        if (cleanBrokenFiles && item.CachedUri) {
+          try {
+            const exists = await FileSystem.getInfoAsync(item.CachedUri);
+            if (!exists.exists) isJunk = true;
+          } catch {
+            isJunk = true;
+          }
+        }
+
+        if (isJunk) junkCount++;
+      }
+
+      setJunkPreviewCount(junkCount);
+    } catch (e) {
+      console.warn('Junk analyze error:', e);
+    }
+  }, [junkAgeFilter, cleanDuplicates, cleanWhitespace, cleanMicroSnips, cleanBrokenFiles, protectPinned]);
+
+  useEffect(() => {
+    if (showJunkCleaner) {
+      analyzeJunk();
+    }
+  }, [showJunkCleaner, analyzeJunk]);
+
+  const executeCleanJunk = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const raw = await EncryptedStorage.getItem('@flyshelf_clips') || await AsyncStorage.getItem('@flyshelf_clips');
+      if (!raw) {
+        toast.info('Clean', 'No clips found to clean');
+        return;
+      }
+      const list = JSON.parse(raw);
+      if (!Array.isArray(list)) return;
+
+      const now = Date.now();
+      const ageCutoff = junkAgeFilter === '24h' ? now - (24 * 60 * 60 * 1000)
+        : junkAgeFilter === '3d' ? now - (3 * 24 * 60 * 60 * 1000)
+        : junkAgeFilter === '7d' ? now - (7 * 24 * 60 * 60 * 1000)
+        : junkAgeFilter === '30d' ? now - (30 * 24 * 60 * 60 * 1000)
+        : 0;
+
+      const seenContent = new Set<string>();
+      const kept: any[] = [];
+      let removedCount = 0;
+
+      for (const item of list) {
+        if (protectPinned && item.IsPinned) {
+          kept.push(item);
+          continue;
+        }
+
+        let isJunk = false;
+        if (ageCutoff > 0 && (item.Timestamp || 0) < ageCutoff) isJunk = true;
+        const text = (item.Raw || item.Title || '').trim();
+        if (cleanWhitespace && !text) isJunk = true;
+        if (cleanMicroSnips && text.length > 0 && text.length <= 2) isJunk = true;
+        if (cleanDuplicates && text) {
+          if (seenContent.has(text)) isJunk = true;
+          else seenContent.add(text);
+        }
+        if (cleanBrokenFiles && item.CachedUri) {
+          try {
+            const exists = await FileSystem.getInfoAsync(item.CachedUri);
+            if (!exists.exists) isJunk = true;
+          } catch {
+            isJunk = true;
+          }
+        }
+
+        if (isJunk) {
+          removedCount++;
+        } else {
+          kept.push(item);
+        }
+      }
+
+      const json = JSON.stringify(kept);
+      const diskClipsBackup = `${FileSystem.documentDirectory}flyshelf_clips_backup.json`;
+      await Promise.all([
+        EncryptedStorage.setItem('@flyshelf_clips', json).catch(() => {}),
+        AsyncStorage.setItem('@flyshelf_clips', json).catch(() => {}),
+        FileSystem.writeAsStringAsync(diskClipsBackup, json).catch(() => {}),
+      ]);
+
+      if (ageCutoff > 0) {
+        await AsyncStorage.setItem('localWipeTimestamp', ageCutoff.toString()).catch(() => {});
+      }
+
+      setShowJunkCleaner(false);
+      toast.success('Clipboard Cleaned', `Removed ${removedCount} junk items. ${kept.length} kept.`);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      Alert.alert('Cleaning Error', e?.message || 'Failed to clean clipboard');
+    }
+  };
 
   // Sync local state when context values change (e.g. loaded from storage)
   useEffect(() => { setLocalIpInput(pcLocalIp || ''); }, [pcLocalIp]);
@@ -46,8 +193,41 @@ function SettingsScreenInner() {
 
   const { AdvanceOverlay } = NativeModules;
 
+  const [, setLogRefreshKey] = useState(0);
 
+  const handleCopyAllLogs = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const report = await getFormattedReport();
+      await Clipboard.setStringAsync(report);
+      toast.success('Logs Copied', 'All logs copied to clipboard');
+    } catch (e: any) {
+      Alert.alert('Error', 'Failed to copy debug report');
+    }
+  };
 
+  const handleCopyNetworkLogs = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const netLogs = getNetworkLogsText();
+      await Clipboard.setStringAsync(netLogs);
+      toast.success('Logs Copied', 'Network logs copied to clipboard');
+    } catch (e: any) {
+      Alert.alert('Error', 'Failed to copy network logs');
+    }
+  };
+
+  const handleClearLogs = () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      clearDebugLogs();
+      clearNetworkLogs();
+      setLogRefreshKey(prev => prev + 1);
+      toast.success('Logs Cleared', 'Debug and network logs cleared');
+    } catch (e: any) {
+      Alert.alert('Error', 'Failed to clear debug logs');
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -199,29 +379,32 @@ function SettingsScreenInner() {
   };
 
   const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler({ onScroll: (e) => { scrollY.value = e.contentOffset.y; } });
+  const scrollHandler = (e: any) => {
+    const offsetY = e?.nativeEvent?.contentOffset?.y;
+    if (typeof offsetY === 'number') {
+      scrollY.value = offsetY;
+    }
+  };
 
   return (
     <LinearGradient colors={[colors.bg.base, colors.bg.baseEnd]} style={{ flex: 1 }}>
     <View style={[styles.container, { backgroundColor: 'transparent' }]}>
-      <ScreenHeader title="Settings" subtitle="Configuration" scrollY={scrollY} />
+      <ScreenHeader title="Settings" subtitle="Configuration" scrollY={scrollY} rightActions={
+        <TouchableOpacity onPress={() => router.navigate('/')} hitSlop={12} style={{ padding: 6, borderRadius: 20, backgroundColor: colors.bg.elevated }}>
+          <Ionicons name="close" size={20} color={colors.text.secondary} />
+        </TouchableOpacity>
+      } />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}>
         <Animated.ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} onScroll={scrollHandler} scrollEventThrottle={16}>
 
-          {/* Save Button at the top */}
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave} accessibilityLabel="Save configuration" accessibilityRole="button">
-            <Text style={styles.saveButtonText}>Save Configuration</Text>
-          </TouchableOpacity>
-          <Text style={{ color: colors.text.tertiary, fontSize: 11, fontFamily: font.regular, textAlign: 'center', marginBottom: space.md, marginTop: -space.md }}>Saves IP address and device name. Toggles auto-save instantly.</Text>
-
           {/* Networking Card */}
-          <View style={styles.card}>
+          <View style={[styles.card, { marginTop: 16 }]}>
             <Text style={styles.sectionHeader}>Networking</Text>
             
             <View style={styles.inputContainer}>
               <View style={styles.inputHeaderRow}>
                 <Ionicons name="wifi" size={20} color={colors.accent.primary} />
-                <Text style={styles.inputLabel}>FlyShelf PC API Address</Text>
+                <Text style={styles.inputLabel}>Computer IP</Text>
               </View>
               <TextInput
                 style={styles.input}
@@ -239,7 +422,7 @@ function SettingsScreenInner() {
             <View style={[styles.inputContainer, { marginTop: 20 }]}>
               <View style={styles.inputHeaderRow}>
                 <Ionicons name="phone-portrait-outline" size={20} color={colors.accent.primary} />
-                <Text style={styles.inputLabel}>Device Profile Name</Text>
+                <Text style={styles.inputLabel}>Your Device Name</Text>
               </View>
               <TextInput
                 style={styles.input}
@@ -270,14 +453,14 @@ function SettingsScreenInner() {
                     accessibilityRole="switch"
                   />
               </View>
-              <Text style={styles.helperText}>If disabled, your clipboard and files will ONLY synchronize when connected locally. Cloud Discovery allows paired devices to find each other over the internet using a lightweight signaling coordinator.</Text>
+              <Text style={styles.helperText}>Allows paired devices to find each other over the internet. If disabled, sync only works on the same local network.</Text>
             </View>
 
             <View style={[styles.inputContainer, { marginTop: 20 }]}>
               <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
                   <View style={styles.inputHeaderRow}>
                     <Ionicons name="sync-outline" size={20} color={colors.accent.primary} />
-                    <Text style={styles.inputLabel}>Auto-Sync Recent Items (Top 5)</Text>
+                    <Text style={styles.inputLabel}>Auto-Sync Recent Copies</Text>
                   </View>
                   <Switch 
                     value={autoSyncTop5} 
@@ -568,6 +751,74 @@ function SettingsScreenInner() {
             </View>
           </View>
 
+          {/* App Customization & Navigation Card */}
+          <View style={[styles.card, { marginTop: 16 }]}>
+            <Text style={styles.sectionHeader}>Customization & Navigation</Text>
+
+            <View style={styles.inputContainer}>
+              <View style={styles.inputHeaderRow}>
+                <Ionicons name="apps-outline" size={20} color={colors.accent.primary} />
+                <Text style={styles.inputLabel}>Default Home Launch</Text>
+              </View>
+              <Text style={styles.helperText}>Select what screen opens when FlyShelf starts:</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {[
+                  { id: 'home', label: '🏠 Dashboard' },
+                  { id: 'clipboard', label: '📋 Clipboard' },
+                  { id: 'archive', label: '📁 Files' },
+                  { id: 'vault', label: '📦 Storage' },
+                  { id: 'notes', label: '📝 Notes' },
+                  { id: 'todo', label: '✏️ Tasks' },
+                ].map(item => {
+                  const isSelected = defaultHomeCard === item.id;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setDefaultHomeCard(item.id);
+                        toast.success('Saved', `Default screen set to ${item.label}`);
+                      }}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        borderRadius: 20,
+                        backgroundColor: isSelected ? colors.accent.primary : colors.bg.input,
+                        borderWidth: 1,
+                        borderColor: isSelected ? colors.accent.primary : colors.border.subtle,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontFamily: font.semibold, color: isSelected ? '#FFF' : colors.text.secondary }}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={[styles.inputContainer, { marginTop: 16 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <View style={styles.inputHeaderRow}>
+                    <Ionicons name="navigate-outline" size={20} color={colors.accent.success} />
+                    <Text style={styles.inputLabel}>Lower Home Switcher</Text>
+                  </View>
+                  <Text style={[styles.helperText, { marginTop: 2 }]}>Floating pill in lower portion to jump back to Home anytime</Text>
+                </View>
+                <Switch
+                  value={showBottomHomeSwitcher}
+                  onValueChange={(val) => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowBottomHomeSwitcher(val);
+                  }}
+                  thumbColor="#FFF"
+                  trackColor={{ false: colors.text.disabled, true: colors.accent.success }}
+                />
+              </View>
+            </View>
+          </View>
+
           {/* App Info & Updates Card */}
           <View style={[styles.card, { marginTop: 16 }]}>
             <Text style={styles.sectionHeader}>App Info & Updates</Text>
@@ -672,6 +923,32 @@ function SettingsScreenInner() {
                 Choose specific data types or timeframes to mass delete from local storage.
               </Text>
 
+              {/* Action 0: Advanced Junk Cleaner */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: colors.accent.primary + '18',
+                  borderRadius: radius.md,
+                  padding: space.md,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space.sm,
+                  borderWidth: 1,
+                  borderColor: colors.accent.primary + '40',
+                  marginBottom: space.sm,
+                }}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowJunkCleaner(true);
+                }}
+              >
+                <Ionicons name="sparkles" size={20} color={colors.accent.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.accent.primary, fontSize: 14, fontFamily: font.bold }}>Advanced Clipboard Junk Cleaner</Text>
+                  <Text style={{ color: colors.text.secondary, fontSize: 11 }}>Smart scan for duplicates, empty items & aged history</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.accent.primary} />
+              </TouchableOpacity>
+
               {/* Action 1: Mass Delete All Clips */}
               <TouchableOpacity
                 style={{
@@ -699,7 +976,9 @@ function SettingsScreenInner() {
                           try {
                             await EncryptedStorage.removeItem('@flyshelf_clips');
                             await AsyncStorage.removeItem('@flyshelf_clips');
-                            Alert.alert('Success', 'All saved clips removed from local storage. Please restart the app to clear the view.');
+                            await AsyncStorage.setItem('localWipeTimestamp', Date.now().toString());
+                            toast.success('Clips Deleted', 'All saved clips removed from storage.');
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                           } catch (e: any) {
                             Alert.alert('Error', e?.message || 'Failed to clear clips.');
                           }
@@ -798,7 +1077,9 @@ function SettingsScreenInner() {
                               const json = JSON.stringify(filtered);
                               await EncryptedStorage.setItem('@flyshelf_clips', json);
                               await AsyncStorage.setItem('@flyshelf_clips', json);
-                              Alert.alert('Success', `Cleaned up old items. ${filtered.length} recent items kept. Please restart the app to clear the view.`);
+                              await AsyncStorage.setItem('localWipeTimestamp', cutoff.toString());
+                              toast.success('Cleaned', `Purged old items. ${filtered.length} recent items kept.`);
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                             } else {
                               Alert.alert('Info', 'No items found to clean.');
                             }
@@ -820,9 +1101,223 @@ function SettingsScreenInner() {
             </View>
           </View>
 
-          {/* Bottom padding handled by scrollContent paddingBottom */}
+          {/* Diagnostics Card */}
+          <View style={[styles.card, { marginTop: 16 }]}>
+            <Text style={styles.sectionHeader}>🔧 Diagnostics & Debug</Text>
+
+            <View style={styles.inputContainer}>
+              <Text style={[styles.helperText, { marginTop: 0, marginBottom: space.md }]}>
+                {getNetworkLogCount()} network events logged
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.bg.input,
+                borderRadius: radius.md,
+                padding: space.md,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.sm,
+                borderWidth: 1,
+                borderColor: colors.border.subtle,
+                marginBottom: space.sm,
+              }}
+              onPress={handleCopyAllLogs}
+              accessibilityLabel="📋 Copy All Logs"
+              accessibilityRole="button"
+            >
+              <Text style={{ color: colors.text.primary, fontSize: 14, fontFamily: font.semibold, flex: 1 }}>
+                📋 Copy All Logs
+              </Text>
+              <Ionicons name="copy-outline" size={16} color={colors.accent.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.bg.input,
+                borderRadius: radius.md,
+                padding: space.md,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.sm,
+                borderWidth: 1,
+                borderColor: colors.border.subtle,
+                marginBottom: space.sm,
+              }}
+              onPress={handleCopyNetworkLogs}
+              accessibilityLabel="📋 Copy Network Logs"
+              accessibilityRole="button"
+            >
+              <Text style={{ color: colors.text.primary, fontSize: 14, fontFamily: font.semibold, flex: 1 }}>
+                📋 Copy Network Logs
+              </Text>
+              <Ionicons name="globe-outline" size={16} color={colors.accent.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.accent.errorDim,
+                borderRadius: radius.md,
+                padding: space.md,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.sm,
+                borderWidth: 1,
+                borderColor: colors.border.subtle,
+              }}
+              onPress={handleClearLogs}
+              accessibilityLabel="🗑️ Clear Logs"
+              accessibilityRole="button"
+            >
+              <Text style={{ color: colors.accent.error, fontSize: 14, fontFamily: font.semibold, flex: 1 }}>
+                🗑️ Clear Logs
+              </Text>
+              <Ionicons name="trash-outline" size={16} color={colors.accent.error} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Save Button at the bottom */}
+          <View style={{ marginTop: space.lg, marginBottom: space.xl }}>
+            <TouchableOpacity style={styles.saveButton} onPress={handleSave} accessibilityLabel="Save configuration" accessibilityRole="button">
+              <Text style={styles.saveButtonText}>Save Configuration</Text>
+            </TouchableOpacity>
+            <Text style={{ color: colors.text.tertiary, fontSize: 11, fontFamily: font.regular, textAlign: 'center', marginTop: -space.md, paddingHorizontal: space.xl }}>Saves IP address and device name. Toggles auto-save instantly.</Text>
+          </View>
 
         </Animated.ScrollView>
+
+        {/* Advanced Clipboard Junk Cleaner Modal */}
+        <Modal
+          visible={showJunkCleaner}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowJunkCleaner(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
+            <View style={{
+              backgroundColor: colors.bg.card,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 20,
+              maxHeight: '85%',
+              borderWidth: 1,
+              borderColor: colors.border.subtle,
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: colors.accent.primary + '20', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="sparkles" size={20} color={colors.accent.primary} />
+                  </View>
+                  <View>
+                    <Text style={{ fontSize: 18, fontFamily: font.bold, color: colors.text.primary }}>Junk Cleaner</Text>
+                    <Text style={{ fontSize: 12, fontFamily: font.medium, color: colors.text.secondary }}>
+                      {totalClipsCount} clips analyzed • {junkPreviewCount ?? '...'} junk detected
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={() => setShowJunkCleaner(false)} style={{ padding: 6 }}>
+                  <Ionicons name="close" size={22} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* Age Filter */}
+                <Text style={{ fontSize: 12, fontFamily: font.bold, color: colors.text.secondary, textTransform: 'uppercase', marginBottom: 8, marginTop: 4 }}>
+                  Delete Items Older Than
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+                  {(['24h', '3d', '7d', '30d', 'all'] as const).map((filter) => {
+                    const label = filter === '24h' ? '24 Hours' : filter === '3d' ? '3 Days' : filter === '7d' ? '7 Days' : filter === '30d' ? '30 Days' : 'Any Age';
+                    const isSelected = junkAgeFilter === filter;
+                    return (
+                      <TouchableOpacity
+                        key={filter}
+                        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setJunkAgeFilter(filter); }}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 20,
+                          backgroundColor: isSelected ? colors.accent.primary : colors.bg.input,
+                          borderWidth: 1,
+                          borderColor: isSelected ? colors.accent.primary : colors.border.subtle,
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontFamily: font.semibold, color: isSelected ? '#FFF' : colors.text.secondary }}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Cleaner Toggles */}
+                <Text style={{ fontSize: 12, fontFamily: font.bold, color: colors.text.secondary, textTransform: 'uppercase', marginBottom: 8 }}>
+                  Cleanup Options
+                </Text>
+
+                <View style={{ backgroundColor: colors.bg.input, borderRadius: radius.md, padding: 12, gap: 12, marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                      <Text style={{ color: colors.text.primary, fontSize: 14, fontFamily: font.semibold }}>Duplicate Clips</Text>
+                      <Text style={{ color: colors.text.tertiary, fontSize: 11 }}>Remove identical copied texts or URLs</Text>
+                    </View>
+                    <Switch value={cleanDuplicates} onValueChange={setCleanDuplicates} thumbColor="#FFF" trackColor={{ false: colors.text.disabled, true: colors.accent.primary }} />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                      <Text style={{ color: colors.text.primary, fontSize: 14, fontFamily: font.semibold }}>Blank & Whitespace</Text>
+                      <Text style={{ color: colors.text.tertiary, fontSize: 11 }}>Purge empty clips or spaces</Text>
+                    </View>
+                    <Switch value={cleanWhitespace} onValueChange={setCleanWhitespace} thumbColor="#FFF" trackColor={{ false: colors.text.disabled, true: colors.accent.primary }} />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                      <Text style={{ color: colors.text.primary, fontSize: 14, fontFamily: font.semibold }}>Micro Snippets</Text>
+                      <Text style={{ color: colors.text.tertiary, fontSize: 11 }}>Remove 1 or 2 character accidental copies</Text>
+                    </View>
+                    <Switch value={cleanMicroSnips} onValueChange={setCleanMicroSnips} thumbColor="#FFF" trackColor={{ false: colors.text.disabled, true: colors.accent.primary }} />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                      <Text style={{ color: colors.text.primary, fontSize: 14, fontFamily: font.semibold }}>Broken File Attachments</Text>
+                      <Text style={{ color: colors.text.tertiary, fontSize: 11 }}>Remove clips whose files are missing from storage</Text>
+                    </View>
+                    <Switch value={cleanBrokenFiles} onValueChange={setCleanBrokenFiles} thumbColor="#FFF" trackColor={{ false: colors.text.disabled, true: colors.accent.primary }} />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                      <Text style={{ color: colors.accent.success, fontSize: 14, fontFamily: font.semibold }}>Protect Pinned Clips</Text>
+                      <Text style={{ color: colors.text.tertiary, fontSize: 11 }}>Never delete your pinned clipboard favorites</Text>
+                    </View>
+                    <Switch value={protectPinned} onValueChange={setProtectPinned} thumbColor="#FFF" trackColor={{ false: colors.text.disabled, true: colors.accent.success }} />
+                  </View>
+                </View>
+
+                {/* Clean Button */}
+                <TouchableOpacity
+                  onPress={executeCleanJunk}
+                  style={{
+                    backgroundColor: (junkPreviewCount ?? 0) > 0 ? colors.accent.error : colors.bg.input,
+                    borderRadius: 14,
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                    marginBottom: 10,
+                  }}
+                  disabled={(junkPreviewCount ?? 0) === 0}
+                >
+                  <Text style={{ color: (junkPreviewCount ?? 0) > 0 ? '#FFF' : colors.text.tertiary, fontSize: 15, fontFamily: font.bold }}>
+                    {(junkPreviewCount ?? 0) > 0 ? `Clean ${junkPreviewCount} Junk Clips Now` : 'No Junk Found'}
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </View>
     </LinearGradient>

@@ -111,6 +111,9 @@ namespace FlyShelf.Classes
 
                 // Also push to the in-memory live monitor (lightweight, already on correct thread)
                 NetworkActivityLog.Instance.Log(upperAction, details);
+
+                // Also push to AppLogger ring buffer
+                AppLogger.AddRawEntry(logEntry);
             }
             catch 
             {

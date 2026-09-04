@@ -758,8 +758,23 @@ namespace FlyShelf.Windows
             if (ClusteredVideoCount != null) ClusteredVideoCount.Text = $"{videoCount} item{(videoCount != 1 ? "s" : "")}";
         }
 
+        private static T? FindVisualParent<T>(DependencyObject? child) where T : DependencyObject
+        {
+            if (child == null) return null;
+            DependencyObject parentObject = VisualTreeHelper.GetParent(child);
+            if (parentObject == null) return null;
+            if (parentObject is T parent) return parent;
+            return FindVisualParent<T>(parentObject);
+        }
+
+        private void ImageGrid_ActionContainer_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+        }
+
         private void ImageGrid_Copy(object sender, RoutedEventArgs e)
         {
+            e.Handled = true;
             if (sender is FrameworkElement fe && fe.Tag is ClipboardItem clip)
             {
                 try
@@ -778,12 +793,13 @@ namespace FlyShelf.Windows
                     }
                     System.Windows.Clipboard.SetDataObject(dataObj, true);
                 }
-                catch (Exception ex) { ToastWindow.ShowToast("Clipboard busy  try again", 2000); }
+                catch (Exception ex) { ToastWindow.ShowToast("Clipboard busy — try again", 2000); }
             }
         }
 
         private void ImageGrid_Pin(object sender, RoutedEventArgs e)
         {
+            e.Handled = true;
             if (sender is FrameworkElement fe && fe.Tag is ClipboardItem clip && _viewModel != null)
             {
                 _viewModel.TogglePin(clip);
@@ -792,6 +808,7 @@ namespace FlyShelf.Windows
 
         private void ImageGrid_Delete(object sender, RoutedEventArgs e)
         {
+            e.Handled = true;
             if (sender is FrameworkElement fe && fe.Tag is ClipboardItem clip)
             {
                 _viewModel?.DroppedItems?.Remove(clip);
@@ -801,6 +818,16 @@ namespace FlyShelf.Windows
         // ═══ IMAGE GRID: QuickLook on click ═══
         private void ImageGrid_QuickLook(object sender, MouseButtonEventArgs e)
         {
+            // Do NOT open QuickLook if clicking on buttons, checkboxes, or their children
+            if (e.OriginalSource is DependencyObject dep)
+            {
+                if (dep is System.Windows.Controls.Primitives.ButtonBase ||
+                    FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(dep) != null)
+                {
+                    return;
+                }
+            }
+
             if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
             {
                 var mainWin = System.Windows.Application.Current.MainWindow as MainWindow;
@@ -821,6 +848,7 @@ namespace FlyShelf.Windows
         // ═══ IMAGE GRID: Selection & Merge ═══
         private void ImageGrid_SelectionChanged(object sender, RoutedEventArgs e)
         {
+            e.Handled = true;
             UpdateImageMergeBar();
         }
 
@@ -1246,25 +1274,6 @@ namespace FlyShelf.Windows
                 {
                     FlyShelf.Classes.SettingsManager.Current.ClipboardRetentionDays = 7;
                     settingsChanged = true;
-                }
-
-                // 3. Correct Cloudflare global tunnel
-                if (FlyShelf.Classes.SettingsManager.Current.EnableGlobalCloudflare)
-                {
-                    FlyShelf.Classes.SettingsManager.Current.EnableGlobalCloudflare = false;
-                    settingsChanged = true;
-                    
-                    // Stop Cloudflare tunnel dynamically!
-                    var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
-                    if (mainWin != null && mainWin.ViewModel?.LocalServer != null)
-                    {
-                        mainWin.ViewModel.LocalServer.Stop();
-                        // If they still want local LAN sync to be running:
-                        if (FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync)
-                        {
-                            mainWin.ViewModel.LocalServer.Start();
-                        }
-                    }
                 }
 
                 if (settingsChanged)

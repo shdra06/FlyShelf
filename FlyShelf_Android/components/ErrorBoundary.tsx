@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
 import { colors, font, radius, space, shadows } from '../styles/theme';
-import { syncLog } from '../utils/debugLog';
+import { syncLog, logFatalCrash } from '../utils/debugLog';
 import { DOWNLOAD_BASE, SYNC_CACHE_BASE, CONVERTED_BASE, IMAGE_CACHE_BASE } from '../utils/clipTypes';
 
 interface Props {
@@ -44,6 +44,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     this.setState({ errorInfo });
     const crashDetails = `[Render Crash]\nMessage: ${error.message}\nStack: ${error.stack}\nComponent Stack: ${errorInfo.componentStack}`;
     syncLog('CRASH', crashDetails);
+    logFatalCrash(error, `${error.stack || ''}\nComponent Stack: ${errorInfo.componentStack}`).catch(() => {});
     
     // Save crash report to AsyncStorage for reference
     AsyncStorage.setItem('last_crash_error', crashDetails).catch(() => {});
@@ -62,8 +63,15 @@ export default class ErrorBoundary extends Component<Props, State> {
           // Guard against setState on unmounted component
           if (!this._mounted) return;
 
+          // Non-fatal async errors (network blips, layout measurements) should never crash the UI
+          if (!isFatal) {
+            syncLog('NON_FATAL_ERROR', `Non-fatal error intercepted: ${error?.message || error}`);
+            return;
+          }
+
           const crashDetails = `[Fatal Async Crash]\nFatal: ${isFatal}\nMessage: ${error?.message || error}\nStack: ${error?.stack}`;
           syncLog('CRASH', crashDetails);
+          await logFatalCrash(error, error?.stack).catch(() => {});
           
           await AsyncStorage.setItem('last_crash_error', crashDetails).catch(() => {});
           
@@ -293,11 +301,27 @@ ${prevCrash}
               <TouchableOpacity 
                 style={s.toastActionBtn} 
                 onPress={() => {
-                  this.setState({
-                    hasError: true,
-                    error: new Error("Reviewing last session's crash."),
-                    errorInfo: { componentStack: 'Previous session dump.' }
-                  });
+                  Alert.alert(
+                    "Previous Session Diagnostics",
+                    this.state.previousCrashReport || "No crash details recorded.",
+                    [
+                      {
+                        text: "Copy Details",
+                        onPress: async () => {
+                          if (this.state.previousCrashReport) {
+                            await Clipboard.setStringAsync(this.state.previousCrashReport);
+                          }
+                          await this.clearPreviousCrash();
+                          Alert.alert("Copied ✅", "Crash details copied to clipboard and dismissed.");
+                        }
+                      },
+                      {
+                        text: "Dismiss & Clear",
+                        style: "destructive",
+                        onPress: this.clearPreviousCrash
+                      }
+                    ]
+                  );
                 }}
                 accessibilityLabel="Inspect last crash"
                 accessibilityRole="button"

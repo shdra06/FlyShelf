@@ -28,6 +28,7 @@ namespace FlyShelf.Classes
         public void Start()
         {
             if (_isRunning) return;
+            AppLogger.Log("SERVER", "Starting NetworkSyncServer...");
 
             try
             {
@@ -186,15 +187,7 @@ namespace FlyShelf.Classes
                 // If we bound directly, Cloudflare tunnels to publicPort which HttpListener handles.
                 if (SettingsManager.Current.EnableGlobalCloudflare)
                 {
-                    if (LicenseManager.CanUseCloudflare())
-                    {
-                        _ = _cfDaemon.StartAsync(CurrentPort);
-                    }
-                    else
-                    {
-                        SettingsManager.Current.EnableGlobalCloudflare = false;
-                        SettingsManager.Save();
-                    }
+                    _ = _cfDaemon.StartAsync(CurrentPort);
                 }
                 // Don't push "Offline" to Firebase — wait for the daemon to provide a real URL
                 if (GlobalUrl != null && GlobalUrl != "Offline")
@@ -584,6 +577,7 @@ namespace FlyShelf.Classes
         public void Stop()
         {
             if (!_isRunning) return;
+            AppLogger.Log("SERVER", "NetworkSyncServer stopped.");
             _isRunning = false;
             _proxyRunning = false;
             ServerUrl = "Offline";

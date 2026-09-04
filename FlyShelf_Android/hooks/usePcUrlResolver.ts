@@ -118,7 +118,7 @@ export function usePcUrlResolver(
         ...(pk ? { 'X-Pairing-Key': pk } : {})
       };
 
-      const probeUrl = async (url: string, timeout = 2500, signal?: AbortSignal): Promise<string> => {
+      const probeUrl = async (url: string, timeout = 6000, signal?: AbortSignal): Promise<string> => {
         try {
           const res = await fetchWithTimeout(`${url}/api/health`, { headers: probeHeaders, signal }, timeout);
           if (res.ok || res.status === 401) {
@@ -132,7 +132,7 @@ export function usePcUrlResolver(
                 const body = await res.json();
                 if (body?.app !== 'FlyShelf') throw new Error(`Probe signature mismatch for ${url}`);
               } catch (e: any) {
-                if (e?.message?.includes('signature mismatch')) throw e;
+                throw e;
               }
             }
             syncLog('URL-RESOLVE', `[STEP 3/6: URL RESOLVE] ✅ Reachable: ${url} (status=${res.status})`);
@@ -182,7 +182,7 @@ export function usePcUrlResolver(
                 const freshCloudUrl = freshPc.GlobalUrl.trim().replace(/\/$/, '');
                 syncLog('URL-RESOLVE', `[STEP 3/6: URL RESOLVE] 🔍 Firebase returned PC Cloudflare URL: ${freshCloudUrl} — probing...`);
                 try {
-                  const verifiedCloud = await probeUrl(freshCloudUrl, 2500);
+                  const verifiedCloud = await probeUrl(freshCloudUrl, 6000);
                   if (verifiedCloud) {
                     cachedPcUrlRef.current = verifiedCloud;
                     cachedPcUrlTimestampRef.current = startNow;
@@ -361,6 +361,22 @@ export function usePcUrlResolver(
           }
         }).catch(() => {});
       }
+      // ═══════════════════════════════════════════════════════════════
+      // TIER 4.5: Persisted Cloudflare URL (last resort when decrypt fails)
+      // ═══════════════════════════════════════════════════════════════
+      // If crypto is broken, Firebase URLs are still encrypted and can't be used.
+      // But we may have saved a working Cloudflare URL from a previous successful session.
+      try {
+        const savedCf = (await getSecureItem('pairedGlobalUrl')) || (await AsyncStorage.getItem('pairedGlobalUrl')) || (await AsyncStorage.getItem('lastCloudflareUrl'));
+        if (savedCf && savedCf.includes('trycloudflare.com')) {
+          const cleanSaved = savedCf.trim().replace(/\/$/, '');
+          cachedPcUrlRef.current = cleanSaved;
+          cachedPcUrlTimestampRef.current = startNow;
+          discoveryMethodRef.current = 'cloudflare';
+          syncLog('URL-RESOLVE', `[STEP 3/6: URL RESOLVE] 🔄 Using persisted Cloudflare URL (decrypt may have failed): ${cleanSaved}`);
+          return cleanSaved;
+        }
+      } catch {}
 
       syncLog('URL-RESOLVE', `[STEP 3/6: URL RESOLVE] ⏳ PC unreachable on Cloud & LAN. Awaiting PC response...`);
       return '';
