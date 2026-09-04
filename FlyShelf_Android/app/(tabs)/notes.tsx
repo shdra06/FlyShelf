@@ -3,7 +3,7 @@ import AppErrorBoundary from '../../components/AppErrorBoundary';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Alert,
   Animated, Keyboard, Platform, ToastAndroid, Share, Modal,
-  ActivityIndicator, FlatList,
+  ActivityIndicator, FlatList, DeviceEventEmitter,
 } from 'react-native';
 // SafeAreaView import removed — unused
 import { LinearGradient } from 'expo-linear-gradient';
@@ -261,8 +261,18 @@ function NotesScreenInner() {
   // ─── Sync hook (PC polling + debounced POST) ───
   const {
     days, setDays, syncStatus, isLoading,
-    modifiedDatesRef, schedulePost, schedulePostRef, daysRef,
+    modifiedDatesRef, schedulePost, schedulePostRef, daysRef, triggerImmediateFetch,
   } = useNotesSync();
+
+  // Listen to WebSocket push events from index.tsx
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('notes_changed', () => {
+      triggerImmediateFetch();
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [triggerImmediateFetch]);
 
   // ─── Zoom & View Mode State ───
   const [noteZoom, setNoteZoom] = useState(1.0);

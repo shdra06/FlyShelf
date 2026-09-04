@@ -294,6 +294,33 @@ namespace FlyShelf.Classes
             }
         }
 
+        public void NotifyNotesChanged()
+        {
+            try
+            {
+                string json = System.Text.Json.JsonSerializer.Serialize(new { type = "notes_changed", timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
+                BroadcastToPeerWebSockets(json);
+                AppLogger.Log($"[WS] Broadcast notes_changed to peers");
+            }
+            catch { }
+        }
+
+        public void NotifyTodosChanged()
+        {
+            try
+            {
+                string json = System.Text.Json.JsonSerializer.Serialize(new { type = "todos_changed", timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
+                BroadcastToPeerWebSockets(json);
+                AppLogger.Log($"[WS] Broadcast todos_changed to peers");
+            }
+            catch { }
+        }
+
+        public void InvalidateNotesCache()
+        {
+            _cachedNotesJson = null;
+        }
+
         /// <summary>
         /// Call this whenever the clipboard changes to instantly push to all connected clients.
         /// Unblocks long-poll waiters AND broadcasts to SSE and WebSocket clients.

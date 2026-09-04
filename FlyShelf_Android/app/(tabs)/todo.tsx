@@ -3,7 +3,7 @@ import AppErrorBoundary from '../../components/AppErrorBoundary';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   Alert, Platform, Modal, Animated, KeyboardAvoidingView,
-  ToastAndroid, FlatList,
+  ToastAndroid, FlatList, DeviceEventEmitter,
 } from 'react-native';
 import { toast } from '../../context/ToastContext';
 
@@ -323,7 +323,7 @@ function TodoScreenInner() {
   }, []);
 
   // ─── useTodoSync hook (placed after saveLocal + mergeDays are declared) ─
-  const { schedulePush } = useTodoSync({
+  const { schedulePush, triggerImmediateFetch } = useTodoSync({
     pairingKey,
     deviceName,
     daysRef,
@@ -337,6 +337,16 @@ function TodoScreenInner() {
     },
     onStatusChange: (status) => setSyncStatus(status),
   });
+
+  // Listen to WebSocket push events from index.tsx
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('todos_changed', () => {
+      triggerImmediateFetch();
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [triggerImmediateFetch]);
 
   // ─── Mark day modified & trigger sync (M-8 fix: immutable copy) ──
   const markModified = useCallback((dayKey: string, inputDays: TodoDay[]) => {

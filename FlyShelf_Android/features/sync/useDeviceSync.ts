@@ -61,6 +61,8 @@ export function useDeviceSync(params: {
   scrollToTop: () => void;
   localDeletedIds: Set<string>;
   setLocalDeletedIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  onNotesChanged?: () => void;
+  onTodosChanged?: () => void;
 }): void {
   const {
     isGlobalSyncEnabled,
@@ -98,12 +100,16 @@ export function useDeviceSync(params: {
     scrollToTop,
     localDeletedIds,
     setLocalDeletedIds,
+    onNotesChanged,
+    onTodosChanged,
   } = params;
 
   // ─── Stale-closure guards: wrap values that change independently of useEffect deps ───
   const pairedDevicesRef = useLatest(pairedDevices);
   const getSyncPrefsRef = useLatest(getSyncPrefsForDevice);
   const isFloatingBallEnabledRef = useLatest(isFloatingBallEnabled);
+  const onNotesChangedRef = useLatest(onNotesChanged);
+  const onTodosChangedRef = useLatest(onTodosChanged);
 
   // ─── Local PC Polling ───
     const enqueueDownloadRef = useRef(enqueueDownload);
@@ -982,6 +988,12 @@ export function useDeviceSync(params: {
                     cachedPcUrlTimestampRef.current = NetworkClock.now();
                   }
                 }
+              } else if (msg.type === 'notes_changed') {
+                syncLog('WS-PEER', `⚡ Instant Push from PC via WebSocket (notes_changed)`);
+                onNotesChangedRef.current?.();
+              } else if (msg.type === 'todos_changed') {
+                syncLog('WS-PEER', `⚡ Instant Push from PC via WebSocket (todos_changed)`);
+                onTodosChangedRef.current?.();
               } else if (msg.type !== 'Ping') {
                 syncLog('WS-PEER', `⚡ Instant Push from PC via WebSocket (${msg.type || 'clip'})`);
                 lastActivityRef.current = NetworkClock.now();

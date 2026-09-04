@@ -43,6 +43,7 @@ export interface UseTodoSyncParams {
 
 export interface UseTodoSyncReturn {
   schedulePush: (dayKey: string) => void;
+  triggerImmediateFetch: () => void;
 }
 
 // -- Hook ---------------------------------------------------------------------
@@ -242,5 +243,5 @@ export function useTodoSync({
     };
   }, [pairingKey, resolvePcUrl, pollTodos]);
 
-  return { schedulePush };
+  return { schedulePush, triggerImmediateFetch: pollTodos };
 }

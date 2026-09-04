@@ -565,6 +565,9 @@ namespace FlyShelf.Classes
                 {
                     if (Interlocked.CompareExchange(ref _isDirty, 0, 1) == 0) return; // was already clean
                     SaveNow();
+                    
+                    // WebSocket Push
+                    NetworkSyncServer.Instance?.NotifyTodosChanged();
                 }, null, 2000, Timeout.Infinite);
             }
         }

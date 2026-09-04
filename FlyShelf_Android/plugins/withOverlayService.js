@@ -65,7 +65,7 @@ class OverlayService : Service() {
     private var badgeView: TextView? = null
 
     companion object {
-        var clipboardItems: String = "[]"
+        @Volatile var clipboardItems: String = "[]"
         var ballSizeDp: Int = 48
         var autoHideDelayMs: Long = 3000L
         var lastCopiedText: String = ""
@@ -76,6 +76,10 @@ class OverlayService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return START_STICKY
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -770,11 +774,15 @@ class OverlayService : Service() {
             var backoff = 1000L
             while (syncEnabled) {
                 try {
-                    val url = ScreenshotObserver.pcUrl
+                    var url = ScreenshotObserver.pcUrl
+                    if (url.isEmpty()) {
+                        url = getSharedPreferences("flyshelf_service_prefs", Context.MODE_PRIVATE).getString("pcUrl", "") ?: ""
+                    }
                     if (url.isEmpty()) { Thread.sleep(5000); continue }
                     
                     // Long-poll the PC for new events
-                    val conn = java.net.URL("$url/api/events?timeout=30000").openConnection() as java.net.HttpURLConnection
+                    val pollUrl = url.trimEnd('/') + "/api/events?timeout=30000"
+                    val conn = java.net.URL(pollUrl).openConnection() as java.net.HttpURLConnection
                     conn.requestMethod = "GET"
                     conn.setRequestProperty("X-FlyShelf-Client", "MobileCompanion")
                     // Read pairing key from encrypted prefs
@@ -822,7 +830,10 @@ class OverlayService : Service() {
         try {
             val obj = org.json.JSONObject(jsonBody)
             val type = obj.optString("Type", "")
-            val raw = obj.optString("Raw", obj.optString("Data", ""))
+            val raw = obj.optString("Raw", obj.optString("Data", obj.optString("Title", "")))
+            if (!obj.has("Raw") && obj.has("Data")) {
+                obj.put("Raw", obj.getString("Data"))
+            }
             val title = obj.optString("Title", raw.take(60))
             val source = obj.optString("SourceDeviceName", "PC")
             
@@ -923,10 +934,14 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
     fun startOverlay() {
         val context = reactApplicationContext
         val intent = Intent(context, OverlayService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
-        } else {
-            context.startService(intent)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AdvanceOverlay", "Failed to start overlay service: ${e.message}")
         }
     }
 
@@ -1012,6 +1027,7 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
     @ReactMethod
     fun setPcUrl(url: String) {
         ScreenshotObserver.pcUrl = url
+        reactApplicationContext.getSharedPreferences("flyshelf_service_prefs", Context.MODE_PRIVATE).edit().putString("pcUrl", url).apply()
     }
 
     @ReactMethod
@@ -1262,11 +1278,15 @@ function withOverlayManifest(config) {
     const permissions = manifest.manifest['uses-permission'] || [];
     const fgPerm = 'android.permission.FOREGROUND_SERVICE';
     const fgSpecPerm = 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE';
+    const postNotifPerm = 'android.permission.POST_NOTIFICATIONS';
     if (!permissions.some(p => p.$?.['android:name'] === fgPerm)) {
         permissions.push({ $: { 'android:name': fgPerm } });
     }
     if (!permissions.some(p => p.$?.['android:name'] === fgSpecPerm)) {
         permissions.push({ $: { 'android:name': fgSpecPerm } });
+    }
+    if (!permissions.some(p => p.$?.['android:name'] === postNotifPerm)) {
+        permissions.push({ $: { 'android:name': postNotifPerm } });
     }
     manifest.manifest['uses-permission'] = permissions;
 

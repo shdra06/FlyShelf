@@ -20,10 +20,14 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
     fun startOverlay() {
         val context = reactApplicationContext
         val intent = Intent(context, OverlayService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
-        } else {
-            context.startService(intent)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AdvanceOverlay", "Failed to start overlay service: ${e.message}")
         }
     }
 
@@ -109,6 +113,7 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
     @ReactMethod
     fun setPcUrl(url: String) {
         ScreenshotObserver.pcUrl = url
+        reactApplicationContext.getSharedPreferences("flyshelf_service_prefs", Context.MODE_PRIVATE).edit().putString("pcUrl", url).apply()
     }
 
     @ReactMethod

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AppErrorBoundary from '../../components/AppErrorBoundary';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, AppState, Modal, NativeModules, ScrollView, Share, RefreshControl, Animated, StyleSheet, FlatList } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, AppState, Modal, NativeModules, ScrollView, Share, RefreshControl, Animated, StyleSheet, FlatList, DeviceEventEmitter } from 'react-native';
 // SafeAreaView removed — ScreenHeader handles safe area
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -162,6 +162,20 @@ function SyncScreenInner() {
       } catch (e) {}
     }
   }, [isFloatingBallEnabled]);
+
+  // Always configure native service with PC URL for background sync — even if floating ball is off
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !AdvanceOverlay) return;
+    (async () => {
+      try {
+        const targetUrl = await getCachedPcUrl();
+        if (targetUrl && typeof AdvanceOverlay.setPcUrl === 'function') AdvanceOverlay.setPcUrl(targetUrl);
+        if (deviceName && typeof AdvanceOverlay.setDeviceName === 'function') AdvanceOverlay.setDeviceName(deviceName);
+        if (pairingKeyRef.current && typeof AdvanceOverlay.setPairingKey === 'function') AdvanceOverlay.setPairingKey(pairingKeyRef.current);
+      } catch (e) { syncLog('OVERLAY', `Native service URL config failed: ${(e as any)?.message || e}`); }
+    })();
+  }, [deviceName]);
+
 
   // ─── Sync Offline Outbox setting to DirectMesh module ───
   useEffect(() => {
@@ -848,6 +862,8 @@ function SyncScreenInner() {
     lastActivityRef,
     lastSyncedContentRef,
     processedEventsRef,
+    onNotesChanged: () => DeviceEventEmitter.emit('notes_changed'),
+    onTodosChanged: () => DeviceEventEmitter.emit('todos_changed'),
     recentSyncFingerprintsRef,
     sentContentFingerprintsRef,
     pairingTimestampRef,

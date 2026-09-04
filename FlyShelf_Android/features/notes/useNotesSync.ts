@@ -442,5 +442,6 @@ export function useNotesSync() {
     NOTES_STORAGE_KEY,
     /** Fetch a single date's notes from PC on demand (for older dates beyond 15-day window). */
     fetchNotesForDate,
+    triggerImmediateFetch: fetchRemoteNotes,
   };
 }

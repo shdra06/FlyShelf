@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, SafeAreaView, FlatList, Platform } from 'react-native';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, SafeAreaView, FlatList, Platform, Image, Dimensions, Modal, StatusBar } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../hooks/useAppTheme';
@@ -17,6 +17,32 @@ import { toast } from '../../context/ToastContext';
 import { useSettings } from '../../context/SettingsContext';
 import { resolveBestPcUrl } from '../../utils/networkHelpers';
 
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const THUMB_GAP = 4;
+const THUMB_COLS = 3;
+const THUMB_SIZE = Math.floor((SCREEN_WIDTH - space.lg * 2 - THUMB_GAP * (THUMB_COLS - 1)) / THUMB_COLS);
+const VAULT_DIR = `${FileSystem.documentDirectory}vault/`;
+
+/** Strip UUID/safe prefix from filename: "ve_1234567890_abc__passport.pdf" → "passport.pdf" */
+const cleanDisplayName = (name: string): string => {
+  if (!name) return 'Unnamed';
+  // Strip "ve_<ts>_<rand>__" prefix from vault safe IDs
+  const dblUnder = name.indexOf('__');
+  if (dblUnder > 0 && name.startsWith('ve_')) {
+    return name.substring(dblUnder + 2) || name;
+  }
+  // Strip UUID prefix: "2d2e924c-8d0f-4098-af94-c0fc..." → keep original if it matches UUID-like
+  const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i;
+  if (uuidRegex.test(name)) {
+    // If the entire name is a UUID (no extension), just show "Image" or "Document"
+    const ext = name.split('.').pop()?.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext || '')) return `Photo.${ext}`;
+    if (ext === 'pdf') return `Document.pdf`;
+    return name;
+  }
+  return name;
+};
+
 function VaultScreenInner() {
   const { colors, shadows } = useAppTheme();
   const s = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
@@ -26,6 +52,9 @@ function VaultScreenInner() {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<VaultCategory | null>(null);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerImages, setViewerImages] = useState<VaultEntry[]>([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
   const scrollY = useSharedValue(0);
   const scrollHandler = (e: any) => {
     const offsetY = e?.nativeEvent?.contentOffset?.y;
@@ -89,7 +118,7 @@ function VaultScreenInner() {
       Alert.alert('No Paired PC Found', 'Connect or pair a PC in FlyShelf settings to send files directly.');
       return;
     }
-    toast.info('Sending to PC...', `Transferring ${entry.originalName}`);
+    toast.info('Sending to PC...', `Transferring ${cleanDisplayName(entry.originalName)}`);
     try {
       const filePath = await getDecryptedFilePath(entry);
       const uploadUrl = `${pcUrl}/api/archive_upload`;
@@ -106,7 +135,7 @@ function VaultScreenInner() {
         },
       });
       if (response.status === 200) {
-        toast.success('Sent to PC', `${entry.originalName} is now on your PC!`);
+        toast.success('Sent to PC', `${cleanDisplayName(entry.originalName)} is now on your PC!`);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         throw new Error(`Upload failed with status ${response.status}`);
@@ -117,18 +146,183 @@ function VaultScreenInner() {
   };
 
   const handleFileOptions = (entry: VaultEntry) => {
-    Alert.alert(entry.originalName, 'File actions', [
+    const name = cleanDisplayName(entry.originalName);
+    Alert.alert(name, undefined, [
       { text: '📖 Open', onPress: () => openFile(entry) },
-      { text: '💻 Send to PC', onPress: () => sendEntryToPc(entry) },
       { text: '📤 Share', onPress: () => shareFile(entry) },
+      { text: '💻 Send to PC', onPress: () => sendEntryToPc(entry) },
       { text: '🗑️ Delete', style: 'destructive', onPress: () => {
-        Alert.alert('Delete File', `Remove "${entry.originalName}"?`, [
+        Alert.alert('Delete File', `Remove "${name}"?`, [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Delete', style: 'destructive', onPress: () => removeFile(entry.id) }
         ]);
       }},
       { text: 'Cancel', style: 'cancel' }
     ]);
+  };
+
+  /** Open image viewer for an image entry */
+  const openImageViewer = useCallback((entry: VaultEntry, allImages: VaultEntry[]) => {
+    setViewerImages(allImages);
+    setViewerIndex(allImages.findIndex(e => e.id === entry.id) || 0);
+    setViewerVisible(true);
+  }, []);
+
+  /** Get file URI for vault entry */
+  const getFileUri = useCallback((entry: VaultEntry): string => {
+    return entry.iv
+      ? '' // Legacy encrypted — can't show inline, needs decrypt
+      : `${VAULT_DIR}${entry.encryptedFilename}`;
+  }, []);
+
+  // Separate entries into images and non-images for the dual-mode layout
+  const getCategoryContent = useCallback((catId: string) => {
+    const entries = getEntriesForCategory(catId);
+    const images: VaultEntry[] = [];
+    const documents: VaultEntry[] = [];
+    for (const e of entries) {
+      if (e.mimeType?.startsWith('image/')) {
+        images.push(e);
+      } else {
+        documents.push(e);
+      }
+    }
+    return { images, documents };
+  }, [getEntriesForCategory]);
+
+  // === Image Thumbnail ===
+  const renderImageThumb = useCallback((item: VaultEntry, allImages: VaultEntry[]) => {
+    const uri = getFileUri(item);
+    return (
+      <TouchableOpacity
+        key={item.id}
+        style={s.thumbContainer}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          openImageViewer(item, allImages);
+        }}
+        onLongPress={() => handleFileOptions(item)}
+        activeOpacity={0.8}
+      >
+        {uri ? (
+          <Image
+            source={{ uri }}
+            style={s.thumbImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={[s.thumbImage, { backgroundColor: colors.bg.card, justifyContent: 'center', alignItems: 'center' }]}>
+            <Ionicons name="lock-closed" size={24} color={colors.text.tertiary} />
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  }, [colors, s, getFileUri, openImageViewer, handleFileOptions]);
+
+  // === Document Row (non-image) ===
+  const renderDocItem = useCallback((item: VaultEntry) => {
+    const isPdf = item.mimeType?.includes('pdf');
+    const isVideo = item.mimeType?.includes('video');
+    const iconColor = isPdf ? colors.type.pdf : isVideo ? colors.type.video : colors.type.doc;
+    const iconName = isPdf ? 'document' : isVideo ? 'videocam' : 'document-text';
+    const displayName = cleanDisplayName(item.originalName);
+
+    return (
+      <TouchableOpacity
+        key={item.id}
+        style={s.fileRow}
+        onPress={() => openFile(item)}
+        onLongPress={() => handleFileOptions(item)}
+        activeOpacity={0.7}
+      >
+        <View style={[s.fileIconBg, { backgroundColor: `${iconColor}15` }]}>
+          <Ionicons name={iconName as any} size={24} color={iconColor} />
+        </View>
+        <View style={s.fileInfo}>
+          <Text style={s.fileName} numberOfLines={1}>{displayName}</Text>
+          <View style={s.fileMeta}>
+            <Text style={s.fileSize}>{item.fileSize > 1048576 ? `${(item.fileSize / 1048576).toFixed(1)} MB` : `${Math.round(item.fileSize / 1024)} KB`}</Text>
+            <Text style={s.fileDate}> • {new Date(item.dateAdded).toLocaleDateString()}</Text>
+          </View>
+        </View>
+        <TouchableOpacity onPress={() => shareFile(item)} style={{ padding: 8, marginRight: 4 }}>
+          <Ionicons name="share-outline" size={18} color={colors.accent.primary} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleFileOptions(item)} style={{ padding: 8 }}>
+          <Ionicons name="ellipsis-vertical" size={20} color={colors.text.tertiary} />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  }, [colors, s, openFile, shareFile, handleFileOptions]);
+
+  // === Category View: Image grid + document list ===
+  const renderCategoryContent = () => {
+    if (!selectedCategory) return null;
+    const { images, documents } = getCategoryContent(selectedCategory.id);
+    const hasContent = images.length > 0 || documents.length > 0;
+
+    return (
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: 120 }}
+        keyboardShouldPersistTaps="handled"
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
+      >
+        {/* Image Grid */}
+        {images.length > 0 && (
+          <View style={s.thumbGrid}>
+            {images.map(img => renderImageThumb(img, images))}
+          </View>
+        )}
+
+        {/* Section divider if both types exist */}
+        {images.length > 0 && documents.length > 0 && (
+          <View style={s.sectionDivider}>
+            <Ionicons name="document-text-outline" size={16} color={colors.text.tertiary} />
+            <Text style={s.sectionLabel}>Documents</Text>
+          </View>
+        )}
+
+        {/* Document List */}
+        {documents.map(doc => renderDocItem(doc))}
+
+        {/* Empty state */}
+        {!hasContent && (
+          <View style={s.emptyState}>
+            <Ionicons name="folder-open-outline" size={48} color={colors.text.tertiary} />
+            <Text style={s.emptyText}>No files in this category</Text>
+            <Text style={[s.emptyText, { fontSize: 12, marginTop: 4 }]}>Tap + to add files</Text>
+          </View>
+        )}
+      </ScrollView>
+    );
+  };
+
+  // === Search results ===
+  const renderSearchItem = ({ item }: { item: VaultEntry }) => {
+    const isImage = item.mimeType?.startsWith('image/');
+    if (isImage) {
+      const uri = getFileUri(item);
+      return (
+        <TouchableOpacity style={s.searchRow} onPress={() => openFile(item)} onLongPress={() => handleFileOptions(item)} activeOpacity={0.7}>
+          {uri ? (
+            <Image source={{ uri }} style={s.searchThumb} resizeMode="cover" />
+          ) : (
+            <View style={[s.searchThumb, { backgroundColor: colors.bg.card, justifyContent: 'center', alignItems: 'center' }]}>
+              <Ionicons name="image" size={20} color={colors.type.image} />
+            </View>
+          )}
+          <View style={s.fileInfo}>
+            <Text style={s.fileName} numberOfLines={1}>{cleanDisplayName(item.originalName)}</Text>
+            <Text style={s.fileSize}>{item.fileSize > 1048576 ? `${(item.fileSize / 1048576).toFixed(1)} MB` : `${Math.round(item.fileSize / 1024)} KB`}</Text>
+          </View>
+          <TouchableOpacity onPress={() => shareFile(item)} style={{ padding: 8 }}>
+            <Ionicons name="share-outline" size={18} color={colors.accent.primary} />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      );
+    }
+    return renderDocItem(item) as any;
   };
 
   if (isLoading) {
@@ -140,41 +334,10 @@ function VaultScreenInner() {
     );
   }
 
-  const renderFileItem = ({ item }: { item: VaultEntry }) => {
-    const isPdf = item.mimeType?.includes('pdf');
-    const isImage = item.mimeType?.includes('image');
-    const isVideo = item.mimeType?.includes('video');
-    const iconColor = isPdf ? colors.type.pdf : isImage ? colors.type.image : isVideo ? colors.type.video : colors.type.doc;
-    const iconName = isPdf ? 'document' : isImage ? 'image' : isVideo ? 'videocam' : 'document-text';
-
-    return (
-      <TouchableOpacity 
-        style={s.fileRow} 
-        onPress={() => openFile(item)} 
-        onLongPress={() => handleFileOptions(item)}
-        activeOpacity={0.7}
-      >
-        <View style={[s.fileIconBg, { backgroundColor: `${iconColor}15` }]}>
-          <Ionicons name={iconName as any} size={24} color={iconColor} />
-        </View>
-        <View style={s.fileInfo}>
-          <Text style={s.fileName} numberOfLines={1}>{item.originalName}</Text>
-          <View style={s.fileMeta}>
-            <Text style={s.fileSize}>{item.fileSize > 1048576 ? `${(item.fileSize / 1048576).toFixed(1)} MB` : `${Math.round(item.fileSize / 1024)} KB`}</Text>
-            <Text style={s.fileDate}> • {new Date(item.dateAdded).toLocaleDateString()}</Text>
-          </View>
-        </View>
-        <TouchableOpacity onPress={() => handleFileOptions(item)} style={{ padding: 8 }}>
-          <Ionicons name="ellipsis-vertical" size={20} color={colors.text.tertiary} />
-        </TouchableOpacity>
-      </TouchableOpacity>
-    );
-  };
-
   return (
     <LinearGradient colors={[colors.bg.base, colors.bg.baseEnd]} style={{ flex: 1 }}>
       <SafeAreaView style={s.container}>
-        <ScreenHeader 
+        <ScreenHeader
           title={selectedCategory ? selectedCategory.name : 'Storage Shelf'}
           subtitle={selectedCategory ? `${selectedCategory.fileCount} files` : 'Quick offline files & documents'}
           scrollY={scrollY}
@@ -193,12 +356,12 @@ function VaultScreenInner() {
         <View style={s.searchContainer}>
           <View style={s.searchInputWrapper}>
             <Ionicons name="search" size={16} color={colors.text.tertiary} />
-            <TextInput 
-              value={searchQuery} 
-              onChangeText={setSearchQuery} 
-              placeholder="Search files..." 
-              placeholderTextColor={colors.text.tertiary} 
-              style={s.searchInput} 
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search files..."
+              placeholderTextColor={colors.text.tertiary}
+              style={s.searchInput}
             />
             {searchQuery ? <TouchableOpacity onPress={() => setSearchQuery('')}><Ionicons name="close-circle" size={18} color={colors.text.tertiary} /></TouchableOpacity> : null}
           </View>
@@ -208,7 +371,7 @@ function VaultScreenInner() {
           <FlatList
             data={searchEntries(searchQuery)}
             keyExtractor={item => item.id}
-            renderItem={renderFileItem}
+            renderItem={renderSearchItem}
             contentContainerStyle={s.listContent}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
@@ -217,17 +380,7 @@ function VaultScreenInner() {
             ListEmptyComponent={<View style={s.emptyState}><Ionicons name="search-outline" size={48} color={colors.text.tertiary} /><Text style={s.emptyText}>No matching files found</Text></View>}
           />
         ) : selectedCategory ? (
-          <FlatList
-            data={getEntriesForCategory(selectedCategory.id)}
-            keyExtractor={item => item.id}
-            renderItem={renderFileItem}
-            contentContainerStyle={s.listContent}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            onScroll={scrollHandler}
-            scrollEventThrottle={16}
-            ListEmptyComponent={<View style={s.emptyState}><Ionicons name="folder-open-outline" size={48} color={colors.text.tertiary} /><Text style={s.emptyText}>No files in this category</Text></View>}
-          />
+          renderCategoryContent()
         ) : (
           <ScrollView contentContainerStyle={s.gridContainer} keyboardShouldPersistTaps="handled" onScroll={scrollHandler} scrollEventThrottle={16}>
             {manifest?.categories?.map(cat => (
@@ -248,6 +401,113 @@ function VaultScreenInner() {
           </TouchableOpacity>
         )}
       </SafeAreaView>
+
+      {/* ═══ Full-Screen Image Viewer Modal ═══ */}
+      <Modal
+        visible={viewerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewerVisible(false)}
+        statusBarTranslucent
+      >
+        <View style={s.viewerContainer}>
+          <StatusBar barStyle="light-content" backgroundColor="#000" />
+          {/* Header */}
+          <View style={s.viewerHeader}>
+            <TouchableOpacity onPress={() => setViewerVisible(false)} style={s.viewerCloseBtn}>
+              <Ionicons name="close" size={28} color="#FFF" />
+            </TouchableOpacity>
+            <Text style={s.viewerTitle} numberOfLines={1}>
+              {viewerImages[viewerIndex] ? cleanDisplayName(viewerImages[viewerIndex].originalName) : ''}
+            </Text>
+            <Text style={s.viewerCounter}>{viewerIndex + 1} / {viewerImages.length}</Text>
+          </View>
+
+          {/* Image */}
+          <FlatList
+            data={viewerImages}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={viewerIndex}
+            getItemLayout={(_, idx) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * idx, index: idx })}
+            onMomentumScrollEnd={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+              setViewerIndex(idx);
+            }}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => {
+              const uri = getFileUri(item);
+              return (
+                <View style={{ width: SCREEN_WIDTH, flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                  {uri ? (
+                    <Image
+                      source={{ uri }}
+                      style={{ width: SCREEN_WIDTH, height: '100%' }}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <View style={{ alignItems: 'center' }}>
+                      <Ionicons name="lock-closed" size={48} color="#666" />
+                      <Text style={{ color: '#999', marginTop: 12 }}>Encrypted file</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            }}
+          />
+
+          {/* Bottom Action Bar */}
+          <View style={s.viewerActions}>
+            <TouchableOpacity
+              style={s.viewerActionBtn}
+              onPress={() => {
+                if (viewerImages[viewerIndex]) {
+                  shareFile(viewerImages[viewerIndex]);
+                }
+              }}
+            >
+              <Ionicons name="share-outline" size={24} color="#FFF" />
+              <Text style={s.viewerActionLabel}>Share</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.viewerActionBtn}
+              onPress={() => {
+                if (viewerImages[viewerIndex]) {
+                  sendEntryToPc(viewerImages[viewerIndex]);
+                }
+              }}
+            >
+              <Ionicons name="laptop-outline" size={24} color="#FFF" />
+              <Text style={s.viewerActionLabel}>Send to PC</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.viewerActionBtn}
+              onPress={() => {
+                if (viewerImages[viewerIndex]) {
+                  const entry = viewerImages[viewerIndex];
+                  Alert.alert('Delete', `Remove "${cleanDisplayName(entry.originalName)}"?`, [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Delete', style: 'destructive', onPress: () => {
+                      removeFile(entry.id);
+                      const newImages = viewerImages.filter(e => e.id !== entry.id);
+                      if (newImages.length === 0) {
+                        setViewerVisible(false);
+                      } else {
+                        setViewerImages(newImages);
+                        setViewerIndex(Math.min(viewerIndex, newImages.length - 1));
+                      }
+                    }}
+                  ]);
+                }
+              }}
+            >
+              <Ionicons name="trash-outline" size={24} color="#EF4444" />
+              <Text style={[s.viewerActionLabel, { color: '#EF4444' }]}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -335,6 +595,25 @@ const createStyles = (colors: any, shadows: any) => StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingBottom: 120,
   },
+  // === Thumbnail Grid ===
+  thumbGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: THUMB_GAP,
+    marginBottom: space.lg,
+  },
+  thumbContainer: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: radius.sm,
+    overflow: 'hidden',
+  },
+  thumbImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: radius.sm,
+  },
+  // === Document Rows ===
   fileRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -376,6 +655,37 @@ const createStyles = (colors: any, shadows: any) => StyleSheet.create({
     fontFamily: font.regular,
     fontSize: 11,
   },
+  // === Section Divider ===
+  sectionDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: space.md,
+    gap: 6,
+  },
+  sectionLabel: {
+    color: colors.text.tertiary,
+    fontFamily: font.semibold,
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  // === Search ===
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bg.card,
+    borderRadius: radius.md,
+    padding: space.sm,
+    marginBottom: space.sm,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+  },
+  searchThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.sm,
+  },
+  // === Empty / FAB ===
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -398,5 +708,55 @@ const createStyles = (colors: any, shadows: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.glow(colors.accent.primary),
-  }
+  },
+  // === Image Viewer ===
+  viewerContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  viewerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'android' ? 40 : 56,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  viewerCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewerTitle: {
+    flex: 1,
+    color: '#FFF',
+    fontFamily: font.semibold,
+    fontSize: 16,
+    marginLeft: 12,
+  },
+  viewerCounter: {
+    color: 'rgba(255,255,255,0.6)',
+    fontFamily: font.medium,
+    fontSize: 13,
+    marginLeft: 8,
+  },
+  viewerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 16,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
+  viewerActionBtn: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  viewerActionLabel: {
+    color: '#FFF',
+    fontFamily: font.medium,
+    fontSize: 11,
+    marginTop: 4,
+  },
 });
