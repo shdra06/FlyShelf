@@ -120,16 +120,16 @@ namespace FlyShelf.Classes
                         if (decoder.Frames.Count > 0)
                         {
                             var frame = decoder.Frames[0];
-                            if (decodeWidth > 0 && frame.PixelWidth > decodeWidth)
+                            var converted = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
+                            if (decodeWidth > 0 && converted.PixelWidth > decodeWidth)
                             {
-                                double scale = (double)decodeWidth / frame.PixelWidth;
-                                var transformed = new TransformedBitmap(frame, new ScaleTransform(scale, scale));
+                                double scale = (double)decodeWidth / converted.PixelWidth;
+                                var transformed = new TransformedBitmap(converted, new ScaleTransform(scale, scale));
                                 transformed.Freeze();
                                 resultBmp = transformed;
                             }
                             else
                             {
-                                var converted = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
                                 converted.Freeze();
                                 resultBmp = converted;
                             }

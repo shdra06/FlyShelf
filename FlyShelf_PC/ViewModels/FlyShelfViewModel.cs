@@ -132,6 +132,17 @@ namespace FlyShelf.ViewModels
 
                         item.EvaluateSmartActions();
 
+                        // Self-heal: if an image was previously persisted as a generic File, upgrade it to Image
+                        if (item.ItemType == ClipboardItemType.File && !string.IsNullOrEmpty(item.FilePath))
+                        {
+                            string ext = Path.GetExtension(item.FilePath);
+                            if (Classes.ImageThumbnailManager.IsImageExtension(ext))
+                            {
+                                item.ItemType = ClipboardItemType.Image;
+                                item.Extension = ext.ToUpperInvariant().TrimStart('.');
+                            }
+                        }
+
                         // Regenerate non-serialized icons (Icon is [JsonIgnore])
                         if (item.IsPassword)
                         {
@@ -236,6 +247,7 @@ namespace FlyShelf.ViewModels
                 {
                     bool isImage = item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode;
                     bool needsIcon = isImage
+                        && item.Icon == null
                         && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
 
                     if (needsIcon)

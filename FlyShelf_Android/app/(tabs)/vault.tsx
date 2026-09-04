@@ -55,6 +55,7 @@ function VaultScreenInner() {
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerImages, setViewerImages] = useState<VaultEntry[]>([]);
   const [viewerIndex, setViewerIndex] = useState(0);
+  const [viewerRotation, setViewerRotation] = useState(0);
   const scrollY = useSharedValue(0);
   const scrollHandler = (e: any) => {
     const offsetY = e?.nativeEvent?.contentOffset?.y;
@@ -461,6 +462,7 @@ function VaultScreenInner() {
             onMomentumScrollEnd={(e) => {
               const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
               setViewerIndex(idx);
+              setViewerRotation(0); // Reset rotation when swiping
             }}
             keyExtractor={item => item.id}
             renderItem={({ item }) => {
@@ -468,11 +470,25 @@ function VaultScreenInner() {
               return (
                 <View style={{ width: SCREEN_WIDTH, flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                   {uri ? (
-                    <Image
-                      source={{ uri }}
-                      style={{ width: SCREEN_WIDTH, height: '100%' }}
-                      resizeMode="contain"
-                    />
+                    <ScrollView
+                      contentContainerStyle={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+                      maximumZoomScale={5}
+                      minimumZoomScale={1}
+                      bouncesZoom={true}
+                      showsHorizontalScrollIndicator={false}
+                      showsVerticalScrollIndicator={false}
+                      centerContent={true}
+                    >
+                      <Image
+                        source={{ uri }}
+                        style={{
+                          width: SCREEN_WIDTH,
+                          height: SCREEN_WIDTH * 1.4,
+                          transform: [{ rotate: `${viewerRotation}deg` }],
+                        }}
+                        resizeMode="contain"
+                      />
+                    </ScrollView>
                   ) : (
                     <View style={{ alignItems: 'center' }}>
                       <Ionicons name="lock-closed" size={48} color="#666" />
@@ -486,6 +502,13 @@ function VaultScreenInner() {
 
           {/* Bottom Action Bar */}
           <View style={s.viewerActions}>
+            <TouchableOpacity
+              style={s.viewerActionBtn}
+              onPress={() => setViewerRotation(r => (r + 90) % 360)}
+            >
+              <Ionicons name="refresh-outline" size={24} color="#FFF" />
+              <Text style={s.viewerActionLabel}>Rotate</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={s.viewerActionBtn}
               onPress={() => {

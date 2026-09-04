@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useFocusEffect } from 'expo-router';
 import AppErrorBoundary from '../../components/AppErrorBoundary';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Alert,
@@ -322,7 +323,7 @@ function NotesScreenInner() {
   // ─── UI refs ───
   const fabScale = useRef(new Animated.Value(1)).current;
 
-  // ─── Generated date chips (refreshes after midnight) ───
+  // ─── Generated date chips (refreshes after midnight + on tab focus) ───
   const [todayKey, setTodayKey] = useState(new Date().toISOString().split('T')[0]);
   useEffect(() => {
     const check = () => {
@@ -332,6 +333,16 @@ function NotesScreenInner() {
     const interval = setInterval(check, 60000);
     return () => clearInterval(interval);
   }, [todayKey]);
+
+  // ─── Reset to today when Notes tab is focused (fixes stale date across midnight) ───
+  useFocusEffect(useCallback(() => {
+    const now = new Date().toISOString().split('T')[0];
+    if (now !== todayKey) {
+      setTodayKey(now);
+      setSelectedDateIdx(0); // Jump back to today
+    }
+  }, [todayKey]));
+
   const recentDates = useMemo(() => generateRecentDates(RECENT_DAYS_COUNT), [todayKey]);
   const selectedDateKey = recentDates[selectedDateIdx];
 

@@ -10,6 +10,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { font, space, radius } from '../../styles/theme';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import OcrButton from './OcrButton';
 
 interface ImageFormatToolProps {
   onBack: () => void;
@@ -146,6 +147,10 @@ export default function ImageFormatTool({ onBack }: ImageFormatToolProps) {
               <Pressable style={styles.repickBtn} onPress={pickImage}>
                 <Ionicons name="refresh" size={20} color={colors.text.primary} />
               </Pressable>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: space.sm }}>
+              <OcrButton imageUri={imageUri} variant="chip" />
             </View>
 
             <View style={styles.card}>

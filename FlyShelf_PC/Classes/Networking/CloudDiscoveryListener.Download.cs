@@ -374,6 +374,7 @@ namespace FlyShelf.Classes
                             if (bmp != null)
                             {
                                 clip.Icon = bmp;
+                                clip.IsLoadedHighQuality = true;
                             }
                         }
                         catch (Exception imgEx)

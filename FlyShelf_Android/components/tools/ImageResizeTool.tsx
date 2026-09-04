@@ -10,6 +10,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { font, space, radius } from '../../styles/theme';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import OcrButton from './OcrButton';
 
 interface ImageResizeToolProps {
   onBack: () => void;
@@ -195,9 +196,12 @@ export default function ImageResizeTool({ onBack }: ImageResizeToolProps) {
                 <Ionicons name="refresh" size={20} color={colors.text.primary} />
               </Pressable>
             </View>
-            <Text style={styles.infoText}>
-              Original: {originalWidth} × {originalHeight} ({formatSize(originalSize)})
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.sm }}>
+              <Text style={styles.infoText}>
+                Original: {originalWidth} × {originalHeight} ({formatSize(originalSize)})
+              </Text>
+              <OcrButton imageUri={imageUri} variant="chip" />
+            </View>
 
             <View style={styles.modeTabs}>
               <Pressable 

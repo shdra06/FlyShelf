@@ -307,34 +307,8 @@ namespace FlyShelf.Classes
 
                 string sizeStr = fileInfo.Length > 1_073_741_824 ? $"{fileInfo.Length / 1_073_741_824.0:F1} GB" : $"{fileInfo.Length / 1_048_576.0:F1} MB";
 
-                _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                    FlyShelf.Windows.ToastWindow.ShowToast($"{rawName} ({sizeStr}) received!");
-                    // Auto-copy to clipboard + insert into FlyShelf
-                    try
-                    {
-                        var fileList = new System.Collections.Specialized.StringCollection { finalPath };
-                        ClipboardHelper.SafeSetFileDropList(fileList);
-                        
-                        var clip = new ClipboardItem
-                        {
-                            RawContent = finalPath,
-                            FileName = rawName,
-                            FilePath = finalPath,
-                            Extension = Path.GetExtension(finalPath).TrimStart('.').ToUpper(CultureInfo.InvariantCulture),
-                            ItemType = ClipboardItemType.File,
-                            SourceDeviceName = sourceDevice,
-                            SourceDeviceType = sourceDevice.Contains("PC", StringComparison.Ordinal) || sourceDevice.Contains("LAPTOP", StringComparison.Ordinal) || sourceDevice.Contains("DESKTOP", StringComparison.Ordinal) ? "PC" : "Mobile",
-                            TransferMethod = chunkTransport.transport
-                        };
-                        clip.EvaluateSmartActions();
-                        _viewModel.InsertWithDedup(clip);
-                        _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-                        
-                        // Persist history so the synced assembled chunk file survives app restarts
-                        _viewModel.SchedulePersistHistoryPublic(); // PERF: throttled — network sync is non-critical
-                    }
-                    catch (Exception ex) { Logger.LogAction("SYNC", $"Failed to add synced chunk to shelf: {ex.Message}"); }
-                });
+                string sourceDeviceType = sourceDevice.Contains("PC", StringComparison.Ordinal) || sourceDevice.Contains("LAPTOP", StringComparison.Ordinal) || sourceDevice.Contains("DESKTOP", StringComparison.Ordinal) ? "PC" : "Mobile";
+                InjectReceivedFile(finalPath, sourceDevice, chunkTransport.transport, sourceDeviceType);
 
                 // Also track in batch for consistency 
                 var batchList = _batchFiles.GetOrAdd(batchName, _ => new List<string>());

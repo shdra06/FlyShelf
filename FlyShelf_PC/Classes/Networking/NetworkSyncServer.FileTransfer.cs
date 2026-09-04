@@ -550,11 +550,24 @@ namespace FlyShelf.Classes
                             SourceDeviceType = sourceDeviceType,
                             TransferMethod = capturedTransport
                         };
-                        // Load its shell icon in the background thread via _viewModel.GetIcon
+                        // Load thumbnail for images or shell icon in the background thread
                         _ = System.Threading.Tasks.Task.Run(() =>
                         {
                             try
                             {
+                                if (clip.ItemType == ClipboardItemType.Image)
+                                {
+                                    var bmp = ViewModels.FlyShelfViewModel.LoadImageThumbnail(possiblePath, 300);
+                                    if (bmp != null)
+                                    {
+                                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                                        {
+                                            clip.Icon = bmp;
+                                            clip.IsLoadedHighQuality = true;
+                                        });
+                                        return;
+                                    }
+                                }
                                 var icon = _viewModel.GetIcon(possiblePath);
                                 if (icon != null)
                                 {

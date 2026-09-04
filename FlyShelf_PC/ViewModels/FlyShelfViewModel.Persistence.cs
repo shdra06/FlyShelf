@@ -418,6 +418,17 @@ namespace FlyShelf.ViewModels
 
                             d.IsPinned = true;
 
+                            // Self-heal: if an image was previously persisted as a generic File, upgrade it to Image
+                            if (d.ItemType == ClipboardItemType.File && !string.IsNullOrEmpty(d.FilePath))
+                            {
+                                string ext = Path.GetExtension(d.FilePath);
+                                if (Classes.ImageThumbnailManager.IsImageExtension(ext))
+                                {
+                                    d.ItemType = ClipboardItemType.Image;
+                                    d.Extension = ext.ToUpperInvariant().TrimStart('.');
+                                }
+                            }
+
                             // Regenerate non-serialized icons (Icon is [JsonIgnore])
                             // Must match the regeneration logic in LoadPersistedHistoryAsync
                             if (d.IsPassword)

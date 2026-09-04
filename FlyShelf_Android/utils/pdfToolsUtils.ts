@@ -166,9 +166,6 @@ export async function splitPdf(
   return outputPaths;
 }
 
-/** @internal Not currently used by any tool — kept for future use */
-/** Remove specific pages from a PDF (1-indexed page numbers) */
-
 /** Reorder pages in a PDF (0-indexed new order array) */
 export async function reorderPages(pdfPath: string, newOrder: number[]): Promise<string> {
   const bytes = await readPdfBytes(pdfPath);
@@ -278,8 +275,6 @@ export async function addWatermark(
 /**
  * Copy PDF — pdf-lib does NOT support native encryption.
  * WARNING: The password parameter is accepted for API compatibility but is NOT applied.
- * A native module (e.g. react-native-pdf-lib with encryption support) or server-side
- * tool would be needed for real password protection.
  */
 export async function protectPdf(pdfPath: string, _password: string): Promise<string> {
   if (_password) {
@@ -317,263 +312,7 @@ export async function getPdfInfo(pdfPath: string): Promise<{
     producer: doc.getProducer() || '',
     creationDate: doc.getCreationDate()?.toISOString() || '',
     modificationDate: doc.getModificationDate()?.toISOString() || '',
-    isEncrypted: false, // pdf-lib can't open encrypted PDFs, so if we got here it's not encrypted
-    pages: doc.getPages().map(p => {
-      const { width, height } = p.getSize();
-      return { width, height, rotation: p.getRotation().angle };
-    }),
-  };
-}
-
-/** Set PDF metadata fields */
-export async function setPdfMetadata(
-  pdfPath: string,
-  metadata: { title?: string; author?: string; subject?: string; keywords?: string[] }
-): Promise<string> {
-  const bytes = await readPdfBytes(pdfPath);
-  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-  if (metadata.title !== undefined) doc.setTitle(metadata.title);
-  if (metadata.author !== undefined) doc.setAuthor(metadata.author);
-  if (metadata.subject !== undefined) doc.setSubject(metadata.subject);
-  if (metadata.keywords !== undefined) doc.setKeywords(metadata.keywords);
-  doc.setProducer('FlyShelf PDF Tools');
-  return savePdf(doc, 'metadata_updated');
-}
-
-/** Insert image pages into an existing PDF at a specific position (0-indexed insertAt) */
-export async function addImagePages(
-  pdfPath: string,
-  insertAt: number,
-  imagePaths: string[]
-): Promise<string> {
-  const bytes = await readPdfBytes(pdfPath);
-  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-  const totalPages = doc.getPageCount();
-  const pos = Math.min(Math.max(0, insertAt), totalPages);
-
-  // Build image pages into a temp doc, then copy them
-  const tempDoc = await PDFDocument.create();
-  for (const imgPath of imagePaths) {
-    const imgBytes = await readImageBytes(imgPath);
-    const lower = imgPath.toLowerCase();
-    let img;
-    if (lower.endsWith('.png')) {
-      img = await tempDoc.embedPng(imgBytes);
-    } else {
-      try { img = await tempDoc.embedJpg(imgBytes); }
-      catch { img = await tempDoc.embedPng(imgBytes); }
-    }
-    const { width, height } = img.scale(1.0);
-    const page = tempDoc.addPage([width, height]);
-    page.drawImage(img, { x: 0, y: 0, width, height });
-  }
-
-  // Copy image pages into a new document with proper ordering
-  const result = await PDFDocument.create();
-  // Pages before insert point
-  if (pos > 0) {
-    const before = await result.copyPages(doc, Array.from({ length: pos }, (_, i) => i));
-    before.forEach(p => result.addPage(p));
-  }
-  // Image pages
-  const imgPages = await result.copyPages(tempDoc, tempDoc.getPageIndices());
-  imgPages.forEach(p => result.addPage(p));
-  // Pages after insert point
-  if (pos < totalPages) {
-    const after = await result.copyPages(doc, Array.from({ length: totalPages - pos }, (_, i) => pos + i));
-    after.forEach(p => result.addPage(p));
-  }
-
-  return savePdf(result, 'pages_added');
-    const rot = pages[i].rotation;
-    if (rot) {
-      const current = p.getRotation().angle;
-      p.setRotation(pdfDegrees((current + rot) % 360));
-    }
-    newDoc.addPage(p);
-  });
-  return savePdf(newDoc, 'edited_pages');
-}
-
-/** Rotate specific pages (1-indexed pageNumbers, degrees: 0|90|180|270) */
-export async function rotatePages(
-  pdfPath: string,
-  pageNumbers: number[],
-  degreesVal: 0 | 90 | 180 | 270
-): Promise<string> {
-  const bytes = await readPdfBytes(pdfPath);
-  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-  for (const pn of pageNumbers) {
-    const idx = pn - 1;
-    if (idx >= 0 && idx < doc.getPageCount()) {
-      const page = doc.getPage(idx);
-      const current = page.getRotation().angle;
-      page.setRotation(pdfDegrees((current + degreesVal) % 360));
-    }
-  }
-  return savePdf(doc, 'rotated');
-}
-
-/** Convert multiple images to a single PDF */
-export async function imagesToPdf(imagePaths: string[]): Promise<string> {
-  const doc = await PDFDocument.create();
-  for (const imgPath of imagePaths) {
-    try {
-      const imgBytes = await readImageBytes(imgPath);
-      const lower = imgPath.toLowerCase();
-      let img;
-      if (lower.endsWith('.png')) {
-        img = await doc.embedPng(imgBytes);
-      } else {
-        try { img = await doc.embedJpg(imgBytes); }
-        catch { img = await doc.embedPng(imgBytes); }
-      }
-      const { width, height } = img.scale(1.0);
-      const page = doc.addPage([width, height]);
-      page.drawImage(img, { x: 0, y: 0, width, height });
-    } catch (e: any) {
-      const filename = imgPath.split('/').pop() || imgPath;
-      throw new Error(`Failed to embed image "${filename}": unsupported format or corrupted file. Only PNG and JPEG are supported.`);
-    }
-  }
-  return savePdf(doc, 'images_to_pdf');
-}
-
-/** Add a text watermark to specified pages */
-export async function addWatermark(
-  pdfPath: string,
-  text: string,
-  options?: { 
-    opacity?: number; 
-    fontSize?: number; 
-    color?: { r: number; g: number; b: number }; 
-    rotation?: number;
-    pages?: number[];
-    position?: 'Diagonal' | 'Center' | 'Top' | 'Bottom' | 'Top-Left' | 'Bottom-Right';
-    isBold?: boolean;
-  }
-): Promise<string> {
-  const bytes = await readPdfBytes(pdfPath);
-  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-  
-  const isBold = options?.isBold ?? false;
-  const font = await doc.embedFont(isBold ? StandardFonts.HelveticaBold : StandardFonts.Helvetica);
-  
-  const opacity = options?.opacity ?? 0.15;
-  const fontSize = options?.fontSize ?? 48;
-  const c = options?.color ?? { r: 0.5, g: 0.5, b: 0.5 };
-  const rotation = options?.rotation ?? -45;
-  const position = options?.position ?? 'Diagonal';
-
-  const pages = doc.getPages();
-  const targetPages = options?.pages ? options.pages : Array.from({ length: pages.length }, (_, i) => i);
-
-  for (const pageIndex of targetPages) {
-    if (pageIndex < 0 || pageIndex >= pages.length) continue;
-    const page = pages[pageIndex];
-    const { width, height } = page.getSize();
-    const textWidth = font.widthOfTextAtSize(text, fontSize);
-    const textHeight = font.heightAtSize(fontSize);
-    
-    let x = 0;
-    let y = 0;
-    let actualRotation = rotation;
-
-    switch (position) {
-      case 'Center':
-        x = (width - textWidth) / 2;
-        y = (height - textHeight) / 2;
-        actualRotation = 0;
-        break;
-      case 'Top':
-        x = (width - textWidth) / 2;
-        y = height - textHeight - 20;
-        actualRotation = 0;
-        break;
-      case 'Bottom':
-        x = (width - textWidth) / 2;
-        y = 20;
-        actualRotation = 0;
-        break;
-      case 'Top-Left':
-        x = 20;
-        y = height - textHeight - 20;
-        actualRotation = 0;
-        break;
-      case 'Bottom-Right':
-        x = width - textWidth - 20;
-        y = 20;
-        actualRotation = 0;
-        break;
-      case 'Diagonal':
-      default:
-        // center of page rotation
-        // text origin is bottom-left, so we offset x and y
-        actualRotation = rotation;
-        const rad = actualRotation * Math.PI / 180;
-        x = (width / 2) - (textWidth / 2) * Math.cos(rad) + (textHeight / 2) * Math.sin(rad);
-        y = (height / 2) - (textWidth / 2) * Math.sin(rad) - (textHeight / 2) * Math.cos(rad);
-        break;
-    }
-
-    page.drawText(text, {
-      x,
-      y,
-      size: fontSize,
-      font,
-      color: rgb(c.r, c.g, c.b),
-      opacity,
-      rotate: pdfDegrees(actualRotation),
-    });
-  }
-  return savePdf(doc, 'watermarked');
-}
-
-/**
- * Copy PDF — pdf-lib does NOT support native encryption.
- * WARNING: The password parameter is accepted for API compatibility but is NOT applied.
- * A native module (e.g. react-native-pdf-lib with encryption support) or server-side
- * tool would be needed for real password protection.
- */
-export async function protectPdf(pdfPath: string, _password: string): Promise<string> {
-  if (_password) {
-    throw new Error(
-      'PDF password protection requires a native module not yet installed. ' +
-      'Please use FlyShelf on a paired PC to apply password protection.'
-    );
-  }
-  const bytes = await readPdfBytes(pdfPath);
-  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-  return savePdf(doc, 'protected_copy');
-}
-
-/** Get detailed PDF information */
-export async function getPdfInfo(pdfPath: string): Promise<{
-  pageCount: number;
-  title?: string;
-  author?: string;
-  subject?: string;
-  creator?: string;
-  producer?: string;
-  keywords?: string[];
-  creationDate?: string;
-  modificationDate?: string;
-  isEncrypted: boolean;
-  pages: { width: number; height: number; rotation: number }[];
-}> {
-  const bytes = await readPdfBytes(pdfPath);
-  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-  return {
-    pageCount: doc.getPageCount(),
-    title: doc.getTitle() ?? undefined,
-    author: doc.getAuthor() ?? undefined,
-    subject: doc.getSubject() ?? undefined,
-    creator: doc.getCreator() ?? undefined,
-    producer: doc.getProducer() || '',
-    keywords: doc.getKeywords()?.split(' ') ?? undefined,
-    creationDate: doc.getCreationDate()?.toISOString() || '',
-    modificationDate: doc.getModificationDate()?.toISOString() || '',
-    isEncrypted: false, // pdf-lib can't open encrypted PDFs, so if we got here it's not encrypted
+    isEncrypted: false,
     pages: doc.getPages().map(p => {
       const { width, height } = p.getSize();
       return { width, height, rotation: p.getRotation().angle };
@@ -643,10 +382,7 @@ export async function addImagePages(
   return savePdf(result, 'pages_added');
 }
 
-/** @internal Not currently used by any tool — kept for future use */
-/** Insert pages from another PDF into target at a specific position */
-
-//** Optimize & compress PDF by cleaning unreferenced objects, stripping metadata, and recompressing streams */
+/** Optimize & compress PDF by rendering pages to images */
 export async function compressPdf(
   pdfPath: string,
   quality: 'low' | 'medium' | 'high' = 'medium'

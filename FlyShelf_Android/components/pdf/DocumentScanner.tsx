@@ -26,6 +26,7 @@ import { createPdfEditorStyles } from '../../styles/pdfEditorStyles';
 import { font, space, radius } from '../../styles/theme';
 import { ImageFilter, ScannerStep, ScanPage, ScanCompleteResult, PageEntry } from './types';
 import { buildEditedPdf } from '../../utils/pdfEditorUtils';
+import OcrButton from '../tools/OcrButton';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -445,6 +446,12 @@ export default function DocumentScanner({
               <Ionicons name="trash-outline" size={24} color={colors.accent.error} />
               <Text style={{ fontFamily: font.medium, fontSize: 10, color: colors.accent.error, marginTop: 4 }}>Delete</Text>
             </Pressable>
+            {pages[currentPageIndex] && (
+              <View style={{ alignItems: 'center' }}>
+                <OcrButton imageUri={pages[currentPageIndex].uri} variant="icon" />
+                <Text style={{ fontFamily: font.medium, fontSize: 10, color: colors.accent.info, marginTop: 4 }}>OCR</Text>
+              </View>
+            )}
           </View>
 
           {/* Filters */}

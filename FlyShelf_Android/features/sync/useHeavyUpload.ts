@@ -68,9 +68,9 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
   const pendingPayloadRef = useRef(pendingUploadPayload);
   useEffect(() => { pendingPayloadRef.current = pendingUploadPayload; }, [pendingUploadPayload]);
 
-  const CLOUD_CHUNK_SIZE = 2 * 1024 * 1024;
-  const LAN_CHUNK_SIZE = 2 * 1024 * 1024;
-  const LAN_CHUNK_THRESHOLD = 50 * 1024 * 1024;
+  const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // >10MB considered large file
+  const CLOUD_CHUNK_SIZE = 5 * 1024 * 1024;
+  const LAN_CHUNK_SIZE = 10 * 1024 * 1024;
 
   // ─── Resolve URL with fallback chain ───
   const resolveUrl = useCallback(async (device?: any): Promise<string | null> => {
@@ -242,7 +242,7 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
       try {
         const safeName = `sync_${NetworkClock.now()}_` + name.replace(/[^a-zA-Z0-9.-]/g, '_');
         // Fix 6: Check available disk space before copying
-        const fileSize = size || 0;
+        let fileSize = size || 0;
         if (fileSize > 0) {
           try {
             const freeSpace = await FileSystem.getFreeDiskStorageAsync();
@@ -259,6 +259,15 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
         await FileSystem.makeDirectoryAsync(`${FileSystem.cacheDirectory}FlyShelf_Upload/`, { intermediates: true }).catch(() => {});
         await FileSystem.copyAsync({ from: physicalPath, to: hydratedPath });
 
+        if (fileSize <= 0) {
+          try {
+            const fileInfo = await FileSystem.getInfoAsync(hydratedPath);
+            if (fileInfo.exists && typeof (fileInfo as any).size === 'number') {
+              fileSize = (fileInfo as any).size;
+            }
+          } catch {}
+        }
+
         const pc = activeDevicesRef.current.find((d: any) => d.DeviceType === 'PC');
         const target = (targetDeviceOrGlobal === 'Global' || !targetDeviceOrGlobal) ? pc : targetDeviceOrGlobal;
         let resolved = await resolveUrl(target);
@@ -273,8 +282,9 @@ export function useHeavyUpload(params: UseHeavyUploadParams) {
         }
 
         const isCloudflare = resolved.includes('trycloudflare.com');
+        const isLargeFile = fileSize > LARGE_FILE_THRESHOLD;
         const chunkSize = isCloudflare ? CLOUD_CHUNK_SIZE : LAN_CHUNK_SIZE;
-        const useChunkedUpload = (isCloudflare && fileSize > CLOUD_CHUNK_SIZE) || (!isCloudflare && fileSize > LAN_CHUNK_THRESHOLD);
+        const useChunkedUpload = isLargeFile;
 
         if (useChunkedUpload) {
           await uploadChunked(resolved, hydratedPath, name, fileSize, chunkSize);

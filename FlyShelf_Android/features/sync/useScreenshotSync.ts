@@ -351,10 +351,10 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
 
   // ─── Unified polling loop (FIX H6: merged 3s + 2s into single 3s loop) ───
   useEffect(() => {
-    // A-10: always run clipboard check regardless of focus
+    // Always run clipboard check regardless of focus
     handleForegroundClipboardCheck();
-    // A-10: skip screenshot polling when tab is not focused
-    if (isFocused) handleForegroundMediaCheck();
+    // Always run screenshot check — user may screenshot from any tab
+    handleForegroundMediaCheck();
 
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
@@ -364,9 +364,9 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
     });
 
     // UNIFIED: Single 3s interval handles BOTH MediaLibrary and native polls
-    // A-10: only set up screenshot polling when tab is focused
+    // Runs regardless of which tab is focused (screenshots happen from any screen)
     let unifiedPollInterval: ReturnType<typeof setTimeout> | null = null;
-    if (Platform.OS !== 'web' && isFocused) {
+    if (Platform.OS !== 'web') {
       // Use recursive setTimeout to prevent overlapping async polls
       const pollLoop = async () => {
         try {
@@ -396,7 +396,7 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
       if (mediaSub) mediaSub.remove();
       if (unifiedPollInterval) clearTimeout(unifiedPollInterval);
     };
-  }, [deviceName, isGlobalSyncEnabled, isFocused, handleForegroundClipboardCheck, handleForegroundMediaCheck, pollAndSyncScreenshot]);
+  }, [deviceName, isGlobalSyncEnabled, handleForegroundClipboardCheck, handleForegroundMediaCheck, pollAndSyncScreenshot]);
 
   return { lastScannedImageId, handleForegroundClipboardCheck };
 }

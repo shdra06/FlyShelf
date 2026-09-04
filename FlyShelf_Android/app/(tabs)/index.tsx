@@ -501,16 +501,21 @@ function SyncScreenInner() {
         if (typeof AdvanceOverlay.getLastCopiedFromOverlay !== 'function') return;
         const copiedText = await AdvanceOverlay.getLastCopiedFromOverlay();
         if (copiedText && copiedText.trim().length > 0) {
-          // Check if this item was received FROM PC (echo-back detection) BEFORE adding
-          const isEchoFromPc = clipsStateRef.current.some(c =>
-            (c._receivedVia === 'LAN' || c._receivedVia === 'Cloud') && (c.Raw === copiedText || c.Title === copiedText)
+          const trimmed = copiedText.trim();
+          // ═══ DEDUP: Check if this text already exists in ANY item (any source) ═══
+          const isDuplicateText = clipsStateRef.current.some(c =>
+            c.Raw?.trim() === trimmed
           );
-          if (isEchoFromPc) {
-            // This text came from PC sync → clipboard → re-captured. Skip entirely.
+          if (isDuplicateText) {
+            // Text already exists — skip entirely (prevents echo AND genuine duplicates)
+            return;
+          }
+          // Also check sent fingerprints — text might have just been sent from this device
+          if (sentContentFingerprintsRef.current.has(trimmed.substring(0, 200))) {
             return;
           }
           // Fingerprint to prevent echo back from Firebase
-          sentContentFingerprintsRef.current.set(copiedText.substring(0, 200), Date.now());
+          sentContentFingerprintsRef.current.set(trimmed.substring(0, 200), Date.now());
           const overlayEventId = generateEventId();
           processedEventsRef.current.set(overlayEventId, NetworkClock.now());
           const newItem: ClipItem = {
@@ -519,9 +524,9 @@ function SyncScreenInner() {
             SourceDeviceType: 'Mobile', Timestamp: NetworkClock.now(),
             _receivedVia: 'Local',
           };
-          // Also dedup against existing items with same Raw text
           setClips(prev => {
-            if (prev.some(c => c.Raw === copiedText)) return prev; // exact duplicate
+            // Final dedup check inside setState (race-condition safe)
+            if (prev.some(c => c.Raw?.trim() === trimmed)) return prev;
             const next = [newItem, ...prev];
             return next.length > MAX_CLIPS_IN_MEMORY ? [...next.filter(c => c.IsPinned), ...next.filter(c => !c.IsPinned)].slice(0, MAX_CLIPS_IN_MEMORY) : next;
           });
@@ -773,9 +778,9 @@ function SyncScreenInner() {
                             Timestamp: NetworkClock.now(),
                             _receivedVia: (cachedPcUrlRef.current?.includes('trycloudflare.com') ? 'Cloud' : 'LAN') as 'Cloud' | 'LAN',
                           }));
-                        // Dedup: skip items whose Raw already exists at the top of the feed
-                        const existingRaws = new Set(prev.slice(0, 20).map(c => c.Raw));
-                        const unique = newItems.filter(n => !existingRaws.has(n.Raw));
+                        // Dedup: skip items whose Raw already exists anywhere in the feed
+                        const existingRaws = new Set(prev.map(c => c.Raw?.trim()));
+                        const unique = newItems.filter(n => !existingRaws.has(n.Raw?.trim()));
                         if (unique.length === 0) return prev;
                         return [...unique, ...prev];
                       });
@@ -2752,7 +2757,7 @@ function SyncScreenInner() {
       <Modal visible={!!expandedImage} transparent={true} animationType="fade" onRequestClose={() => setExpandedImage(null)}>
         <View style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center'}}>
           <TouchableOpacity style={{position: 'absolute', top: 60, right: 20, zIndex: 10, padding: 10, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, width: 44, height: 44, alignItems: 'center', justifyContent: 'center'}} onPress={() => setExpandedImage(null)} accessibilityLabel="Close image" accessibilityRole="button"><Ionicons name="close" size={24} color="#FFF" /></TouchableOpacity>
-          {expandedImage && <Image source={{uri: expandedImage, headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' }}} style={{width: '100%', height: '80%'}} contentFit="contain" />}
+          {expandedImage && <ScrollView contentContainerStyle={{flex: 1, justifyContent: 'center', alignItems: 'center'}} maximumZoomScale={5} minimumZoomScale={1} centerContent={true} showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false}><Image source={{uri: expandedImage, headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' }}} style={{width: '100%', height: '80%'}} contentFit="contain" /></ScrollView>}
           {expandedImage && (
             <View style={{position: 'absolute', bottom: 50, flexDirection: 'row', gap: 30, zIndex: 10}}>
               <TouchableOpacity style={{backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 30, width: 60, height: 60, alignItems: 'center', justifyContent: 'center'}} onPress={async () => {

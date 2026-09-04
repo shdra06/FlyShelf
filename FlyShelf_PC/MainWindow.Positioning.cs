@@ -1134,7 +1134,18 @@ namespace FlyShelf
                         {
                             var item = ShelfListView.Items[i] as ClipboardItem;
                             if (item == null) continue;
-                            if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode) continue;
+                            if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode)
+                            {
+                                if (item.ItemType == ClipboardItemType.File && !string.IsNullOrEmpty(item.FilePath) && Classes.ImageThumbnailManager.IsImageExtension(System.IO.Path.GetExtension(item.FilePath)))
+                                {
+                                    item.ItemType = ClipboardItemType.Image;
+                                    item.Extension = System.IO.Path.GetExtension(item.FilePath).ToUpperInvariant().TrimStart('.');
+                                }
+                                else
+                                {
+                                    continue;
+                                }
+                            }
                             imgCount++;
                             _alwaysLoadedImageIndices.Add(i);
 
@@ -1225,7 +1236,18 @@ namespace FlyShelf
                         var item = ShelfListView.Items[i] as ClipboardItem;
                         if (item == null) continue;
 
-                        if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode) continue;
+                        if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode)
+                        {
+                            if (item.ItemType == ClipboardItemType.File && !string.IsNullOrEmpty(item.FilePath) && Classes.ImageThumbnailManager.IsImageExtension(System.IO.Path.GetExtension(item.FilePath)))
+                            {
+                                item.ItemType = ClipboardItemType.Image;
+                                item.Extension = System.IO.Path.GetExtension(item.FilePath).ToUpperInvariant().TrimStart('.');
+                            }
+                            else
+                            {
+                                continue;
+                            }
+                        }
 
                         if (item.IsLoadedHighQuality && item.Icon != null)
                             continue;

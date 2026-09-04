@@ -23,6 +23,12 @@ namespace FlyShelf
         private static readonly System.Threading.SemaphoreSlim _clipboardStaSemaphore = new System.Threading.SemaphoreSlim(1, 1);
         private DateTime _lastClipboardCaptureTime = DateTime.MinValue;
         private DateTime _lastHotkeyTime = DateTime.MinValue;
+        // ═══ SAME-CONTENT THROTTLE: Prevent syncing identical text repeatedly ═══
+        private string _lastSyncedTextContent = "";
+        private DateTime _lastSyncedTextTime = DateTime.MinValue;
+        private string _lastSyncedBitmapHash = "";
+        private DateTime _lastSyncedBitmapTime = DateTime.MinValue;
+        private const int SAME_CONTENT_COOLDOWN_SECS = 30;
         private bool _waitingForHotkeyRelease = false;
 
         // ═══ Source App Icon Cache: keyed by process name → frozen BitmapSource ═══
@@ -666,6 +672,18 @@ namespace FlyShelf
                     }
 
                     _lastClipboardCaptureTime = DateTime.UtcNow;
+
+                    // ═══ SAME-CONTENT THROTTLE: Skip if identical text was synced within 30s ═══
+                    var trimmedText = text.Trim();
+                    if (string.Equals(trimmedText, _lastSyncedTextContent, StringComparison.Ordinal)
+                        && (DateTime.UtcNow - _lastSyncedTextTime).TotalSeconds < SAME_CONTENT_COOLDOWN_SECS)
+                    {
+                        Classes.Logger.LogAction("CLIPBOARD", $"→ Skipped TEXT (same content synced {(DateTime.UtcNow - _lastSyncedTextTime).TotalSeconds:F0}s ago, cooldown {SAME_CONTENT_COOLDOWN_SECS}s)");
+                        return;
+                    }
+                    _lastSyncedTextContent = trimmedText;
+                    _lastSyncedTextTime = DateTime.UtcNow;
+
                     Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as TEXT ({text.Length} chars)");
                     var capturedText = text;
                     _ = Task.Run(() =>

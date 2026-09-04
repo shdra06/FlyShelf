@@ -355,11 +355,24 @@ namespace FlyShelf.Classes
                         SourceDeviceType = capturedSource.Contains("PC", StringComparison.Ordinal) || capturedSource.Contains("LAPTOP", StringComparison.Ordinal) || capturedSource.Contains("DESKTOP", StringComparison.Ordinal) ? "PC" : "Mobile",
                         TransferMethod = capturedTransport.transport
                     };
-                    // Load its shell icon in the background thread via _viewModel.GetIcon
+                    // Load thumbnail for images or shell icon in the background thread
                     _ = System.Threading.Tasks.Task.Run(() =>
                     {
                         try
                         {
+                            if (clip.ItemType == ClipboardItemType.Image)
+                            {
+                                var bmp = ViewModels.FlyShelfViewModel.LoadImageThumbnail(possiblePath, 300);
+                                if (bmp != null)
+                                {
+                                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                                    {
+                                        clip.Icon = bmp;
+                                        clip.IsLoadedHighQuality = true;
+                                    });
+                                    return;
+                                }
+                            }
                             var icon = _viewModel.GetIcon(possiblePath);
                             if (icon != null)
                             {
@@ -794,40 +807,11 @@ namespace FlyShelf.Classes
                 var batchList = _batchFiles.GetOrAdd(batchName, _ => new List<string>());
                 lock (batchList) { batchList.Add(finalPath); }
                 
-                // Auto-copy to Windows clipboard if â‰¤2 files in this batch
+                // Auto-copy to Windows clipboard and shelf if <=2 files in this batch
                 if (batchList.Count <= 2)
                 {
-                    _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                    {
-                        try
-                        {
-                            var fileList = new System.Collections.Specialized.StringCollection();
-                            lock (batchList) { foreach (var f in batchList) fileList.Add(f); }
-                            ClipboardHelper.SafeSetFileDropList(fileList);
-                            FlyShelf.Windows.ToastWindow.ShowToast($"{rawName} copied to clipboard");
-                            
-                            // Insert proper file entry into FlyShelf (clickable → opens in default app)
-                            var clip = new ClipboardItem
-                            {
-                                RawContent = finalPath,
-                                FileName = rawName,
-                                FilePath = finalPath,
-                                Extension = Path.GetExtension(finalPath).TrimStart('.').ToUpper(CultureInfo.InvariantCulture),
-                                ItemType = ClipboardItemType.File,
-                                SourceDeviceName = archiveSource,
-                                SourceDeviceType = archiveSource.Contains("PC", StringComparison.Ordinal) || archiveSource.Contains("LAPTOP", StringComparison.Ordinal) || archiveSource.Contains("DESKTOP", StringComparison.Ordinal) ? "PC" : "Mobile",
-                                TransferMethod = archiveTransport.transport
-                            };
-                            clip.EvaluateSmartActions();
-                            bool wasEmpty = _viewModel.DroppedItems.Count == 0;
-                            _viewModel.InsertWithDedup(clip);
-                            if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-
-                            // PERF: throttled — network sync is non-critical
-                            _viewModel.SchedulePersistHistoryPublic();
-                        }
-                        catch (Exception ex) { Logger.LogAction("ARCHIVE", $"Clipboard set failed: {ex.Message}"); }
-                    });
+                    string devType = archiveSource.Contains("PC", StringComparison.Ordinal) || archiveSource.Contains("LAPTOP", StringComparison.Ordinal) || archiveSource.Contains("DESKTOP", StringComparison.Ordinal) ? "PC" : "Mobile";
+                    InjectReceivedFile(finalPath, archiveSource, archiveTransport.transport, devType);
                 }
                 
                 // Clean up old batches after 5 minutes

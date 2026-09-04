@@ -240,10 +240,11 @@ namespace FlyShelf.ViewModels
             
             // Fast in-memory classification based on extension
             string ext = Extension.ToLowerInvariant();
-            if (ext is ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".webp" or ".svg" or ".ico" or ".tiff" or ".tif" or ".heic" or ".heif")
+            if (ImageThumbnailManager.IsImageExtension(ext))
             {
                 ItemType = ClipboardItemType.Image;
-                Extension = ext == ".svg" ? "SVG" : (ext == ".gif" ? "GIF" : "IMAGE");
+                string cleanExt = ext.StartsWith(".", StringComparison.Ordinal) ? ext : "." + ext;
+                Extension = cleanExt == ".svg" ? "SVG" : (cleanExt == ".gif" ? "GIF" : "IMAGE");
             }
             else if (ext == ".pdf")
             {

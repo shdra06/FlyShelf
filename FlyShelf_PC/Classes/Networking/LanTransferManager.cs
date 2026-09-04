@@ -527,18 +527,48 @@ namespace FlyShelf.Classes
                     ClipboardHelper.SafeSetFileDropList(fileList);
 
                     // Insert into FlyShelf shelf
-                    var clip = new ClipboardItem
+                    var clip = new ClipboardItem(session.FilePath)
                     {
-                        RawContent = session.FilePath,
-                        FileName = session.FileName,
-                        FilePath = session.FilePath,
-                        Extension = Path.GetExtension(session.FilePath).TrimStart('.').ToUpperInvariant(),
-                        ItemType = ClipboardItemType.File,
                         SourceDeviceName = session.PeerDeviceName,
                         SourceDeviceType = "PC",
                         TransferMethod = "LAN TCP"
                     };
                     clip.EvaluateSmartActions();
+
+                    if (clip.ItemType == ClipboardItemType.Image)
+                    {
+                        _ = Task.Run(() =>
+                        {
+                            try
+                            {
+                                var bmp = ViewModels.FlyShelfViewModel.LoadImageThumbnail(session.FilePath, 300);
+                                if (bmp != null)
+                                {
+                                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                                    {
+                                        clip.Icon = bmp;
+                                        clip.IsLoadedHighQuality = true;
+                                    });
+                                }
+                            }
+                            catch { }
+                        });
+                    }
+                    else if (clip.Icon == null)
+                    {
+                        _ = Task.Run(() =>
+                        {
+                            try
+                            {
+                                var icon = _viewModel.GetIcon(session.FilePath);
+                                if (icon != null)
+                                {
+                                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => clip.Icon = icon);
+                                }
+                            }
+                            catch { }
+                        });
+                    }
 
                     // Swap placeholder with completed item if placeholder exists
                     if (session.Placeholder != null)

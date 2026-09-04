@@ -9,6 +9,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { font, space, radius } from '../../styles/theme';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import OcrButton from './OcrButton';
 
 interface ImageInfoToolProps {
   onBack: () => void;
@@ -160,6 +161,12 @@ Format: ${info.format}`;
                   <Text style={styles.infoLabel}>Path / URI</Text>
                   <Text style={styles.infoValueSmall}>{info.uri}</Text>
                 </View>
+              </View>
+            )}
+
+            {imageUri && (
+              <View style={{ marginTop: space.md }}>
+                <OcrButton imageUri={imageUri} variant="full" label="Extract Text (OCR)" />
               </View>
             )}
 
