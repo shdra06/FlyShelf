@@ -31,14 +31,37 @@ const initExternalPaths = async (): Promise<boolean> => {
   if (externalReady) return true;
   try {
     if (!AdvanceOverlay?.getFlyShelfStoragePath) return false;
+
+    // Check permission first — if denied or removed by OS update, skip external
+    if (AdvanceOverlay.hasAllFilesPermission) {
+      try {
+        const hasPerm = await AdvanceOverlay.hasAllFilesPermission();
+        if (!hasPerm) return false; // Permission denied — use internal as primary
+      } catch { return false; }
+    }
+
     const basePath: string = await AdvanceOverlay.getFlyShelfStoragePath();
     if (!basePath) return false;
+
+    // Try creating directories
+    try {
+      await AdvanceOverlay.ensureFlyShelfDirs();
+    } catch { return false; } // Can't create dirs — permission truly denied
+
+    // Verify we can actually write by checking the directory exists
+    const testDir = `file://${basePath}/Vault/`;
+    try {
+      const info = await FileSystem.getInfoAsync(testDir);
+      if (!info.exists) {
+        // Try creating via FileSystem as well
+        await FileSystem.makeDirectoryAsync(testDir, { intermediates: true });
+      }
+    } catch { return false; } // Can't access — fall back to internal
+
     FLYSHELF_BASE = basePath;
     FLYSHELF_VAULT_DIR = `file://${basePath}/Vault/`;
     FLYSHELF_MANIFEST_PATH = `file://${basePath}/Vault/vault_manifest.json`;
     FLYSHELF_CLIPBOARD_DIR = `file://${basePath}/Clipboard/`;
-    // Create the directories via native (uses java.io.File which doesn't need file:// prefix)
-    await AdvanceOverlay.ensureFlyShelfDirs();
     externalReady = true;
     return true;
   } catch {
@@ -322,15 +345,45 @@ export const useVault = () => {
     }
   };
 
-  // Re-check permission when app comes to foreground (user may have just granted it)
+  // Re-check permission when app comes to foreground (user may have just granted/revoked it)
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (state) => {
       if (state === 'active' && AdvanceOverlay?.hasAllFilesPermission) {
         try {
           const hasPerm = await AdvanceOverlay.hasAllFilesPermission();
+          const wasGranted = hasPermission;
           setHasPermission(hasPerm);
+
           if (hasPerm && !externalReady) {
-            await initExternalPaths();
+            // Permission just granted — init external and migrate data there
+            const ok = await initExternalPaths();
+            if (ok && manifestRef.current) {
+              let migrated = 0;
+              for (const entry of manifestRef.current.entries) {
+                const intPath = `${INTERNAL_VAULT_DIR}${entry.encryptedFilename}`;
+                const extPath = `${FLYSHELF_VAULT_DIR}${entry.encryptedFilename}`;
+                try {
+                  const intInfo = await FileSystem.getInfoAsync(intPath);
+                  if (intInfo.exists && (intInfo as any).size > 0) {
+                    const extInfo = await FileSystem.getInfoAsync(extPath).catch(() => ({ exists: false }));
+                    if (!extInfo.exists) {
+                      await FileSystem.copyAsync({ from: intPath, to: extPath });
+                      migrated++;
+                    }
+                  }
+                } catch {}
+              }
+              if (migrated > 0) {
+                toast.success('Data Migrated', `${migrated} files copied to FlyShelf folder`);
+                // Re-save manifest to external
+                const json = JSON.stringify(manifestRef.current);
+                await FileSystem.writeAsStringAsync(FLYSHELF_MANIFEST_PATH, json).catch(() => {});
+              }
+            }
+          } else if (!hasPerm && wasGranted) {
+            // Permission revoked — external no longer accessible, internal is primary
+            externalReady = false;
+            console.log('[Vault] External storage permission revoked — using internal storage');
           }
         } catch {}
       }
