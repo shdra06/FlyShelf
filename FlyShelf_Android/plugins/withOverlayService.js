@@ -49,7 +49,7 @@ class OverlayService : Service() {
     private var panelView: View? = null
     private var dimView: View? = null
     private var isPanelVisible = false
-    private var screenshotObserver: ScreenshotObserver? = null
+    var screenshotObserver: ScreenshotObserver? = null
     private var panelParams: WindowManager.LayoutParams? = null
     private var ballParams: WindowManager.LayoutParams? = null
     private val autoHideHandler = Handler(Looper.getMainLooper())
@@ -141,6 +141,45 @@ class OverlayService : Service() {
                                     pulseBall()
                                 }
                             } catch(e: Exception) {}
+                            // === NATIVE TEXT-TO-PC SYNC ===
+                            // Upload text directly to PC from native service (works even when JS is suspended)
+                            Thread {
+                                try {
+                                    val url = ScreenshotObserver.pcUrl.ifEmpty {
+                                        getSharedPreferences("flyshelf_service_prefs", Context.MODE_PRIVATE)
+                                            .getString("pcUrl", "") ?: ""
+                                    }
+                                    if (url.isEmpty()) return@Thread
+                                    val conn = java.net.URL(url.trimEnd('/') + "/api/sync_text").openConnection() as java.net.HttpURLConnection
+                                    conn.requestMethod = "POST"
+                                    conn.doOutput = true
+                                    conn.setRequestProperty("Content-Type", "text/plain; charset=UTF-8")
+                                    conn.setRequestProperty("X-FlyShelf-Client", "MobileCompanion")
+                                    val deviceName = ScreenshotObserver.deviceName.ifEmpty {
+                                        getSharedPreferences("flyshelf_service_prefs", Context.MODE_PRIVATE)
+                                            .getString("deviceName", "Mobile") ?: "Mobile"
+                                    }
+                                    conn.setRequestProperty("X-Source-Device", deviceName)
+                                    // Read pairing key
+                                    try {
+                                        val masterKey = androidx.security.crypto.MasterKey.Builder(this@OverlayService).setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM).build()
+                                        val prefs = androidx.security.crypto.EncryptedSharedPreferences.create(this@OverlayService, "flyshelf_secure_prefs", masterKey, androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV, androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
+                                        val pk = prefs.getString("flyshelf_pairing_key", "") ?: ""
+                                        if (pk.isNotEmpty()) conn.setRequestProperty("X-Pairing-Key", pk)
+                                    } catch (_: Exception) {}
+                                    conn.connectTimeout = 5000
+                                    conn.readTimeout = 10000
+                                    val bytes = text.toByteArray(Charsets.UTF_8)
+                                    conn.outputStream.use { it.write(bytes) }
+                                    val code = conn.responseCode
+                                    conn.disconnect()
+                                    if (code == 200) {
+                                        android.util.Log.d("FlyShelf", "Native text sync to PC succeeded")
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.w("FlyShelf", "Native text sync to PC failed: \${e.message}")
+                                }
+                            }.start()
                         }
                     }
                 } catch(e: Exception) {}
@@ -1049,11 +1088,14 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
     fun setPcUrl(url: String) {
         ScreenshotObserver.pcUrl = url
         reactApplicationContext.getSharedPreferences("flyshelf_service_prefs", Context.MODE_PRIVATE).edit().putString("pcUrl", url).apply()
+        // Retry any pending screenshot uploads now that we have a URL
+        try { OverlayService.instance?.screenshotObserver?.retryPendingUploads() } catch (_: Exception) {}
     }
 
     @ReactMethod
     fun setDeviceName(name: String) {
         ScreenshotObserver.deviceName = name
+        reactApplicationContext.getSharedPreferences("flyshelf_service_prefs", Context.MODE_PRIVATE).edit().putString("deviceName", name).apply()
     }
 
     @ReactMethod
@@ -1207,6 +1249,7 @@ import androidx.security.crypto.MasterKey
 class ScreenshotObserver(private val context: Context) : ContentObserver(Handler(Looper.getMainLooper())) {
 
     private var lastScreenshotTime = 0L
+    private val pendingUploads = java.util.concurrent.ConcurrentLinkedQueue<String>()
 
     companion object {
         /** The last detected screenshot absolute path — polled by React Native JS */
@@ -1220,6 +1263,47 @@ class ScreenshotObserver(private val context: Context) : ContentObserver(Handler
         /** Device name for upload headers */
         @Volatile
         var deviceName: String = "Mobile"
+
+        /** Pairing key for auth headers */
+        @Volatile
+        var pairingKey: String = ""
+    }
+
+    /** Resolve pcUrl: use in-memory value, fall back to SharedPreferences */
+    private fun resolvePcUrl(): String {
+        if (pcUrl.isNotEmpty()) return pcUrl
+        try {
+            val stored = context.getSharedPreferences("flyshelf_service_prefs", Context.MODE_PRIVATE)
+                .getString("pcUrl", "") ?: ""
+            if (stored.isNotEmpty()) {
+                pcUrl = stored
+                return stored
+            }
+        } catch (_: Exception) {}
+        return ""
+    }
+
+    /** Resolve pairing key: use in-memory value, fall back to EncryptedSharedPreferences */
+    private fun resolvePairingKey(): String {
+        if (pairingKey.isNotEmpty()) return pairingKey
+        try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            val prefs = EncryptedSharedPreferences.create(
+                context,
+                "flyshelf_secure_prefs",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+            val key = prefs.getString("flyshelf_pairing_key", "") ?: ""
+            if (key.isNotEmpty()) {
+                pairingKey = key
+                return key
+            }
+        } catch (_: Exception) {}
+        return ""
     }
 
     override fun onChange(selfChange: Boolean, uri: Uri?) {
@@ -1251,15 +1335,22 @@ class ScreenshotObserver(private val context: Context) : ContentObserver(Handler
                                 OverlayService.instance?.pulseBall()
                             }
 
-                            // Auto-upload to PC in background if URL is available
-                            if (pcUrl.isNotEmpty()) {
+                            // Auto-upload to PC in background thread
+                            val url = resolvePcUrl()
+                            if (url.isNotEmpty()) {
                                 Thread {
                                     try {
-                                        uploadScreenshotToPC(path)
+                                        uploadScreenshotToPC(path, url)
                                     } catch (e: Exception) {
-                                        // Upload failed silently — JS poller will pick it up as fallback
+                                        // Queue for retry
+                                        pendingUploads.add(path)
+                                        android.util.Log.w("FlyShelf", "Screenshot upload failed, queued for retry: \${e.message}")
                                     }
                                 }.start()
+                            } else {
+                                // Queue for when URL becomes available
+                                pendingUploads.add(path)
+                                android.util.Log.w("FlyShelf", "Screenshot queued — no PC URL available yet")
                             }
                         }
                     }
@@ -1268,58 +1359,63 @@ class ScreenshotObserver(private val context: Context) : ContentObserver(Handler
         } catch (e: Exception) {}
     }
 
+    /** Retry any pending screenshot uploads (called when pcUrl is set or connectivity changes) */
+    fun retryPendingUploads() {
+        val url = resolvePcUrl()
+        if (url.isEmpty()) return
+        Thread {
+            while (pendingUploads.isNotEmpty()) {
+                val path = pendingUploads.peek() ?: break
+                try {
+                    uploadScreenshotToPC(path, url)
+                    pendingUploads.poll() // Remove on success
+                } catch (e: Exception) {
+                    break // Stop retrying on first failure
+                }
+            }
+        }.start()
+    }
+
     /**
      * Upload screenshot directly to PC from the native foreground service.
      * This works even when the React Native JS thread is suspended (app backgrounded).
      */
-    private fun uploadScreenshotToPC(filePath: String) {
+    private fun uploadScreenshotToPC(filePath: String, targetUrl: String) {
         val file = File(filePath)
         if (!file.exists() || file.length() == 0L) return
 
         val fileName = file.name
         val encodedName = URLEncoder.encode(fileName, "UTF-8")
         val encodedDevice = URLEncoder.encode(deviceName, "UTF-8")
-        val uploadUrl = "\${pcUrl}/api/sync_file?name=\$encodedName&type=ImageLink&sourceDevice=\$encodedDevice"
+        val uploadUrl = "\${targetUrl.trimEnd('/')}/api/sync_file?name=\$encodedName&type=ImageLink&sourceDevice=\$encodedDevice"
 
         val boundary = "----FlyShelfBoundary\${System.currentTimeMillis()}"
+        val CRLF = "\\r\\n"
         val conn = URL(uploadUrl).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.doOutput = true
         conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=\$boundary")
         conn.setRequestProperty("X-FlyShelf-Client", "MobileCompanion")
-        // Read pairing key from SharedPreferences and attach as auth header
-        try {
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            val prefs = EncryptedSharedPreferences.create(
-                context,
-                "flyshelf_secure_prefs",
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-            val pairingKey = prefs.getString("flyshelf_pairing_key", "") ?: ""
-            if (pairingKey.isNotEmpty()) {
-                conn.setRequestProperty("X-Pairing-Key", pairingKey)
-            }
-        } catch (e: Exception) {}
-        conn.connectTimeout = 5000
-        conn.readTimeout = 15000
+        val key = resolvePairingKey()
+        if (key.isNotEmpty()) {
+            conn.setRequestProperty("X-Pairing-Key", key)
+        }
+        conn.connectTimeout = 10000
+        conn.readTimeout = 30000
 
         conn.outputStream.use { out ->
-            val writer = out.bufferedWriter()
-            writer.write("--\$boundary\\r\\n")
-            writer.write("Content-Disposition: form-data; name=\\"file\\"; filename=\\"\$fileName\\"\\r\\n")
-            writer.write("Content-Type: image/png\\r\\n\\r\\n")
-            writer.flush()
+            val header = "--\$boundary" + CRLF +
+                "Content-Disposition: form-data; name=\\"file\\"; filename=\\"\$fileName\\"" + CRLF +
+                "Content-Type: image/png" + CRLF + CRLF
+            out.write(header.toByteArray(Charsets.UTF_8))
 
             file.inputStream().use { input ->
                 input.copyTo(out, bufferSize = 65536)
             }
 
-            writer.write("\\r\\n--\$boundary--\\r\\n")
-            writer.flush()
+            val footer = CRLF + "--\$boundary--" + CRLF
+            out.write(footer.toByteArray(Charsets.UTF_8))
+            out.flush()
         }
 
         val responseCode = conn.responseCode
@@ -1329,6 +1425,8 @@ class ScreenshotObserver(private val context: Context) : ContentObserver(Handler
             Handler(Looper.getMainLooper()).post {
                 Toast.makeText(context, "\uD83D\uDCF8 Screenshot synced to PC!", Toast.LENGTH_SHORT).show()
             }
+        } else {
+            throw java.io.IOException("Upload failed with HTTP \$responseCode")
         }
     }
 }
