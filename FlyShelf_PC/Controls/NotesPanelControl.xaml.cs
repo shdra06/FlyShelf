@@ -94,6 +94,7 @@ namespace FlyShelf.Controls
         /// </summary>
         public void Initialize(NoteDay today)
         {
+            ClearSearch();
             _selectedNoteDay = today;
 
             // Bind days list
@@ -181,6 +182,16 @@ namespace FlyShelf.Controls
         }
 
         /// <summary>
+        /// Clears notes search results and restores normal note content visibility.
+        /// </summary>
+        public void ClearSearch()
+        {
+            NotesSearchResultsList.ItemsSource = null;
+            NotesSearchResults.Visibility = Visibility.Collapsed;
+            NotesContentArea.Visibility = Visibility.Visible;
+        }
+
+        /// <summary>
         /// Apply notes search from the shared search box. Called by MainWindow.Search.cs.
         /// </summary>
         public void ApplySearch(string query)
@@ -188,8 +199,7 @@ namespace FlyShelf.Controls
             string queryClean = (query ?? "").Trim();
             if (string.IsNullOrWhiteSpace(queryClean))
             {
-                NotesSearchResults.Visibility = Visibility.Collapsed;
-                NotesContentArea.Visibility = Visibility.Visible;
+                ClearSearch();
                 return;
             }
 

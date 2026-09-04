@@ -500,6 +500,14 @@ function SyncScreenInner() {
         if (typeof AdvanceOverlay.getLastCopiedFromOverlay !== 'function') return;
         const copiedText = await AdvanceOverlay.getLastCopiedFromOverlay();
         if (copiedText && copiedText.trim().length > 0) {
+          // Check if this item was received FROM PC (echo-back detection) BEFORE adding
+          const isEchoFromPc = clipsStateRef.current.some(c =>
+            (c._receivedVia === 'LAN' || c._receivedVia === 'Cloud') && (c.Raw === copiedText || c.Title === copiedText)
+          );
+          if (isEchoFromPc) {
+            // This text came from PC sync → clipboard → re-captured. Skip entirely.
+            return;
+          }
           // Fingerprint to prevent echo back from Firebase
           sentContentFingerprintsRef.current.set(copiedText.substring(0, 200), Date.now());
           const overlayEventId = generateEventId();
@@ -510,22 +518,15 @@ function SyncScreenInner() {
             SourceDeviceType: 'Mobile', Timestamp: NetworkClock.now(),
             _receivedVia: 'Local',
           };
-          setClips(prev => { const next = [newItem, ...prev]; return next.length > MAX_CLIPS_IN_MEMORY ? [...next.filter(c => c.IsPinned), ...next.filter(c => !c.IsPinned)].slice(0, MAX_CLIPS_IN_MEMORY) : next; });
+          // Also dedup against existing items with same Raw text
+          setClips(prev => {
+            if (prev.some(c => c.Raw === copiedText)) return prev; // exact duplicate
+            const next = [newItem, ...prev];
+            return next.length > MAX_CLIPS_IN_MEMORY ? [...next.filter(c => c.IsPinned), ...next.filter(c => !c.IsPinned)].slice(0, MAX_CLIPS_IN_MEMORY) : next;
+          });
           scrollToTop();
-          // LEAKAGE FIX: Only send first 3 items to PC on initial overlay sync.
-          // After that, only genuinely NEW user-copied items are transmitted (not echoes of PC items).
           overlayTxCountRef.current++;
-          // Check if this item was received FROM PC (echo-back detection)
-          const isEchoFromPc = clipsStateRef.current.some(c =>
-            c._receivedVia === 'LAN' && (c.Raw === copiedText || c.Title === copiedText)
-          );
-          if (!isEchoFromPc && overlayTxCountRef.current <= OVERLAY_TX_INITIAL_CAP) {
-            transmitTextSecurelyRef.current(copiedText).catch(() => {});
-          } else if (!isEchoFromPc && overlayTxCountRef.current > OVERLAY_TX_INITIAL_CAP) {
-            // After initial cap, still transmit genuinely new user copies
-            transmitTextSecurelyRef.current(copiedText).catch(() => {});
-          }
-          // Items that ARE echoes from PC are kept local-only — never sent back
+          transmitTextSecurelyRef.current(copiedText).catch(() => {});
         }
       } catch(e) { syncLog('OVERLAY', `Overlay poll error: ${(e as any)?.message || e}`); }
     }, 1500);

@@ -50,6 +50,7 @@ namespace FlyShelf
             if (_isResearchActive) CloseResearchPanel(immediate: true);
             if (_isAiSettingsActive) CloseAiSettingsPanel(immediate: true);
             if (_isSearchActive) CloseSearch(switchingPanel: true);
+            try { NotesContent?.ClearSearch(); } catch { }
             if (_isFilterBarActive) ToggleFilterBar(false);
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
 
@@ -355,6 +356,13 @@ namespace FlyShelf
         private void CloseNotesPanel(bool immediate = false)
         {
             _isNotesActive = false;
+
+            // Clear search state inside Notes panel
+            try { NotesContent.ClearSearch(); } catch { }
+            if (_isSearchActive)
+            {
+                CloseSearch();
+            }
 
             // Close month picker popup if open
             NotesContent.CloseMonthPopup();

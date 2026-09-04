@@ -25,6 +25,9 @@ namespace FlyShelf.Controls
 
         private void SelectNoteDay(NoteDay day, string? targetSectionId = null)
         {
+            // Reset search view state if it was left open
+            ClearSearch();
+
             // Always use freeform mode (bullet mode removed)
             day.IsFreeformMode = true;
 
@@ -105,6 +108,7 @@ namespace FlyShelf.Controls
 
         private void SelectNoteMonth(int month, int year)
         {
+            ClearSearch();
             _selectedNoteDay = null;
             _selectedMonth = month;
             _selectedYear = year;
@@ -319,6 +323,7 @@ namespace FlyShelf.Controls
 
         private void NotesBack_Click(object sender, MouseButtonEventArgs e)
         {
+            ClearSearch();
             CloseRequested?.Invoke(this, EventArgs.Empty);
         }
 

@@ -130,7 +130,10 @@ namespace FlyShelf
                     _notesSearchDebounce.Tick += (s, args) =>
                     {
                         _notesSearchDebounce.Stop();
-                        ApplyNotesSearch(SearchTextBox.Text);
+                        if (_isNotesActive && _isSearchActive)
+                        {
+                            ApplyNotesSearch(SearchTextBox.Text);
+                        }
                     };
                 }
                 else
@@ -152,7 +155,10 @@ namespace FlyShelf
                     _todoSearchDebounce.Tick += (s, args) =>
                     {
                         _todoSearchDebounce.Stop();
-                        ApplyTodoSearch(SearchTextBox.Text);
+                        if (_isTodoActive && _isSearchActive)
+                        {
+                            ApplyTodoSearch(SearchTextBox.Text);
+                        }
                     };
                 }
                 else
@@ -172,7 +178,10 @@ namespace FlyShelf
                 _searchDebounceTimer.Tick += (s, args) =>
                 {
                     _searchDebounceTimer.Stop();
-                    ApplySearchFilter(SearchTextBox.Text);
+                    if (_isSearchActive)
+                    {
+                        ApplySearchFilter(SearchTextBox.Text);
+                    }
                 };
             }
             else
@@ -238,17 +247,23 @@ namespace FlyShelf
         internal void CloseSearch(bool switchingPanel = false)
         {
             if (_isClosingSearch) return;   // prevent re-entrant calls
-            if (!_isSearchActive) return;   // PERF: fast-path — nothing to close
+            if (!_isSearchActive && string.IsNullOrEmpty(SearchTextBox.Text)) return;   // PERF: fast-path — nothing to close
             _isClosingSearch = true;
             try
             {
                 _isSearchActive = false;
                 _searchDebounceTimer?.Stop();
+                _notesSearchDebounce?.Stop();
+                _todoSearchDebounce?.Stop();
                 SearchTextBox.Text = "";           // fires TextChanged, but the guard above blocks it
 
                 // Hide unified search results panel
                 if (UnifiedSearchPanel != null)
                     UnifiedSearchPanel.Visibility = Visibility.Collapsed;
+
+                // Always clear search results in child panels (Notes & Todo)
+                try { NotesContent?.ClearSearch(); } catch { }
+                try { ApplyTodoSearch(""); } catch { }
 
                 // Restore WS_EX_NOACTIVATE dynamically immediately
                 UpdateWindowActivationStyle();
@@ -308,7 +323,6 @@ namespace FlyShelf
 
                 if (_isNotesActive)
                 {
-                    ApplyNotesSearch(""); // Clears search results in the UserControl
                     FocusNotesActiveTextBox();
                 }
                 else
