@@ -6,8 +6,8 @@
 
 *Copy on one device. Paste anywhere. Instantly. Secure peer-to-peer pipelines for Windows & Android.*
 
-[![Windows Desktop App](https://img.shields.io/badge/Windows_PC-v4.0.0-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v4.0.0/FlyShelf.exe)
-[![Android Mobile Companion](https://img.shields.io/badge/Android_Mobile-v7.1.0-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk)
+[![Windows Desktop App](https://img.shields.io/badge/Windows_PC-v4.1.0-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v4.1.0/FlyShelf.exe)
+[![Android Mobile Companion](https://img.shields.io/badge/Android_Mobile-v7.2.0-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v4.1.0/FlyShelf_Mobile_Device.apk)
 [![Ecosystem License](https://img.shields.io/badge/License-Proprietary-FF007F?style=for-the-badge&logo=shield&logoColor=white)](LICENSE)
 
 🚀 **Live Interactive Showcase**: [https://shdra06.github.io/FlyShelf](https://shdra06.github.io/FlyShelf)
@@ -190,7 +190,7 @@ FlyShelf is distributed as fully self-contained, ready-to-run standalone binarie
 
 - **Desktop (Windows 10/11)**: [Download FlyShelf.exe](https://github.com/shdra06/FlyShelf/releases/download/v4.0.0/FlyShelf.exe) (Single-file, self-contained release, no .NET install required).
 - **Microsoft Store**: Available soon! (Note: Global Transfer is disabled in the Microsoft Store version to comply with Store policies. Pro features are unlocked via an in-app add-on rather than a license key).
-- **Mobile (Android 8.0+)**: [Download FlyShelf_Mobile.apk](https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk) (Lightweight, single-architecture arm64 release).
+- **Mobile (Android 8.0+)**: [Download FlyShelf_Mobile.apk](https://github.com/shdra06/FlyShelf/releases/download/v4.1.0/FlyShelf_Mobile_Device.apk) (Lightweight, single-architecture arm64 release).
 
 ---
 

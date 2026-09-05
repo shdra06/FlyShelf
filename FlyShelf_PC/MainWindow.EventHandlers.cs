@@ -670,6 +670,7 @@ namespace FlyShelf
                 {
                     ReapplyActiveFilters();
                 }
+                _viewModel.AllowHover = true;
                 ForceMouseReEvaluation();
                 return;
             }
@@ -720,6 +721,7 @@ namespace FlyShelf
                 {
                     ReapplyActiveFilters();
                 }
+                _viewModel.AllowHover = true;
                 ForceMouseReEvaluation();
                 return;
             }
@@ -781,6 +783,8 @@ namespace FlyShelf
                     {
                         ReapplyActiveFilters();
                     }
+                    // Re-enable hover buttons so the next card shows action buttons immediately
+                    _viewModel.AllowHover = true;
                     ForceMouseReEvaluation();
                 }
             };
