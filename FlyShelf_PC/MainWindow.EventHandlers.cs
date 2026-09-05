@@ -876,6 +876,24 @@ namespace FlyShelf
                     // on the card that slid into position under the stationary cursor
                     Classes.NativeMethods.SetCursorPos(pt.X, pt.Y);
                 }
+                
+                // Schedule a SECOND re-evaluation after WPF layout completes.
+                // The VirtualizingStackPanel may not have finished repositioning cards
+                // when we do the first SetCursorPos. This delayed pass catches the case
+                // where items in the lower portion of the viewport slide up after deletion
+                // but haven't reached their final position yet.
+                Dispatcher.InvokeAsync(async () =>
+                {
+                    await System.Threading.Tasks.Task.Delay(50);
+                    try
+                    {
+                        if (Classes.NativeMethods.GetCursorPos(out var pt2))
+                        {
+                            Classes.NativeMethods.SetCursorPos(pt2.X, pt2.Y);
+                        }
+                    }
+                    catch { } // Best-effort: failure is acceptable
+                }, System.Windows.Threading.DispatcherPriority.Loaded);
             }
             catch { } // Best-effort: failure is acceptable
         }

@@ -814,10 +814,28 @@ namespace FlyShelf.Classes
                     }
                 }
 
-                // Step 2: Small delay for file handles to release
-                System.Threading.Thread.Sleep(1000);
+                // Step 2: Longer delay for file handles and .NET extraction locks to release
+                System.Threading.Thread.Sleep(2000);
 
-                // Step 3: Copy ourselves to the target path (retry up to 10 times)
+                // Step 2.5: Clear .NET single-file extraction cache to force fresh extraction
+                // Without this, the new exe might use stale cached assemblies from the old version
+                try
+                {
+                    string dotnetExtractDir = Path.Combine(Path.GetTempPath(), ".net", "FlyShelf");
+                    if (Directory.Exists(dotnetExtractDir))
+                    {
+                        Directory.Delete(dotnetExtractDir, recursive: true);
+                        Log($"Cleared .NET extraction cache: {dotnetExtractDir}");
+                    }
+                }
+                catch (Exception cacheEx)
+                {
+                    Log($"Warning: Could not clear .NET extraction cache: {cacheEx.Message} — proceeding anyway");
+                }
+
+                // Step 3: Replace the old EXE using rename-then-copy strategy
+                // Windows allows RENAMING a locked/running exe but NOT overwriting it.
+                // This is far more reliable than direct File.Copy overwrite.
                 string selfPath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? "";
                 if (string.IsNullOrEmpty(selfPath))
                 {
@@ -825,27 +843,42 @@ namespace FlyShelf.Classes
                     return true;
                 }
 
-                // Backup old EXE before overwriting — enables manual recovery if new version is broken
+                // Backup old EXE by RENAMING it (works even if file is locked by Windows)
                 string backupPath = targetPath + ".bak";
-                try
-                {
-                    if (File.Exists(targetPath))
-                    {
-                        File.Copy(targetPath, backupPath, overwrite: true);
-                        Log($"Backed up old EXE to {backupPath}");
-                    }
-                }
-                catch (Exception bex)
-                {
-                    Log($"Warning: Could not backup old EXE: {bex.Message} — proceeding anyway");
-                }
-
-                Log($"Copying {selfPath} → {targetPath}");
+                string oldRenamePath = targetPath + ".old";
+                bool renamedOld = false;
+                
+                // Clean up any previous .old file
+                try { if (File.Exists(oldRenamePath)) File.Delete(oldRenamePath); } catch { }
+                
+                Log($"Replacing {targetPath} with {selfPath}");
                 bool copied = false;
-                for (int attempt = 1; attempt <= 10; attempt++)
+                
+                for (int attempt = 1; attempt <= 15; attempt++)
                 {
                     try
                     {
+                        if (File.Exists(targetPath) && !renamedOld)
+                        {
+                            // Strategy A: Rename old exe out of the way (works on locked files)
+                            try
+                            {
+                                // Also create a .bak copy for rollback
+                                try { File.Copy(targetPath, backupPath, overwrite: true); } catch { }
+                                
+                                File.Move(targetPath, oldRenamePath, overwrite: true);
+                                renamedOld = true;
+                                Log($"Renamed old EXE to {oldRenamePath} on attempt {attempt}");
+                            }
+                            catch (Exception renameEx)
+                            {
+                                Log($"Rename attempt {attempt}: {renameEx.Message}");
+                                // If rename fails too, try direct delete
+                                try { File.Delete(targetPath); renamedOld = true; } catch { }
+                            }
+                        }
+
+                        // Now copy the new exe to the (now empty) target path
                         File.Copy(selfPath, targetPath, overwrite: true);
                         copied = true;
                         Log($"Copy succeeded on attempt {attempt}.");
@@ -853,16 +886,24 @@ namespace FlyShelf.Classes
                     }
                     catch (Exception ex)
                     {
-                        Log($"Copy attempt {attempt}/10 failed: {ex.Message}");
-                        System.Threading.Thread.Sleep(1000);
+                        Log($"Copy attempt {attempt}/15 failed: {ex.Message}");
+                        System.Threading.Thread.Sleep(1500);
                     }
                 }
 
                 if (!copied)
                 {
-                    Log("FATAL: Could not copy new EXE after 10 attempts.");
+                    // Last resort: if rename worked but copy failed, restore the old exe
+                    if (renamedOld && File.Exists(oldRenamePath) && !File.Exists(targetPath))
+                    {
+                        try { File.Move(oldRenamePath, targetPath); } catch { }
+                    }
+                    Log("FATAL: Could not copy new EXE after 15 attempts.");
                     return true;
                 }
+                
+                // Clean up the .old file (best-effort)
+                try { if (File.Exists(oldRenamePath)) File.Delete(oldRenamePath); } catch { }
 
                 // Step 4: Write health-check marker so the new app can verify itself and rollback if needed
                 WriteUpdatePendingMarker(backupPath);
