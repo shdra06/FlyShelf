@@ -1078,7 +1078,7 @@
                   VirtualizingStackPanel.IsVirtualizing="True"
                   VirtualizingStackPanel.VirtualizationMode="Recycling"
                   VirtualizingPanel.ScrollUnit="Pixel"
-                  VirtualizingPanel.CacheLength="3,3"
+                  VirtualizingPanel.CacheLength="1.5,1.5"
                   VirtualizingPanel.CacheLengthUnit="Page"
                   SelectionMode="Extended" MouseMove="ShelfListView_MouseMove" PreviewMouseLeftButtonDown="ShelfListView_PreviewMouseLeftButtonDown"
                   PreviewMouseLeftButtonUp="ShelfListView_PreviewMouseLeftButtonUp"
@@ -1131,7 +1131,18 @@
                                 <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
                                 <Setter Property="Opacity" Value="1" />
                                 <!-- NOTE: Loaded animation REMOVED — virtualization recycling causes lag -->
+                                <Setter Property="CacheMode" Value="{x:Null}"/>
                                 <Style.Triggers>
+                                    <!-- GPU CACHE: Rasterize cards to GPU texture during scroll.
+                                         Eliminates expensive text layout + ClearType rendering per frame.
+                                         Removed when scrolling stops so hover/click interactions work normally. -->
+                                    <DataTrigger Binding="{Binding DataContext.IsScrolling, ElementName=ShelfListView}" Value="True">
+                                        <Setter Property="CacheMode">
+                                            <Setter.Value>
+                                                <BitmapCache RenderAtScale="1"/>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </DataTrigger>
                                     <!-- STABILITY FIX: Gate hover animation by AllowHover to prevent
                                          dozens of simultaneous enter/exit animations during fast scrolling.
                                          AllowHover is only true when the user physically moves the mouse

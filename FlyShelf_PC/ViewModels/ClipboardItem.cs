@@ -43,7 +43,7 @@ namespace FlyShelf.ViewModels
         private const int MaxCollapsedLines = 4;
         private const double CollapsedMaxHeightLong = 100.0;
         private const double CollapsedMaxHeightShort = 57.0;
-        private const int ExpandedDisplayTextLimit = 5000;
+        private const int ExpandedDisplayTextLimit = 2000;
         private const double ExpandedMaxHeightLimit = 800.0;
 
         public DateTime DateCopied { get; set; } = DateTime.Now;
