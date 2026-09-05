@@ -1,9 +1,9 @@
-﻿{
-    "pc_version":  "4.1.0",
-    "pc_changelog":  "v4.0.0 â€” Version 4 Release\n\nâ€¢ Major version update\nâ€¢ Performance and stability improvements\nâ€¢ Enhanced user experience",
-    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v4.1.0/FlyShelf.exe",
-    "pc_sha256":  "cecacd1d3cbc2a22c114ce374255635b6ae6e2c29bf7f12cd54431a4a1c9bede",
-    "android_version":  "7.1.0",
-    "android_changelog":  "v7.1.0 â€” Version Sync\n\nâ€¢ Bumped version to sync with Desktop client release.",
-    "android_download":  "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
+{
+    "pc_version": "4.1.0",
+    "pc_changelog": "v4.1.0\n\n• Mermaid diagram rendering in PDF export (SVG via WebView2)\n• Improved image handling: local, relative, and HTTP URL support\n• Fixed markdown edit mode crash\n• Fixed JPEG thumbnail preview for cross-device transfers\n• WebView2 PDF timeout increased for complex documents",
+    "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v4.1.0/FlyShelf.exe",
+    "pc_sha256": "cecacd1d3cbc2a22c114ce374255635b6ae6e2c29bf7f12cd54431a4a1c9bede",
+    "android_version": "7.2.0",
+    "android_changelog": "v7.2.0\n\n• 10MB large file threshold for chunked uploads\n• Performance and stability improvements",
+    "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v4.1.0/FlyShelf_Mobile.apk"
 }
