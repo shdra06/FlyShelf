@@ -50,7 +50,7 @@ namespace FlyShelf.Classes
         private bool _enableCloudDiscovery = true;
         public bool EnableCloudDiscovery { get => _enableCloudDiscovery; set => SetProperty(ref _enableCloudDiscovery, value); }
 
-        private bool _enableFcmSilentWake = false;
+        private bool _enableFcmSilentWake = true; // Enable by default for instant background wake
         /// <summary>When true, sends a silent high-priority wake ping via FCM/Firebase to wake mobile devices for instant background floating ball clipboard sync.</summary>
         public bool EnableFcmSilentWake { get => _enableFcmSilentWake; set => SetProperty(ref _enableFcmSilentWake, value); }
 

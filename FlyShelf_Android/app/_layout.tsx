@@ -172,7 +172,7 @@ if (Platform.OS !== 'web') {
 
          const snaps = await get(ref(database, `active_devices/${pk}/wakeSignal`));
          if (snaps.exists()) {
-           const latestTs = typeof snaps.val() === 'number' ? snaps.val() : (snaps.val()?.timestamp || 0);
+           const latestTs = typeof snaps.val() === 'number' ? snaps.val() : (snaps.val()?.ts || snaps.val()?.timestamp || 0);
 
            if (latestTs > lastNotified) {
              await AsyncStorage.setItem('lastNotifiedTimestamp', latestTs.toString());
