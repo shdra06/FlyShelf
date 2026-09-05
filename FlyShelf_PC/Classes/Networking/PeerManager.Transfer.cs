@@ -398,8 +398,8 @@ namespace FlyShelf.Classes
                             bool isCf = tryTransport == "Cloudflare";
                             long fileSize = new FileInfo(filePath).Length;
 
-                            // Cloudflare large file → chunked upload
-                            if (isCf && fileSize > 256 * 1024)
+                            // Cloudflare large file → chunked upload (files >2MB)
+                            if (isCf && fileSize > 2 * 1024 * 1024)
                             {
                                 // Temporarily set ActiveUrl for chunked upload
                                 string savedUrl = peer.ActiveUrl;
@@ -509,8 +509,8 @@ namespace FlyShelf.Classes
         /// Parallel chunked upload for Cloudflare. Splits file into 512KB chunks and sends
         /// up to 4 in parallel, then finalizes. This bypasses per-connection throughput limits.
         /// </summary>
-        private const int CHUNK_SIZE = 512 * 1024; // 512KB per chunk
-        private const int MAX_PARALLEL_CHUNKS = 4;  // 4 concurrent uploads
+        private const int CHUNK_SIZE = 1024 * 1024; // 1MB per chunk (was 512KB — fewer chunks = fewer CF round-trips)
+        private const int MAX_PARALLEL_CHUNKS = 6;  // 6 concurrent uploads (was 4)
 
         private async Task<bool> TrySendFileChunked(PeerConnection peer, string filePath, string fileName, string title, string itemType, string pk)
         {

@@ -824,7 +824,8 @@ export function useDeviceSync(params: {
       }
       } finally { pollLockRef.current = false; }
     };
-    // Adaptive polling: 2s (LAN active) → 4s (Cloud) → 4s (retry) → re-evaluate every cycle
+    // Adaptive polling: When WebSocket/long-poll is active, slow down to heartbeat-only.
+    // Push channel handles instant sync; polling is just a safety net.
     lastActivityRef.current = NetworkClock.now();
     const getAdaptiveInterval = () => {
       const retries = pollRetryCountRef.current;
@@ -833,6 +834,22 @@ export function useDeviceSync(params: {
       const url = cachedPcUrlRef.current || '';
       const idleSecs = (NetworkClock.now() - lastActivityRef.current) / 1000;
       if (!url) return 4000; // No PC found — continuously retry every 4s
+
+      // ═══ PUSH-AWARE OPTIMIZATION ═══
+      // When WebSocket is connected, it pushes events instantly → polling is just a heartbeat
+      const wsIsActive = wsInstance && wsInstance.readyState === WebSocket.OPEN;
+      const lpIsActive = longPollActive;
+
+      if (wsIsActive) {
+        // WebSocket delivers push events in <50ms — poll is just a health-check
+        return idleSecs > 120 ? 30000 : 15000; // 15s active, 30s idle
+      }
+      if (lpIsActive) {
+        // Long-poll delivers push events in <100ms — poll is a backup
+        return idleSecs > 120 ? 20000 : 10000; // 10s active, 20s idle
+      }
+
+      // No push channel active — poll aggressively as primary sync
       if (url.includes('trycloudflare')) return idleSecs > 120 ? 6000 : 3000; // Cloud: 3s active, 6s idle
       return idleSecs > 120 ? 4000 : 2000; // LAN: 2s active, 4s idle
     };
@@ -860,7 +877,7 @@ export function useDeviceSync(params: {
     });
 
     // ─── Unified Real-Time Duplex Engine (WebSocket Primary + Fallback Pipeline) ───
-    let wsReconnectDelay = 3000;
+    let wsReconnectDelay = 1000; // Start at 1s for fast recovery
     const WS_MAX_RECONNECT_DELAY = 60000;
 
     let wsInstance: WebSocket | null = null;
@@ -925,7 +942,7 @@ export function useDeviceSync(params: {
         const connType = targetUrl.includes('trycloudflare.com') ? 'Cloud' as const : 'LAN' as const;
 
         ws.onopen = () => {
-          wsReconnectDelay = 3000;
+          wsReconnectDelay = 1000; // Reset to 1s for fast recovery on next disconnect
           if (isTornDown) { ws.close(); return; }
           wsConnected = true;
           longPollActive = false; // Disable fallback when WebSocket is live
@@ -1015,7 +1032,8 @@ export function useDeviceSync(params: {
           if (isTornDown) return;
           syncLog('WS-PEER', `WebSocket closed (code=${ev.code}). Engaging fallback & reconnecting in ${wsReconnectDelay}ms.`);
           
-          if (!wsConnected && !longPollActive) {
+          // Always engage long-poll as fallback for instant push when WS is down
+          if (!longPollActive) {
             startLongPollFallback();
           }
           

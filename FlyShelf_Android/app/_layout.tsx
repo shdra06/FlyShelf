@@ -244,7 +244,7 @@ export default function RootLayout() {
         TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK).then(isRegistered => {
           if (!isRegistered) {
             BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
-              minimumInterval: 5 * 60, // 5 minutes — more responsive background sync
+              minimumInterval: 60, // 1 minute — Android may throttle but we request the minimum
               stopOnTerminate: false,
               startOnBoot: true,
             }).catch(console.warn);

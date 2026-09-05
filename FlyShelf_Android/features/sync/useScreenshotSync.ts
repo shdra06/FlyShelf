@@ -79,7 +79,7 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
   const lastProcessedScreenshotRef = useRef<string | null>(null);
   // M-1 FIX: Rate limiting for screenshot uploads
   const lastScreenshotUploadTimeRef = useRef<number>(0);
-  const MIN_SCREENSHOT_UPLOAD_INTERVAL_MS = 2000; // 2s minimum between uploads
+  const MIN_SCREENSHOT_UPLOAD_INTERVAL_MS = 1000; // 1s minimum between uploads (was 2s)
   const mediaPermGrantedRef = useRef<boolean>(false);
 
   // A-2 fix: stabilise activeDevices via ref to prevent resolvePcUrl/main-effect churn
@@ -377,9 +377,9 @@ export function useScreenshotSync(params: UseScreenshotSyncParams) {
           }
         } catch (e) { /* ignore */ }
         // Schedule next poll AFTER this one completes
-        unifiedPollInterval = setTimeout(pollLoop, 3000) as any;
+        unifiedPollInterval = setTimeout(pollLoop, 2000) as any;
       };
-      unifiedPollInterval = setTimeout(pollLoop, 3000) as any;
+      unifiedPollInterval = setTimeout(pollLoop, 2000) as any;
     }
 
     let mediaSub: any = null;
