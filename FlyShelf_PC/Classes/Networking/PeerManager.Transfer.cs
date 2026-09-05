@@ -398,8 +398,9 @@ namespace FlyShelf.Classes
                             bool isCf = tryTransport == "Cloudflare";
                             long fileSize = new FileInfo(filePath).Length;
 
-                            // Cloudflare large file → chunked upload (files >2MB)
-                            if (isCf && fileSize > 2 * 1024 * 1024)
+                            // Cloudflare large file → chunked upload (files >10MB only)
+                            // Files ≤10MB: single raw POST is faster, simpler, and reliable for background sync
+                            if (isCf && fileSize > 10 * 1024 * 1024)
                             {
                                 // Temporarily set ActiveUrl for chunked upload
                                 string savedUrl = peer.ActiveUrl;
