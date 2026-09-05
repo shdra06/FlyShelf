@@ -89,57 +89,63 @@ namespace FlyShelf.Windows
             }
         }
 
-        private void MarkdownEditToggle_Click(object sender, RoutedEventArgs e)
+        private async void MarkdownEditToggle_Click(object sender, RoutedEventArgs e)
         {
-            if (!_isMarkdownEditMode)
+            try
             {
-                // Enter Markdown Source Editor Mode
-                _isMarkdownEditMode = true;
-                WebPreview.Visibility = Visibility.Collapsed;
-                CodePreview.Visibility = Visibility.Visible;
-                CodePreview.Text = _markdownRawContent ?? "";
-                CodePreview.IsReadOnly = false;
-
-                // Load Markdown / Text highlighting definition
-                try
+                if (!_isMarkdownEditMode)
                 {
-                    var highlighting = HighlightingManager.Instance.GetDefinition("MarkDown") 
-                                       ?? HighlightingManager.Instance.GetDefinition("HTML")
-                                       ?? HighlightingManager.Instance.GetDefinition("XML");
-                    if (highlighting != null)
+                    // Enter Markdown Source Editor Mode
+                    _isMarkdownEditMode = true;
+                    WebPreview.Visibility = Visibility.Collapsed;
+                    CodePreview.Visibility = Visibility.Visible;
+                    CodePreview.IsReadOnly = false;
+
+                    // Clear any previous highlighting to prevent freezes
+                    // (MarkDown/HTML highlighting in AvalonEdit is regex-heavy and crashes on large files)
+                    CodePreview.SyntaxHighlighting = null;
+
+                    // Update UI labels first
+                    if (MdEditLabel != null) MdEditLabel.Text = "Preview";
+                    if (MdEditIcon != null) MdEditIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Eye24;
+                    if (MdSaveBtn != null) MdSaveBtn.Visibility = Visibility.Visible;
+
+                    // Defer text loading to let the UI render the editor shell first
+                    await System.Threading.Tasks.Task.Delay(50);
+                    CodePreview.Text = _markdownRawContent ?? "";
+
+                    FlyShelf.Windows.ToastWindow.ShowToast("Markdown Editor Mode (Ctrl+S to save, Ctrl+E to preview)");
+                }
+                else
+                {
+                    // Return to Rendered Markdown Preview Mode
+                    _isMarkdownEditMode = false;
+                    _markdownRawContent = CodePreview.Text;
+
+                    // Clear editor to release resources
+                    CodePreview.SyntaxHighlighting = null;
+                    CodePreview.Text = "";
+                    CodePreview.Visibility = Visibility.Collapsed;
+                    WebPreview.Visibility = Visibility.Visible;
+
+                    string html = !string.IsNullOrEmpty(_item?.FilePath)
+                        ? FlyShelf.Classes.MarkdownTemplate.GetHtml(_markdownRawContent, _item.FilePath)
+                        : FlyShelf.Classes.MarkdownTemplate.GetHtml(_markdownRawContent);
+
+                    try
                     {
-                        ApplyModernSyntaxTheme(highlighting);
-                        CodePreview.SyntaxHighlighting = highlighting;
+                        WebPreview.NavigateToString(html);
                     }
-                }
-                catch { }
+                    catch { }
 
-                if (MdEditLabel != null) MdEditLabel.Text = "Preview";
-                if (MdEditIcon != null) MdEditIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Eye24;
-                if (MdSaveBtn != null) MdSaveBtn.Visibility = Visibility.Visible;
-                FlyShelf.Windows.ToastWindow.ShowToast("Markdown Editor Mode (Ctrl+S to save, Ctrl+E to preview)");
+                    if (MdEditLabel != null) MdEditLabel.Text = "Edit";
+                    if (MdEditIcon != null) MdEditIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Edit24;
+                    if (MdSaveBtn != null) MdSaveBtn.Visibility = Visibility.Collapsed;
+                }
             }
-            else
+            catch (Exception ex)
             {
-                // Return to Rendered Markdown Preview Mode
-                _isMarkdownEditMode = false;
-                _markdownRawContent = CodePreview.Text;
-                CodePreview.Visibility = Visibility.Collapsed;
-                WebPreview.Visibility = Visibility.Visible;
-
-                string html = !string.IsNullOrEmpty(_item?.FilePath)
-                    ? FlyShelf.Classes.MarkdownTemplate.GetHtml(_markdownRawContent, _item.FilePath)
-                    : FlyShelf.Classes.MarkdownTemplate.GetHtml(_markdownRawContent);
-
-                try
-                {
-                    WebPreview.NavigateToString(html);
-                }
-                catch { }
-
-                if (MdEditLabel != null) MdEditLabel.Text = "Edit";
-                if (MdEditIcon != null) MdEditIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Edit24;
-                if (MdSaveBtn != null) MdSaveBtn.Visibility = Visibility.Collapsed;
+                Logger.LogAction("MD_EDIT_TOGGLE_ERR", $"Edit toggle failed: {ex.Message}");
             }
         }
 

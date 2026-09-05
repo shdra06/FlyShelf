@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <AssemblyName>FlyShelf</AssemblyName>
@@ -17,16 +16,16 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- AUDIT Task 1: Removed CS4014 (fire-and-forget hides async bugs); CA1001 suppressed (app-lifetime types manually dispose fields on shutdown) -->
     <NoWarn>CS0168;CS0162;CS0414;CS8632;CS0169;CA1001;CA1805;CA1707;CA1051;CA1806;CA1869;CA1725;CA1872;CA1401;CA1711;CA2101;CA1010;CA1816;CA1822;CA1835;CA2016;CA2201;CA1859;CA2249;CA1838;CA1510;CA1854;CA1860;CA2263;CA1868;CA1836;CA1834;CA1837;CA1866;CA1850;CA1861;CA1852;CA1847;CA1865</NoWarn>
-    <Version>4.0.0</Version>
+    <Version>4.1.0</Version>
     <AssemblyVersion>4.0.0</AssemblyVersion>
     <FileVersion>4.0.0</FileVersion>
     <AssemblyTitle>FlyShelf</AssemblyTitle>
-    <Product>FlyShelf — Seamless Cross-Device Clipboard</Product>
+    <Product>FlyShelf â€” Seamless Cross-Device Clipboard</Product>
     <Company>Shivendra</Company>
     <Authors>Shivendra</Authors>
-    <Copyright>© 2024-2026 Shivendra. All rights reserved.</Copyright>
+    <Copyright>Â© 2024-2026 Shivendra. All rights reserved.</Copyright>
     <Description>FlyShelf syncs your clipboard, files, and screenshots across all your devices in real-time via secure peer-to-peer connections.</Description>
-    <!-- ═══ AUDIT: Enable Roslyn static analysis ═══ -->
+    <!-- â•â•â• AUDIT: Enable Roslyn static analysis â•â•â• -->
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
@@ -36,7 +35,6 @@
     <RetainVM>false</RetainVM>
     <DefaultItemExcludes>$(DefaultItemExcludes);FINAL\**</DefaultItemExcludes>
   </PropertyGroup>
-
   <!-- Microsoft Store build: pass /p:StorePublish=true to define MSIX_STORE -->
   <PropertyGroup Condition="'$(StorePublish)' == 'true'">
     <DefineConstants>$(DefineConstants);MSIX_STORE</DefineConstants>
@@ -53,30 +51,25 @@
          conflicts with the Store publisher and prevents Microsoft from signing. -->
     <ApplicationManifest>app.store.manifest</ApplicationManifest>
   </PropertyGroup>
-
-  <!-- MSIX assets — included for all builds (required for sparse package registration in standalone EXE) -->
+  <!-- MSIX assets â€” included for all builds (required for sparse package registration in standalone EXE) -->
   <ItemGroup>
     <Content Include="..\MicrosoftBuild\Assets\**\*" Link="Assets\%(RecursiveDir)%(FileName)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-
-  <!-- cloudflared.exe EXCLUDED from Store builds — unsigned native PE causes Store signing failure.
+  <!-- cloudflared.exe EXCLUDED from Store builds â€” unsigned native PE causes Store signing failure.
        LAN sync works without it. Global sync is handled by CloudflareDaemon download at runtime. -->
   <!-- <ItemGroup Condition="'$(StorePublish)' == 'true' AND Exists('..\MicrosoftBuild\agent\cloudflared.exe')">
     <Content Include="..\MicrosoftBuild\agent\cloudflared.exe" Link="agent\cloudflared.exe" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup> -->
-
   <!-- Prevent process crash from unobserved async Task exceptions -->
   <ItemGroup>
     <RuntimeHostConfigurationOption Include="System.Threading.Tasks.TaskScheduler.ThrowUnobservedTaskExceptions" Value="false" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageReference Include="Emoji.Wpf" Version="0.3.4" />
     <PackageReference Include="MdXaml" Version="1.27.0" />
-
     <PackageReference Include="MicaWPF" Version="6.3.2" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
     <PackageReference Include="SharpVectors.Wpf" Version="1.8.5" />
@@ -92,24 +85,19 @@
     <PackageReference Include="PDFsharp" Version="6.2.0" />
     <PackageReference Include="System.IO.Hashing" Version="9.0.0" />
     <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
-
     <PackageReference Include="WPF-UI" Version="4.2.0" />
     <PackageReference Include="WPF-UI.Tray" Version="4.2.0" />
     <PackageReference Include="XamlAnimatedGif" Version="2.3.0" />
     <PackageReference Include="ZXing.Net.Bindings.Windows.Compatibility" Version="0.16.14" />
-
   </ItemGroup>
-
   <ItemGroup>
     <None Include="Models\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-
   <ItemGroup>
     <Resource Include="Resources\**\*.png" />
     <Resource Include="Resources\**\*.ico" />
     <Resource Include="Resources\**\*.jpg" />
   </ItemGroup>
-
   <Target Name="GenerateFirebaseSecrets" BeforeTargets="BeforeBuild">
     <PropertyGroup>
       <SecretsFile>Classes\Security\FirebaseSecrets.cs</SecretsFile>
@@ -117,27 +105,22 @@
     <!-- Stub: compiles but Firebase features won't work until real file is provided -->
     <WriteLinesToFile File="$(SecretsFile)" Lines="namespace FlyShelf.Classes%0D%0A{%0D%0A    public static class FirebaseSecrets%0D%0A    {%0D%0A        public static string ApiKey =&gt; &quot;&quot;;%0D%0A        public static string DatabaseUrl =&gt; &quot;&quot;;%0D%0A    }%0D%0A}" Overwrite="true" Condition="!Exists('$(SecretsFile)')" />
   </Target>
-
   <Target Name="ZipPayloads" BeforeTargets="BeforeBuild">
     <Message Text="Zipping WebClient into Native Embedded Resources..." Importance="high" />
     <ZipDirectory SourceDirectory="Resources\WebClient" DestinationFile="WebClient.zip" Overwrite="true" />
   </Target>
-
   <Target Name="BuildSparseResource" BeforeTargets="BeforeBuild" Condition="'$(StorePublish)' != 'true'">
     <Message Text="Compiling and signing Sparse Package resources..." Importance="high" />
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\MicrosoftBuild\Build_Sparse_Resource.ps1&quot;" IgnoreExitCode="true" />
   </Target>
-
   <ItemGroup>
     <EmbeddedResource Include="WebClient.zip" LogicalName="FlyShelf.WebClient.zip" />
   </ItemGroup>
-
   <ItemGroup Condition="'$(StorePublish)' != 'true'">
     <EmbeddedResource Include="Resources\FlyShelfSparse.msix" LogicalName="FlyShelf.Resources.FlyShelfSparse.msix" Condition="Exists('Resources\FlyShelfSparse.msix')" />
     <EmbeddedResource Include="Resources\FlyShelfSparse.cer" LogicalName="FlyShelf.Resources.FlyShelfSparse.cer" Condition="Exists('Resources\FlyShelfSparse.cer')" />
   </ItemGroup>
-
-  <!-- ═══ OBFUSCATION: Run Obfuscar after compile, before single-file bundle ═══ -->
+  <!-- â•â•â• OBFUSCATION: Run Obfuscar after compile, before single-file bundle â•â•â• -->
   <Target Name="ObfuscateAssembly" AfterTargets="ComputeFilesToPublish" BeforeTargets="GenerateSingleFileBundle" Condition="'$(Configuration)' == 'Release' AND '$(PublishSingleFile)' == 'true'">
     <Message Text="[OBFUSCATION] Running Obfuscar on FlyShelf.dll..." Importance="high" />
     <Exec Command="cd /d &quot;$(MSBuildProjectDirectory)\bin\Release\net10.0-windows10.0.19041.0\win-x64&quot; &amp;&amp; obfuscar.console &quot;$(MSBuildProjectDirectory)\obfuscar.xml&quot;" IgnoreExitCode="true" ConsoleToMsBuild="true">
@@ -146,10 +129,7 @@
     <Message Text="[OBFUSCATION] Obfuscar completed (exit: $(ObfuscarExitCode))" Importance="high" />
     <!-- Copy obfuscated DLL back over the original -->
     <Copy SourceFiles="$(MSBuildProjectDirectory)\bin\Obfuscated\FlyShelf.dll" DestinationFiles="$(MSBuildProjectDirectory)\bin\Release\net10.0-windows10.0.19041.0\win-x64\FlyShelf.dll" OverwriteReadOnlyFiles="true" Condition="'$(ObfuscarExitCode)' == '0'" />
-    <Message Text="[OBFUSCATION] ✅ Obfuscated DLL injected into publish pipeline" Importance="high" Condition="'$(ObfuscarExitCode)' == '0'" />
-    <Warning Text="[OBFUSCATION] ⚠️ Obfuscation failed — publishing unobfuscated DLL" Condition="'$(ObfuscarExitCode)' != '0'" />
+    <Message Text="[OBFUSCATION] âœ… Obfuscated DLL injected into publish pipeline" Importance="high" Condition="'$(ObfuscarExitCode)' == '0'" />
+    <Warning Text="[OBFUSCATION] âš ï¸ Obfuscation failed â€” publishing unobfuscated DLL" Condition="'$(ObfuscarExitCode)' != '0'" />
   </Target>
-
 </Project>
-
-

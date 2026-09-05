@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text.RegularExpressions;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
@@ -273,14 +274,25 @@ namespace FlyShelf.Classes.Utils
             var imgMatch = Regex.Match(text, @"^!\[(.*?)\]\((.*?)\)$");
             if (imgMatch.Success)
             {
+                string altText = imgMatch.Groups[1].Value.Trim();
                 string imgPath = imgMatch.Groups[2].Value.Trim();
-                if (!Path.IsPathRooted(imgPath) && !string.IsNullOrEmpty(state.SourceDir))
+                string resolvedPath = ResolveImagePath(imgPath, state.SourceDir);
+
+                if (resolvedPath != null && File.Exists(resolvedPath))
                 {
-                    imgPath = Path.Combine(state.SourceDir, imgPath);
+                    RenderImage(resolvedPath, state);
+                    return;
                 }
-                if (File.Exists(imgPath))
+
+                // Image not found — render alt text as a styled placeholder
+                if (!string.IsNullOrEmpty(altText))
                 {
-                    RenderImage(imgPath, state);
+                    var altFont = new XFont("Segoe UI", 9.0, XFontStyleEx.Italic);
+                    var altBrush = new XSolidBrush(XColor.FromArgb(148, 163, 184)); // Slate-400
+                    double lineH = 14.0;
+                    if (state.CurrentY + lineH > PageHeight - MarginBottom) state.NewPage();
+                    state.Gfx.DrawString($"\U0001f5bc {altText}", altFont, altBrush, new XPoint(MarginLeft, state.CurrentY + lineH * 0.75));
+                    state.CurrentY += lineH + 4.0;
                     return;
                 }
             }
@@ -428,6 +440,13 @@ namespace FlyShelf.Classes.Utils
 
         private static void RenderCodeBlock(List<string> codeLines, string lang, MdLayoutState state)
         {
+            // ═══ Special handling for Mermaid diagrams ═══
+            if (string.Equals(lang, "mermaid", StringComparison.OrdinalIgnoreCase))
+            {
+                RenderMermaidPlaceholder(codeLines, state);
+                return;
+            }
+
             state.CurrentY += 6.0;
             var codeFont = new XFont("Consolas", 9.0, XFontStyleEx.Regular);
             double lineHeight = 13.0;
@@ -481,6 +500,87 @@ namespace FlyShelf.Classes.Utils
 
                 state.Gfx.DrawString(displayCode, codeFont, textBrush, new XPoint(MarginLeft + padding, lineY + lineHeight * 0.75));
                 lineY += lineHeight;
+            }
+
+            state.CurrentY = blockY + blockHeight + 8.0;
+        }
+
+        /// <summary>
+        /// Renders a visual placeholder for Mermaid diagrams in the PDFsharp fallback engine.
+        /// Mermaid diagrams are rendered as SVG only in WebView2 Tier 1; this provides a clean fallback.
+        /// </summary>
+        private static void RenderMermaidPlaceholder(List<string> codeLines, MdLayoutState state)
+        {
+            state.CurrentY += 6.0;
+            double padding = 12.0;
+            double headerHeight = 28.0;
+            double lineHeight = 12.0;
+            var codeFont = new XFont("Consolas", 8.0, XFontStyleEx.Regular);
+
+            // Calculate block height: header + code lines
+            double blockHeight = headerHeight + padding + (codeLines.Count * lineHeight) + (padding * 2);
+            double maxBlockHeight = UsableHeight * 0.65;
+            int maxLines = (int)((maxBlockHeight - headerHeight - padding * 3) / lineHeight);
+            bool truncated = codeLines.Count > maxLines;
+            int displayLineCount = truncated ? maxLines : codeLines.Count;
+            blockHeight = headerHeight + padding + (displayLineCount * lineHeight) + (padding * 2);
+            if (truncated) blockHeight += lineHeight; // space for "... (truncated)" line
+
+            if (state.CurrentY + blockHeight > PageHeight - MarginBottom)
+            {
+                state.NewPage();
+            }
+
+            double blockY = state.CurrentY;
+
+            // Background card (indigo-tinted dark)
+            var bgBrush = new XSolidBrush(XColor.FromArgb(30, 27, 75)); // Indigo-950
+            var bgRect = new XRect(MarginLeft, blockY, UsableWidth, blockHeight);
+            state.Gfx.DrawRoundedRectangle(bgBrush, bgRect, new XSize(6, 6));
+
+            // Left accent bar (indigo)
+            var accentBrush = new XSolidBrush(XColor.FromArgb(99, 102, 241)); // Indigo-500
+            state.Gfx.DrawRectangle(accentBrush, new XRect(MarginLeft, blockY, 4, blockHeight));
+
+            // Header: diagram icon + label
+            var headerFont = new XFont("Segoe UI", 11.0, XFontStyleEx.Bold);
+            var headerBrush = new XSolidBrush(XColor.FromArgb(199, 210, 254)); // Indigo-200
+            state.Gfx.DrawString("\U0001f4ca Mermaid Diagram", headerFont, headerBrush, new XPoint(MarginLeft + padding + 4, blockY + 18));
+
+            // Subtitle
+            var subtitleFont = new XFont("Segoe UI", 7.5, XFontStyleEx.Italic);
+            var subtitleBrush = new XSolidBrush(XColor.FromArgb(129, 140, 248)); // Indigo-400
+            state.Gfx.DrawString("Source code (rendered as SVG in full-quality export)", subtitleFont, subtitleBrush, new XPoint(MarginLeft + padding + 4, blockY + 28));
+
+            // Divider
+            var divPen = new XPen(XColor.FromArgb(55, 48, 163), 0.75); // Indigo-800
+            double divY = blockY + headerHeight + 2;
+            state.Gfx.DrawLine(divPen, MarginLeft + padding, divY, MarginLeft + UsableWidth - padding, divY);
+
+            // Code lines
+            var codeBrush = new XSolidBrush(XColor.FromArgb(165, 180, 252)); // Indigo-300
+            double lineY = divY + padding;
+
+            for (int i = 0; i < displayLineCount; i++)
+            {
+                string displayCode = codeLines[i];
+                var size = state.Gfx.MeasureString(displayCode, codeFont);
+                if (size.Width > UsableWidth - (padding * 3))
+                {
+                    while (displayCode.Length > 4 && state.Gfx.MeasureString(displayCode + "...", codeFont).Width > UsableWidth - (padding * 3))
+                    {
+                        displayCode = displayCode.Substring(0, displayCode.Length - 1);
+                    }
+                    displayCode += "...";
+                }
+                state.Gfx.DrawString(displayCode, codeFont, codeBrush, new XPoint(MarginLeft + padding + 4, lineY + lineHeight * 0.75));
+                lineY += lineHeight;
+            }
+
+            if (truncated)
+            {
+                var truncBrush = new XSolidBrush(XColor.FromArgb(99, 102, 241));
+                state.Gfx.DrawString($"... ({codeLines.Count - maxLines} more lines)", codeFont, truncBrush, new XPoint(MarginLeft + padding + 4, lineY + lineHeight * 0.75));
             }
 
             state.CurrentY = blockY + blockHeight + 8.0;
@@ -611,6 +711,53 @@ namespace FlyShelf.Classes.Utils
             {
                 Logger.LogAction("MD_IMAGE_RENDER_ERR", $"Failed to embed {Path.GetFileName(imagePath)}: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Resolves an image path from markdown to a local file path.
+        /// Handles: absolute paths, relative paths (resolved against sourceDir), 
+        /// and HTTP/HTTPS URLs (downloaded to temp).
+        /// </summary>
+        private static string ResolveImagePath(string rawPath, string sourceDir)
+        {
+            if (string.IsNullOrWhiteSpace(rawPath)) return null;
+
+            // Strip optional leading ./ 
+            rawPath = rawPath.TrimStart('.', '/');
+
+            // Absolute local path
+            if (Path.IsPathRooted(rawPath) && File.Exists(rawPath))
+                return rawPath;
+
+            // Relative path resolved against sourceDir
+            if (!string.IsNullOrEmpty(sourceDir))
+            {
+                string combined = Path.Combine(sourceDir, rawPath);
+                if (File.Exists(combined)) return combined;
+            }
+
+            // HTTP/HTTPS — download to temp
+            if (rawPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                rawPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    using var client = new HttpClient();
+                    client.Timeout = TimeSpan.FromSeconds(10);
+                    var data = client.GetByteArrayAsync(rawPath).GetAwaiter().GetResult();
+                    string ext = Path.GetExtension(new Uri(rawPath).AbsolutePath);
+                    if (string.IsNullOrEmpty(ext)) ext = ".png";
+                    string tempPath = Path.Combine(Path.GetTempPath(), $"flyshelf_mdimg_{Guid.NewGuid():N}{ext}");
+                    File.WriteAllBytes(tempPath, data);
+                    return tempPath;
+                }
+                catch
+                {
+                    return null; // Download failed — silently skip
+                }
+            }
+
+            return null;
         }
 
         #endregion

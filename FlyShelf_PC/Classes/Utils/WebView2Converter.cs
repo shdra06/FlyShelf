@@ -85,8 +85,8 @@ namespace FlyShelf.Classes
                 // Load the HTML content
                 webView.NavigateToString(html);
 
-                // Set a 15-second timeout for the rendering process
-                var timeoutTask = Task.Delay(15000);
+                // Set a 25-second timeout for the rendering process (extra time for mermaid diagram rendering)
+                var timeoutTask = Task.Delay(25000);
                 var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
 
                 if (completedTask == timeoutTask)

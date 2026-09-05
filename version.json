@@ -1,8 +1,8 @@
 ﻿{
-    "pc_version":  "4.0.0",
+    "pc_version":  "4.1.0",
     "pc_changelog":  "v4.0.0 â€” Version 4 Release\n\nâ€¢ Major version update\nâ€¢ Performance and stability improvements\nâ€¢ Enhanced user experience",
-    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v4.0.0/FlyShelf.exe",
-    "pc_sha256":  "b647e97c6ab8002fa04b6dcbea972dfa0178e890db46662e4d56c2c63b2f2d74",
+    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v4.1.0/FlyShelf.exe",
+    "pc_sha256":  "cecacd1d3cbc2a22c114ce374255635b6ae6e2c29bf7f12cd54431a4a1c9bede",
     "android_version":  "7.1.0",
     "android_changelog":  "v7.1.0 â€” Version Sync\n\nâ€¢ Bumped version to sync with Desktop client release.",
     "android_download":  "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"

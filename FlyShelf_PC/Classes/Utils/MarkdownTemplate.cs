@@ -145,6 +145,9 @@ pre code {
   display: block;
 }
 
+.mermaid { background: #1e293b; padding: 20px; border-radius: 8px; margin: 16px 0; text-align: center; overflow-x: auto; }
+.mermaid svg { max-width: 100%; height: auto; }
+
 .code-container {
   margin: 1.4em 0;
   border-radius: 8px;
@@ -523,6 +526,19 @@ hr {
           }
         });
 
+        // ═══ Mermaid Diagram Rendering ═══
+        var mermaidBlocks = document.querySelectorAll('#content pre code.language-mermaid');
+        var hasMermaid = mermaidBlocks.length > 0;
+        if (hasMermaid) {
+          mermaidBlocks.forEach(function(code) {
+            var pre = code.parentElement;
+            var mermaidDiv = document.createElement('div');
+            mermaidDiv.className = 'mermaid';
+            mermaidDiv.textContent = code.textContent;
+            pre.parentNode.replaceChild(mermaidDiv, pre);
+          });
+        }
+
         // Enhance code blocks with copy buttons & language badges
         document.querySelectorAll('#content pre').forEach(pre => {
           const code = pre.querySelector('code');
@@ -574,7 +590,32 @@ hr {
           }
         });
 
-        notifyHost('RENDER_COMPLETE');
+        // Load and render mermaid if needed, then signal completion
+        if (hasMermaid && typeof mermaid === 'undefined') {
+          var mermaidScript = document.createElement('script');
+          mermaidScript.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
+          mermaidScript.onload = function() {
+            mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
+            mermaid.run({ nodes: document.querySelectorAll('.mermaid') }).then(function() {
+              notifyHost('RENDER_COMPLETE');
+            }).catch(function() {
+              notifyHost('RENDER_COMPLETE');
+            });
+          };
+          mermaidScript.onerror = function() {
+            notifyHost('RENDER_COMPLETE');
+          };
+          document.head.appendChild(mermaidScript);
+        } else if (hasMermaid && typeof mermaid !== 'undefined') {
+          mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
+          mermaid.run({ nodes: document.querySelectorAll('.mermaid') }).then(function() {
+            notifyHost('RENDER_COMPLETE');
+          }).catch(function() {
+            notifyHost('RENDER_COMPLETE');
+          });
+        } else {
+          notifyHost('RENDER_COMPLETE');
+        }
       } catch (err) {
         notifyHost('RENDER_ERROR:' + err.message);
       }
