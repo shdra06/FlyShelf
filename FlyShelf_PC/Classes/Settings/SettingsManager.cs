@@ -309,7 +309,7 @@ namespace FlyShelf.Classes
         public string ThemeDisplayMode { get => _themeDisplayMode; set => SetProperty(ref _themeDisplayMode, value); }
 
         // ═══ Color Theme System (Midnight/Ocean/Sunset/Emerald/Lavender/Light) ═══
-        private string _colorThemeName = "Default";
+        private string _colorThemeName = "Midnight";
         public string ColorThemeName { get => _colorThemeName; set => SetProperty(ref _colorThemeName, value); }
 
         private bool _themeAnimationsEnabled = true;
@@ -514,7 +514,7 @@ namespace FlyShelf.Classes
                             }
                             if (string.IsNullOrEmpty(Current.ColorThemeName))
                             {
-                                Current.ColorThemeName = "Default";
+                                Current.ColorThemeName = "Midnight";
                             }
                             Current.Version = 3;
                             // Write synchronously to guarantee persistence before DebouncedSave can race
