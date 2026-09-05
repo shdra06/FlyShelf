@@ -256,7 +256,7 @@ export function useLanPresence(params: {
     const unsubscribe = NetInfo.addEventListener(state => {
       if (state.isConnected && state.type === 'wifi' && isMountedRef.current) {
         if (ipTimerRef.current) clearTimeout(ipTimerRef.current);
-        ipTimerRef.current = setTimeout(() => { if (isMountedRef.current) announcePresence(); }, 2000);
+        ipTimerRef.current = setTimeout(() => { if (isMountedRef.current) announcePresence(); }, 500); // Fast re-announce on WiFi (was 2000ms)
       }
     });
 

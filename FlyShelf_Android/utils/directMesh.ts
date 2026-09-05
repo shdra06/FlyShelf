@@ -61,24 +61,29 @@ export const DirectMesh = {
     if (_outboxQueue.length === 0) return;
 
     syncLog('DIRECT-MESH', `⚡ Draining ${_outboxQueue.length} queued outbox items over WebSocket`);
-    while (_outboxQueue.length > 0 && _activeWebSocket.readyState === WebSocket.OPEN) {
-      const item = _outboxQueue.shift();
-      if (item) {
-        try {
-          _activeWebSocket.send(JSON.stringify({
-            type: 'SyncClip',
-            itemType: item.type,
-            title: item.title,
-            data: item.data,
-            sourceDeviceName: item.sourceDeviceName,
-            sourceDeviceId: item.sourceDeviceId,
-            sourceDeviceType: item.sourceDeviceType,
-            ts: item.timestamp,
-          }));
-        } catch (e) {
-          _outboxQueue.unshift(item);
-          break;
-        }
+    // PERF: splice(0) is O(1) vs shift() in a loop which is O(N²)
+    const batch = _outboxQueue.splice(0);
+    for (let i = 0; i < batch.length; i++) {
+      if (_activeWebSocket.readyState !== WebSocket.OPEN) {
+        // Put remaining items back
+        _outboxQueue.unshift(...batch.slice(i));
+        break;
+      }
+      const item = batch[i];
+      try {
+        _activeWebSocket.send(JSON.stringify({
+          type: 'SyncClip',
+          itemType: item.type,
+          title: item.title,
+          data: item.data,
+          sourceDeviceName: item.sourceDeviceName,
+          sourceDeviceId: item.sourceDeviceId,
+          sourceDeviceType: item.sourceDeviceType,
+          ts: item.timestamp,
+        }));
+      } catch (e) {
+        _outboxQueue.unshift(...batch.slice(i));
+        break;
       }
     }
   },
@@ -138,6 +143,8 @@ export const DirectMesh = {
           'X-FlyShelf-Client': 'MobileCompanion',
           'X-Source-Device': deviceName || 'Mobile',
           'X-Device-Id': myDeviceId,
+          'Connection': 'keep-alive',
+          'Accept-Encoding': 'gzip',
         };
         if (pairingKey) hdrs['X-Pairing-Key'] = pairingKey;
 

@@ -8,6 +8,7 @@ using System;
 using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -140,7 +141,9 @@ namespace FlyShelf.Classes
                             Type = x.itemType.ToString(),
                             PreviewUrl = (x.itemType == ClipboardItemType.Image || x.itemType == ClipboardItemType.QRCode) ? (!string.IsNullOrEmpty(x.filePath) ? $"/download?path={Uri.EscapeDataString(x.filePath)}" : (x.rawContent ?? "")) : "",
                             DownloadUrl = !string.IsNullOrEmpty(x.filePath) ? $"/download?path={Uri.EscapeDataString(x.filePath)}" : (x.rawContent ?? ""),
-                            Raw = x.rawContent ?? x.fileName ?? "",
+                            Raw = (x.rawContent ?? x.fileName ?? "").Length > 51200 
+                                ? string.Concat((x.rawContent ?? "").AsSpan(0, 51200), "…[truncated]") 
+                                : (x.rawContent ?? x.fileName ?? ""),
                             FileName = x.fileName ?? "",
                             Time = x.dateCopied.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
                             Timestamp = ((DateTimeOffset)x.dateCopied).ToUnixTimeMilliseconds(),
@@ -162,16 +165,34 @@ namespace FlyShelf.Classes
                 string json = JsonSerializer.Serialize(payloadList);
                 var jsonBytes = Encoding.UTF8.GetBytes(json);
                 res.ContentType = "application/json; charset=utf-8";
-                res.ContentLength64 = jsonBytes.Length;
                 // Send PC identity in response headers so Android can update device status
                 res.AddHeader("X-PC-DeviceName", SettingsManager.Current.DeviceName ?? Environment.MachineName);
                 res.AddHeader("X-PC-DeviceId", SettingsManager.Current.DeviceId ?? "");
                 res.AddHeader("X-PC-LAN-Active", (!string.IsNullOrEmpty(CloudDiscoveryManager.CachedLocalUrl)).ToString());
                 res.AddHeader("X-PC-Cloud-Active", (!string.IsNullOrEmpty(CloudDiscoveryManager.CachedGlobalUrl)).ToString());
-                await res.OutputStream.WriteAsync(jsonBytes, 0, jsonBytes.Length);
+
+                // PERF: Gzip compress response if client supports it and payload is large enough
+                string acceptEncoding = req.Headers["Accept-Encoding"] ?? "";
+                if (acceptEncoding.Contains("gzip", StringComparison.OrdinalIgnoreCase) && jsonBytes.Length > 512)
+                {
+                    res.AddHeader("Content-Encoding", "gzip");
+                    using var ms = new MemoryStream();
+                    using (var gz = new GZipStream(ms, CompressionLevel.Fastest, leaveOpen: true))
+                    {
+                        gz.Write(jsonBytes, 0, jsonBytes.Length);
+                    }
+                    var gzBytes = ms.ToArray();
+                    res.ContentLength64 = gzBytes.Length;
+                    await res.OutputStream.WriteAsync(gzBytes, 0, gzBytes.Length);
+                    Logger.LogAction("SYNC-RESP", $"device={reqDevice} items={snapshot?.Count ?? 0} raw={jsonBytes.Length} gzip={gzBytes.Length} ({100 - gzBytes.Length * 100 / Math.Max(jsonBytes.Length, 1)}% smaller)");
+                }
+                else
+                {
+                    res.ContentLength64 = jsonBytes.Length;
+                    await res.OutputStream.WriteAsync(jsonBytes, 0, jsonBytes.Length);
+                    Logger.LogAction("SYNC-RESP", $"device={reqDevice} items={snapshot?.Count ?? 0} bytes={jsonBytes.Length}");
+                }
                 await res.OutputStream.FlushAsync();
-                // DEV DEBUG: Log items served
-                Logger.LogAction("SYNC-RESP", $"device={reqDevice} items={snapshot?.Count ?? 0} bytes={jsonBytes.Length} cloud={!string.IsNullOrEmpty(CloudDiscoveryManager.CachedGlobalUrl)}");
                 res.Close();
             }
             catch (Exception ex) { Logger.LogAction("SYNC_SERVE", $"ServeClipboardData failed: {ex.Message}"); try { res.StatusCode = 500; } catch { } try { res.Close(); } catch { } }

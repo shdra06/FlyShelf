@@ -635,7 +635,7 @@ namespace FlyShelf.Classes
                     }
                     else if (path == "/api/events" && req.HttpMethod == "GET")
                     {
-                        var tcs = new TaskCompletionSource<string>();
+                        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
                         // Fix: CancellationTokenSource ensures cleanup if client disconnects
                         using var cts = new CancellationTokenSource();
                         lock (_longPollLock) { _longPollWaiters.Add(tcs); }

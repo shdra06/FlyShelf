@@ -191,7 +191,7 @@ export function useDeviceSync(params: {
       }
       try {
         const timeout = targetUrl.includes('trycloudflare.com') ? 5000 : 2000;
-        const syncHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion', 'Connection': 'keep-alive' };
+        const syncHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion', 'Connection': 'keep-alive', 'Accept-Encoding': 'gzip' };
         if (pairingKeyRef.current) syncHeaders['X-Pairing-Key'] = pairingKeyRef.current;
         // Send device identity so PC can update device status and show real name
         if (deviceName) {
