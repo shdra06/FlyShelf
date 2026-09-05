@@ -678,16 +678,25 @@ namespace FlyShelf.Classes
             }
 
             // Determine current EXE path (multiple fallback strategies for single-file deployment)
-            string currentExePath = Process.GetCurrentProcess().MainModule?.FileName ?? "";
+            // Priority: Environment.ProcessPath (most reliable for .NET 6+ single-file) → MainModule → AppContext
+            string currentExePath = Environment.ProcessPath ?? "";
+            if (string.IsNullOrEmpty(currentExePath) || !File.Exists(currentExePath))
+            {
+                currentExePath = Process.GetCurrentProcess().MainModule?.FileName ?? "";
+            }
             if (string.IsNullOrEmpty(currentExePath) || !File.Exists(currentExePath))
             {
                 currentExePath = Path.Combine(AppContext.BaseDirectory, "FlyShelf.exe");
             }
-            if (string.IsNullOrEmpty(currentExePath) || !File.Exists(currentExePath))
+            // Guard: reject paths inside .NET extraction temp dir
+            string tempDir2 = Path.GetTempPath();
+            if (currentExePath.StartsWith(tempDir2, StringComparison.OrdinalIgnoreCase) &&
+                currentExePath.Contains(".net", StringComparison.OrdinalIgnoreCase))
             {
-                currentExePath = Environment.ProcessPath ?? "";
+                Logger.LogAction("UPDATE", $"WARNING: Resolved path is .NET extraction dir: {currentExePath}, using AppContext fallback");
+                currentExePath = Path.Combine(AppContext.BaseDirectory, "FlyShelf.exe");
             }
-            if (string.IsNullOrEmpty(currentExePath))
+            if (string.IsNullOrEmpty(currentExePath) || !File.Exists(currentExePath))
             {
                 StatusChanged?.Invoke("Cannot determine current EXE path.");
                 Logger.LogAction("UPDATE", "FATAL: Could not find current EXE path via any method.");
@@ -771,7 +780,9 @@ namespace FlyShelf.Classes
             if (!string.IsNullOrEmpty(targetPath))
             {
                 string targetFileName = Path.GetFileName(targetPath);
-                if (!targetFileName.Equals("FlyShelf.exe", StringComparison.OrdinalIgnoreCase))
+                // Allow FlyShelf.exe and common variants like "FlyShelf (1).exe"
+                if (!targetFileName.StartsWith("FlyShelf", StringComparison.OrdinalIgnoreCase) ||
+                    !targetFileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                 {
                     Logger.LogAction("UPDATE_SECURITY", $"Rejected suspicious --target path: {targetPath}");
                     return true; // Return true to signal 'handled' so app exits

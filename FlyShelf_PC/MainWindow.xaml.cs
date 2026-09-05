@@ -547,7 +547,7 @@ namespace FlyShelf
             Dispatcher.InvokeAsync(() =>
             {
                 Classes.UpdateManager.MarkUpdateVerified();
-            }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         private void DeleteContextMenu_Click(object sender, RoutedEventArgs e)
