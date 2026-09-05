@@ -34,28 +34,10 @@ namespace FlyShelf.Classes
                 bool lanEnabled = SettingsManager.Current.EnableLocalLAN;
                 Logger.LogAction("PEER", $"Handshake {peer.DeviceName}: LAN={peer.LanUrl ?? "(empty)"} CF={peer.CloudflareUrl ?? "(empty)"} lanEnabled={lanEnabled}");
 
-                using var cts = new CancellationTokenSource();
-                var tasks = new List<Task<(bool success, string transport, string url)>>();
-
-                if (lanEnabled && !string.IsNullOrEmpty(peer.LanUrl))
-                {
-                    tasks.Add(Task.Run(async () =>
-                    {
-                        bool ok = await TryConnect(peer, peer.LanUrl, "LAN", cts.Token);
-                        return (ok, "LAN", peer.LanUrl);
-                    }));
-                }
-
-                if (!string.IsNullOrEmpty(peer.CloudflareUrl))
-                {
-                    tasks.Add(Task.Run(async () =>
-                    {
-                        bool ok = await TryConnect(peer, peer.CloudflareUrl, "Cloudflare", cts.Token);
-                        return (ok, "Cloudflare", peer.CloudflareUrl);
-                    }));
-                }
-
-                if (tasks.Count == 0)
+                // Guard: no URLs available at all
+                bool hasLan = lanEnabled && !string.IsNullOrEmpty(peer.LanUrl);
+                bool hasCf = !string.IsNullOrEmpty(peer.CloudflareUrl);
+                if (!hasLan && !hasCf)
                 {
                     bool isMobile = string.Equals(peer.DeviceType, "Mobile", StringComparison.OrdinalIgnoreCase) ||
                                     (peer.DeviceId != null && peer.DeviceId.StartsWith("Mobile_", StringComparison.OrdinalIgnoreCase));
@@ -69,29 +51,42 @@ namespace FlyShelf.Classes
                             return;
                         }
                     }
-
                     lock (peer.StateLock) { peer.IsAlive = false; peer.Transport = "offline"; }
                     return;
                 }
 
-                var remainingTasks = new List<Task<(bool success, string transport, string url)>>(tasks);
+                // ═══ LAN-FIRST STRATEGY ═══
+                // Always try LAN first — it's faster and more reliable.
+                // Only fall back to Cloudflare if LAN fails or isn't available.
                 bool handshakeSucceeded = false;
 
-                while (remainingTasks.Count > 0)
+                if (hasLan)
                 {
-                    var completedTask = await Task.WhenAny(remainingTasks);
-                    remainingTasks.Remove(completedTask);
                     try
                     {
-                        var result = await completedTask;
-                        if (result.success)
+                        using var lanCts = new CancellationTokenSource(2500); // 2.5s LAN timeout
+                        bool lanOk = await TryConnect(peer, peer.LanUrl, "LAN", lanCts.Token);
+                        if (lanOk)
                         {
                             handshakeSucceeded = true;
-                            try { cts.Cancel(); } catch { } // Best-effort: failure is acceptable
-                            break;
                         }
                     }
-                    catch { } // Best-effort: failure is acceptable
+                    catch { } // LAN attempt failed — fall through to Cloudflare
+                }
+
+                // Cloudflare fallback only if LAN failed or unavailable
+                if (!handshakeSucceeded && hasCf)
+                {
+                    try
+                    {
+                        using var cfCts = new CancellationTokenSource(8000); // 8s Cloudflare timeout
+                        bool cfOk = await TryConnect(peer, peer.CloudflareUrl, "Cloudflare", cfCts.Token);
+                        if (cfOk)
+                        {
+                            handshakeSucceeded = true;
+                        }
+                    }
+                    catch { } // Cloudflare attempt also failed
                 }
 
                 if (!handshakeSucceeded)

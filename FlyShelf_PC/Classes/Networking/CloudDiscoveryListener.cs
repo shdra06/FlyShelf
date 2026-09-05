@@ -31,10 +31,10 @@ namespace FlyShelf.Classes
         private const int QUERY_DEBOUNCE_MS = 3000; // 3s minimum between queries
         private readonly SemaphoreSlim _querySemaphore = new(1, 1);
 
-        // H-13 fix: Adaptive polling to prevent Firebase quota exhaustion
-        private int _currentPollInterval = 30_000;  // Start at 30s (was 10s)
-        private const int POLL_INTERVAL_MIN = 30_000;   // 30s floor
-        private const int POLL_INTERVAL_MAX = 300_000;   // 5 min ceiling
+        // H-13 fix: Adaptive polling — balanced between responsiveness and Firebase quota
+        private int _currentPollInterval = 10_000;  // Start at 10s for fast initial sync
+        private const int POLL_INTERVAL_MIN = 10_000;   // 10s floor — fast enough for near-instant sync
+        private const int POLL_INTERVAL_MAX = 30_000;   // 30s ceiling (was 5min — way too slow)
         private int _lastPeerCount = -1;  // Track peer changes to reset interval
 
         public CloudDiscoveryListener(FlyShelfViewModel viewModel)

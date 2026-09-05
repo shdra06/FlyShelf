@@ -378,6 +378,19 @@ namespace FlyShelf.ViewModels
                                 catch (IOException) { continue; }
                                 catch { } // Best-effort: failure is acceptable
 
+                                // Echo prevention: don't re-sync files we received from peers
+                                try
+                                {
+                                    var fi = new System.IO.FileInfo(filePath);
+                                    string fileFp = $"FILE::{fi.Name}::{fi.Length}";
+                                    if (IsCloudSourced(fileFp))
+                                    {
+                                        FlyShelf.Classes.Logger.LogAction("SYNC ECHO GUARD", $"Blocked re-sync of cloud-sourced file: {fi.Name}");
+                                        continue;
+                                    }
+                                }
+                                catch { } // Best-effort: failure is acceptable
+
                                 await SyncFileToDevicesAsync(filePath, item, label: "FILE");
                             }
                         }

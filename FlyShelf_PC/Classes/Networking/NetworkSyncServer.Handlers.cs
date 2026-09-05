@@ -418,7 +418,7 @@ namespace FlyShelf.Classes
                 _viewModel.MarkAsCloudSourced(txtFp);
                 
                 // Suppress clipboard monitor during our write
-                ClipboardHelper.SafeSetText(capturedText, suppressEcho: true, echoDelayMs: 500);
+                ClipboardHelper.SafeSetText(capturedText, suppressEcho: true, echoDelayMs: 1000);
                 
                 FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}!");
                 // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)

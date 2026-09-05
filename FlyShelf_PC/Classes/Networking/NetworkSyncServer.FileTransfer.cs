@@ -443,8 +443,17 @@ namespace FlyShelf.Classes
                     // forceClipboardSync=false - we write to clipboard ourselves with echo prevention
                     _viewModel.HandleDrop(dataObj, false, skipCloudSync: true, sourceDevice, sourceDeviceType, transferMethod);
                     
+                    // Mark file as cloud-sourced to prevent echo if WM_CLIPBOARDUPDATE fires after delay
+                    try
+                    {
+                        var fi = new System.IO.FileInfo(filePath);
+                        string fileFp = $"FILE::{fi.Name}::{fi.Length}";
+                        _viewModel.MarkAsCloudSourced(fileFp);
+                    }
+                    catch { } // Best-effort: failure is acceptable
+                    
                     // Write received file to OS clipboard so user can paste it
-                    ClipboardHelper.SafeSetFileDropList(new System.Collections.Specialized.StringCollection { filePath }, suppressEcho: true, echoDelayMs: 100);
+                    ClipboardHelper.SafeSetFileDropList(new System.Collections.Specialized.StringCollection { filePath }, suppressEcho: true, echoDelayMs: 2000);
                     
                     string sizeStr = "";
                     try
@@ -494,7 +503,7 @@ namespace FlyShelf.Classes
                     // Set file drop list to clipboard
                     var clipList = new System.Collections.Specialized.StringCollection();
                     foreach (var f in files) clipList.Add(f);
-                    ClipboardHelper.SafeSetFileDropList(clipList, suppressEcho: true, echoDelayMs: 100);
+                    ClipboardHelper.SafeSetFileDropList(clipList, suppressEcho: true, echoDelayMs: 2000);
 
                     FlyShelf.Windows.ToastWindow.ShowToast($"Saved: Group of {files.Length} files via {transferMethod}");
                     NotifyClipboardChanged("Group", groupItem.FileName);
@@ -612,7 +621,7 @@ namespace FlyShelf.Classes
                     _viewModel.MarkAsCloudSourced(txtFp);
                     
                     // Suppress clipboard monitor during our write
-                    ClipboardHelper.SafeSetText(capturedText, suppressEcho: true, echoDelayMs: 100);
+                    ClipboardHelper.SafeSetText(capturedText, suppressEcho: true, echoDelayMs: 1000);
                     
                     FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport}!");
                     // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)

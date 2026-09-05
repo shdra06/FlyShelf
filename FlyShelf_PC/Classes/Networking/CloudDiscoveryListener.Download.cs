@@ -356,7 +356,11 @@ namespace FlyShelf.Classes
                         ? string.Create(CultureInfo.InvariantCulture, $"{fileInfo.Length / 1_073_741_824.0:F1} GB")
                         : string.Create(CultureInfo.InvariantCulture, $"{fileInfo.Length / 1_048_576.0:F1} MB");
 
-                    ClipboardHelper.SafeSetFileDropList(new System.Collections.Specialized.StringCollection { filePath }, suppressEcho: true, echoDelayMs: 100);
+                    // Mark file as cloud-sourced to prevent echo back to sender
+                    string receivedFileFp = $"FILE::{fileInfo.Name}::{fileInfo.Length}";
+                    _viewModel.MarkAsCloudSourced(receivedFileFp);
+
+                    ClipboardHelper.SafeSetFileDropList(new System.Collections.Specialized.StringCollection { filePath }, suppressEcho: true, echoDelayMs: 2000);
                     FlyShelf.Windows.ToastWindow.ShowToast($"{cloudItem.Title} ({sizeStr}) from {cloudItem.SourceDeviceName}");
 
                     var clip = new ClipboardItem(filePath);
