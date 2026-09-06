@@ -1051,9 +1051,9 @@ namespace FlyShelf.ViewModels
         /// <summary>True for any item backed by a file on disk (images, docs, archives, etc.)</summary>
         public bool HasFilePath => !string.IsNullOrEmpty(FilePath);
         public bool CanShowInExplorer => HasFilePath || ItemType == ClipboardItemType.Group;
-        /// <summary>True when the item can be renamed in FlyShelf (file-backed items only, not passwords).</summary>
-        public bool CanRename => HasFilePath && !IsPassword && ItemType != ClipboardItemType.Text
-            && ItemType != ClipboardItemType.Code && ItemType != ClipboardItemType.Url;
+        /// <summary>True when the item can be renamed in FlyShelf (any file-backed item, not passwords).
+        /// Real files (.json, .py, .cs, .txt etc.) get classified as Code/Text during import but are still renamable.</summary>
+        public bool CanRename => HasFilePath && !IsPassword;
 
         private bool _isRenaming;
         /// <summary>True when the user is editing this item's name directly on the card in-place (File Explorer style).</summary>

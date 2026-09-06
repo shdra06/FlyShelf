@@ -699,6 +699,12 @@ namespace FlyShelf
                 AltShelfListView.SelectedItem = item;
             }
 
+            // Activate the window so the rename TextBox can receive keyboard input.
+            // Without this, WS_EX_NOACTIVATE causes keystrokes to go to the previously focused app.
+            UpdateWindowActivationStyle();
+            SuppressDwmBorder();
+            this.Activate();
+
             item.IsRenaming = true;
         }
 
