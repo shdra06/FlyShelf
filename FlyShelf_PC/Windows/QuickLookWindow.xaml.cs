@@ -685,6 +685,27 @@ namespace FlyShelf.Windows
                                 Dispatcher.Invoke(() => { LoadingProgress.Visibility = Visibility.Collapsed; });
                             };
 
+                            // ═══ Map the markdown file's directory to a virtual host for image loading ═══
+                            // WebView2's NavigateToString() treats the page as about:blank, blocking all file:// requests.
+                            // Virtual host mapping creates an allowed HTTP host that serves local files.
+                            if (!string.IsNullOrEmpty(_item.FilePath))
+                            {
+                                try
+                                {
+                                    string mdDir = System.IO.Path.GetDirectoryName(_item.FilePath);
+                                    if (!string.IsNullOrEmpty(mdDir) && Directory.Exists(mdDir))
+                                    {
+                                        WebPreview.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                                            "md-assets.flyshelf", mdDir,
+                                            Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
+                                    }
+                                }
+                                catch (Exception vhEx)
+                                {
+                                    FlyShelf.Classes.Logger.LogAction("QUICKLOOK", $"Virtual host mapping failed: {vhEx.Message}");
+                                }
+                            }
+
                             WebPreview.NavigateToString(html);
                             
                             // Show markdown-specific buttons

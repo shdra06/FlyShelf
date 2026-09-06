@@ -575,19 +575,27 @@ hr {
           });
         }
 
-        // Image path resolution
+        // Image path resolution — use virtual host mapping (file:// is blocked by WebView2 security)
         var baseDir = document.getElementById('md-base-dir');
         var basePath = baseDir ? baseDir.textContent.trim() : '';
         document.querySelectorAll('#content img').forEach(function(img) {
           var src = img.getAttribute('src');
           if (!src) return;
-          if (/^(https?:|data:|file:|blob:)/i.test(src)) return;
-          if (/^[A-Za-z]:[\\/]/.test(src)) {
-            img.src = 'file:///' + src.replace(/\\/g, '/');
+          if (/^(https?:|data:|blob:)/i.test(src)) return;
+          // Absolute Windows path (C:\...) — extract filename and serve via virtual host
+          if (/^[A-Za-z]:[\\\/]/.test(src)) {
+            var fileName = src.replace(/\\/g, '/').split('/').pop();
+            img.src = 'https://md-assets.flyshelf/' + fileName;
           } else if (basePath) {
-            var resolved = basePath.replace(/\\/g, '/') + '/' + src.replace(/^\.\//, '');
-            img.src = 'file:///' + resolved;
+            // Relative path (./img.png, img.png, subdir/img.png) — serve via virtual host
+            var resolved = src.replace(/^\.\//, '');
+            img.src = 'https://md-assets.flyshelf/' + resolved;
           }
+          // Style images to fit within the container
+          img.style.maxWidth = '100%';
+          img.style.height = 'auto';
+          img.style.borderRadius = '8px';
+          img.style.margin = '12px 0';
         });
 
         // Load and render mermaid if needed, then signal completion

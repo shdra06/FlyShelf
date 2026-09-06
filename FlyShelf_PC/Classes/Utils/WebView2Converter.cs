@@ -82,6 +82,22 @@ namespace FlyShelf.Classes
                     ? MarkdownTemplate.GetHtml(markdownContent)
                     : MarkdownTemplate.GetHtml(markdownContent, sourceFilePath);
 
+                // ═══ Map the markdown file's directory to a virtual host for image loading ═══
+                if (!string.IsNullOrEmpty(sourceFilePath))
+                {
+                    try
+                    {
+                        string mdDir = Path.GetDirectoryName(sourceFilePath);
+                        if (!string.IsNullOrEmpty(mdDir) && Directory.Exists(mdDir))
+                        {
+                            webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                                "md-assets.flyshelf", mdDir,
+                                CoreWebView2HostResourceAccessKind.Allow);
+                        }
+                    }
+                    catch { }
+                }
+
                 // Load the HTML content
                 webView.NavigateToString(html);
 
