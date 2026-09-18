@@ -1,0 +1,9 @@
+{
+    "pc_version":  "4.3.0",
+    "pc_changelog":  "v4.3.0\n\n• Foolproof PC update mechanism: automatic UAC elevation, pre-downloaded binary detection, working directory lock prevention\n• Complete clipboard persistence integrity across app updates, system logoffs, and shutdowns\n• Robust fallback to version.json on API rate limits and automatic crash recovery\n• Performance optimizations and UI reliability improvements",
+    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v4.3.0/FlyShelf.exe",
+    "pc_sha256":  "f436ab187b55ad02e87f8b845f2a8b9c0854ce359719cee8d8332d7d7d97f97d",
+    "android_version":  "7.2.0",
+    "android_changelog":  "v7.2.0\n\n• 10MB large file threshold for chunked uploads\n• Cross-device instant P2P transfer optimizations\n• Performance and stability improvements",
+    "android_download":  "https://github.com/shdra06/FlyShelf/releases/download/v4.3.0/FlyShelf_Mobile_Device.apk"
+}
