@@ -1,0 +1,21 @@
+/* Finishing layer: keep decorative motion contained and user-controllable. */
+body{overflow-x:clip}
+.ticker{margin:0}
+.hero{overflow:clip}
+.hero-art .image-card img,.drag-shelf img{width:100%;height:auto}
+.personalization-showcase{margin:32px 0 0;position:relative;border:1px solid #4a4b58;border-radius:12px;overflow:hidden;background:#11150f}
+.personalization-showcase img{width:100%;height:auto;transition:transform 1s cubic-bezier(.2,.8,.2,1)}
+.personalization-showcase:hover img{transform:scale(1.035)}
+.personalization-showcase figcaption{position:absolute;left:22px;bottom:19px;font-size:8px;letter-spacing:.12em;color:#dfd9f3;background:#17131fbf;border-radius:4px;padding:5px 9px}
+.hero-copy{animation:hero-enter .8s cubic-bezier(.2,.8,.2,1) both}
+.hero-art{animation:art-enter 1.1s cubic-bezier(.2,.8,.2,1) both}
+.shot-surface.changing{animation:shot-arrive .5s ease-out}
+.button:active{transform:translateY(0) scale(.98)}
+.ticker-track{gap:0}
+.ticker-group{display:flex;gap:35px;align-items:center;padding-right:35px;flex:none}
+.motion-paused .reveal{transition:none!important;opacity:1!important;transform:none!important}
+.motion-paused .hero-art{translate:0 0!important}
+@keyframes hero-enter{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes art-enter{from{opacity:0;filter:blur(6px)}to{opacity:1;filter:blur(0)}}
+@media(max-width:600px){.personalization-showcase{margin-top:25px}.personalization-showcase figcaption{font-size:5px;left:10px;bottom:9px;padding:3px 5px}.ticker-group{gap:24px;padding-right:24px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.hero-art{translate:0 0!important}}

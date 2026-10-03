@@ -1,0 +1,9 @@
+{
+    "pc_version": "4.4.0",
+    "pc_changelog": "v4.4.0 — Fluid 120 FPS Scrolling, Instant Background Sync & Deletion Optimization\n\n• Ultra-smooth 60/120 FPS list scrolling physics, lower latency, and touchpad mid-scroll catch and halt\n• Zero-lag deletion and background synchronization optimization when FlyShelf Hub is open\n• Native SymbolIcons overhaul and dedicated back-to-clipboard pill buttons for sub-panels\n• Hardened LAN transfer pipeline and HMAC peer discovery with fail-safe reconnect logic\n• Notes journal view enhancements with top-of-list insertion and auto-save debouncing\n• Living Shelf styling tokens, ambient shadows, and companion mascot animations",
+    "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v4.4.0/FlyShelf.exe",
+    "pc_sha256": "a1368d3c98048ce5974e87011fbf52bc51c638cfb46e271e80a869ddc856e07b",
+    "android_version": "7.2.0",
+    "android_changelog": "v7.2.0\n\n• 10MB large file threshold for chunked uploads\n• Cross-device instant P2P transfer optimizations\n• Performance and stability improvements",
+    "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v4.4.0/FlyShelf_Mobile_Device.apk"
+}

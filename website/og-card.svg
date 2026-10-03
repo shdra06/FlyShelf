@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#101411"/>
+  <g fill="none" stroke="#566a3c" opacity=".65"><ellipse cx="1000" cy="315" rx="330" ry="230" transform="rotate(-35 1000 315)"/><ellipse cx="1000" cy="315" rx="320" ry="185" transform="rotate(35 1000 315)"/><circle cx="1000" cy="315" r="195"/></g>
+  <rect x="65" y="57" width="41" height="41" rx="10" fill="#d6ff89"/>
+  <path d="m76 87 19-19m-15 0h15v15" fill="none" stroke="#17200e" stroke-width="3.5" stroke-linecap="round"/>
+  <text x="121" y="89" fill="#f3f5ed" font-family="Arial,sans-serif" font-size="31" font-weight="700">FlyShelf</text>
+  <text x="65" y="185" fill="#a9bc94" font-family="Arial,sans-serif" font-size="14" letter-spacing="3">COPY. KEEP. CARRY.</text>
+  <text x="60" y="305" fill="#f3f5ed" font-family="Arial,sans-serif" font-size="92" font-weight="700" letter-spacing="-5">Your clipboard.</text>
+  <text x="60" y="410" fill="#d6ff89" font-family="Arial,sans-serif" font-size="92" font-weight="700" letter-spacing="-5">Unchained.</text>
+  <text x="65" y="477" fill="#b5c0ad" font-family="Arial,sans-serif" font-size="24">A little home for your big ideas.</text>
+  <text x="65" y="557" fill="#9cae8d" font-family="Arial,sans-serif" font-size="16">WINDOWS + ANDROID</text>
+  <g transform="translate(1000 315)" fill="none" stroke="#d6ff89" stroke-width="5"><path d="M-63 0H63M0-63V63M-45-45l90 90M-45 45l90-90"/></g>
+  <circle cx="1047" cy="92" r="5" fill="#d6ff89"/>
+  <circle cx="818" cy="373" r="4" fill="#c2b2fa"/>
+</svg>
