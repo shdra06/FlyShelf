@@ -1,8 +1,8 @@
 {
-    "pc_version":  "4.5.0",
-    "pc_changelog":  "v4.5.0 — Smoother Scrolling, Safer Updates & Faster Startup\n\n• Smoother scrolling: no more upward-scroll stutter or momentum jitter; new low-end mode\n• Faster startup, fewer UI freezes, instant tray quit\n• Safer auto-updates: resumable downloads, automatic rollback if a new version fails to start\n• Smarter shake-to-summon with fewer accidental triggers\n• Image-text editor fine-tuning, table recovery and PDF page previews\n• PDF/Markdown merge tools, QuickLook on Spacebar, OCR tools\n• More reliable LAN/cloud sync, delivery receipts and clipboard/paste sync",
-    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v4.5.0/FlyShelf.exe",
-    "pc_sha256":  "13a362118bf90d06c156e6d60beefa58de04ec9c7ca2a808ca0a5e3e808548d9",
+    "pc_version":  "4.5.1",
+    "pc_changelog":  "v4.5.1 — Polish & Reliability Update\n\n• Cleaner right-click menus: PDF actions in a clear order, one Convert menu, Show in Explorer at the top level\n• New PDF Compare: pick the other PDF straight from your shelf, browse, or drop it in\n• PDF tools pick files from the shelf in one click; Stamp, Split, Redact and Password show quick toasts instead of popups\n• Notes keep the cursor in the card you click, so pastes land where you expect\n• Clipboard background no longer changes when you switch Windows virtual desktops\n• Smaller, tidier default Clipboard size (310 × 355); your saved size is kept\n• Folder cards open in File Explorer from the Quick Look button; Ctrl+W closes Quick Look\n• Large copies (hundreds of files) paste and open without freezing the shelf\n• More reliable LAN transfers: idle timeouts, delivery tracking and correct queue order",
+    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v4.5.1/FlyShelf.exe",
+    "pc_sha256":  "1099a10453385c4eb1fdcba4eee712e951a05c8454d66bd0f671cc9bfa3099bd",
     "android_version":  "7.2.0",
     "android_changelog":  "v7.2.0\n\n• 10MB large file threshold for chunked uploads\n• Cross-device instant P2P transfer optimizations\n• Performance and stability improvements",
     "android_download":  "https://github.com/shdra06/FlyShelf/releases/download/v4.4.0/FlyShelf_Mobile_Device.apk"
