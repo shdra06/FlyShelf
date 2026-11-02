@@ -1,750 +1,419 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-theme="light">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FlyShelf Pro — Lifetime License $9.99 | Clipboard Manager Upgrade</title>
-  
-  <!-- SEO Meta Tags -->
-  <meta name="description" content="Upgrade to FlyShelf Pro with a one-time lifetime license. PDF merges, document conversions, OCR and table extraction without daily limits. ₹299 in India or $9.99 internationally.">
-  <meta name="keywords" content="flyshelf pro, clipboard manager pro, buy flyshelf, clipboard sync license, clipboard manager upgrade, PDF merger tool, OCR text extraction, flyshelf pricing">
-  <meta name="author" content="Shivendra (shdra06)">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>FlyShelf Pro — Monthly, yearly or lifetime</title>
+  <meta name="description" content="FlyShelf Pro removes every daily limit and adds Workflow Studio, watched folders, smart redaction and internet sync. ₹99 a month, ₹799 a year or ₹1,999 once in India; $2.99, $19.99 or $50 elsewhere. Up to 3 devices.">
   <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#f4f3ef">
   <link rel="canonical" href="https://fly-shelf.vercel.app/pricing.html">
-  
-  <!-- Open Graph / Social Metadata -->
-  <meta property="og:title" content="FlyShelf Pro — Lifetime License for $9.99">
-  <meta property="og:description" content="Upgrade to FlyShelf Pro for PDF and OCR tools without daily usage limits. One-time payment, lifetime license.">
   <meta property="og:type" content="product">
-  <meta property="og:url" content="https://fly-shelf.vercel.app/pricing.html">
   <meta property="og:site_name" content="FlyShelf">
-  <meta property="og:image" content="https://fly-shelf.vercel.app/og-banner-v10.png">
+  <meta property="og:title" content="FlyShelf Pro — No daily limits, monthly, yearly or once">
+  <meta property="og:description" content="Every FlyShelf tool without daily limits, plus Workflow Studio, watched folders and internet sync. From ₹99 or $2.99 a month, or ₹1,999 or $50 once.">
+  <meta property="og:url" content="https://fly-shelf.vercel.app/pricing.html">
+  <meta property="og:image" content="https://fly-shelf.vercel.app/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  
-  <!-- Twitter Cards -->
+  <meta property="og:image:alt" content="FlyShelf: Everything you copy, within reach. Clipboard history for Windows and Android.">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="FlyShelf Pro — Lifetime License for $9.99">
-  <meta name="twitter:description" content="PDF, document and OCR tools without daily usage limits. ₹299 or $9.99 for a lifetime license.">
-  <meta name="twitter:image" content="https://fly-shelf.vercel.app/og-banner-v10.png">
-  
-  <!-- JSON-LD Product Schema -->
+  <meta name="twitter:title" content="FlyShelf Pro — No daily limits, monthly, yearly or once">
+  <meta name="twitter:description" content="Every FlyShelf tool without daily limits, plus Workflow Studio, watched folders and internet sync. From ₹99 or $2.99 a month, or ₹1,999 or $50 once.">
+  <meta name="twitter:image" content="https://fly-shelf.vercel.app/og-image.png">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&family=Instrument+Serif:ital@0;1&display=swap">
+  <script src="appearance.js?v=20"></script>
+  <link rel="stylesheet" href="site.css?v=20">
+  <link rel="stylesheet" href="checkout.css?v=21">
+  <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
+  <script src="site.js?v=20" defer></script>
+  <script src="pricing.js?v=21" defer></script>
   <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "Product",
-        "name": "FlyShelf Pro Lifetime License",
-        "description": "FlyShelf Pro lifetime license: PDF merges and saves, document conversions, OCR and table extraction without daily limits. One-time purchase.",
-        "brand": {"@type": "Brand", "name": "FlyShelf"},
-        "image": "https://fly-shelf.vercel.app/og-banner-v10.png",
-        "offers": [
-          {"@type": "Offer", "price": "9.99", "priceCurrency": "USD", "availability": "https://schema.org/InStock"},
-          {"@type": "Offer", "price": "299", "priceCurrency": "INR", "availability": "https://schema.org/InStock"}
-        ]
-      },
-      {
-        "@type": "BreadcrumbList",
-        "itemListElement": [
-          {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://fly-shelf.vercel.app/"},
-          {"@type": "ListItem", "position": 2, "name": "Buy Pro", "item": "https://fly-shelf.vercel.app/pricing.html"}
-        ]
-      }
-    ]
-  }
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Product",
+      "name": "FlyShelf Pro",
+      "description": "FlyShelf Pro: no daily limits on any FlyShelf tool, plus Workflow Studio, watched folders, smart redaction, stamps and seals, internet sync, device groups, custom document folders and custom wallpaper. Monthly, yearly or lifetime; one key activates up to 3 devices.",
+      "brand": {"@type": "Brand", "name": "FlyShelf"},
+      "image": "https://fly-shelf.vercel.app/og-image.png",
+      "offers": [
+        {"@type": "Offer", "name": "FlyShelf Pro Monthly", "price": "2.99", "priceCurrency": "USD", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "2.99", "priceCurrency": "USD", "billingDuration": "P1M", "unitText": "month"}, "availability": "https://schema.org/InStock", "url": "https://fly-shelf.vercel.app/pricing.html"},
+        {"@type": "Offer", "name": "FlyShelf Pro Monthly", "price": "99", "priceCurrency": "INR", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "99", "priceCurrency": "INR", "billingDuration": "P1M", "unitText": "month"}, "availability": "https://schema.org/InStock", "url": "https://fly-shelf.vercel.app/pricing.html"},
+        {"@type": "Offer", "name": "FlyShelf Pro Yearly", "price": "19.99", "priceCurrency": "USD", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "19.99", "priceCurrency": "USD", "billingDuration": "P1Y", "unitText": "year"}, "availability": "https://schema.org/InStock", "url": "https://fly-shelf.vercel.app/pricing.html"},
+        {"@type": "Offer", "name": "FlyShelf Pro Yearly", "price": "799", "priceCurrency": "INR", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "799", "priceCurrency": "INR", "billingDuration": "P1Y", "unitText": "year"}, "availability": "https://schema.org/InStock", "url": "https://fly-shelf.vercel.app/pricing.html"},
+        {"@type": "Offer", "name": "FlyShelf Pro Lifetime", "price": "50", "priceCurrency": "USD", "availability": "https://schema.org/InStock", "url": "https://fly-shelf.vercel.app/pricing.html"},
+        {"@type": "Offer", "name": "FlyShelf Pro Lifetime", "price": "1999", "priceCurrency": "INR", "availability": "https://schema.org/InStock", "url": "https://fly-shelf.vercel.app/pricing.html"}
+      ]
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://fly-shelf.vercel.app/"},
+        {"@type": "ListItem", "position": 2, "name": "FlyShelf Pro", "item": "https://fly-shelf.vercel.app/pricing.html"}
+      ]
+    }
+  ]
+}
   </script>
-  
-  <!-- Favicon / Styling -->
-  <link rel="shortcut icon" href="favicon.png" type="image/x-icon">
-  <link rel="stylesheet" href="style.css?v=8.5.2">
-  
-  <!-- Ionicons -->
-  
-  <!-- Razorpay Checkout SDK -->
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-  
-  <!-- Custom pricing specific styles -->
-  <style>
-    .pricing-hero {
-      padding: 140px 20px 60px 20px;
-      max-width: 1000px;
-      margin: 0 auto;
-      text-align: center;
-    }
-    
-    .checkout-container {
-      max-width: 800px;
-      margin: 0 auto 100px auto;
-      padding: 20px;
-    }
-    
-    .checkout-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 30px;
-    }
-    
-    @media (max-width: 768px) {
-      .checkout-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-    
-    .checkout-card {
-      padding: 30px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      position: relative;
-    }
-    
-    .payment-tab-row {
-      display: flex;
-      background: var(--bg-card);
-      border: 1px solid var(--border-light);
-      border-radius: 12px;
-      padding: 4px;
-      gap: 4px;
-    }
-    
-    .payment-tab {
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: var(--text-secondary);
-      padding: 10px;
-      font-size: 0.8rem;
-      font-weight: 700;
-      border-radius: 8px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      transition: var(--transition-fast);
-    }
-    
-    .payment-tab.active {
-      background: var(--color-cyan);
-      color: var(--btn-text);
-      border: 1px solid var(--color-cyan);
-    }
-    
-    .payment-tab.razorpay.active {
-      border-color: rgba(0, 210, 255, 0.2);
-      box-shadow: 0 0 10px rgba(0, 210, 255, 0.1);
-    }
-    
-    .payment-tab.paypal.active {
-      border-color: rgba(158, 0, 255, 0.2);
-      box-shadow: 0 0 10px rgba(158, 0, 255, 0.1);
-    }
-    
-    .input-field-glow {
-      background: var(--bg-card);
-      border: 1px solid var(--border-light);
-      border-radius: 10px;
-      padding: 12px 16px;
-      color: var(--text-primary);
-      font-family: inherit;
-      font-size: 0.9rem;
-      outline: none;
-      transition: var(--transition-fast);
-      width: 100%;
-    }
-    
-    .input-field-glow:focus {
-      border-color: var(--color-cyan);
-      box-shadow: 0 0 15px rgba(0, 210, 255, 0.15);
-    }
-    
-    .btn-checkout-pay {
-      width: 100%;
-      padding: 14px;
-      border-radius: 30px;
-      font-weight: 700;
-      font-size: 0.95rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      transition: var(--transition-smooth);
-      border: none;
-    }
-    
-    .btn-razorpay {
-      background: linear-gradient(135deg, #0b72e7 0%, #002c8a 100%);
-      color: #fff;
-      box-shadow: 0 4px 15px rgba(11, 114, 231, 0.3);
-    }
-    
-    .btn-razorpay:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(11, 114, 231, 0.5), 0 0 15px rgba(0, 210, 255, 0.2);
-    }
-    
-    .btn-paypal {
-      background: linear-gradient(135deg, #ffc439 0%, #e19b00 100%);
-      color: #012169;
-      box-shadow: 0 4px 15px rgba(255, 196, 57, 0.3);
-    }
-    
-    .btn-paypal:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(255, 196, 57, 0.5), 0 0 15px rgba(158, 0, 255, 0.2);
-    }
-    
-    /* Interactive Modal */
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(4, 5, 10, 0.88);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 2000;
-      padding: 20px;
-    }
-    
-    .modal-content {
-      width: 100%;
-      max-width: 480px;
-      padding: 36px 32px;
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      animation: zoom-in-modal 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      /* Force solid opaque dark background for maximum contrast */
-      background: #0d1117 !important;
-      border: 1px solid rgba(0, 210, 255, 0.15) !important;
-      border-radius: 24px !important;
-      box-shadow: 0 24px 80px -12px rgba(0, 0, 0, 0.7), 0 0 60px -10px rgba(0, 210, 255, 0.12) !important;
-      position: relative;
-      overflow: hidden;
-    }
-    
-    /* Subtle gradient shimmer on modal top edge */
-    .modal-content::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: linear-gradient(90deg, transparent, #00d2ff, #3ddc84, #00d2ff, transparent);
-      background-size: 200% 100%;
-      animation: shimmer-bar 3s ease-in-out infinite;
-    }
-    
-    @keyframes shimmer-bar {
-      0%, 100% { background-position: -200% 0; }
-      50% { background-position: 200% 0; }
-    }
-    
-    @keyframes zoom-in-modal {
-      from { transform: scale(0.85) translateY(20px); opacity: 0; }
-      to { transform: scale(1) translateY(0); opacity: 1; }
-    }
-    
-    .payment-loader {
-      width: 50px;
-      height: 50px;
-      border: 3px solid rgba(0, 210, 255, 0.1);
-      border-top-color: #00d2ff;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: 10px auto;
-    }
-    
-    /* ── SUCCESS ICON ── */
-    .success-icon-badge {
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      background: linear-gradient(145deg, rgba(61, 220, 132, 0.2), rgba(0, 210, 255, 0.1));
-      border: 2px solid rgba(61, 220, 132, 0.4);
-      display: grid;
-      place-content: center;
-      font-size: 2.5rem;
-      color: #3ddc84;
-      box-shadow: 0 0 35px rgba(61, 220, 132, 0.25), inset 0 0 20px rgba(61, 220, 132, 0.1);
-      margin: 0 auto;
-      animation: success-pulse 2s ease-in-out infinite, success-enter 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    
-    @keyframes success-pulse {
-      0%, 100% { box-shadow: 0 0 35px rgba(61, 220, 132, 0.25), inset 0 0 20px rgba(61, 220, 132, 0.1); }
-      50% { box-shadow: 0 0 50px rgba(61, 220, 132, 0.4), inset 0 0 25px rgba(61, 220, 132, 0.15); }
-    }
-    
-    @keyframes success-enter {
-      from { transform: scale(0.3) rotate(-15deg); opacity: 0; }
-      to { transform: scale(1) rotate(0deg); opacity: 1; }
-    }
-    
-    /* ── SUCCESS HEADING ── */
-    .success-heading {
-      font-size: 1.5rem;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #f3f5f9, #ffffff);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    
-    .success-subtext {
-      font-size: 0.85rem;
-      color: #9aa2b5;
-      line-height: 1.6;
-      max-width: 360px;
-      margin: 0 auto;
-    }
-    
-    .success-subtext strong {
-      color: #e0e7ff;
-    }
-    
-    /* ── EMAIL BADGE ── */
-    .email-confirm-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(61, 220, 132, 0.12);
-      border: 1px solid rgba(61, 220, 132, 0.3);
-      border-radius: 24px;
-      padding: 8px 18px;
-      font-size: 0.78rem;
-      color: #3ddc84;
-      font-weight: 700;
-      margin: 0 auto;
-      letter-spacing: 0.3px;
-    }
-    
-    /* ── LICENSE KEY BOX ── */
-    .license-glow-box {
-      background: linear-gradient(135deg, rgba(0, 210, 255, 0.08), rgba(61, 220, 132, 0.06));
-      border: 2px solid rgba(0, 210, 255, 0.3);
-      padding: 18px 20px;
-      border-radius: 14px;
-      font-family: 'Fira Code', monospace;
-      font-size: 1.1rem;
-      font-weight: 700;
-      letter-spacing: 2px;
-      color: #00d2ff;
-      text-shadow: 0 0 12px rgba(0, 210, 255, 0.4);
-      margin: 8px 0;
-      position: relative;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: inset 0 0 20px rgba(0, 210, 255, 0.06);
-    }
-    
-    .license-glow-box:hover {
-      border-color: rgba(0, 210, 255, 0.6);
-      box-shadow: 0 0 30px rgba(0, 210, 255, 0.2), inset 0 0 25px rgba(0, 210, 255, 0.08);
-      transform: scale(1.02);
-    }
-    
-    .license-glow-box::after {
-      content: '🔑 Click to copy';
-      position: absolute;
-      bottom: -22px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 0.68rem;
-      color: #626a7e;
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      letter-spacing: 0;
-      font-weight: 600;
-      opacity: 0;
-      transition: opacity 0.2s ease;
-    }
-    
-    .license-glow-box:hover::after {
-      opacity: 1;
-    }
-    
-    /* ── COPY BUTTON ── */
-    .btn-copy-key {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: #e0e7ff;
-      padding: 11px 28px;
-      font-size: 0.82rem;
-      font-weight: 700;
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      border-radius: 22px;
-      cursor: pointer;
-      transition: all 0.25s ease;
-    }
-    
-    .btn-copy-key:hover {
-      background: rgba(255, 255, 255, 0.15);
-      border-color: rgba(255, 255, 255, 0.25);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-    }
-    
-    /* ── ACTIVATE BUTTON ── */
-    .btn-deeplink {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      background: linear-gradient(135deg, #00d2ff, #0078d6);
-      color: #fff;
-      text-decoration: none;
-      padding: 13px 28px;
-      font-weight: 700;
-      border-radius: 25px;
-      font-size: 0.88rem;
-      box-shadow: 0 4px 20px rgba(0, 210, 255, 0.35);
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-      letter-spacing: 0.3px;
-    }
-    
-    .btn-deeplink:hover {
-      transform: translateY(-3px) scale(1.02);
-      box-shadow: 0 8px 30px rgba(0, 210, 255, 0.5), 0 0 15px rgba(0, 210, 255, 0.2);
-    }
-    
-    /* ── CLIPBOARD MAGIC TIP ── */
-    .clipboard-magic-tip {
-      font-size: 0.75rem;
-      color: #626a7e;
-      margin-top: 12px;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      padding-top: 14px;
-      line-height: 1.6;
-    }
-    
-    .clipboard-magic-tip strong {
-      color: #9aa2b5;
-    }
-    
-    /* ── CLOSE BUTTON ── */
-    .btn-close-success {
-      background: transparent;
-      border: none;
-      color: #626a7e;
-      cursor: pointer;
-      font-size: 0.78rem;
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      font-weight: 600;
-      margin-top: 4px;
-      padding: 6px 16px;
-      border-radius: 12px;
-      transition: all 0.2s ease;
-    }
-    
-    .btn-close-success:hover {
-      color: #9aa2b5;
-      background: rgba(255, 255, 255, 0.05);
-    }
-    
-    /* ── CONFETTI PARTICLES ── */
-    .confetti-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      overflow: hidden;
-      z-index: 1;
-    }
-    
-    .confetti-particle {
-      position: absolute;
-      width: 6px;
-      height: 6px;
-      border-radius: 2px;
-      top: -10px;
-      animation: confetti-fall linear forwards;
-    }
-    
-    @keyframes confetti-fall {
-      0% { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
-      70% { opacity: 1; }
-      100% { transform: translateY(500px) rotate(720deg) scale(0.3); opacity: 0; }
-    }
-    
-    /* Ensure content sits above confetti */
-    #modal-stage-success > *:not(.confetti-container) {
-      position: relative;
-      z-index: 2;
-    }
-  </style>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="checkout.css?v=10">
-  <script src="icons.js" defer></script>
 </head>
-<body>
+<body class="page-pricing">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V7a2.5 2.5 0 0 0-2.5-2.5H7A2.5 2.5 0 0 0 4.5 7v6A2.5 2.5 0 0 0 7 15.5h1.5"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/></symbol>
+      <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15.5" r="4"/><path d="m11 12.5 8.5-8.5M16.5 7l2.5 2.5M14.5 9l1.5 1.5"/></symbol>
+      <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4.5 7 7.5 6 7.5-6"/></symbol>
+      <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></symbol>
+      <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h3"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s6.5-6.2 6.5-11.5a6.5 6.5 0 0 0-13 0C5.5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.2"/></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5z"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.5h.01"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6v5.5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+      <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M17 3.5 20 6.5l-3 3M20 6.5H8a4 4 0 0 0-4 4v1M7 20.5l-3-3 3-3M4 17.5h12a4 4 0 0 0 4-4v-1"/></symbol>
+    </defs>
+  </svg>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="ambient" aria-hidden="true"></div>
 
-  <!-- Background Layer -->
-  <div class="bg-mesh"></div>
-  <div class="grid-bg"></div>
-
-  <!-- Navbar -->
-  <nav class="navbar glass" id="main-nav" aria-label="Main navigation">
-    <a class="nav-brand" href="index.html">
-      <img src="favicon.png" alt="FlyShelf Logo" style="width: 24px; height: 24px; margin-right: 8px; border-radius: 6px; vertical-align: middle; box-shadow: 0 0 10px rgba(0, 210, 255, 0.4);"/>
-      <span>FlyShelf</span>
-    </a>
-    <ul class="nav-links">
-      <li><a href="index.html#simulator">Sync Space</a></li>
-      <li><a href="index.html#features">Smart Tools</a></li>
-      <li><a href="index.html#licensing">Free vs Pro</a></li>
-      <li><a href="index.html#features">Features</a></li>
-      <li><a href="index.html#download" style="color: var(--color-cyan); font-weight: 700;">Download Free</a></li>
-    </ul>
-    <div style="display: flex; align-items: center; gap: 15px;">
-      <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Mode">
-        <ion-icon name="moon-outline" id="theme-toggle-icon"></ion-icon>
-      </button>
-      <a href="pricing.html" class="btn-premium btn-cyan nav-download-btn" style="padding: 10px 20px; font-size: 0.85rem; box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);">Buy Pro</a>
-      <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Toggle Navigation Menu">
-        <ion-icon name="menu-outline"></ion-icon>
-      </button>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="index.html" aria-label="FlyShelf home"><img src="favicon.png" width="28" height="28" alt="">FlyShelf</a>
+      <nav id="site-nav" class="site-nav" aria-label="Main">
+        <a href="index.html#how">How it works</a>
+        <a href="index.html#devices">Android sync</a>
+        <a href="index.html#features">Tools</a>
+        <a href="pricing.html" aria-current="page">Pricing</a>
+        <a href="index.html#faq">FAQ</a>
+        <a class="nav-cta" href="index.html#download">Download free</a>
+      </nav>
+      <div class="header-actions">
+        <a class="btn btn-sm header-cta" href="index.html#download">Download free</a>
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open navigation"><span></span><span></span></button>
+      </div>
     </div>
-  </nav>
-
-  <!-- Mobile Navigation Drawer -->
-  <div class="mobile-menu-drawer glass" id="mobile-menu-drawer">
-    <button class="mobile-menu-close" id="mobile-menu-close" aria-label="Close Navigation Menu">
-      <ion-icon name="close-outline"></ion-icon>
-    </button>
-    <ul class="mobile-nav-links">
-      <li><a href="index.html#simulator">Sync Space</a></li>
-      <li><a href="index.html#features">Smart Tools</a></li>
-      <li><a href="index.html#licensing">Free vs Pro</a></li>
-      <li><a href="index.html#features">Features</a></li>
-      <li><a href="index.html#download" style="color: var(--color-cyan); font-weight: 700;">Download Free</a></li>
-    </ul>
-    <div class="mobile-menu-cta">
-      <a href="pricing.html" class="btn-premium btn-cyan" style="width: 100%; justify-content: center; box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);">Buy Pro</a>
-    </div>
-  </div>
-
-  <!-- Hero Header -->
-  <header class="pricing-hero scroll-reveal">
-    <span class="badge badge-cyan" style="margin-bottom: 12px;">Premium Upgrade</span>
-    <h1 style="font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 15px;">Unlock FlyShelf Pro</h1>
-    <p style="color: var(--text-secondary); font-size: 1.1rem; max-width: 600px; margin: 0 auto;">Keep your flow going with PDF, document and OCR tools without daily usage limits. One payment. A lifetime license.</p>
   </header>
 
-  <!-- Checkout Grid Container -->
-  <main class="checkout-container scroll-reveal">
-    <div class="checkout-grid">
-      
-      <!-- CARD 1: ORDER SUMMARY -->
-      <div class="widget-card glass checkout-card">
-        <h3 style="font-size: 1.25rem; font-weight: 800; border-bottom: 1px solid var(--border-light); padding-bottom: 15px; margin-bottom: 5px;"><span class="title-icon-wrap" style="color: var(--color-cyan);"><ion-icon name="briefcase"></ion-icon></span> FlyShelf Pro Lifetime</h3>
-        <p style="font-size: 0.85rem; color: var(--text-secondary);">One-time purchase. Free lifetime updates. Valid on up to 3 personal devices.</p>
-        
-        <ul style="list-style: none; padding-left: 0; display: flex; flex-direction: column; gap: 12px; font-size: 0.85rem; color: var(--text-secondary); margin-top: 10px;">
-          <li style="display: flex; align-items: center; gap: 8px;">
-            <ion-icon name="checkmark-circle-outline" style="color: var(--color-cyan); font-size: 1.15rem;"></ion-icon>
-            <span>Searchable clipboard history</span>
-          </li>
-          <li style="display: flex; align-items: center; gap: 8px;">
-            <ion-icon name="checkmark-circle-outline" style="color: var(--color-cyan); font-size: 1.15rem;"></ion-icon>
-            <span>Unlimited PDF Merges, Saves & OCR</span>
-          </li>
-          <li style="display: flex; align-items: center; gap: 8px;">
-            <ion-icon name="checkmark-circle-outline" style="color: var(--color-cyan); font-size: 1.15rem;"></ion-icon>
-            <span>Document conversions without daily limits</span>
-          </li>
-          <li style="display: flex; align-items: center; gap: 8px;">
-            <ion-icon name="checkmark-circle-outline" style="color: var(--color-cyan); font-size: 1.15rem;"></ion-icon>
-            <span>Table extraction without daily limits</span>
-          </li>
-          <li style="display: flex; align-items: center; gap: 8px;">
-            <ion-icon name="checkmark-circle-outline" style="color: var(--color-cyan); font-size: 1.15rem;"></ion-icon>
-            <span>Support independent development</span>
-          </li>
-        </ul>
-        
-        <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-weight: 700;">Total Price:</span>
-          <div style="text-align: right;">
-            <span id="price-display-usd" style="font-size: 1.75rem; font-weight: 800; color: var(--text-primary);">$9.99</span>
-            <span id="price-display-inr" style="font-size: 1.75rem; font-weight: 800; color: var(--text-primary); display: none;">₹299</span>
-            <div style="font-size: 0.65rem; color: var(--text-muted);">One-time payment</div>
+  <main id="main">
+    <section class="pro-hero wrap" aria-labelledby="pro-title">
+      <p class="eyebrow">FlyShelf Pro</p>
+      <h1 id="pro-title" class="display pro-title">No daily limits. <span class="serif accent-text">Pay your way.</span></h1>
+      <p class="lead">Pro lifts every daily cap and adds Workflow Studio, watched folders, smart redaction and internet sync. Pay monthly, save with yearly, or buy it once — and use it on up to three of your devices.</p>
+    </section>
+
+    <!-- Shown for 15 minutes after a purchase in this tab -->
+    <section id="recent-order-section" class="wrap recent-order" aria-labelledby="recent-title" hidden>
+      <div class="recent-card">
+        <button id="btn-dismiss-recent" class="icon-btn recent-dismiss" type="button" aria-label="Hide this license key"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
+        <div class="recent-head">
+          <span class="success-dot" aria-hidden="true"><svg><use href="#i-check"/></svg></span>
+          <div>
+            <h2 id="recent-title">Your recent purchase</h2>
+            <p>Your key is also in your email. <span id="recent-order-timer"></span></p>
           </div>
+        </div>
+        <div class="recent-progress" aria-hidden="true"><span id="recent-order-progress"></span></div>
+        <button type="button" class="license-key" id="recent-order-key" title="Copy license key"></button>
+        <div class="key-actions">
+          <button id="btn-copy-recent" type="button" class="btn btn-sm"><svg aria-hidden="true"><use href="#i-copy"/></svg><span>Copy key</span></button>
+          <button id="recent-order-deeplink" type="button" class="btn btn-sm btn-primary"><svg aria-hidden="true"><use href="#i-bolt"/></svg><span>Activate on this PC</span></button>
         </div>
       </div>
-      
-      <!-- CARD 2: SECURE SECURE CHECKOUT -->
-      <div class="widget-card glass checkout-card" style="box-shadow: 0 12px 40px -10px rgba(0, 210, 255, 0.15);">
-        <h3 style="font-size: 1.25rem; font-weight: 800; border-bottom: 1px solid var(--border-light); padding-bottom: 15px;"><span class="title-icon-wrap" style="color: var(--color-cyan);"><ion-icon name="lock-closed"></ion-icon></span> Secure Checkout</h3>
-        
-        <!-- Region Tabs -->
-        <div class="payment-tab-row">
-          <button class="payment-tab razorpay" id="tab-inr">
-            <ion-icon name="pin-outline"></ion-icon> India (Razorpay)
-          </button>
-          <button class="payment-tab razorpay active" id="tab-usd">
-            <ion-icon name="globe-outline"></ion-icon> International ($9.99)
-          </button>
-        </div>
-        
-        <!-- User email input -->
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          <label for="customer-email" style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">Customer Email Address</label>
-          <input type="email" id="customer-email" autocomplete="email" required class="input-field-glow" placeholder="you@example.com">
-          <div style="font-size: 0.68rem; color: var(--text-muted);">Your license key will be generated and bound to this email.</div>
-        </div>
-        
-        <!-- Payment details and buy button -->
-        <div style="margin-top: auto; display: flex; flex-direction: column; gap: 15px;">
-          <!-- India / Razorpay form details -->
-          <div id="razorpay-details" style="font-size: 0.72rem; color: var(--text-secondary); display: none; flex-direction: column; gap: 6px; padding: 5px 0;">
-            <div style="display: flex; justify-content: space-between;"><span>Payment Gateway:</span><strong>Razorpay Secure</strong></div>
-            <div style="display: flex; justify-content: space-between;"><span>Supported Methods:</span><strong>UPI (GPay/PhonePe), NetBanking, Cards</strong></div>
-          </div>
-          
-          <!-- International / Razorpay USD form details -->
-          <div id="paypal-details" style="font-size: 0.72rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 6px; padding: 5px 0;">
-            <div style="display: flex; justify-content: space-between;"><span>Payment Gateway:</span><strong>Razorpay International</strong></div>
-            <div style="display: flex; justify-content: space-between;"><span>Supported Methods:</span><strong>Visa, Mastercard, AmEx, International Cards</strong></div>
-          </div>
-          
-          <!-- Submit Button -->
-          <button class="btn-checkout-pay btn-razorpay" id="btn-submit-payment">
-            <ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card
-          </button>
-        </div>
+    </section>
+
+    <section class="wrap checkout" aria-label="Buy FlyShelf Pro">
+      <div class="billing" role="group" aria-label="How would you like to pay?">
+        <button class="billing-option" id="plan-monthly" data-plan="pro_monthly" type="button" aria-pressed="false"><span class="billing-name">Monthly</span><small>Cancel any time</small></button>
+        <button class="billing-option active" id="plan-yearly" data-plan="pro_yearly" type="button" aria-pressed="true"><span class="billing-name">Yearly</span><small class="save-tag" id="yearly-savings">Save 44%</small></button>
+        <button class="billing-option" id="plan-lifetime" data-plan="lifetime" type="button" aria-pressed="false"><span class="billing-name">Lifetime</span><small>Pay once</small></button>
       </div>
-      
-    </div>
+      <div class="checkout-grid">
+        <article class="summary-card">
+          <div class="summary-top">
+            <div>
+              <h2 class="summary-title" id="plan-title">FlyShelf Pro Yearly</h2>
+              <p class="summary-sub" id="plan-sub">Billed yearly · cancel any time</p>
+            </div>
+            <div class="summary-price" aria-live="polite">
+              <span id="price-display-usd" class="price">$19.99</span>
+              <span id="price-display-inr" class="price" hidden>₹799</span>
+              <span class="price-note" id="price-note">a year · about $1.67 a month</span>
+            </div>
+          </div>
+          <ul class="summary-list">
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span><strong>No daily limits</strong> on any tool — PDF, conversion, table extraction, QR and Magic edit</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span><strong>Workflow Studio</strong> and <strong>watched folders</strong> to automate repeat jobs</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Smart redaction, stamps and seals for documents</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span><strong>Internet sync</strong> and device groups</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Custom document folders and custom wallpaper</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span><strong>50,000</strong> history entries and <strong>100</strong> text shortcuts</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>One key activates <strong>up to 3</strong> of your devices</span></li>
+          </ul>
+          <p class="summary-free">Free stays free: unlimited clipboard capture, OCR, image tools, video compression and conversions, with daily limits on a few heavier tools. <a class="link" href="#compare">Compare Free and Pro</a></p>
+        </article>
+
+        <form class="pay-card" id="checkout-form" novalidate aria-labelledby="pay-title">
+          <h2 id="pay-title" class="pay-title"><svg aria-hidden="true"><use href="#i-lock"/></svg>Checkout</h2>
+          <fieldset class="region">
+            <legend id="region-legend">Where are you paying from?</legend>
+            <div class="region-options">
+              <button class="region-option" id="tab-inr" type="button" aria-pressed="false">
+                <svg aria-hidden="true"><use href="#i-pin"/></svg>
+                <span><strong>India</strong><small id="tab-inr-note">₹799 a year · UPI Autopay, cards</small></span>
+              </button>
+              <button class="region-option active" id="tab-usd" type="button" aria-pressed="true">
+                <svg aria-hidden="true"><use href="#i-globe"/></svg>
+                <span><strong>International</strong><small id="tab-usd-note">$19.99 a year · Visa, Mastercard, Amex</small></span>
+              </button>
+            </div>
+          </fieldset>
+          <div class="field">
+            <label for="customer-email">Email for your license key</label>
+            <input class="input" type="email" id="customer-email" name="email" autocomplete="email" inputmode="email" required placeholder="you@example.com" aria-describedby="email-hint email-error">
+            <p id="email-hint" class="hint">We’ll email your key here. You’ll also use it to recover the key or manage your plan.</p>
+            <p id="email-error" class="form-status" data-tone="error" aria-live="polite"></p>
+          </div>
+          <dl id="razorpay-details" class="pay-details" hidden>
+            <div><dt>Processed by</dt><dd>Razorpay</dd></div>
+            <div><dt>Pay with</dt><dd id="inr-methods">UPI Autopay or cards</dd></div>
+          </dl>
+          <dl id="paypal-details" class="pay-details">
+            <div><dt>Processed by</dt><dd>Razorpay International</dd></div>
+            <div><dt>Pay with</dt><dd>Visa, Mastercard or Amex</dd></div>
+          </dl>
+          <button class="btn btn-primary btn-lg pay-button" id="btn-submit-payment" type="submit"><svg aria-hidden="true"><use href="#i-lock"/></svg><span>Pay $19.99 a year</span></button>
+          <p id="checkout-status" class="form-status" role="status" aria-live="polite"></p>
+          <p class="pay-fine" id="renew-note"><svg aria-hidden="true"><use href="#i-repeat"/></svg><span id="renew-text">Renews at $19.99 a year until you cancel. Cancel any time under Manage subscription on this page — Pro stays on until the paid year ends.</span></p>
+          <p class="pay-fine"><svg aria-hidden="true"><use href="#i-shield"/></svg>A secure Razorpay window opens to take payment. FlyShelf never sees your card or UPI details.</p>
+        </form>
+      </div>
+    </section>
+
+    <section id="compare" class="wrap compare" aria-labelledby="compare-title">
+      <h2 id="compare-title" class="h2 after-title">What’s free, and what Pro adds</h2>
+      <div class="compare-grid">
+        <article class="compare-card" aria-labelledby="free-title">
+          <div class="compare-head">
+            <h3 id="free-title">Free</h3>
+            <p>Generous limits that reset every day</p>
+          </div>
+          <h4 class="compare-label">Unlimited</h4>
+          <ul class="compare-list">
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Clipboard capture</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Conversions to PDF, Markdown and spreadsheets</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>OCR</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Image tools and video compression</span></li>
+          </ul>
+          <h4 class="compare-label">Daily limits</h4>
+          <dl class="limit-list">
+            <div><dt>PDF merges</dt><dd>100 a day, up to 50 files each</dd></div>
+            <div><dt>QR scans</dt><dd>10 a day</dd></div>
+            <div><dt>PDF compressions</dt><dd>5 a day</dd></div>
+            <div><dt>PDF to Word</dt><dd>5 a day</dd></div>
+            <div><dt>Table extraction from PDFs</dt><dd>5 a day</dd></div>
+            <div><dt>Table extraction from images</dt><dd>5 a day</dd></div>
+            <div><dt>“Convert any file”</dt><dd>5 a day</dd></div>
+            <div><dt>PDF comparison</dt><dd>1 a day</dd></div>
+            <div><dt>Magic edit</dt><dd>5 images and 2 PDFs per 24 h</dd></div>
+          </dl>
+          <h4 class="compare-label">Capacity</h4>
+          <dl class="limit-list">
+            <div><dt>Clipboard history</dt><dd>5,000 entries</dd></div>
+            <div><dt>Synced devices</dt><dd>2</dd></div>
+            <div><dt>File transfers</dt><dd>2 GB each</dd></div>
+            <div><dt>Text shortcuts</dt><dd>20</dd></div>
+          </dl>
+        </article>
+        <article class="compare-card compare-pro" aria-labelledby="pro-col-title">
+          <div class="compare-head">
+            <h3 id="pro-col-title">Pro</h3>
+            <p>Everything in Free, with no daily limits</p>
+          </div>
+          <h4 class="compare-label">Unlimited</h4>
+          <ul class="compare-list">
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Every tool in Free, with no daily limits — including PDF merges, compression, PDF to Word, table extraction, QR scans, “Convert any file”, PDF comparison and Magic edit</span></li>
+          </ul>
+          <h4 class="compare-label">Only in Pro</h4>
+          <ul class="compare-list compare-cols">
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Workflow Studio</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Watched folders</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Smart redaction</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Stamps and seals</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Internet sync</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Device groups</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Custom document folders</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Custom wallpaper</span></li>
+          </ul>
+          <h4 class="compare-label">Capacity</h4>
+          <dl class="limit-list">
+            <div><dt>Clipboard history</dt><dd>50,000 entries</dd></div>
+            <div><dt>Text shortcuts</dt><dd>100</dd></div>
+            <div><dt>Devices per key</dt><dd>Up to 3</dd></div>
+          </dl>
+        </article>
+      </div>
+    </section>
+
+    <section class="wrap after" aria-labelledby="after-title">
+      <h2 id="after-title" class="h2 after-title">After you pay</h2>
+      <ol class="after-steps">
+        <li><span class="after-num">1</span><h3>Your key appears</h3><p>It shows on this page as soon as payment is confirmed, and a copy goes to your email.</p></li>
+        <li><span class="after-num">2</span><h3>Activate FlyShelf</h3><p>With FlyShelf running, press <strong>Activate on this PC</strong>. Or paste the key into the license box in FlyShelf Hub → Settings.</p></li>
+        <li><span class="after-num">3</span><h3>Add your other devices</h3><p>Use the same key on up to three of your devices. Monthly and yearly plans renew on their own; the key never changes.</p></li>
+      </ol>
+    </section>
+
+    <section id="recover" class="wrap recover" aria-labelledby="recover-title">
+      <div class="recover-card">
+        <div class="recover-copy">
+          <span class="recover-icon" aria-hidden="true"><svg><use href="#i-key"/></svg></span>
+          <h2 id="recover-title">Lost your license key?</h2>
+          <p>Enter the email you used at checkout and we’ll send the key to that address again.</p>
+        </div>
+        <form id="recover-form" class="recover-form" novalidate>
+          <div class="field">
+            <label for="recover-email">Purchase email</label>
+            <div class="recover-row">
+              <input class="input" type="email" id="recover-email" name="email" autocomplete="email" inputmode="email" required placeholder="you@example.com" aria-describedby="recover-status">
+              <button class="btn btn-ink" id="recover-submit" type="submit"><span>Send my key</span></button>
+            </div>
+          </div>
+          <p id="recover-status" class="form-status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+
+    <section id="account" class="wrap recover account" aria-labelledby="account-title">
+      <div class="recover-card">
+        <div class="recover-copy">
+          <span class="recover-icon" aria-hidden="true"><svg><use href="#i-card"/></svg></span>
+          <h2 id="account-title">Manage subscription</h2>
+          <p>Enter your license key and purchase email to see your plan and renewal date, or to stop renewal.</p>
+        </div>
+        <form id="account-form" class="recover-form" novalidate>
+          <div class="field">
+            <label for="account-key">License key</label>
+            <input class="input input-key" type="text" id="account-key" name="key" autocomplete="off" autocapitalize="characters" spellcheck="false" required placeholder="FS-PRO-XXXX-XXXX-XXXX-XXXX" aria-describedby="account-status">
+          </div>
+          <div class="field">
+            <label for="account-email">Purchase email</label>
+            <div class="recover-row">
+              <input class="input" type="email" id="account-email" name="email" autocomplete="email" inputmode="email" required placeholder="you@example.com" aria-describedby="account-status">
+              <button class="btn btn-ink" id="account-submit" type="submit"><span>Look up</span></button>
+            </div>
+          </div>
+          <p id="account-status" class="form-status" role="status" aria-live="polite"></p>
+          <div id="account-result" class="account-result" hidden>
+            <dl class="pay-details">
+              <div><dt>Plan</dt><dd id="account-plan"></dd></div>
+              <div><dt>Status</dt><dd id="account-state"></dd></div>
+              <div id="account-date-row"><dt id="account-date-label">Renews on</dt><dd id="account-date"></dd></div>
+            </dl>
+            <button class="btn btn-sm" id="account-cancel" type="button" hidden><span>Stop renewal</span></button>
+            <div id="account-confirm" class="account-confirm" hidden>
+              <p>Stop renewal? You won’t be charged again, and Pro stays on until <strong id="account-confirm-date"></strong>.</p>
+              <div class="account-actions">
+                <button class="btn btn-sm btn-ink" id="account-confirm-yes" type="button"><span>Yes, stop renewal</span></button>
+                <button class="btn btn-sm btn-ghost" id="account-confirm-no" type="button"><span>Keep my plan</span></button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="wrap pro-faq" aria-labelledby="pro-faq-title">
+      <h2 id="pro-faq-title" class="h2 after-title">Questions about Pro</h2>
+      <div class="faq-cols">
+        <div><h3>Do monthly and yearly plans renew automatically?</h3><p>Yes, until you cancel. Stop renewal any time under <a class="link" href="#account">Manage subscription</a>. You won’t be charged again, and Pro stays on until the end of the period you’ve paid for.</p></div>
+        <div><h3>Can I still pay once?</h3><p>Yes. Lifetime is a one-time payment of ₹1,999 or $50, with nothing to renew. Keys bought at the earlier lifetime price stay Pro for life.</p></div>
+        <div><h3>What happens if a subscription ends?</h3><p>Pro stays on until the paid period ends, plus three days in case a renewal is late. After that FlyShelf goes back to the Free plan.</p></div>
+        <div><h3>Do I need an account?</h3><p>No account is needed — just an email address, so we can send your key.</p></div>
+        <div><h3>How many devices can I use?</h3><p>One key activates Pro on up to three of your devices, on any plan.</p></div>
+        <div><h3>What if I stay on Free?</h3><p>That’s fine. Clipboard capture, OCR, image tools, video compression and conversions are unlimited on Free; a few heavier tools have daily limits.</p></div>
+      </div>
+      <p class="pro-contact">Need help with a purchase? Email <a class="link" href="mailto:shdra06@gmail.com">shdra06@gmail.com</a>.</p>
+    </section>
   </main>
 
-  <!-- Interactive Sandbox Checkout Modal -->
-  <div class="modal-overlay" id="checkout-modal">
-    <div class="modal-content glass">
-      
-      <!-- Stage 1: Loading verification -->
-      <div id="modal-stage-loading" style="display: flex; flex-direction: column; gap: 15px; padding: 20px 0;">
-        <div class="payment-loader"></div>
-        <h4 style="font-size: 1.15rem; font-weight: 800; color: #f3f5f9;" id="loader-headline">Connecting with Razorpay...</h4>
-        <p style="font-size: 0.82rem; color: #9aa2b5;" id="loader-desc">Awaiting secure handshake buffer approval...</p>
+  <!-- Purchase progress and result -->
+  <div class="modal-overlay" id="checkout-modal" hidden>
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
+      <div id="modal-stage-loading" class="modal-stage">
+        <div class="payment-loader spinner" aria-hidden="true"></div>
+        <h2 class="modal-heading" id="loader-headline">Confirming your payment…</h2>
+        <p class="modal-text" id="loader-desc">Please keep this tab open. This usually takes a few seconds.</p>
       </div>
-      
-      <!-- Stage 2: Sandbox test verification approval -->
-      <div id="modal-stage-approval" style="display: none; flex-direction: column; gap: 15px; padding: 10px 0;">
-        <div style="font-size: 3rem; color: #00d2ff;"><ion-icon name="flask-outline"></ion-icon></div>
-        <h4 style="font-size: 1.25rem; font-weight: 800; color: #f3f5f9;">Sandbox Payment Portal</h4>
-        <p style="font-size: 0.85rem; color: #9aa2b5; line-height: 1.5;">This is the local FlyShelf checkout sandbox. To test the license generation and C# app auto-activation, click the confirm payment button below.</p>
-        <div style="background: rgba(20, 24, 38, 0.55); border: 1px solid rgba(255, 255, 255, 0.07); padding: 12px; border-radius: 8px; font-size: 0.78rem; text-align: left; color: #9aa2b5;">
-          <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Email:</span><strong id="confirm-email" style="color: #f3f5f9;">test@flyshelf.app</strong></div>
-          <div style="display:flex; justify-content:space-between;"><span>Amount:</span><strong id="confirm-amount" style="color:#00d2ff;">₹299</strong></div>
+      <div id="modal-stage-success" class="modal-stage" hidden>
+        <div class="confetti-container" id="confetti-container" aria-hidden="true"></div>
+        <span class="success-badge" aria-hidden="true"><svg><use href="#i-check"/></svg></span>
+        <h2 class="modal-heading">You’re all set</h2>
+        <p class="modal-text">Here’s your Pro license key. A copy is on its way to <strong id="confirm-email">your email</strong>.</p>
+        <button type="button" class="license-key" id="license-key-output" title="Copy license key">FS-PRO-XXXX-XXXX-XXXX-XXXX</button>
+        <div class="key-actions">
+          <button class="btn" id="btn-copy-license" type="button"><svg aria-hidden="true"><use href="#i-copy"/></svg><span>Copy key</span></button>
+          <button class="btn btn-primary" id="btn-activate-deeplink" type="button"><svg aria-hidden="true"><use href="#i-bolt"/></svg><span>Activate on this PC</span></button>
         </div>
-        <button class="btn-checkout-pay btn-razorpay" id="btn-confirm-test-pay" style="margin-top: 10px;">
-          Confirm Test Payment
-        </button>
+        <p class="modal-tip" id="confirm-plan" hidden></p>
+        <p class="modal-tip"><strong>Activate on this PC</strong> copies a special activation code. If FlyShelf is running, it picks it up and turns on Pro.</p>
+        <button class="btn btn-ghost btn-sm" id="btn-close-modal" type="button">Close</button>
       </div>
-
-      <!-- Stage 3: Success & C# key display -->
-      <div id="modal-stage-success" style="display: none; flex-direction: column; gap: 16px; text-align: center;">
-        <!-- Confetti particles (injected by JS) -->
-        <div class="confetti-container" id="confetti-container"></div>
-        
-        <div class="success-icon-badge">
-          <ion-icon name="checkmark-outline"></ion-icon>
-        </div>
-        
-        <h4 class="success-heading">Purchase Successful! 🎉</h4>
-        <p class="success-subtext">Your Pro license key has been <strong>emailed to you</strong> and is shown below. Copy it to activate Pro instantly.</p>
-        
-        <!-- Email confirmation badge -->
-        <div class="email-confirm-badge">
-          <ion-icon name="mail-outline" style="font-size: 1rem;"></ion-icon> Confirmation email sent
-        </div>
-        
-        <!-- Valid generated C# License Key -->
-        <div class="license-glow-box" id="license-key-output">FS-PRO-XXXX-XXXX-XXXX-XXXX</div>
-        
-        <!-- Action Row -->
-        <div style="display: flex; flex-direction: column; gap: 12px; align-items: center; margin-top: 8px;">
-          <button class="btn-copy-key" id="btn-copy-license">
-            <ion-icon name="copy-outline" style="font-size: 1.05rem;"></ion-icon> Copy License Key
-          </button>
-          
-          <a href="#" class="btn-deeplink" id="btn-activate-deeplink">
-            <ion-icon name="flash-outline" style="font-size: 1.1rem;"></ion-icon> One-Click Activate PC App
-          </a>
-        </div>
-        
-        <div class="clipboard-magic-tip">
-          <ion-icon name="bulb-outline" style="color: #ff9d00; font-size: 0.95rem; vertical-align: middle; margin-right: 3px;"></ion-icon>
-          <strong>Clipboard Magic:</strong> Copying this key (Ctrl+C) while your FlyShelf PC app is running in the background will automatically activate it!
-        </div>
-        
-        <button class="btn-close-success" id="btn-close-modal">Close Window</button>
+      <div id="modal-stage-error" class="modal-stage" hidden>
+        <span class="error-badge" aria-hidden="true"><svg><use href="#i-alert"/></svg></span>
+        <h2 class="modal-heading">We couldn’t confirm your key yet</h2>
+        <p class="modal-text" id="modal-error-text">Your payment is safe. If your key doesn’t arrive by email within a few minutes, use “Lost your license key?” on this page or email <a class="link" href="mailto:shdra06@gmail.com">shdra06@gmail.com</a>.</p>
+        <button class="btn" id="btn-close-error" type="button">Close</button>
       </div>
-
+      <h2 id="modal-title" class="sr-only">Purchase status</h2>
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════ -->
-  <!-- RECENTLY ORDERED — Cached key (15 min)     -->
-  <!-- ═══════════════════════════════════════════ -->
-  <div id="recent-order-section" style="max-width: 600px; margin: 0 auto 30px auto; padding: 0 20px; display: none;">
-    <div class="widget-card glass" style="padding: 28px 28px 24px; text-align: center; border: 1px solid rgba(61, 220, 132, 0.2); box-shadow: 0 8px 30px rgba(61, 220, 132, 0.08); position: relative;">
-      
-      <!-- Dismiss button -->
-      <button id="btn-dismiss-recent" title="Dismiss" style="position: absolute; top: 10px; right: 14px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem; padding: 4px; line-height: 1; opacity: 0.5; transition: opacity 0.2s;">
-        <ion-icon name="close-outline"></ion-icon>
-      </button>
-
-      <h3 style="font-size: 1.05rem; font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-        <span class="title-icon-wrap" style="color: var(--color-emerald); margin-right: 0;"><ion-icon name="checkmark-circle"></ion-icon></span> Recently Purchased
-      </h3>
-      <p style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 14px;">
-        Your license key is available below. <span id="recent-order-timer" style="color: var(--color-cyan); font-weight: 600;"></span>
-      </p>
-
-      <!-- Expiry progress bar -->
-      <div style="width: 100%; height: 3px; background: rgba(255,255,255,0.06); border-radius: 3px; margin-bottom: 16px; overflow: hidden;">
-        <div id="recent-order-progress" style="height: 100%; background: linear-gradient(90deg, var(--color-emerald), var(--color-cyan)); border-radius: 3px; transition: width 1s linear; width: 100%;"></div>
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="brand" href="index.html"><img src="favicon.png" width="28" height="28" alt="" loading="lazy">FlyShelf</a>
+          <p>A calm home for everything you copy.</p>
+        </div>
+        <div class="footer-col">
+          <h2>Product</h2>
+          <ul>
+            <li><a href="index.html#how">How it works</a></li>
+            <li><a href="index.html#devices">Android sync</a></li>
+            <li><a href="index.html#features">Tools</a></li>
+            <li><a href="index.html#download">Download</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h2>Pro</h2>
+          <ul>
+            <li><a href="#main">Buy FlyShelf Pro</a></li>
+            <li><a href="#account">Manage subscription</a></li>
+            <li><a href="#recover">Recover a license key</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h2>More</h2>
+          <ul>
+            <li><a href="privacy.html">Privacy policy</a></li>
+            <li><a href="https://github.com/shdra06/FlyShelf/releases">All releases</a></li>
+            <li><a href="https://github.com/shdra06/FlyShelf">GitHub</a></li>
+          </ul>
+        </div>
       </div>
-
-      <div class="license-glow-box" id="recent-order-key" style="font-size: 1rem; margin-bottom: 14px; cursor: pointer;" title="Click to copy"></div>
-      <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-        <button id="btn-copy-recent" 
-          style="padding: 8px 20px; border-radius: 8px; border: none; background: var(--color-emerald); color: #000; font-weight: 700; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: transform 0.15s ease;">
-          <ion-icon name="copy-outline" style="font-size: 1rem;"></ion-icon> Copy Key
-        </button>
-        <a id="recent-order-deeplink" href="#" 
-          style="padding: 8px 20px; border-radius: 8px; border: none; background: linear-gradient(135deg, #00d2ff, #0b72e7); color: #fff; font-weight: 700; font-size: 0.78rem; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 4px; transition: transform 0.15s ease;">
-          <ion-icon name="flash-outline" style="font-size: 1rem;"></ion-icon> Activate App
-        </a>
+      <div class="footer-bottom">
+        <span>© <span id="copyright-year">2026</span> FlyShelf · Made by Shivendra</span>
+        <div class="footer-controls"></div>
       </div>
-      
-      <p style="font-size: 0.65rem; color: var(--text-muted); margin-top: 14px; margin-bottom: 0;">This key was also sent to your email. This section will auto-expire for your security.</p>
     </div>
-  </div>
-
-
-
-  <!-- JavaScript: Real Razorpay Checkout -->
-  <footer class="checkout-footer"><a href="index.html">← Back to your flow</a><span>A lifetime license. A little more possibility.</span><a href="privacy.html">Privacy policy</a></footer>
-  <script src="/pricing.js"></script>
-
-
+  </footer>
 </body>
 </html>

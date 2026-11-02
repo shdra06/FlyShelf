@@ -1,170 +1,232 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-theme="light">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Privacy Policy — FlyShelf Clipboard</title>
-  <meta name="description" content="FlyShelf Privacy Policy — how we handle your data, what we collect, and your rights." />
-  <link rel="icon" href="/favicon.ico" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root { --bg:#ffffff; --surface:#f7f7fb; --border:rgba(0,0,0,0.08); --accent:#6c5ce7; --accent2:#0984e3; --text:#1a1a2e; --muted:#555577; --radius:14px; }
-    body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); line-height:1.7; min-height:100vh; }
-    nav { position:sticky; top:0; z-index:100; display:flex; align-items:center; justify-content:space-between; padding:16px 40px; background:rgba(255,255,255,0.92); backdrop-filter:blur(20px); border-bottom:1px solid var(--border); }
-    .logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
-    .logo img { width:32px; height:32px; border-radius:8px; }
-    .logo span { font-size:18px; font-weight:700; color:var(--text); }
-    .nav-back { color:var(--accent); text-decoration:none; font-size:14px; font-weight:500; display:flex; align-items:center; gap:6px; transition:opacity .2s; }
-    .nav-back:hover { opacity:.7; }
-    .hero { text-align:center; padding:80px 24px 48px; background:linear-gradient(180deg, #f0eeff 0%, #ffffff 100%); }
-    .hero-badge { display:inline-flex; align-items:center; gap:8px; padding:6px 16px; border-radius:100px; border:1px solid rgba(108,92,231,.25); background:rgba(108,92,231,.08); font-size:13px; color:var(--accent); margin-bottom:24px; }
-    .hero h1 { font-size:clamp(28px,5vw,48px); font-weight:700; margin-bottom:16px; color:var(--text); }
-    .hero p { color:var(--muted); font-size:16px; max-width:540px; margin:0 auto; }
-    .hero-meta { margin-top:24px; display:flex; justify-content:center; gap:32px; flex-wrap:wrap; font-size:13px; color:var(--muted); }
-    .container { max-width:800px; margin:0 auto; padding:0 24px 80px; }
-    .tl-dr { background:linear-gradient(135deg, rgba(108,92,231,.06), rgba(9,132,227,.04)); border:1px solid rgba(108,92,231,.2); border-radius:var(--radius); padding:28px 32px; margin-bottom:48px; }
-    .tl-dr h2 { font-size:16px; font-weight:600; color:var(--accent); margin-bottom:16px; letter-spacing:.05em; text-transform:uppercase; }
-    .tl-dr ul { list-style:none; display:flex; flex-direction:column; gap:10px; }
-    .tl-dr li { display:flex; align-items:flex-start; gap:10px; font-size:15px; color:var(--text); }
-    .tl-dr li::before { content:'✓'; color:#00b894; font-weight:700; flex-shrink:0; margin-top:1px; }
-    .section { margin-bottom:48px; }
-    .section h2 { font-size:22px; font-weight:600; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid var(--border); display:flex; align-items:center; gap:10px; color:var(--text); }
-    .section h2 .num { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; background:rgba(108,92,231,.1); color:var(--accent); font-size:14px; font-weight:700; flex-shrink:0; }
-    .section h3 { font-size:16px; font-weight:600; margin:24px 0 10px; color:var(--accent2); }
-    .section p { color:var(--muted); margin-bottom:14px; font-size:15px; }
-    .section ul { color:var(--muted); padding-left:20px; margin-bottom:14px; font-size:15px; }
-    .section ul li { margin-bottom:6px; }
-    .section strong { color:var(--text); }
-    .table-wrap { overflow-x:auto; margin:16px 0; border-radius:var(--radius); border:1px solid var(--border); overflow:hidden; }
-    table { width:100%; border-collapse:collapse; font-size:14px; }
-    th { background:rgba(108,92,231,.07); color:var(--accent); font-weight:600; padding:12px 16px; text-align:left; border-bottom:1px solid var(--border); }
-    td { padding:12px 16px; border-bottom:1px solid var(--border); color:var(--muted); vertical-align:top; }
-    td a { color:var(--accent); text-decoration:none; }
-    td a:hover { text-decoration:underline; }
-    tr:last-child td { border-bottom:none; }
-    tr:hover td { background:rgba(108,92,231,.03); }
-    .code-block { background:#f4f4f8; border:1px solid var(--border); border-radius:10px; padding:20px 24px; margin:16px 0; font-family:'Courier New',monospace; font-size:13px; color:#2d3436; overflow-x:auto; white-space:pre; }
-    .path { display:inline-block; background:#f0eeff; border:1px solid rgba(108,92,231,.2); border-radius:6px; padding:2px 10px; font-family:monospace; font-size:12px; color:var(--accent); }
-    .contact-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px 28px; }
-    .contact-card a { color:var(--accent); text-decoration:none; font-weight:500; }
-
-    .section p { color:var(--muted); margin-bottom:14px; font-size:15px; }
-    .section ul { color:var(--muted); padding-left:20px; margin-bottom:14px; font-size:15px; }
-    .section ul li { margin-bottom:6px; }
-    .section strong { color:var(--text); }
-    .contact-card a:hover { text-decoration:underline; }
-    footer { text-align:center; padding:32px 24px; border-top:1px solid var(--border); color:var(--muted); font-size:13px; background:var(--surface); }
-    footer a { color:var(--accent); text-decoration:none; }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Privacy policy — FlyShelf</title>
+  <meta name="description" content="How FlyShelf handles your data: what stays on your devices, how sync works, which services the app and website use, and what we keep for Pro purchases.">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#f4f3ef">
   <link rel="canonical" href="https://fly-shelf.vercel.app/privacy.html">
-  <meta name="theme-color" content="#101411">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="privacy-theme.css?v=10">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="FlyShelf">
+  <meta property="og:title" content="FlyShelf privacy policy">
+  <meta property="og:description" content="What stays on your devices, how sync works, and the few services FlyShelf uses.">
+  <meta property="og:url" content="https://fly-shelf.vercel.app/privacy.html">
+  <meta property="og:image" content="https://fly-shelf.vercel.app/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&family=Instrument+Serif:ital@0;1&display=swap">
+  <script src="appearance.js?v=20"></script>
+  <link rel="stylesheet" href="site.css?v=20">
+  <link rel="stylesheet" href="privacy.css?v=20">
+  <script src="site.js?v=20" defer></script>
 </head>
-<body>
-<nav>
-  <a href="/" class="logo"><img src="/favicon.png" alt="FlyShelf" /><span>FlyShelf</span></a>
-  <a href="/" class="nav-back">← Back to Home</a>
-</nav>
-<div class="hero">
-  <div class="hero-badge">🔒 Privacy Policy</div>
-  <h1>Your Privacy, Protected</h1>
-  <p>FlyShelf is built privacy-first. Your clipboard data never leaves your devices without your explicit action.</p>
-  <div class="hero-meta">
-    <span>📅 Last Updated: May 27, 2026</span>
-    <span>👤 Developer: Shivendra</span>
-    <span>📧 shdra06@gmail.com</span>
-  </div>
-</div>
-<div class="container">
-  <div class="tl-dr">
-    <h2>TL;DR — The Short Version</h2>
-    <ul>
-      <li>Your clipboard data is stored <strong>only on your own devices</strong> — never on our servers</li>
-      <li><strong>Zero telemetry</strong> — we do not track usage, analytics, or behavior</li>
-      <li>All data in transit is encrypted with <strong>AES-256-GCM</strong> end-to-end</li>
-      <li>Data at rest is protected by <strong>Windows DPAPI</strong> per-user encryption</li>
-      <li>We only collect what is needed to process your <strong>Pro license</strong> purchase</li>
-      <li>You can <strong>delete everything</strong> instantly from within the app</li>
-    </ul>
-  </div>
-  <div class="section">
-    <h2><span class="num">1</span> What We Store on Your Device</h2>
-    <p>FlyShelf operates primarily as a local application. All data is stored on your physical machine under your user account.</p>
-    <h3>Clipboard Content</h3>
-    <ul>
-      <li><strong>Text and Code:</strong> Stored in <span class="path">%AppData%\FlyShelf\clipboard_history.json</span></li>
-      <li><strong>Images and Files:</strong> Cached in <span class="path">%AppData%\FlyShelf\Images\</span></li>
-      <li><strong>Retention:</strong> Configurable — 1, 7, 14, or 30 days. Capped at 500 items by default</li>
-    </ul>
-    <h3>Password Protection</h3>
-    <p>Items detected as passwords are encrypted at rest using <strong>Windows DPAPI</strong> anchored to your Windows user account. No other user or machine can decrypt them.</p>
-    <h3>App Credentials</h3>
-    <ul>
-      <li><strong>Firebase Auth Token:</strong> Encrypted in <span class="path">%AppData%\FlyShelf\firebase_auth.dat</span></li>
-      <li><strong>Gemini API Key (optional):</strong> Encrypted in <span class="path">%AppData%\FlyShelf\config.json</span></li>
-      <li><strong>Pro License:</strong> DPAPI-encrypted in <span class="path">%AppData%\FlyShelf\license.json</span></li>
-    </ul>
-  </div>
-  <div class="section">
-    <h2><span class="num">2</span> Network and Transit Security</h2>
-    <div class="code-block">PC Companion  ---AES-256-GCM--->  LAN Sync (direct)
-PC Companion  ---AES-256-GCM--->  Cloudflare Tunnel  ---AES-256-GCM--->  Android
-PC Companion  ---  Encrypted signals only  --->  Firebase (NO clipboard data)</div>
-    <h3>Local LAN Sync</h3>
-    <p>Direct TCP transfer encrypted with <strong>AES-256-GCM</strong> using keys derived via PBKDF2-SHA256 (100,000 iterations).</p>
-    <h3>Remote Sync via Cloudflare</h3>
-    <p>Ephemeral tunnels, created on demand and destroyed on app close. Payloads are AES-256-GCM encrypted at the app level — Cloudflare cannot read your clipboard data.</p>
-    <h3>Firebase Signaling</h3>
-    <p><strong>No clipboard data is ever stored in Firebase.</strong> Firebase is used only as a secure phonebook to help devices find each other.</p>
-  </div>
-  <div class="section">
-    <h2><span class="num">3</span> Third-Party Services</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Service</th><th>Purpose</th><th>Data Sent</th><th>Privacy Policy</th></tr></thead>
-        <tbody>
-          <tr><td><strong>Google Firebase</strong></td><td>Peer discovery</td><td>Anonymous UID, encrypted coordinates</td><td><a href="https://firebase.google.com/support/privacy" target="_blank">View</a></td></tr>
-          <tr><td><strong>Cloudflare</strong></td><td>Remote sync routing</td><td>Encrypted packets (unreadable by Cloudflare)</td><td><a href="https://www.cloudflare.com/privacypolicy/" target="_blank">View</a></td></tr>
-          <tr><td><strong>Google Gemini</strong> (optional)</td><td>AI image extraction</td><td>User-selected images only on explicit click</td><td><a href="https://ai.google.dev/terms" target="_blank">View</a></td></tr>
-          <tr><td><strong>Vercel</strong></td><td>License activation</td><td>License key, anonymous device ID</td><td><a href="https://vercel.com/legal/privacy-policy" target="_blank">View</a></td></tr>
-          <tr><td><strong>Microsoft Store</strong></td><td>In-app purchase</td><td>Handled entirely by Microsoft</td><td><a href="https://privacy.microsoft.com" target="_blank">View</a></td></tr>
-        </tbody>
-      </table>
+<body class="page-privacy">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="ambient" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="index.html" aria-label="FlyShelf home"><img src="favicon.png" width="28" height="28" alt="">FlyShelf</a>
+      <nav id="site-nav" class="site-nav" aria-label="Main">
+        <a href="index.html#how">How it works</a>
+        <a href="index.html#devices">Android sync</a>
+        <a href="index.html#features">Tools</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="index.html#faq">FAQ</a>
+        <a class="nav-cta" href="index.html#download">Download free</a>
+      </nav>
+      <div class="header-actions">
+        <a class="btn btn-sm header-cta" href="index.html#download">Download free</a>
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open navigation"><span></span><span></span></button>
+      </div>
     </div>
-  </div>
-  <div class="section">
-    <h2><span class="num">4</span> Pro License and Purchases</h2>
-    <p>When you purchase FlyShelf Pro we collect only:</p>
-    <ul>
-      <li><strong>License key</strong> — generated at purchase, stored DPAPI-encrypted on your device</li>
-      <li><strong>Device ID</strong> — a randomly generated anonymous identifier</li>
-      <li><strong>Activation timestamp</strong> — for the 3-device limit</li>
-    </ul>
-    <p>Payment details (card number, billing address) are handled entirely by <strong>Stripe</strong> or the <strong>Microsoft Store</strong>. We never see or store your payment information.</p>
-  </div>
-  <div class="section">
-    <h2><span class="num">5</span> Your Rights and Data Control</h2>
-    <ul>
-      <li><strong>Inspect:</strong> Browse <span class="path">%AppData%\FlyShelf\</span> directly to see every file the app creates</li>
-      <li><strong>Partial delete:</strong> Delete individual clipboard entries or use time-range sweeps from the dashboard</li>
-      <li><strong>Uninstall options:</strong> Use "Uninstall FlyShelf" from About (Danger Zone) — choose between deleting the app while keeping data, or a full wipe</li>
-      <li><strong>Deactivate license:</strong> Remove your Pro license from Settings at any time</li>
-    </ul>
-  </div>
-  <div class="section">
-    <h2><span class="num">6</span> Contact</h2>
-    <div class="contact-card">
-      <p><strong>Developer:</strong> Shivendra</p>
-      <p><strong>Email:</strong> <a href="mailto:shdra06@gmail.com">shdra06@gmail.com</a></p>
-      <p><strong>Repository:</strong> <a href="https://github.com/shdra06/FlyShelf" target="_blank">github.com/shdra06/FlyShelf</a></p>
+  </header>
+
+  <main id="main">
+    <header class="policy-hero wrap">
+      <p class="eyebrow">Privacy policy</p>
+      <h1 class="display policy-title">Your clipboard <span class="serif accent-text">stays yours.</span></h1>
+      <p class="lead">What you copy can be personal. This page explains what FlyShelf keeps on your devices, what leaves them and why, and what we store when you buy Pro.</p>
+      <dl class="policy-meta">
+        <div><dt>Last updated</dt><dd><time datetime="2026-10-29">29 October 2026</time></dd></div>
+        <div><dt>Developer</dt><dd>Shivendra</dd></div>
+        <div><dt>Contact</dt><dd><a class="link" href="mailto:shdra06@gmail.com">shdra06@gmail.com</a></dd></div>
+      </dl>
+    </header>
+
+    <div class="wrap policy-layout">
+      <nav class="policy-toc" aria-label="On this page">
+        <p class="toc-title">On this page</p>
+        <ol>
+          <li><a href="#summary">In short</a></li>
+          <li><a href="#on-device">On your device</a></li>
+          <li><a href="#sync">Sync and connections</a></li>
+          <li><a href="#services">Third-party services</a></li>
+          <li><a href="#purchases">Pro purchases</a></li>
+          <li><a href="#website">This website</a></li>
+          <li><a href="#control">Your control</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ol>
+      </nav>
+
+      <article class="policy">
+        <section id="summary" class="policy-summary" aria-labelledby="summary-title">
+          <h2 id="summary-title">In short</h2>
+          <ul>
+            <li>Your clipboard history is stored on your own devices. It isn’t uploaded to FlyShelf servers.</li>
+            <li>FlyShelf contains no analytics, advertising or crash-reporting services.</li>
+            <li>Passwords and API keys you copy are detected and encrypted at rest with Windows DPAPI.</li>
+            <li>Sync goes directly between your devices on a local network, or through a temporary Cloudflare tunnel if you use remote sync.</li>
+            <li>Firebase only helps your devices find each other. Clipboard content is never stored there.</li>
+            <li>For Pro purchases we keep your email, license key and device activations. Razorpay handles payment details.</li>
+          </ul>
+        </section>
+
+        <section id="on-device" aria-labelledby="on-device-title">
+          <h2 id="on-device-title"><span class="num">1</span>What FlyShelf stores on your device</h2>
+          <p>FlyShelf is a local application. Its data lives in your Windows user profile, under <code class="path">%AppData%\FlyShelf\</code>.</p>
+          <h3>Clipboard history</h3>
+          <ul>
+            <li><strong>Text, links and code:</strong> <code class="path">clipboard_history.json</code>, with recent changes in <code class="path">clipboard_journal.jsonl</code>.</li>
+            <li><strong>Images and files:</strong> cached in <code class="path">Images\</code>.</li>
+            <li><strong>How long it’s kept:</strong> 7 days by default. You can choose 14 or 30 days, or no expiry with Pro. History holds up to 50,000 items.</li>
+          </ul>
+          <h3>Sensitive items</h3>
+          <p>Clips that look like passwords or API keys are encrypted at rest with <strong>Windows DPAPI</strong>, which ties them to your Windows user account. Other history is stored as ordinary files in your user profile, protected by your Windows account permissions rather than additional encryption.</p>
+          <h3>Notes, shortcuts and settings</h3>
+          <ul>
+            <li><strong>Notes, to-dos and reminders:</strong> <code class="path">notes.json</code>, <code class="path">todos.json</code> and <code class="path">reminders.json</code>.</li>
+            <li><strong>Text shortcuts:</strong> encrypted with DPAPI.</li>
+            <li><strong>Firebase sign-in token:</strong> encrypted in <code class="path">firebase_auth.dat</code>.</li>
+            <li><strong>AI provider API keys (optional):</strong> encrypted in <code class="path">config.json</code>.</li>
+            <li><strong>Pro license:</strong> DPAPI-encrypted in <code class="path">license.json</code>.</li>
+          </ul>
+        </section>
+
+        <section id="sync" aria-labelledby="sync-title">
+          <h2 id="sync-title"><span class="num">2</span>Sync and network connections</h2>
+          <figure class="flow" aria-label="How FlyShelf connects devices">
+            <div class="flow-row"><span class="flow-node">Windows PC</span><span class="flow-line"><span>same network · direct</span></span><span class="flow-node">Android</span></div>
+            <div class="flow-row"><span class="flow-node">Windows PC</span><span class="flow-line"><span>remote sync · Cloudflare tunnel (HTTPS)</span></span><span class="flow-node">Android</span></div>
+            <div class="flow-row"><span class="flow-node">Both devices</span><span class="flow-line"><span>discovery only · no clipboard content</span></span><span class="flow-node">Firebase</span></div>
+          </figure>
+          <h3>Pairing</h3>
+          <p>You pair devices by scanning a QR code or entering a six-character code that expires after five minutes. Pairing details and the device addresses kept for discovery are encrypted with AES-256-GCM, using keys derived with PBKDF2-SHA256 (100,000 iterations).</p>
+          <h3>Local network sync</h3>
+          <p>On the same network, your devices connect to each other directly. FlyShelf’s direct-transfer connections are authenticated with a key from pairing, but some transfers — including file transfers — are not separately encrypted by FlyShelf. Use local sync on networks you trust.</p>
+          <h3>Remote sync through Cloudflare</h3>
+          <p>If you use remote sync, FlyShelf starts a temporary Cloudflare Quick Tunnel so your phone can reach your PC from another network. The tunnel is created on demand and closes when FlyShelf exits. Traffic reaches Cloudflare over HTTPS and is relayed to your PC; Cloudflare handles it under its own privacy policy.</p>
+          <h3>Firebase</h3>
+          <p>Firebase is used only so your devices can find each other. It holds an anonymous sign-in ID, your active devices with their encrypted addresses, temporary pairing codes and device groups. <strong>No clipboard content is sent to or stored in Firebase.</strong></p>
+          <h3>Other connections the app makes</h3>
+          <ul>
+            <li><strong>Update checks</strong> with GitHub, to find and verify new releases.</li>
+            <li><strong>Time checks</strong> with Cloudflare (1.1.1.1), worldtimeapi.org and timeapi.io, plus lightweight requests to google.com, cloudflare.com and microsoft.com.</li>
+            <li><strong>Resources for tools:</strong> a font list for PDF tools from GitHub’s API, and the Mermaid diagram library from jsDelivr for Markdown previews.</li>
+            <li><strong>Cloudflare’s tunnel program</strong> (cloudflared), downloaded when remote sync first needs it.</li>
+            <li><strong>AI features, only if you add your own API key:</strong> the content you choose is sent to the provider you picked — Google Gemini, OpenAI or Anthropic. Regular OCR runs on your PC and doesn’t need this.</li>
+          </ul>
+        </section>
+
+        <section id="services" aria-labelledby="services-title">
+          <h2 id="services-title"><span class="num">3</span>Third-party services</h2>
+          <div class="table-wrap" tabindex="0" role="region" aria-labelledby="services-title">
+            <table>
+              <thead><tr><th scope="col">Service</th><th scope="col">Used for</th><th scope="col">Data involved</th><th scope="col">Policy</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">Google Firebase</th><td>Device discovery and pairing</td><td>Anonymous ID, encrypted device addresses, temporary pairing codes</td><td><a class="link" href="https://firebase.google.com/support/privacy">Firebase</a></td></tr>
+                <tr><th scope="row">Cloudflare</th><td>Remote sync tunnel</td><td>Sync traffic while remote sync is in use</td><td><a class="link" href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a></td></tr>
+                <tr><th scope="row">Google Gemini, OpenAI, Anthropic <span class="opt">optional</span></th><td>AI text extraction and AI tools</td><td>Content you choose to send, with your own API key</td><td><a class="link" href="https://ai.google.dev/gemini-api/terms">Gemini</a> · <a class="link" href="https://openai.com/policies/privacy-policy/">OpenAI</a> · <a class="link" href="https://www.anthropic.com/legal/privacy">Anthropic</a></td></tr>
+                <tr><th scope="row">Razorpay</th><td>Payments</td><td>Payment details you enter in Razorpay’s window, your email and the order amount</td><td><a class="link" href="https://razorpay.com/privacy/">Razorpay</a></td></tr>
+                <tr><th scope="row">Vercel</th><td>This website and the license server</td><td>Email, license key, device ID, activation time</td><td><a class="link" href="https://vercel.com/legal/privacy-policy">Vercel</a></td></tr>
+                <tr><th scope="row">GitHub</th><td>Downloads and update checks</td><td>Standard request data, such as IP address</td><td><a class="link" href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="purchases" aria-labelledby="purchases-title">
+          <h2 id="purchases-title"><span class="num">4</span>Pro license and purchases</h2>
+          <p>When you buy FlyShelf Pro, we keep:</p>
+          <ul>
+            <li><strong>Your email address</strong> — to send your license key, and to resend it if you lose it.</li>
+            <li><strong>Your license key and order reference</strong> — to confirm the purchase.</li>
+            <li><strong>Device ID</strong> — a random identifier generated by the app.</li>
+            <li><strong>Activation time</strong> — to apply the three-device limit.</li>
+            <li><strong>Subscription status</strong> (monthly and yearly plans) — the Razorpay subscription reference, plan, status and the date the paid period ends, so Pro stays on while your plan is active.</li>
+          </ul>
+          <p>To prevent abuse, the purchase, activation, recovery and subscription-management endpoints also record a one-way hash of your IP address. These records are deleted after 24 hours.</p>
+          <p>Card, UPI and bank details are entered in Razorpay’s checkout and handled entirely by Razorpay. We never see or store them.</p>
+        </section>
+
+        <section id="website" aria-labelledby="website-title">
+          <h2 id="website-title"><span class="num">5</span>This website</h2>
+          <p>This site has no analytics or advertising cookies. It remembers your light or dark theme and your motion preference in your browser’s local storage. Fonts load from Google Fonts, and the pricing page loads Razorpay’s checkout script. The live demo on the homepage runs entirely in your browser; nothing you type into it is sent anywhere.</p>
+        </section>
+
+        <section id="control" aria-labelledby="control-title">
+          <h2 id="control-title"><span class="num">6</span>Your control over your data</h2>
+          <ul>
+            <li><strong>Inspect:</strong> open <code class="path">%AppData%\FlyShelf\</code> to see every file the app creates.</li>
+            <li><strong>Delete:</strong> remove single clips, or clear a time range from the dashboard.</li>
+            <li><strong>Uninstall:</strong> use “Uninstall FlyShelf” in About to remove the app and keep your data, or wipe everything.</li>
+            <li><strong>License:</strong> remove your Pro license from Settings at any time.</li>
+          </ul>
+        </section>
+
+        <section id="contact" aria-labelledby="contact-title">
+          <h2 id="contact-title"><span class="num">7</span>Contact</h2>
+          <div class="contact-card">
+            <p>Questions about privacy or a purchase? Email <a class="link" href="mailto:shdra06@gmail.com">shdra06@gmail.com</a>.</p>
+            <p>Source and releases: <a class="link" href="https://github.com/shdra06/FlyShelf">github.com/shdra06/FlyShelf</a></p>
+          </div>
+        </section>
+      </article>
     </div>
-  </div>
-</div>
-<footer>
-  <p>&copy; 2026 FlyShelf by Shivendra &nbsp;&middot;&nbsp; <a href="/">Home</a> &nbsp;&middot;&nbsp; <a href="/pricing.html">Pricing</a> &nbsp;&middot;&nbsp; <a href="/privacy">Privacy Policy</a></p>
-</footer>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="brand" href="index.html"><img src="favicon.png" width="28" height="28" alt="" loading="lazy">FlyShelf</a>
+          <p>A calm home for everything you copy.</p>
+        </div>
+        <div class="footer-col">
+          <h2>Product</h2>
+          <ul>
+            <li><a href="index.html#how">How it works</a></li>
+            <li><a href="index.html#devices">Android sync</a></li>
+            <li><a href="index.html#features">Tools</a></li>
+            <li><a href="index.html#download">Download</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h2>Pro</h2>
+          <ul>
+            <li><a href="pricing.html">Buy FlyShelf Pro</a></li>
+            <li><a href="pricing.html#recover">Recover a license key</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h2>More</h2>
+          <ul>
+            <li><a href="privacy.html" aria-current="page">Privacy policy</a></li>
+            <li><a href="https://github.com/shdra06/FlyShelf/releases">All releases</a></li>
+            <li><a href="https://github.com/shdra06/FlyShelf">GitHub</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© <span id="copyright-year">2026</span> FlyShelf · Made by Shivendra</span>
+        <div class="footer-controls"></div>
+      </div>
+    </div>
+  </footer>
 </body>
 </html>

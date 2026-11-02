@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { firebaseFetch, setSecurityHeaders } = require('./_firebaseAdmin');
+const { validLifetimeAmounts } = require('./_billing');
 
 // Safe import — if nodemailer isn't available, email is skipped (not fatal)
 let sendPurchaseEmail;
@@ -141,7 +142,9 @@ module.exports = async (req, res) => {
     // Signature confirms the payment exists, but we also verify the captured
     // amount matches our expected prices — defense-in-depth against amount tampering.
     // ═══════════════════════════════════════════════════════════════
-    const VALID_AMOUNTS = [29900, 999]; // ₹299 (paise) or $9.99 (cents)
+    // ₹1,999 / $50 lifetime, plus the old ₹299 / $9.99 for orders created before the price change
+    // (see LEGACY_LIFETIME_AMOUNTS in _billing.js).
+    const VALID_AMOUNTS = validLifetimeAmounts();
     const key_id = process.env.RAZORPAY_KEY_ID;
     try {
       const paymentFetchRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, {

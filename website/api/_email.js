@@ -57,7 +57,7 @@ function getTransporter() {
 // NO inline data:image SVGs (major spam trigger)
 // NO dark backgrounds (suspicious to filters)
 // Clean, professional, light design that passes spam filters
-function emailShell(title, bodyContent) {
+function emailShell(title, bodyContent, subtitle = 'Lifetime License') {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -78,7 +78,7 @@ function emailShell(title, bodyContent) {
         <!-- Header -->
         <tr><td style="background-color:#0066ff;padding:28px 32px;text-align:center;">
           <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">FlyShelf Pro</h1>
-          <p style="margin:6px 0 0;font-size:12px;color:rgba(255,255,255,0.8);font-weight:500;letter-spacing:0.5px;text-transform:uppercase;">Lifetime License</p>
+          <p style="margin:6px 0 0;font-size:12px;color:rgba(255,255,255,0.8);font-weight:500;letter-spacing:0.5px;text-transform:uppercase;">${escapeHTML(subtitle)}</p>
         </td></tr>
         
         <!-- Body -->
@@ -161,10 +161,11 @@ function detailRow(label, value) {
 }
 
 // ─── Plain-text version generator (for multipart/alternative — anti-spam) ───
-function purchasePlainText(licenseKey, paymentId, email, dateStr) {
+function purchasePlainText(licenseKey, paymentId, email, dateStr, details = {}) {
+  const sub = details.subscription;
   return `FlyShelf Pro — License Key
 
-Thank you for purchasing FlyShelf Pro! Your lifetime license has been generated.
+${sub ? `Thank you for subscribing to FlyShelf ${details.planLabel}! Your license key has been generated.` : 'Thank you for purchasing FlyShelf Pro! Your lifetime license has been generated.'}
 
 YOUR LICENSE KEY:
 ${licenseKey}
@@ -175,10 +176,11 @@ HOW TO ACTIVATE:
 3. Paste the key above
 
 ORDER DETAILS:
-- License Type: Pro — Lifetime
+- License Type: ${sub ? details.planLabel : 'Pro — Lifetime'}
 - Payment ID: ${paymentId || 'N/A'}
 - Date: ${dateStr}
-- Email: ${email}
+- Email: ${email}${sub && details.renewsOn ? `
+- Renews: ${details.renewsOn} (cancel any time at https://fly-shelf.vercel.app/pricing.html#account)` : ''}
 
 Pro tip: Copy the key while FlyShelf is running — it auto-detects Pro keys from your clipboard.
 
@@ -188,7 +190,7 @@ Do not share your license key with anyone.
 https://fly-shelf.vercel.app`;
 }
 
-function recoveryPlainText(licenseKey, purchaseDate) {
+function recoveryPlainText(licenseKey, purchaseDate, planLabel) {
   return `FlyShelf Pro — License Key Recovery
 
 We found your FlyShelf Pro license. Here is your key:
@@ -202,7 +204,7 @@ HOW TO ACTIVATE:
 3. Paste the key above
 
 Original Purchase Date: ${purchaseDate}
-License Type: Pro — Lifetime
+License Type: ${planLabel || 'Pro — Lifetime'}
 
 ---
 This is an automated transactional email from FlyShelf.
@@ -217,7 +219,11 @@ https://fly-shelf.vercel.app`;
  * Send purchase confirmation email with the license key.
  * Includes plain-text alternative for spam filter compliance.
  */
-async function sendPurchaseEmail(email, licenseKey, paymentId) {
+/**
+ * @param {object} [details] - omit for lifetime (unchanged email).
+ *   { subscription: true, planLabel: 'Pro Yearly', renewsOn: 'November 1, 2027' }
+ */
+async function sendPurchaseEmail(email, licenseKey, paymentId, details = {}) {
   const t = getTransporter();
   if (!t) return { skipped: true };
 
@@ -237,7 +243,9 @@ async function sendPurchaseEmail(email, licenseKey, paymentId) {
 
     <h2 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#111;letter-spacing:-0.3px;">Your license is ready</h2>
     <p style="margin:0 0 4px;font-size:14px;color:#666;line-height:1.6;">
-      Thank you for purchasing FlyShelf Pro. Your lifetime license has been generated and is ready to activate.
+      ${details.subscription
+        ? `Thank you for subscribing to FlyShelf ${escapeHTML(details.planLabel)}. Your license key has been generated and is ready to activate.`
+        : 'Thank you for purchasing FlyShelf Pro. Your lifetime license has been generated and is ready to activate.'}
     </p>
 
     ${keyBlock(licenseKey)}
@@ -248,13 +256,21 @@ async function sendPurchaseEmail(email, licenseKey, paymentId) {
       <tr><td>
         <p style="margin:0 0 10px;font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;">Order Details</p>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-          ${detailRow('License Type', 'Pro &mdash; Lifetime')}
+          ${details.subscription ? detailRow('License Type', details.planLabel) : detailRow('License Type', 'Pro &mdash; Lifetime')}
           ${detailRow('Payment ID', paymentId ? paymentId.substring(0, 14) + '...' : 'N/A')}
           ${detailRow('Date', dateStr)}
           ${detailRow('Email', email)}
+          ${details.subscription && details.renewsOn ? detailRow('Renews', details.renewsOn) : ''}
         </table>
       </td></tr>
     </table>
+
+    ${details.subscription ? `
+    <p style="margin:16px 0 0;font-size:12px;color:#666;line-height:1.6;">
+      Your plan renews automatically. To see your renewal date or cancel, open
+      <a href="https://fly-shelf.vercel.app/pricing.html#account" style="color:#0066ff;text-decoration:none;font-weight:600;">Manage subscription</a>
+      and enter this key with your email. Pro stays on until the end of the period you paid for.
+    </p>` : ''}
 
     <!-- Pro Tip -->
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;">
@@ -273,8 +289,8 @@ async function sendPurchaseEmail(email, licenseKey, paymentId) {
       to: email,
       subject: 'Your FlyShelf Pro License Key',
       // Plain-text alternative (critical for anti-spam)
-      text: purchasePlainText(licenseKey, paymentId, email, dateStr),
-      html: emailShell('FlyShelf Pro — License Key', body),
+      text: purchasePlainText(licenseKey, paymentId, email, dateStr, details),
+      html: emailShell('FlyShelf Pro — License Key', body, details.subscription ? `${details.planLabel} Subscription` : 'Lifetime License'),
       headers: {
         'X-Mailer': 'FlyShelf License Server',
         'X-Entity-Ref-ID': paymentId || `fs-${Date.now()}`,
@@ -291,7 +307,7 @@ async function sendPurchaseEmail(email, licenseKey, paymentId) {
 /**
  * Send key recovery email.
  */
-async function sendRecoveryEmail(email, licenseKey, purchasedAt) {
+async function sendRecoveryEmail(email, licenseKey, purchasedAt, planLabel) {
   const t = getTransporter();
   if (!t) return { skipped: true };
 
@@ -324,7 +340,7 @@ async function sendRecoveryEmail(email, licenseKey, purchasedAt) {
       <tr><td>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
           ${detailRow('Original Purchase', purchaseDate)}
-          ${detailRow('License Type', 'Pro &mdash; Lifetime')}
+          ${planLabel ? detailRow('License Type', planLabel) : detailRow('License Type', 'Pro &mdash; Lifetime')}
         </table>
       </td></tr>
     </table>
@@ -336,8 +352,8 @@ async function sendRecoveryEmail(email, licenseKey, purchasedAt) {
       replyTo: senderEmail,
       to: email,
       subject: 'Your FlyShelf Pro License Key (Recovery)',
-      text: recoveryPlainText(licenseKey, purchaseDate),
-      html: emailShell('FlyShelf Pro — Key Recovery', body),
+      text: recoveryPlainText(licenseKey, purchaseDate, planLabel),
+      html: emailShell('FlyShelf Pro — Key Recovery', body, planLabel ? `${planLabel} Subscription` : 'Lifetime License'),
       headers: {
         'X-Mailer': 'FlyShelf License Server',
         'X-Entity-Ref-ID': `fs-recovery-${Date.now()}`,

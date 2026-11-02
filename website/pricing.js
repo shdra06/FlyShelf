@@ -1,498 +1,521 @@
-    document.addEventListener('DOMContentLoaded', () => {
+/* FlyShelf Pro checkout. Prices, payment verification and key generation stay on the server
+   (api/createOrder + api/verifyPayment for Lifetime, api/createSubscription + api/verifySubscription
+   for Monthly/Yearly, api/manageSubscription for the account box); this file only presents the flow. */
+(() => {
+  'use strict';
+  const $ = selector => document.querySelector(selector);
+  const motionOK = () => window.FlyShelfSite?.motionAllowed() ?? !matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-      // XSS sanitization helper (security audit v3.0)
-      function escapeHTML(str) {
-        if (!str) return '';
-        const d = document.createElement('div');
-        d.textContent = String(str);
-        return d.innerHTML;
+  const tabInr = $('#tab-inr');
+  const tabUsd = $('#tab-usd');
+  const priceUsd = $('#price-display-usd');
+  const priceInr = $('#price-display-inr');
+  const inrDetails = $('#razorpay-details');
+  const usdDetails = $('#paypal-details');
+  const form = $('#checkout-form');
+  const payButton = $('#btn-submit-payment');
+  const payLabel = payButton.querySelector('span');
+  const email = $('#customer-email');
+  const emailError = $('#email-error');
+  const status = $('#checkout-status');
+  const planButtons = [...document.querySelectorAll('.billing-option')];
+
+  const modal = $('#checkout-modal');
+  const dialog = modal.querySelector('.modal-content');
+  const stages = { loading: $('#modal-stage-loading'), success: $('#modal-stage-success'), error: $('#modal-stage-error') };
+  const keyOutput = $('#license-key-output');
+
+  /* Display prices only; the server decides what is charged. Amounts in paise/cents. */
+  const PLANS = {
+    pro_monthly: {
+      title: 'FlyShelf Pro Monthly', sub: 'Billed monthly · cancel any time', every: 'a month', period: 'month',
+      INR: { amount: 9900, price: '₹99' }, USD: { amount: 299, price: '$2.99' },
+    },
+    pro_yearly: {
+      title: 'FlyShelf Pro Yearly', sub: 'Billed yearly · cancel any time', every: 'a year', period: 'year',
+      INR: { amount: 79900, price: '₹799', monthly: '₹67' }, USD: { amount: 1999, price: '$19.99', monthly: '$1.67' },
+    },
+    lifetime: {
+      title: 'FlyShelf Pro Lifetime', sub: 'One-time payment · nothing to renew', every: '', period: '',
+      INR: { amount: 199900, price: '₹1,999' }, USD: { amount: 5000, price: '$50' },
+    },
+  };
+  const METHODS = { subscription: 'UPI Autopay or cards', lifetime: 'UPI, cards or netbanking' };
+
+  let region = 'USD';
+  let plan = 'pro_yearly';
+  let generatedKey = '';
+  let busy = false;
+  let lastFocus = null;
+
+  // The desktop app may pass its device id when it opens this page.
+  const deviceId = new URLSearchParams(location.search).get('deviceId') || 'web_purchase';
+
+  function say(element, message, tone = 'info') {
+    element.dataset.tone = tone;
+    element.textContent = message;
+  }
+  const isSubscription = name => name === 'pro_monthly' || name === 'pro_yearly';
+  const priceLabel = (name, currency) => {
+    const def = PLANS[name];
+    return def.every ? `${def[currency].price} ${def.every}` : def[currency].price;
+  };
+  function yearlySavings(currency) {
+    const yearly = PLANS.pro_yearly[currency].amount;
+    const monthly = PLANS.pro_monthly[currency].amount * 12;
+    return Math.round((1 - yearly / monthly) * 100);
+  }
+  function formatDate(iso) {
+    const time = Date.parse(iso || '');
+    return Number.isNaN(time) ? '' : new Date(time).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  /* ── Plan and region ─────────────────────────────────────────────────── */
+  function render() {
+    const def = PLANS[plan];
+    const india = region === 'INR';
+    const sub = isSubscription(plan);
+    tabInr.classList.toggle('active', india);
+    tabUsd.classList.toggle('active', !india);
+    tabInr.setAttribute('aria-pressed', String(india));
+    tabUsd.setAttribute('aria-pressed', String(!india));
+    for (const button of planButtons) {
+      const on = button.dataset.plan === plan;
+      button.classList.toggle('active', on);
+      button.setAttribute('aria-pressed', String(on));
+    }
+    $('#yearly-savings').textContent = `Save ${yearlySavings(region)}%`;
+    $('#plan-title').textContent = def.title;
+    $('#plan-sub').textContent = def.sub;
+    priceInr.textContent = def.INR.price;
+    priceUsd.textContent = def.USD.price;
+    priceInr.hidden = !india;
+    priceUsd.hidden = india;
+    const cur = def[region];
+    $('#price-note').textContent = plan === 'pro_yearly' ? `a year · about ${cur.monthly} a month` : def.every || 'once, yours to keep';
+    $('#tab-inr-note').textContent = `${priceLabel(plan, 'INR')} · ${sub ? 'UPI Autopay, cards' : 'UPI, cards, netbanking'}`;
+    $('#tab-usd-note').textContent = `${priceLabel(plan, 'USD')} · Visa, Mastercard, Amex`;
+    $('#inr-methods').textContent = sub ? METHODS.subscription : METHODS.lifetime;
+    inrDetails.hidden = !india;
+    usdDetails.hidden = india;
+    $('#renew-note').hidden = !sub;
+    if (sub) $('#renew-text').textContent = `Renews at ${priceLabel(plan, region)} until you cancel. Cancel any time under Manage subscription on this page — Pro stays on until the paid ${def.period} ends.`;
+    if (!busy) payLabel.textContent = `Pay ${priceLabel(plan, region)}`;
+  }
+  let regionLocked = false;
+  function setRegion(next) { if (!regionLocked) { region = next; render(); } }
+  function setPlan(next) { if (PLANS[next]) { plan = next; render(); } }
+  tabInr.addEventListener('click', () => setRegion('INR'));
+  tabUsd.addEventListener('click', () => setRegion('USD'));
+  for (const button of planButtons) button.addEventListener('click', () => setPlan(button.dataset.plan));
+  // Links like pricing.html?plan=lifetime (or from the desktop app) preselect a plan.
+  const requestedPlan = new URLSearchParams(location.search).get('plan');
+  if (requestedPlan === 'monthly' || requestedPlan === 'yearly') plan = `pro_${requestedPlan}`;
+  else if (requestedPlan === 'lifetime') plan = 'lifetime';
+  // First guess from the time zone, then the server's answer (by country) replaces it and locks the choice:
+  // India sees ₹, everyone else sees $, and checkout charges exactly what is shown.
+  try { if (/^Asia\/(Kolkata|Calcutta)$/.test(Intl.DateTimeFormat().resolvedOptions().timeZone)) region = 'INR'; } catch { /* Default stays international. */ }
+  render();
+  fetch('/api/region', { headers: { Accept: 'application/json' } })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((info) => {
+      if (!info || !info.detected || (info.currency !== 'INR' && info.currency !== 'USD')) return;
+      region = info.currency;
+      regionLocked = true;
+      const india = region === 'INR';
+      tabInr.hidden = !india;
+      tabUsd.hidden = india;
+      $('#region-legend').textContent = india ? 'Prices for India, in rupees' : 'Prices in US dollars';
+      render();
+    })
+    .catch(() => { /* Preview servers have no /api/region: keep the manual switch. */ });
+
+  /* ── Email ───────────────────────────────────────────────────────────── */
+  function validEmail() {
+    const value = email.value.trim();
+    const ok = value.length > 0 && email.checkValidity() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    email.setAttribute('aria-invalid', String(!ok));
+    say(emailError, ok ? '' : value ? 'That email doesn’t look complete. Check it and try again.' : 'Enter the email where you’d like your license key.', 'error');
+    return ok;
+  }
+  email.addEventListener('input', () => { if (email.getAttribute('aria-invalid') === 'true') validEmail(); });
+
+  /* ── Pay ─────────────────────────────────────────────────────────────── */
+  function setBusy(next, label) {
+    busy = next;
+    payButton.disabled = next;
+    payButton.setAttribute('aria-busy', String(next));
+    tabInr.disabled = next;
+    tabUsd.disabled = next;
+    for (const button of planButtons) button.disabled = next;
+    payLabel.textContent = label || `Pay ${priceLabel(plan, region)}`;
+  }
+
+  async function postJson(url, body) {
+    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const result = await response.json().catch(() => ({}));
+    return { response, result };
+  }
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    say(status, '');
+    if (!validEmail()) { email.focus(); return; }
+    if (typeof window.Razorpay !== 'function') {
+      say(status, 'Secure checkout couldn’t load. Check your connection or pause content blockers for this page, then try again.', 'error');
+      return;
+    }
+    const customerEmail = email.value.trim();
+    const chosen = { region, plan };
+    const def = PLANS[chosen.plan];
+    setBusy(true, 'Opening secure checkout…');
+    try {
+      let options;
+      if (isSubscription(chosen.plan)) {
+        const { response, result } = await postJson('/api/createSubscription', { email: customerEmail, deviceId, region: chosen.region, plan: chosen.plan });
+        const subscriptionId = result.subscription_id || result.subscriptionId;
+        if (!response.ok || !subscriptionId) throw new Error(result.error || 'We couldn’t start checkout. Please try again in a moment.');
+        options = {
+          key: result.key_id || result.keyId,
+          subscription_id: subscriptionId,
+          name: 'FlyShelf Pro',
+          description: `${def.title.replace('FlyShelf ', '')} — renews every ${def.period} until you cancel`,
+          handler: payment => confirmPayment(payment, customerEmail, chosen),
+        };
+      } else {
+        const { response, result } = await postJson('/api/createOrder', { email: customerEmail, deviceId, region: chosen.region });
+        if (!response.ok) throw new Error(result.error || 'We couldn’t start checkout. Please try again in a moment.');
+        options = {
+          key: result.keyId,
+          amount: result.amount,
+          currency: result.currency,
+          order_id: result.orderId,
+          name: 'FlyShelf Pro',
+          description: 'Lifetime license — one-time payment',
+          handler: payment => confirmPayment(payment, customerEmail, chosen),
+        };
       }
-
-      
-      /* Glass blur lazy visibility (performance) */
-      const glassEls = document.querySelectorAll('.glass');
-      const glassObs = new IntersectionObserver((entries) => {
-        entries.forEach(e => e.target.classList.toggle('glass--visible', e.isIntersecting));
-      }, { rootMargin: '200px 0px 200px 0px', threshold: 0 });
-      glassEls.forEach(el => glassObs.observe(el));
-
-      const tabInr = document.getElementById('tab-inr');
-      const tabUsd = document.getElementById('tab-usd');
-      const priceDisplayUsd = document.getElementById('price-display-usd');
-      const priceDisplayInr = document.getElementById('price-display-inr');
-      const razorpayDetails = document.getElementById('razorpay-details');
-      const paypalDetails = document.getElementById('paypal-details');
-      const btnSubmitPayment = document.getElementById('btn-submit-payment');
-      
-      const checkoutModal = document.getElementById('checkout-modal');
-      const modalStageLoading = document.getElementById('modal-stage-loading');
-      const modalStageApproval = document.getElementById('modal-stage-approval');
-      const modalStageSuccess = document.getElementById('modal-stage-success');
-      const loaderHeadline = document.getElementById('loader-headline');
-      const loaderDesc = document.getElementById('loader-desc');
-      
-      const customerEmail = document.getElementById('customer-email');
-      const confirmEmail = document.getElementById('confirm-email');
-      const confirmAmount = document.getElementById('confirm-amount');
-      
-      const licenseKeyOutput = document.getElementById('license-key-output');
-      const btnCopyLicense = document.getElementById('btn-copy-license');
-      const btnActivateDeeplink = document.getElementById('btn-activate-deeplink');
-      const btnCloseModal = document.getElementById('btn-close-modal');
-      
-      let selectedRegion = 'USD';
-      let generatedKey = '';
-
-      // Get deviceId from URL params (passed from desktop app)
-      const urlParams = new URLSearchParams(window.location.search);
-      const deviceId = urlParams.get('deviceId') || 'web_purchase';
-
-      // ═══════════════════════════════════════════
-      // Shared creative-orbit appearance is defined in checkout.css.
-      // ═══════════════════════════════════════════
-      tabInr.setAttribute('aria-pressed', 'false');
-      tabUsd.setAttribute('aria-pressed', 'true');
-
-      // Set reveal trigger
-      setTimeout(() => {
-        document.querySelectorAll('.scroll-reveal').forEach(el => el.classList.add('visible'));
-      }, 100);
-
-      // ═══════════════════════════════════════════
-      // REGION TAB SWITCHING
-      // ═══════════════════════════════════════════
-
-      tabInr.addEventListener('click', () => {
-        tabInr.setAttribute('aria-pressed', 'true');
-        tabUsd.setAttribute('aria-pressed', 'false');
-        selectedRegion = 'INR';
-        tabInr.classList.add('active');
-        tabUsd.classList.remove('active');
-        priceDisplayInr.style.display = 'inline';
-        priceDisplayUsd.style.display = 'none';
-        razorpayDetails.style.display = 'flex';
-        paypalDetails.style.display = 'none';
-        
-        btnSubmitPayment.className = 'btn-checkout-pay btn-razorpay';
-        btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
+      const checkout = new window.Razorpay({
+        ...options,
+        prefill: { email: customerEmail },
+        theme: { color: '#2456d3' },
+        modal: {
+          ondismiss() {
+            setBusy(false);
+            say(status, 'Checkout closed. You haven’t been charged — pay whenever you’re ready.');
+          },
+        },
       });
-
-      tabUsd.addEventListener('click', () => {
-        tabInr.setAttribute('aria-pressed', 'false');
-        tabUsd.setAttribute('aria-pressed', 'true');
-        selectedRegion = 'USD';
-        tabUsd.classList.add('active');
-        tabInr.classList.remove('active');
-        priceDisplayUsd.style.display = 'inline';
-        priceDisplayInr.style.display = 'none';
-        paypalDetails.style.display = 'flex';
-        razorpayDetails.style.display = 'none';
-        
-        btnSubmitPayment.className = 'btn-checkout-pay btn-razorpay';
-        btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card';
+      checkout.on('payment.failed', response => {
+        setBusy(false);
+        const reason = response?.error?.description;
+        say(status, `Payment didn’t go through${reason ? `: ${reason}` : '.'} You can try again or use another method.`, 'error');
       });
+      checkout.open();
+    } catch (error) {
+      setBusy(false);
+      say(status, error.message || 'We couldn’t start checkout. Please try again.', 'error');
+    }
+  });
 
-      // ═══════════════════════════════════════════
-      // PAYMENT BUTTON CLICK
-      // ═══════════════════════════════════════════
-
-      btnSubmitPayment.addEventListener('click', () => {
-        const emailVal = customerEmail.value.trim();
-        if (!emailVal || !customerEmail.checkValidity()) {
-          customerEmail.reportValidity();
-          customerEmail.focus();
-          return;
-        }
-
-        // Both INR and USD use Razorpay — just different currencies
-        openRazorpayCheckout(emailVal, selectedRegion);
-      });
-
-      // ═══════════════════════════════════════════
-      // RAZORPAY STANDARD CHECKOUT
-      // ═══════════════════════════════════════════
-
-      async function openRazorpayCheckout(email, region) {
-        // Disable button to prevent double-click
-        btnSubmitPayment.disabled = true;
-        btnSubmitPayment.innerHTML = '<div class="payment-loader" style="width:20px;height:20px;border-width:2px;margin:0;"></div> Processing...';
-
-        try {
-          const backendUrl = window.location.origin;
-          const orderRes = await fetch(`${backendUrl}/api/createOrder`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, deviceId, region })
-          });
-
-          if (!orderRes.ok) {
-            const errData = await orderRes.json().catch(() => ({}));
-            throw new Error(errData.error || 'Failed to create payment order. Please try again.');
-          }
-
-          const orderData = await orderRes.json();
-
-          const options = {
-            key: orderData.keyId,
-            amount: orderData.amount,
-            currency: orderData.currency,
-            name: 'FlyShelf Pro',
-            description: 'Lifetime Pro License — One-time Payment',
-            order_id: orderData.orderId,
-            prefill: {
-              email: email
-            },
-            theme: {
-              color: '#0b72e7'
-            },
-            handler: async function(response) {
-              // ── PAYMENT SUCCESS ──
-              console.log('Payment successful:', response.razorpay_payment_id);
-              
-              // Show processing modal
-              checkoutModal.style.display = 'flex';
-              modalStageLoading.style.display = 'flex';
-              modalStageApproval.style.display = 'none';
-              modalStageSuccess.style.display = 'none';
-              loaderHeadline.textContent = 'Payment Captured!';
-              loaderDesc.textContent = 'Generating your license key...';
-
-              try {
-                // Verify signature on backend
-                const verifyRes = await fetch(`${backendUrl}/api/verifyPayment`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    razorpay_payment_id: response.razorpay_payment_id,
-                    razorpay_order_id: response.razorpay_order_id,
-                    razorpay_signature: response.razorpay_signature,
-                    email: email,
-                    deviceId: deviceId
-                  })
-                });
-
-                const verifyData = await verifyRes.json();
-
-                if (!verifyRes.ok) {
-                  throw new Error(verifyData.error || `Server returned ${verifyRes.status}`);
-                }
-
-                if (verifyData.success) {
-                  generatedKey = verifyData.licenseKey;
-                  
-                  // Cache key in sessionStorage for 15 minutes
-                  try {
-                    sessionStorage.setItem('flyshelf_recent_purchase', JSON.stringify({
-                      key: generatedKey,
-                      email: email,
-                      timestamp: Date.now()
-                    }));
-                    showRecentOrder();
-                  } catch(e) {}
-                  
-                  // Show success modal
-                  modalStageLoading.style.display = 'none';
-                  modalStageSuccess.style.display = 'flex';
-                  licenseKeyOutput.textContent = generatedKey;
-                  btnActivateDeeplink.href = `flyshelf://activate?key=${generatedKey}`;
-                  confirmEmail.textContent = email;
-                  confirmAmount.textContent = region === 'USD' ? '$9.99' : '₹299';
-                  spawnConfetti();
-                } else {
-                  alert('Verification could not be completed. Your payment is safe — please contact support@flyshelf.app');
-                  modalStageLoading.style.display = 'none';
-                }
-              } catch (verifyErr) {
-                console.error(verifyErr);
-                alert('Something went wrong verifying your payment. Your money is safe — please contact support@flyshelf.app if your key doesn\'t arrive by email.');
-                modalStageLoading.style.display = 'none';
-              }
-
-              // Reset button
-              btnSubmitPayment.disabled = false;
-              btnSubmitPayment.innerHTML = selectedRegion === 'USD' ? '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card' : '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
-            },
-            modal: {
-              ondismiss: function() {
-                // User closed the Razorpay popup
-                btnSubmitPayment.disabled = false;
-                btnSubmitPayment.innerHTML = selectedRegion === 'USD' ? '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card' : '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
-              }
-            }
-          };
-
-          const rzp = new Razorpay(options);
-          
-          rzp.on('payment.failed', function(response) {
-            console.error('Payment failed:', response.error);
-            alert(`Payment failed: ${response.error.description}\n\nPlease try again.`);
-            btnSubmitPayment.disabled = false;
-            btnSubmitPayment.innerHTML = selectedRegion === 'USD' ? '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card' : '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
-          });
-
-          rzp.open();
-
-        } catch (err) {
-          console.error(err);
-          alert(err.message || 'Could not initialize payment. Please try again.');
-          btnSubmitPayment.disabled = false;
-          btnSubmitPayment.innerHTML = selectedRegion === 'USD' ? '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card' : '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
-        }
-      }
-
-      // ═══════════════════════════════════════════
-      // COPY LICENSE KEY
-      // ═══════════════════════════════════════════
-
-      // Click on the key box itself to copy
-      licenseKeyOutput.addEventListener('click', () => {
-        copyAndFlash(licenseKeyOutput, generatedKey);
-      });
-
-      btnCopyLicense.addEventListener('click', () => {
-        copyAndFlash(btnCopyLicense, generatedKey);
-      });
-
-      // Reusable copy + flash feedback
-      function copyAndFlash(el, text) {
-        navigator.clipboard.writeText(text);
-        const original = el.innerHTML;
-        const origBg = el.style.background;
-        const origColor = el.style.color;
-        el.innerHTML = '<ion-icon name="checkmark-done-outline" style="vertical-align: middle;"></ion-icon> Copied!';
-        el.style.background = '#3ddc84';
-        el.style.color = '#000';
-        setTimeout(() => {
-          el.innerHTML = original;
-          el.style.background = origBg;
-          el.style.color = origColor;
-        }, 1800);
-      }
-
-      // ═══════════════════════════════════════════
-      // CONFETTI CELEBRATION EFFECT
-      // ═══════════════════════════════════════════
-      function spawnConfetti() {
-        const container = document.getElementById('confetti-container');
-        if (!container) return;
-        container.innerHTML = ''; // Clear any previous confetti
-        const colors = ['#00d2ff', '#3ddc84', '#ff9d00', '#a78bfa', '#f472b6', '#fbbf24', '#34d399'];
-        const count = 40;
-        for (let i = 0; i < count; i++) {
-          const particle = document.createElement('div');
-          particle.className = 'confetti-particle';
-          particle.style.left = Math.random() * 100 + '%';
-          particle.style.background = colors[Math.floor(Math.random() * colors.length)];
-          particle.style.width = (Math.random() * 6 + 4) + 'px';
-          particle.style.height = (Math.random() * 6 + 4) + 'px';
-          particle.style.animationDuration = (Math.random() * 2 + 1.5) + 's';
-          particle.style.animationDelay = (Math.random() * 0.8) + 's';
-          particle.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
-          container.appendChild(particle);
-        }
-        // Auto-clean after animation completes
-        setTimeout(() => { container.innerHTML = ''; }, 4000);
-      }
-
-      // ═══════════════════════════════════════════
-      // DEEP LINK ACTIVATE — copy activation trigger to clipboard
-      // The FlyShelf PC app monitors clipboard for the FLYSHELF_ACTIVATE:: prefix
-      // and auto-triggers activation when detected.
-      // ═══════════════════════════════════════════
-      function tryActivate(key, feedbackEl) {
-        // Copy key with activation trigger prefix — FlyShelf PC app auto-detects this
-        const activationString = `FLYSHELF_ACTIVATE::${key}`;
-        navigator.clipboard.writeText(activationString).then(() => {
-          // Visual feedback on button
-          if (feedbackEl) {
-            const orig = feedbackEl.innerHTML;
-            feedbackEl.innerHTML = '<ion-icon name="checkmark-done-outline" style="font-size: 1rem;"></ion-icon> Activating... Check your PC app!';
-            feedbackEl.style.pointerEvents = 'none';
-            feedbackEl.style.background = 'linear-gradient(135deg, var(--color-emerald), #0ea5e9)';
-            setTimeout(() => {
-              feedbackEl.innerHTML = orig;
-              feedbackEl.style.pointerEvents = '';
-              feedbackEl.style.background = '';
-            }, 4000);
-          }
-        }).catch(() => {
-          // Fallback: copy plain key
-          navigator.clipboard.writeText(key).catch(() => {});
-          if (feedbackEl) {
-            const orig = feedbackEl.innerHTML;
-            feedbackEl.innerHTML = '<ion-icon name="copy-outline" style="font-size: 1rem;"></ion-icon> Key Copied! Paste in app settings.';
-            setTimeout(() => { feedbackEl.innerHTML = orig; }, 3000);
-          }
+  async function confirmPayment(payment, customerEmail, chosen) {
+    openModal('loading');
+    $('#loader-headline').textContent = 'Payment received';
+    $('#loader-desc').textContent = 'Generating your license key. Please keep this tab open.';
+    const subscription = isSubscription(chosen.plan);
+    try {
+      const { response, result } = subscription
+        ? await postJson('/api/verifySubscription', {
+          razorpay_payment_id: payment.razorpay_payment_id,
+          razorpay_subscription_id: payment.razorpay_subscription_id,
+          razorpay_signature: payment.razorpay_signature,
+          email: customerEmail,
+          deviceId,
+        })
+        : await postJson('/api/verifyPayment', {
+          razorpay_payment_id: payment.razorpay_payment_id,
+          razorpay_order_id: payment.razorpay_order_id,
+          razorpay_signature: payment.razorpay_signature,
+          email: customerEmail,
+          deviceId,
         });
-      }
-
-      // Success modal activate button
-      btnActivateDeeplink.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (generatedKey) tryActivate(generatedKey, btnActivateDeeplink);
-      });
-
-      // Close modal
-      btnCloseModal.addEventListener('click', () => {
-        checkoutModal.style.display = 'none';
-      });
-
-      checkoutModal.addEventListener('click', (e) => {
-        if (e.target === checkoutModal) {
-          checkoutModal.style.display = 'none';
-        }
-      });
-
-      // ═══════════════════════════════════════════
-      // KEY GENERATION — Server-side only (security hardened v2.0.0)
-      // All license key generation now happens exclusively on the
-      // Vercel backend (api/verifyPayment.js) after payment verification.
-      // HMAC secret is NEVER exposed to the client.
-      // ═══════════════════════════════════════════
-
-      // ═══════════════════════════════════════════
-      // RECENTLY ORDERED — sessionStorage cache (15 min)
-      // ═══════════════════════════════════════════
-      const recentOrderSection = document.getElementById('recent-order-section');
-      const recentOrderKey = document.getElementById('recent-order-key');
-      const recentOrderTimer = document.getElementById('recent-order-timer');
-      const btnCopyRecent = document.getElementById('btn-copy-recent');
-      const recentOrderDeeplink = document.getElementById('recent-order-deeplink');
-
-      let recentTimerInterval = null;
-
-      const recentProgressBar = document.getElementById('recent-order-progress');
-      const btnDismissRecent = document.getElementById('btn-dismiss-recent');
-      const EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
-
-      function clearRecentOrder() {
-        sessionStorage.removeItem('flyshelf_recent_purchase');
-        if (recentTimerInterval) clearInterval(recentTimerInterval);
-        // Fade out smoothly
-        recentOrderSection.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
-        recentOrderSection.style.opacity = '0';
-        recentOrderSection.style.transform = 'translateY(-10px)';
-        setTimeout(() => { recentOrderSection.style.display = 'none'; }, 400);
-      }
-
-      function showRecentOrder() {
-        try {
-          const cached = JSON.parse(sessionStorage.getItem('flyshelf_recent_purchase'));
-          if (!cached || !cached.key) return;
-          
-          const elapsed = Date.now() - cached.timestamp;
-          
-          if (elapsed >= EXPIRY_MS) {
-            clearRecentOrder();
-            return;
-          }
-          
-          recentOrderKey.textContent = cached.key;
-          recentOrderDeeplink.href = `flyshelf://activate?key=${cached.key}`;
-          recentOrderSection.style.display = 'block';
-          recentOrderSection.style.opacity = '1';
-          recentOrderSection.style.transform = 'translateY(0)';
-          
-          // Update progress bar + countdown every second
-          if (recentTimerInterval) clearInterval(recentTimerInterval);
-          function tick() {
-            const remaining = EXPIRY_MS - (Date.now() - cached.timestamp);
-            if (remaining <= 0) {
-              clearRecentOrder();
-              return;
-            }
-            const mins = Math.floor(remaining / 60000);
-            const secs = Math.floor((remaining % 60000) / 1000);
-            recentOrderTimer.textContent = `Expires in ${mins}:${secs.toString().padStart(2, '0')}`;
-            
-            // Progress bar percentage
-            const pct = Math.max(0, (remaining / EXPIRY_MS) * 100);
-            if (recentProgressBar) recentProgressBar.style.width = pct + '%';
-            
-            // Color shift: green → yellow → red as time runs low
-            if (pct < 20) {
-              if (recentProgressBar) recentProgressBar.style.background = 'linear-gradient(90deg, #ff6b6b, #ff4757)';
-              recentOrderTimer.style.color = '#ff6b6b';
-            } else if (pct < 40) {
-              if (recentProgressBar) recentProgressBar.style.background = 'linear-gradient(90deg, #ffa502, #ff6348)';
-              recentOrderTimer.style.color = '#ffa502';
-            } else {
-              if (recentProgressBar) recentProgressBar.style.background = 'linear-gradient(90deg, var(--color-emerald), var(--color-cyan))';
-              recentOrderTimer.style.color = 'var(--color-cyan)';
-            }
-          }
-          tick(); // Run immediately
-          recentTimerInterval = setInterval(tick, 1000);
-        } catch(e) {}
-      }
-
-      // Show cached order on page load
+      if (!response.ok || !result.success || !result.licenseKey) throw new Error(result.error || `Server returned ${response.status}`);
+      generatedKey = result.licenseKey;
+      try {
+        sessionStorage.setItem('flyshelf_recent_purchase', JSON.stringify({ key: generatedKey, email: customerEmail, timestamp: Date.now() }));
+      } catch { /* The key is still shown and emailed. */ }
       showRecentOrder();
+      keyOutput.textContent = generatedKey;
+      $('#confirm-email').textContent = customerEmail;
+      const planNote = $('#confirm-plan');
+      if (subscription) {
+        const renews = formatDate(result.currentPeriodEnd);
+        planNote.textContent = `${PLANS[chosen.plan].title.replace('FlyShelf ', '')}${renews ? ` · renews on ${renews}` : ''}. Stop renewal any time under Manage subscription on this page.`;
+        planNote.hidden = false;
+      } else {
+        planNote.hidden = true;
+      }
+      showStage('success');
+      celebrate();
+      say(status, 'Payment complete. Your license key is below and in your email.', 'success');
+    } catch (error) {
+      console.error(error);
+      showStage('error');
+    } finally {
+      setBusy(false);
+    }
+  }
 
-      // Dismiss button
-      if (btnDismissRecent) {
-        btnDismissRecent.addEventListener('click', clearRecentOrder);
-      }
+  /* ── Dialog ──────────────────────────────────────────────────────────── */
+  function showStage(name) {
+    for (const [key, stage] of Object.entries(stages)) stage.hidden = key !== name;
+    modal.dataset.stage = name;
+    const focusTarget = name === 'success' ? keyOutput : name === 'error' ? $('#btn-close-error') : dialog;
+    focusTarget.focus({ preventScroll: true });
+  }
+  function openModal(stage) {
+    if (modal.hidden) lastFocus = document.activeElement;
+    modal.hidden = false;
+    document.documentElement.classList.add('modal-open');
+    showStage(stage);
+  }
+  function closeModal() {
+    if (modal.dataset.stage === 'loading') return; // Never abandon a payment that's being confirmed.
+    modal.hidden = true;
+    document.documentElement.classList.remove('modal-open');
+    // The pay button is disabled while busy, so focus usually falls back to it.
+    const returnTo = lastFocus && lastFocus !== document.body && document.contains(lastFocus) && !lastFocus.disabled ? lastFocus : payButton;
+    returnTo.focus({ preventScroll: true });
+  }
+  $('#btn-close-modal').addEventListener('click', closeModal);
+  $('#btn-close-error').addEventListener('click', closeModal);
+  modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+  document.addEventListener('keydown', event => {
+    if (modal.hidden) return;
+    if (event.key === 'Escape') { event.preventDefault(); closeModal(); return; }
+    if (event.key !== 'Tab') return;
+    // Keep keyboard focus inside the dialog.
+    const focusable = [...dialog.querySelectorAll('button, a[href], input')].filter(node => !node.closest('[hidden]') && !node.disabled);
+    if (!focusable.length) { event.preventDefault(); return; }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  });
 
-      // Click on recent key box to copy
-      if (recentOrderKey) {
-        recentOrderKey.addEventListener('click', () => {
-          const key = recentOrderKey.textContent;
-          copyAndFlash(recentOrderKey, key);
-        });
-      }
+  /* ── Copy and activate ───────────────────────────────────────────────── */
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
+  }
+  function flash(button, message, ok = true) {
+    const label = button.querySelector('span') || button;
+    if (!button.dataset.label) button.dataset.label = label.textContent;
+    label.textContent = message;
+    button.classList.toggle('is-done', ok);
+    clearTimeout(button._flash);
+    button._flash = setTimeout(() => { label.textContent = button.dataset.label; button.classList.remove('is-done'); }, 2400);
+  }
+  async function copyKey(button, key) {
+    if (!key) return;
+    const ok = await copyText(key);
+    flash(button, ok ? 'Copied' : 'Select and copy the key', ok);
+    window.FlyShelfSite?.toast(ok ? 'License key copied.' : 'Clipboard access is blocked. Select the key and copy it manually.');
+  }
+  // The FlyShelf PC app watches the clipboard for this prefix and activates Pro by itself.
+  async function activate(button, key) {
+    if (!key) return;
+    if (await copyText(`FLYSHELF_ACTIVATE::${key}`)) {
+      flash(button, 'Sent — check FlyShelf');
+      window.FlyShelfSite?.toast('Activation code copied. FlyShelf will turn on Pro if it’s running.');
+    } else {
+      const copied = await copyText(key);
+      flash(button, copied ? 'Key copied — paste it in FlyShelf' : 'Copy the key manually', copied);
+    }
+  }
+  keyOutput.addEventListener('click', () => copyKey($('#btn-copy-license'), generatedKey));
+  $('#btn-copy-license').addEventListener('click', event => copyKey(event.currentTarget, generatedKey));
+  $('#btn-activate-deeplink').addEventListener('click', event => activate(event.currentTarget, generatedKey));
 
-      // Copy button for recent order
-      if (btnCopyRecent) {
-        btnCopyRecent.addEventListener('click', () => {
-          const key = recentOrderKey.textContent;
-          navigator.clipboard.writeText(key);
-          btnCopyRecent.innerHTML = '<ion-icon name="checkmark-done-outline" style="font-size: 1rem;"></ion-icon> Copied!';
-          setTimeout(() => {
-            btnCopyRecent.innerHTML = '<ion-icon name="copy-outline" style="font-size: 1rem;"></ion-icon> Copy Key';
-          }, 1800);
-        });
-      }
+  /* ── Celebration (skipped when motion is reduced or paused) ──────────── */
+  function celebrate() {
+    const container = $('#confetti-container');
+    if (!container || !motionOK()) return;
+    container.replaceChildren();
+    const colors = ['#2456d3', '#58d2df', '#6ee7b7', '#f6c445', '#b4a2ff', '#ffb08c'];
+    for (let i = 0; i < 36; i++) {
+      const piece = document.createElement('i');
+      piece.className = 'confetti-particle';
+      piece.style.left = `${Math.random() * 100}%`;
+      piece.style.background = colors[i % colors.length];
+      piece.style.width = piece.style.height = `${4 + Math.random() * 5}px`;
+      piece.style.borderRadius = Math.random() > .5 ? '50%' : '2px';
+      piece.style.animationDuration = `${1.6 + Math.random() * 1.6}s`;
+      piece.style.animationDelay = `${Math.random() * .5}s`;
+      container.append(piece);
+    }
+    setTimeout(() => container.replaceChildren(), 4200);
+  }
 
-      // Activate button for recent order
-      if (recentOrderDeeplink) {
-        recentOrderDeeplink.addEventListener('click', (e) => {
-          e.preventDefault();
-          const key = recentOrderKey.textContent;
-          if (key) tryActivate(key, recentOrderDeeplink);
-        });
-      }
-      // Mobile Navigation Drawer Toggle
-      const mobileToggle = document.getElementById('mobile-menu-toggle');
-      const mobileDrawer = document.getElementById('mobile-menu-drawer');
-      const mobileClose = document.getElementById('mobile-menu-close');
-      if (mobileToggle && mobileDrawer) {
-        mobileToggle.setAttribute('aria-controls', 'mobile-menu-drawer');
-        mobileToggle.setAttribute('aria-expanded', 'false');
-        mobileToggle.addEventListener('click', () => {
-          mobileDrawer.classList.toggle('open');
-          mobileToggle.setAttribute('aria-expanded', String(mobileDrawer.classList.contains('open')));
-        });
-      }
-      if (mobileClose && mobileDrawer) {
-        mobileClose.addEventListener('click', () => {
-          mobileDrawer.classList.remove('open');
-          mobileToggle?.setAttribute('aria-expanded', 'false');
-        });
-      }
-      const mobileLinks = document.querySelectorAll('.mobile-nav-links a');
-      mobileLinks.forEach(link => {
-        link.addEventListener('click', () => {
-          mobileDrawer.classList.remove('open');
-          mobileToggle?.setAttribute('aria-expanded', 'false');
-        });
+  /* ── Recent purchase (this tab only, 15 minutes) ─────────────────────── */
+  const recent = $('#recent-order-section');
+  const recentKey = $('#recent-order-key');
+  const recentTimer = $('#recent-order-timer');
+  const recentProgress = $('#recent-order-progress');
+  const EXPIRY_MS = 15 * 60 * 1000;
+  let recentInterval = 0;
+  function clearRecentOrder() {
+    try { sessionStorage.removeItem('flyshelf_recent_purchase'); } catch { /* Nothing stored. */ }
+    clearInterval(recentInterval);
+    recent.hidden = true;
+  }
+  function showRecentOrder() {
+    let cached = null;
+    try { cached = JSON.parse(sessionStorage.getItem('flyshelf_recent_purchase')); } catch { return; }
+    if (!cached?.key) return;
+    if (Date.now() - cached.timestamp >= EXPIRY_MS) { clearRecentOrder(); return; }
+    recentKey.textContent = cached.key;
+    recent.hidden = false;
+    clearInterval(recentInterval);
+    const tick = () => {
+      const remaining = EXPIRY_MS - (Date.now() - cached.timestamp);
+      if (remaining <= 0) { clearRecentOrder(); return; }
+      const minutes = Math.floor(remaining / 60000);
+      const seconds = String(Math.floor((remaining % 60000) / 1000)).padStart(2, '0');
+      recentTimer.textContent = `This box hides itself in ${minutes}:${seconds}.`;
+      recentProgress.style.transform = `scaleX(${remaining / EXPIRY_MS})`;
+      recent.classList.toggle('is-ending', remaining / EXPIRY_MS < .2);
+    };
+    tick();
+    recentInterval = setInterval(tick, 1000);
+  }
+  showRecentOrder();
+  $('#btn-dismiss-recent').addEventListener('click', clearRecentOrder);
+  recentKey.addEventListener('click', () => copyKey($('#btn-copy-recent'), recentKey.textContent));
+  $('#btn-copy-recent').addEventListener('click', event => copyKey(event.currentTarget, recentKey.textContent));
+  $('#recent-order-deeplink').addEventListener('click', event => activate(event.currentTarget, recentKey.textContent));
+
+  /* ── License recovery (api/recoverKey emails the key; it never returns it) ─ */
+  const recoverForm = $('#recover-form');
+  const recoverEmail = $('#recover-email');
+  const recoverButton = $('#recover-submit');
+  const recoverStatus = $('#recover-status');
+  recoverForm?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const value = recoverEmail.value.trim();
+    if (!value || !recoverEmail.checkValidity() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      recoverEmail.setAttribute('aria-invalid', 'true');
+      say(recoverStatus, 'Enter the email address you used at checkout.', 'error');
+      recoverEmail.focus();
+      return;
+    }
+    recoverEmail.setAttribute('aria-invalid', 'false');
+    recoverButton.disabled = true;
+    recoverButton.setAttribute('aria-busy', 'true');
+    say(recoverStatus, 'Sending…');
+    try {
+      const response = await fetch('/api/recoverKey', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: value }),
       });
-      document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && mobileDrawer?.classList.contains('open')) {
-          mobileDrawer.classList.remove('open');
-          mobileToggle?.setAttribute('aria-expanded', 'false');
-          mobileToggle?.focus();
+      const result = await response.json().catch(() => ({}));
+      // Purchases aren't confirmed or denied here, so the answer is the same either way.
+      if (response.ok || response.status === 404) say(recoverStatus, `If ${value} was used to buy FlyShelf Pro, the license key is on its way there now. Check spam if it hasn’t arrived in a few minutes.`, 'success');
+      else if (response.status === 429) say(recoverStatus, result.error || 'Too many requests for this email. Please try again tomorrow.', 'error');
+      else say(recoverStatus, 'We couldn’t send the email just now. Please try again in a few minutes.', 'error');
+    } catch {
+      say(recoverStatus, 'You seem to be offline. Check your connection and try again.', 'error');
+    } finally {
+      recoverButton.disabled = false;
+      recoverButton.removeAttribute('aria-busy');
+    }
+  });
+
+  /* ── Manage subscription (api/manageSubscription; key + email must both match) ─ */
+  const accountForm = $('#account-form');
+  const accountKey = $('#account-key');
+  const accountEmail = $('#account-email');
+  const accountSubmit = $('#account-submit');
+  const accountStatus = $('#account-status');
+  const accountResult = $('#account-result');
+  const cancelButton = $('#account-cancel');
+  const confirmBox = $('#account-confirm');
+  const confirmYes = $('#account-confirm-yes');
+  const STATUS_TEXT = {
+    active: 'Active', past_due: 'Payment retrying', halted: 'Paused — payment failed', paused: 'Paused',
+    cancelled: 'Cancelled', completed: 'Ended', expired: 'Ended', revoked: 'Revoked', created: 'Not started',
+  };
+  let lookup = null;
+
+  function showAccount(data) {
+    lookup = data;
+    accountResult.hidden = false;
+    confirmBox.hidden = true;
+    $('#account-plan').textContent = data.planLabel || 'Pro';
+    const lifetime = data.plan === 'lifetime';
+    const ended = ['cancelled', 'completed', 'expired', 'revoked'].includes(data.status);
+    $('#account-state').textContent = data.cancelAtPeriodEnd ? 'Active — won’t renew' : STATUS_TEXT[data.status] || data.status;
+    const date = formatDate(data.currentPeriodEnd);
+    $('#account-date-row').hidden = lifetime || !date;
+    $('#account-date-label').textContent = data.renewsAt ? 'Renews on' : ended && Date.parse(data.currentPeriodEnd) < Date.now() ? 'Ended on' : 'Pro until';
+    $('#account-date').textContent = date;
+    cancelButton.hidden = lifetime || ended || data.cancelAtPeriodEnd || data.status === 'halted';
+    $('#account-confirm-date').textContent = date || 'the end of your current period';
+  }
+
+  async function manage(action) {
+    const key = accountKey.value.trim().toUpperCase();
+    const value = accountEmail.value.trim();
+    const keyOk = /^FS-PRO-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key);
+    const emailOk = value && accountEmail.checkValidity() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    accountKey.setAttribute('aria-invalid', String(!keyOk));
+    accountEmail.setAttribute('aria-invalid', String(!emailOk));
+    if (!keyOk || !emailOk) {
+      say(accountStatus, !keyOk ? 'Enter your license key — it looks like FS-PRO-XXXX-XXXX-XXXX-XXXX.' : 'Enter the email you used at checkout.', 'error');
+      (keyOk ? accountEmail : accountKey).focus();
+      return;
+    }
+    accountSubmit.disabled = true;
+    confirmYes.disabled = true;
+    say(accountStatus, action === 'cancel' ? 'Stopping renewal…' : 'Looking up your plan…');
+    try {
+      const { response, result } = await postJson('/api/manageSubscription', { key, email: value, action });
+      if (response.ok && result.success) {
+        showAccount(result);
+        if (action === 'cancel') {
+          const until = formatDate(result.currentPeriodEnd);
+          say(accountStatus, `Renewal stopped. You won’t be charged again${until ? `, and Pro stays on until ${until}` : ''}.`, 'success');
+          accountSubmit.focus();
+        } else {
+          say(accountStatus, result.plan === 'lifetime' ? 'This is a lifetime key — there’s nothing to renew or cancel.' : '');
         }
-      });
+      } else if (response.status === 404) {
+        accountResult.hidden = true;
+        say(accountStatus, 'We couldn’t find a plan for that key and email. Check both and try again.', 'error');
+      } else if (response.status === 429) {
+        say(accountStatus, result.message || 'Too many requests. Please try again later.', 'error');
+      } else {
+        say(accountStatus, result.message || 'We couldn’t reach the server just now. Please try again in a few minutes.', 'error');
+      }
+    } catch {
+      say(accountStatus, 'You seem to be offline. Check your connection and try again.', 'error');
+    } finally {
+      accountSubmit.disabled = false;
+      confirmYes.disabled = false;
+    }
+  }
 
-    });
+  accountForm?.addEventListener('submit', event => { event.preventDefault(); manage('status'); });
+  cancelButton?.addEventListener('click', () => {
+    if (!lookup) return;
+    confirmBox.hidden = false;
+    cancelButton.hidden = true;
+    $('#account-confirm-no').focus();
+  });
+  $('#account-confirm-no')?.addEventListener('click', () => {
+    confirmBox.hidden = true;
+    cancelButton.hidden = false;
+    cancelButton.focus();
+  });
+  confirmYes?.addEventListener('click', () => manage('cancel'));
+})();

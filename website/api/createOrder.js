@@ -1,6 +1,7 @@
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const { firebaseFetch, setSecurityHeaders } = require('./_firebaseAdmin');
+const { LIFETIME_AMOUNTS, currencyForRequest } = require('./_billing');
 
 // Rate limit constants
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -100,10 +101,9 @@ module.exports = async (req, res) => {
 
     const receiptId = `rcpt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     
-    // Determine currency and amount based on region
-    const isInternational = region === 'USD';
-    const currency = isInternational ? 'USD' : 'INR';
-    const amount = isInternational ? 999 : 29900; // $9.99 (999 cents) or ₹299 (29900 paise)
+    // Currency comes from the visitor's country (India → INR, elsewhere → USD), not from the page.
+    const currency = currencyForRequest(req, region);
+    const amount = LIFETIME_AMOUNTS[currency];
 
     const order = await razorpay.orders.create({
       amount,

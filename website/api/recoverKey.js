@@ -145,7 +145,7 @@ module.exports = async (req, res) => {
 
     // ─── Send key via email (NEVER return in response) ───
     try {
-      await sendRecoveryEmail(latestPayment.email, latestPayment.licenseKey, latestPayment.timestamp);
+      await sendRecoveryEmail(latestPayment.email, latestPayment.licenseKey, latestPayment.timestamp, planLabelFor(latestPayment));
     } catch (emailErr) {
       console.error('[recoverKey] Email send failed:', emailErr.message);
       return res.status(500).json({ error: 'Failed to send recovery email. Please try again or contact support.' });
@@ -161,6 +161,13 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'Recovery failed. Please contact support.' });
   }
 };
+
+// Subscription payments carry plan: 'pro_monthly' | 'pro_yearly'; lifetime records have none.
+function planLabelFor(record) {
+  if (record && record.plan === 'pro_monthly') return 'Pro Monthly';
+  if (record && record.plan === 'pro_yearly') return 'Pro Yearly';
+  return undefined;
+}
 
 // Fallback: shallow scan when Firebase indexing isn't configured
 async function fallbackSearch(dbUrl, normalizedEmail, res) {
@@ -209,7 +216,7 @@ async function fallbackSearch(dbUrl, normalizedEmail, res) {
 
     // ─── Send key via email (NEVER return in response) ───
     try {
-      await sendRecoveryEmail(foundPayment.email, foundPayment.licenseKey, foundPayment.timestamp);
+      await sendRecoveryEmail(foundPayment.email, foundPayment.licenseKey, foundPayment.timestamp, planLabelFor(foundPayment));
     } catch (emailErr) {
       console.error('[recoverKey:fallback] Email send failed:', emailErr.message);
       return res.status(500).json({ error: 'Failed to send recovery email. Please try again or contact support.' });

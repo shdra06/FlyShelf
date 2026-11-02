@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { firebaseFetch, setSecurityHeaders } = require('./_firebaseAdmin');
+const { getSubscriptionRecord, refreshSubscriptionIfStale, evaluateSubscriptionAccess } = require('./_billing');
 
 // Rate limit constants
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -176,6 +177,35 @@ module.exports = async (req, res) => {
       return res.status(503).json({ valid: false, error: 'License verification temporarily unavailable. Please try again.' });
     }
 
+    // ═══ Step 2.5: Subscription keys (v4.6.0) ═══
+    // No /subscriptions record = lifetime key (unchanged behaviour, plan "lifetime").
+    let subscription = null;
+    let subscriptionAccess = null;
+    try {
+      subscription = await getSubscriptionRecord(DB_URL, safeKey);
+    } catch (err) {
+      // Fail closed — same as the revocation check
+      console.error('[revalidate] Subscription lookup failed — blocking revalidation:', err.message);
+      return res.status(503).json({ valid: false, error: 'License verification temporarily unavailable. Please try again.' });
+    }
+    if (subscription) {
+      subscription = await refreshSubscriptionIfStale(DB_URL, safeKey, subscription);
+      subscriptionAccess = evaluateSubscriptionAccess(subscription);
+      if (subscriptionAccess.revoked) {
+        return res.status(403).json({ valid: false, error: 'revoked' });
+      }
+      if (subscriptionAccess.expired) {
+        console.log(`[revalidate] Subscription expired: ${safeKey.substring(0, 15)}... (${subscription.status}, ended ${subscription.currentPeriodEnd})`);
+        return res.status(403).json({
+          valid: false,
+          error: 'subscription_expired',
+          plan: subscription.plan,
+          status: subscription.status,
+          currentPeriodEnd: subscription.currentPeriodEnd || ''
+        });
+      }
+    }
+
     // ═══ Step 3: Verify device is still within limit ═══
     try {
       const activationsRes = await firebaseFetch(`${DB_URL}/licenses/activations/${safeKey}.json?shallow=true`);
@@ -198,18 +228,26 @@ module.exports = async (req, res) => {
     // ═══ Step 4: Issue fresh JWT with new expiry ═══
     // [SECURITY FIX v2.2.0]: Use token's deviceId, not request body, to prevent injection
     const tokenDeviceId = payload.deviceId || deviceId;
+    // Lifetime: 7 days. Subscription: min(7 days, currentPeriodEnd + 3 days grace).
+    const planFields = subscription
+      ? { plan: subscription.plan, status: subscription.status, currentPeriodEnd: subscription.currentPeriodEnd || '' }
+      : { plan: 'lifetime' };
+    const expiresInSeconds = subscription
+      ? Math.max(60, Math.round((subscriptionAccess.tokenExpiresAtMs - Date.now()) / 1000))
+      : TOKEN_EXPIRY_DAYS * 86400;
     const freshToken = jwt.sign(
       {
         key: encryptKeyForJwt(key),
         keyVersion: 2,
         deviceId: tokenDeviceId,
         tier: payload.tier || 'pro',
+        ...planFields,
         v: 2
       },
       JWT_SECRET,
       {
         algorithm: 'HS256',
-        expiresIn: `${TOKEN_EXPIRY_DAYS}d`,
+        expiresIn: expiresInSeconds, // number = seconds
         issuer: 'flyshelf-license-server'
       }
     );
@@ -232,7 +270,8 @@ module.exports = async (req, res) => {
     return res.status(200).json({
       valid: true,
       token: freshToken,
-      expiresIn: TOKEN_EXPIRY_DAYS * 86400
+      expiresIn: expiresInSeconds,
+      ...planFields
     });
 
   } catch (err) {

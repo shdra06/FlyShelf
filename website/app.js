@@ -1,151 +1,232 @@
-/* FlyShelf: a tiny, framework-free playground. All sample data stays in memory. */
+/* FlyShelf homepage: illustrations and the sample shelf. All sample data stays in memory. */
 (() => {
   'use strict';
-  const $ = (selector) => document.querySelector(selector);
-  const $$ = (selector) => [...document.querySelectorAll(selector)];
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  const ticker = $('.ticker-track');
-  if (ticker) {
-    // Two equal groups make the endless ribbon loop without a visible jump.
-    const items = [...ticker.children];
-    const halfway = items.length / 2;
-    for (const half of [items.slice(0, halfway), items.slice(halfway)]) {
-      const group = document.createElement('div');
-      group.className = 'ticker-group';
-      group.append(...half);
-      ticker.append(group);
+  const site = window.FlyShelfSite;
+  if (!site) return;
+  const { $, $$, motionAllowed, toast, wait } = site;
+  const ease = 'cubic-bezier(.22,1,.36,1)';
+  const svgNS = 'http://www.w3.org/2000/svg';
+
+  function element(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+  function icon(name, className) {
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('aria-hidden', 'true');
+    if (className) svg.setAttribute('class', className);
+    const use = document.createElementNS(svgNS, 'use');
+    use.setAttribute('href', `#i-${name}`);
+    svg.append(use);
+    return svg;
+  }
+
+  /* ── Hero: copies fly onto the shelf ─────────────────────────────────── */
+  const stage = $('.stage');
+  const heroList = $('#hero-list');
+  const flyLayer = $('#hero-fly-layer');
+  const phoneCard = $('#hero-phone-card');
+  const heroCopies = [
+    { type: 'text', from: 'Mail', text: 'Pickup at 7:15 · Gate B, level 2', sub: 'Mail — Travel plans', send: true },
+    { type: 'code', from: 'Terminal', text: 'git commit -m "Polish onboarding"', sub: 'Windows Terminal' },
+    { type: 'link', from: 'Browser', text: 'developer.mozilla.org/docs/Web/CSS', sub: 'Browser' },
+    { type: 'file', from: 'Explorer', text: 'quarterly-report.xlsx', sub: 'Explorer · 82 KB' },
+    { type: 'text', from: 'Notepad', text: 'Send the final draft by Friday', sub: 'Notepad — weekly-plan.txt' },
+  ];
+  let heroIndex = 0;
+  let heroTimer = 0;
+  let heroVisible = false;
+  let heroBusy = false;
+
+  function heroCard(copy) {
+    const card = element('li', `app-card card-${copy.type}`);
+    if (copy.type === 'file') card.append(icon('pdf', 'pdf-glyph'));
+    else if (copy.type !== 'text') {
+      const glyph = element('span', `card-glyph ${copy.type}`);
+      glyph.append(icon(copy.type === 'code' ? 'code' : 'link'));
+      card.append(glyph);
     }
+    const main = element('span', 'card-main', copy.text);
+    main.append(element('small', '', copy.sub));
+    card.append(main);
+    return card;
   }
-  let toastTimer;
-  function toast(message) {
-    const element = $('#demo-toast');
-    if (!element) return;
-    clearTimeout(toastTimer);
-    element.textContent = message;
-    element.classList.add('show');
-    toastTimer = setTimeout(() => element.classList.remove('show'), 2800);
+  function relative(rect) {
+    const box = stage.getBoundingClientRect();
+    return { x: rect.left - box.left, y: rect.top - box.top, w: rect.width, h: rect.height };
   }
+  async function flyNext() {
+    if (heroBusy || !heroVisible || !motionAllowed()) return;
+    heroBusy = true;
+    const copy = heroCopies[heroIndex++ % heroCopies.length];
+    const chip = element('div', 'fly-chip');
+    const meta = element('span', 'fly-meta');
+    const keys = element('span');
+    keys.append(element('kbd', '', 'Ctrl'), ' ', element('kbd', '', 'C'));
+    meta.append(element('span', '', `Copied in ${copy.from}`), keys);
+    chip.append(meta, element('span', 'fly-text', copy.text));
+    flyLayer.append(chip);
 
-  const toggle = $('.menu-toggle');
-  const nav = $('#site-nav');
-  function closeMenu() {
-    nav?.classList.remove('open');
-    toggle?.setAttribute('aria-expanded', 'false');
-    toggle?.setAttribute('aria-label', 'Open navigation');
-  }
-  toggle?.addEventListener('click', () => {
-    const open = nav.classList.toggle('open');
-    toggle.setAttribute('aria-expanded', String(open));
-    toggle.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
-  });
-  $$('#site-nav a').forEach(link => link.addEventListener('click', closeMenu));
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && nav?.classList.contains('open')) {
-      closeMenu();
-      toggle.focus();
+    const box = stage.getBoundingClientRect();
+    const target = relative(heroList.getBoundingClientRect());
+    const start = { x: -box.width * .04, y: box.height * .86 };
+    const end = { x: target.x, y: target.y };
+    const mid = { x: start.x + (end.x - start.x) * .35, y: Math.min(start.y, end.y) - box.height * .02 };
+    const scale = Math.min(1.12, target.w / chip.offsetWidth);
+    const flight = chip.animate([
+      { transform: `translate(${start.x}px, ${start.y}px) scale(.92)`, opacity: 0 },
+      { transform: `translate(${start.x}px, ${start.y - 14}px) scale(1)`, opacity: 1, offset: .16 },
+      { transform: `translate(${mid.x}px, ${mid.y}px) scale(1.02)`, opacity: 1, offset: .58 },
+      { transform: `translate(${end.x}px, ${end.y}px) scale(${scale}, 1)`, opacity: .0 },
+    ], { duration: 1250, easing: 'cubic-bezier(.45,.05,.25,1)', fill: 'forwards' });
+    await flight.finished.catch(() => {});
+    chip.remove();
+
+    // FLIP the list so existing clips glide down to make room.
+    const before = new Map([...heroList.children].map(card => [card, card.getBoundingClientRect().top]));
+    const card = heroCard(copy);
+    heroList.prepend(card);
+    for (const existing of heroList.children) {
+      const previous = before.get(existing);
+      if (previous === undefined) continue;
+      const delta = previous - existing.getBoundingClientRect().top;
+      if (delta) existing.animate([{ transform: `translateY(${delta}px)` }, { transform: 'none' }], { duration: 640, easing: ease });
     }
-  });
-  document.addEventListener('click', event => {
-    if (!event.target.closest('.site-header')) closeMenu();
-  });
-  matchMedia('(min-width: 601px)').addEventListener('change', closeMenu);
+    card.animate([{ opacity: 0, transform: 'scale(.96)', filter: 'brightness(1.6)' }, { opacity: 1, transform: 'none', filter: 'none' }], { duration: 560, easing: ease });
+    while (heroList.children.length > 6) heroList.lastElementChild.remove();
 
-  if ('IntersectionObserver' in window && !reduced.matches) {
-    const reveals = new IntersectionObserver(entries => {
-      for (const entry of entries) if (entry.isIntersecting) {
-        entry.target.classList.add('visible');
-        reveals.unobserve(entry.target);
-      }
-    }, { threshold: 0.06, rootMargin: '0px 0px 35px 0px' });
-    $$('.reveal').forEach(element => reveals.observe(element));
-    document.body.classList.add('motion-ready');
-    const art = $('.hero-art');
-    const artObserver = new IntersectionObserver(([entry]) => {
-      art.classList.toggle('is-paused', !entry.isIntersecting);
-    });
-    if (art) artObserver.observe(art);
+    if (copy.send) await sendToPhone(card, copy);
+    heroBusy = false;
   }
-  let scrollQueued = false;
-  function updateProgress() {
-    const available = document.documentElement.scrollHeight - innerHeight;
-    $('.reading-progress')?.style.setProperty('transform', `scaleX(${available > 0 ? scrollY / available : 0})`);
-    scrollQueued = false;
+  async function sendToPhone(card, copy) {
+    await new Promise(resolve => setTimeout(resolve, 700));
+    if (!motionAllowed()) return;
+    const from = relative(card.getBoundingClientRect());
+    const to = relative(phoneCard.getBoundingClientRect());
+    const packet = element('span', 'fly-packet');
+    packet.append(icon('phone'));
+    flyLayer.append(packet);
+    const size = packet.offsetWidth;
+    const sx = from.x + from.w - size * 1.4;
+    const sy = from.y + (from.h - size) / 2;
+    const ex = to.x + (to.w - size) / 2;
+    const ey = to.y + (to.h - size) / 2;
+    await packet.animate([
+      { transform: `translate(${sx}px, ${sy}px) scale(.4)`, opacity: 0 },
+      { transform: `translate(${sx}px, ${sy}px) scale(1)`, opacity: 1, offset: .18 },
+      { transform: `translate(${(sx + ex) / 2}px, ${Math.min(sy, ey) - 30}px) scale(1)`, opacity: 1, offset: .55 },
+      { transform: `translate(${ex}px, ${ey}px) scale(.6)`, opacity: 0 },
+    ], { duration: 1100, easing: 'cubic-bezier(.45,.05,.25,1)', fill: 'forwards' }).finished.catch(() => {});
+    packet.remove();
+    phoneCard.firstElementChild.textContent = copy.text;
+    phoneCard.classList.remove('arrived');
+    void phoneCard.offsetWidth;
+    phoneCard.classList.add('arrived');
   }
-  window.addEventListener('scroll', () => {
-    if (!scrollQueued) { scrollQueued = true; requestAnimationFrame(updateProgress); }
-  }, { passive: true });
-  window.addEventListener('resize', updateProgress, { passive: true });
-  updateProgress();
-  const hero = $('.hero');
-  const art = $('.hero-art');
-  hero?.addEventListener('pointermove', event => {
-    if (event.pointerType !== 'mouse' || reduced.matches || innerWidth < 801 || document.body.classList.contains('motion-paused')) return;
-    const bounds = hero.getBoundingClientRect();
-    art.style.setProperty('--pointer-x', `${(event.clientX - bounds.left - bounds.width / 2) * .012}px`);
-    art.style.setProperty('--pointer-y', `${(event.clientY - bounds.top - bounds.height / 2) * .018}px`);
-  }, { passive: true });
-  hero?.addEventListener('pointerleave', () => {
-    art.style.setProperty('--pointer-x', '0px');
-    art.style.setProperty('--pointer-y', '0px');
-  });
-  document.addEventListener('visibilitychange', () => {
-    document.body.classList.toggle('page-hidden', document.hidden);
-  });
-  const motionButton = document.createElement('button');
-  motionButton.className = 'motion-toggle';
-  motionButton.textContent = 'Pause motion';
-  motionButton.setAttribute('aria-pressed', 'false');
-  motionButton.addEventListener('click', () => {
-    const paused = document.body.classList.toggle('motion-paused');
-    motionButton.textContent = paused ? 'Resume motion' : 'Pause motion';
-    motionButton.setAttribute('aria-pressed', String(paused));
-  });
-  $('.footer-bottom > div')?.append(motionButton);
+  function scheduleHero(delay = 3300) {
+    clearTimeout(heroTimer);
+    if (!heroVisible || !motionAllowed()) return;
+    heroTimer = setTimeout(async () => { await flyNext(); scheduleHero(); }, delay);
+  }
+  if (stage && heroList && 'IntersectionObserver' in window && Element.prototype.animate) {
+    new IntersectionObserver(([entry]) => {
+      heroVisible = entry.isIntersecting;
+      if (heroVisible) scheduleHero(heroIndex ? 1400 : 1600);
+      else clearTimeout(heroTimer);
+    }, { threshold: .25 }).observe(stage);
+    site.onMotionChange(allowed => allowed ? scheduleHero(900) : clearTimeout(heroTimer));
+  }
 
+  /* ── Sample shelf ────────────────────────────────────────────────────── */
   const initialClips = [
-    { id: 1, type: 'text', label: 'A little reminder', content: 'Make something worth copying.', time: 'Just now', pinned: true },
-    { id: 2, type: 'code', label: 'That perfect snippet', content: 'const ideas = capture();\nawait ideas.sync();', time: '2 minutes ago', pinned: false },
-    { id: 3, type: 'link', label: 'Some inspiration', content: 'https://www.are.na/', time: '5 minutes ago', pinned: false },
-    { id: 4, type: 'text', label: 'The next big thing', content: 'Less friction. More flow.\nKeep the good stuff.', time: '8 minutes ago', pinned: true },
-    { id: 5, type: 'link', label: 'Your creative toolkit', content: 'https://github.com/shdra06/FlyShelf', time: '12 minutes ago', pinned: false },
-    { id: 6, type: 'code', label: 'A fresh start', content: 'function create() {\n  return somethingGood;\n}', time: '15 minutes ago', pinned: false },
+    { id: 1, type: 'text', label: 'Note to self', content: 'Call the venue before 3 pm — ask about the projector.', time: 'Just now', pinned: true },
+    { id: 2, type: 'code', label: 'Deploy command', content: 'git push origin main && npm run deploy', time: '2 min ago', pinned: false },
+    { id: 3, type: 'link', label: 'CSS reference', content: 'https://developer.mozilla.org/docs/Web/CSS', time: '6 min ago', pinned: false },
+    { id: 4, type: 'text', label: 'Quarter goals', content: 'Launch the beta. Hire a designer. Publish the docs.', time: '18 min ago', pinned: true },
+    { id: 5, type: 'link', label: 'FlyShelf on GitHub', content: 'https://github.com/shdra06/FlyShelf', time: '1 hr ago', pinned: false },
+    { id: 6, type: 'code', label: 'Python one-liner', content: 'print(sorted(set(words)))', time: 'Yesterday', pinned: false },
   ];
   let clips = initialClips.map(clip => ({ ...clip }));
   let filter = 'all';
   const search = $('#clip-search');
-  function element(tag, className, content) {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (content !== undefined) node.textContent = content;
-    return node;
+  const grid = $('#demo-clips');
+  const symbols = { text: 'Aa', link: '↗', code: '</>' };
+
+  function highlight(target, text, query) {
+    if (!query) { target.textContent = text; return; }
+    const lower = text.toLowerCase();
+    let from = 0;
+    for (let at = lower.indexOf(query); at !== -1; at = lower.indexOf(query, from)) {
+      target.append(text.slice(from, at), element('mark', '', text.slice(at, at + query.length)));
+      from = at + query.length;
+    }
+    target.append(text.slice(from));
   }
-  function renderClips() {
-    const grid = $('#demo-clips');
-    if (!grid) return;
-    const query = (search?.value || '').toLowerCase().trim();
-    const visible = clips.filter(clip => (filter === 'all' || clip.type === filter || (filter === 'pinned' && clip.pinned)) && `${clip.label} ${clip.content}`.toLowerCase().includes(query));
-    grid.replaceChildren();
-    for (const clip of visible) {
-      const card = element('article', 'demo-clip');
+  // Cards are built once per shelf; filtering only shows and hides them, so a click
+  // repaints the cards that change rather than rebuilding the whole grid.
+  const cards = new Map();
+  let lastQuery = null;
+  function buildCards() {
+    cards.clear();
+    lastQuery = null;
+    grid.replaceChildren(...clips.map(clip => {
+      const card = element('article', `demo-clip${clip.pinned ? ' is-pinned' : ''}`);
       card.dataset.type = clip.type;
       const top = element('div', 'demo-clip-top');
-      const symbol = clip.type === 'code' ? '</>' : clip.type === 'link' ? '↗' : 'Aa';
-      top.append(element('span', `mini-symbol ${clip.type === 'code' ? 'violet' : clip.type === 'link' ? 'mint' : 'peach'}`, symbol), element('span', '', clip.label));
-      const pin = element('button', 'demo-pin', clip.pinned ? '◆' : '◇');
-      pin.dataset.action = 'pin'; pin.dataset.id = clip.id;
-      pin.setAttribute('aria-label', `Pin ${clip.label}`);
+      const label = element('span', 'label');
+      top.append(element('span', `mini-symbol ${clip.type}`, symbols[clip.type]), label);
+      const pin = element('button', 'demo-pin');
+      pin.type = 'button';
+      pin.dataset.action = 'pin';
+      pin.dataset.id = clip.id;
       pin.setAttribute('aria-pressed', String(clip.pinned));
+      pin.setAttribute('aria-label', `Pin ${clip.label}`);
+      pin.append(icon('pin'));
       top.append(pin);
-      card.append(top, element('p', 'demo-clip-content', clip.content));
+      const content = element('p', 'demo-clip-content');
       const bottom = element('div', 'demo-clip-bottom');
-      const copy = element('button', 'demo-copy', 'Copy ↗');
-      copy.dataset.action = 'copy'; copy.dataset.id = clip.id;
+      const copy = element('button', 'demo-copy');
+      copy.type = 'button';
+      copy.dataset.action = 'copy';
+      copy.dataset.id = clip.id;
       copy.setAttribute('aria-label', `Copy ${clip.label}`);
+      copy.append(icon('copy'), element('span', '', 'Copy'));
       bottom.append(element('span', '', clip.time), copy);
-      card.append(bottom);
-      grid.append(card);
+      card.append(top, content, bottom);
+      cards.set(clip.id, { card, label, content });
+      return card;
+    }));
+  }
+  function renderClips() {
+    if (!grid) return;
+    if (!cards.size) buildCards();
+    const query = (search?.value || '').toLowerCase().trim();
+    const arriving = [];
+    let shown = 0;
+    for (const clip of clips) {
+      const { card, label, content } = cards.get(clip.id);
+      const visible = (filter === 'all' || clip.type === filter || (filter === 'pinned' && clip.pinned))
+        && `${clip.label} ${clip.content}`.toLowerCase().includes(query);
+      if (query !== lastQuery) {
+        label.replaceChildren();
+        content.replaceChildren();
+        highlight(label, clip.label, query);
+        highlight(content, clip.content, query);
+      }
+      if (visible && card.hidden) arriving.push(card);
+      card.hidden = !visible;
+      if (visible) shown++;
     }
-    $('#demo-empty').hidden = visible.length > 0;
+    // Web Animations avoid a forced layout per card; only newly shown cards move.
+    if (motionAllowed()) arriving.forEach((card, index) => card.animate(
+      [{ opacity: 0, transform: 'translateY(8px) scale(.99)' }, { opacity: 1, transform: 'none' }],
+      { duration: 360, delay: index * 30, easing: ease, fill: 'backwards' }));
+    lastQuery = query;
+    $('#demo-empty').hidden = shown > 0;
+    const count = $('#demo-count');
+    if (count) count.textContent = shown === clips.length ? `${clips.length} sample clips` : `Showing ${shown} of ${clips.length} sample clips`;
   }
   $$('.demo-filters button').forEach(button => {
     button.addEventListener('click', () => {
@@ -158,125 +239,194 @@
     });
   });
   search?.addEventListener('input', renderClips);
-  $('#demo-clips')?.addEventListener('click', async event => {
+  search?.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && search.value) { event.stopPropagation(); search.value = ''; renderClips(); }
+  });
+  grid?.addEventListener('click', async event => {
     const button = event.target.closest('button[data-action]');
     if (!button) return;
     const clip = clips.find(candidate => candidate.id === Number(button.dataset.id));
     if (!clip) return;
     if (button.dataset.action === 'pin') {
       clip.pinned = !clip.pinned;
-      // Update in place to preserve keyboard focus, even in the pinned filter.
-      button.textContent = clip.pinned ? '◆' : '◇';
+      // Update in place to keep keyboard focus, even in the Pinned view.
       button.setAttribute('aria-pressed', String(clip.pinned));
+      button.closest('.demo-clip').classList.toggle('is-pinned', clip.pinned);
+      button.classList.remove('pop');
+      void button.offsetWidth;
+      if (motionAllowed()) button.classList.add('pop');
       if (filter === 'pinned' && !clip.pinned) {
         renderClips();
-        ($('#demo-clips .demo-pin') || $('.demo-filters [data-filter="pinned"]')).focus();
+        ($('#demo-clips .demo-clip:not([hidden]) .demo-pin') || $('.demo-filters [data-filter="pinned"]')).focus();
       }
-      toast(clip.pinned ? 'Pinned. A keeper.' : 'Unpinned from your sample shelf.');
+      toast(clip.pinned ? `Pinned “${clip.label}”.` : `Unpinned “${clip.label}”.`);
     } else {
       try {
         await navigator.clipboard.writeText(clip.content);
-        toast('Copied. Go make something good.');
-      } catch { toast('Clipboard access is unavailable. Select the sample text to copy it.'); }
+        const label = button.querySelector('span');
+        button.classList.add('done');
+        label.textContent = 'Copied';
+        setTimeout(() => { button.classList.remove('done'); label.textContent = 'Copy'; }, 1600);
+        toast('Copied to your clipboard.');
+      } catch {
+        toast('Clipboard access is unavailable here. Select the sample text to copy it.');
+      }
     }
   });
   $('#demo-reset')?.addEventListener('click', () => {
     clips = initialClips.map(clip => ({ ...clip }));
-    search.value = '';
-    $('.demo-filters [data-filter="all"]').click();
-    toast('A fresh shelf. All yours.');
+    cards.clear();
+    if (search) search.value = '';
+    $('.demo-filters [data-filter="all"]')?.click();
+    toast('Sample shelf reset.');
   });
   document.addEventListener('keydown', event => {
     if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable) return;
+    if (!search) return;
     event.preventDefault();
-    search?.scrollIntoView({ block: 'center', behavior: reduced.matches ? 'instant' : 'smooth' });
-    search?.focus({ preventScroll: true });
+    search.scrollIntoView({ block: 'center', behavior: motionAllowed() ? 'smooth' : 'instant' });
+    search.focus({ preventScroll: true });
   });
   renderClips();
 
-  $('#sync-trigger')?.addEventListener('click', () => {
+  /* ── Sync illustration ───────────────────────────────────────────────── */
+  $('#sync-trigger')?.addEventListener('click', async () => {
     const button = $('#sync-trigger');
-    const stage = $('.sync-stage');
+    const syncStage = $('.sync-stage');
     button.disabled = true;
-    stage.classList.remove('synced');
-    stage.classList.add('syncing');
-    $('#sync-state').textContent = 'Your idea is on its way…';
-    setTimeout(() => {
-      $('#sync-target').textContent = $('#sync-source').textContent;
-      $('#sync-state').textContent = 'Same idea. Another device.';
-      stage.classList.remove('syncing');
-      stage.classList.add('synced');
-      button.disabled = false;
-      button.textContent = 'Play it again ↻';
-    }, reduced.matches ? 0 : 1700);
+    syncStage.classList.remove('synced', 'syncing');
+    void syncStage.offsetWidth;
+    syncStage.classList.add('syncing');
+    $('#sync-state').textContent = 'Sending over your network…';
+    await wait(1500);
+    $('#sync-target').textContent = $('#sync-source').textContent;
+    $('#sync-receiver .sync-kind').textContent = 'Text · just now';
+    $('#sync-state').textContent = 'Arrived on your phone. (Illustration)';
+    syncStage.classList.remove('syncing');
+    syncStage.classList.add('synced');
+    button.disabled = false;
+    button.querySelector('span').textContent = 'Send again';
   });
 
+  /* ── Tool tiles animate only while on screen ─────────────────────────── */
+  const tiles = $$('.tile');
+  if ('IntersectionObserver' in window) {
+    const tileObserver = new IntersectionObserver(entries => {
+      for (const entry of entries) entry.target.classList.toggle('in-view', entry.isIntersecting && motionAllowed());
+    }, { threshold: .35 });
+    tiles.forEach(tile => tileObserver.observe(tile));
+    site.onMotionChange(allowed => {
+      if (!allowed) tiles.forEach(tile => tile.classList.remove('in-view'));
+      else tiles.forEach(tile => { tileObserver.unobserve(tile); tileObserver.observe(tile); });
+    });
+  }
+
+  /* ── Drag illustration ───────────────────────────────────────────────── */
+  $('#drag-demo')?.addEventListener('click', async () => {
+    const button = $('#drag-demo');
+    const scene = $('.drag-scene');
+    const file = $('.travelling-file', scene);
+    const drop = $('.drop-target', scene);
+    scene.classList.remove('delivered', 'moving');
+    const fileBox = file.getBoundingClientRect();
+    const dropBox = drop.getBoundingClientRect();
+    scene.style.setProperty('--drag-dx', `${dropBox.left + dropBox.width / 2 - (fileBox.left + fileBox.width / 2)}px`);
+    scene.style.setProperty('--drag-dy', `${dropBox.top + dropBox.height / 2 - (fileBox.top + fileBox.height / 2)}px`);
+    void scene.offsetWidth;
+    scene.classList.add('moving');
+    button.disabled = true;
+    $('#drag-status').textContent = 'Dragging project-brief.pdf into a new email…';
+    await wait(1650);
+    scene.classList.remove('moving');
+    scene.classList.add('delivered');
+    $('.drop-target p', scene).textContent = 'Attached';
+    $('#drag-status').textContent = 'Attached. That’s the whole move. (Illustration)';
+    button.disabled = false;
+    button.querySelector('span').textContent = 'Watch again';
+  });
+
+  /* ── Real screenshots ────────────────────────────────────────────────── */
   const shots = {
-    clipboard: { src: 'assets/clipboard.png', width: 454, height: 477, caption: 'Everything you copied. Beautifully within reach.', alt: 'FlyShelf floating clipboard with file filters, text and image clips' },
-    tools: { src: 'assets/pdf-studio.png', width: 1916, height: 1015, caption: 'Meet PDF Studio. Your documents, with possibilities.', alt: 'FlyShelf PDF Studio with merge, split, rotate, compress and export tools' },
-    notes: { src: 'assets/notes.png', width: 461, height: 483, caption: 'A small place to put the thought you don’t want to lose.', alt: 'FlyShelf floating notes panel with daily notes and to-do list access' },
-    themes: { src: 'assets/personalization.png', width: 1141, height: 832, caption: 'Your wallpaper. Your colors. Your kind of workspace.', alt: 'FlyShelf personalization panel with wallpaper, blur and appearance settings' },
+    clipboard: { src: 'assets/shelf-clipboard.webp', width: 451, height: 477, caption: 'The floating shelf: filters for images, pins, PDFs, documents and passwords, with your newest clips first.', alt: 'FlyShelf’s floating clipboard on Windows, with filter chips and recent file, text and image clips' },
+    tools: { src: 'assets/shelf-pdf-studio.webp', width: 1916, height: 1015, caption: 'PDF Studio: 13 local tools to split, merge, compress, protect, compare and convert PDFs.', alt: 'FlyShelf PDF Studio with recent documents and tools including Split, Merge, Rotate, Compress, Protect and PDF to Word' },
+    notes: { src: 'assets/shelf-notes.webp', width: 461, height: 483, caption: 'Notes: a page for today, with your to-do list and reminders one click away.', alt: 'FlyShelf notes panel showing a dated note with to-do list and reminder controls' },
+    themes: { src: 'assets/shelf-personalization.webp', width: 1141, height: 832, caption: 'Personalization: your own wallpaper, blur and background styles, in the FlyShelf Hub.', alt: 'FlyShelf Hub personalization page with wallpaper, blur effect and background style options' },
   };
+  const tabs = $$('.showcase-tabs [role="tab"]');
+  const tablist = $('.showcase-tabs');
+  const indicator = $('.tab-indicator');
+  function placeIndicator() {
+    const selected = tabs.find(tab => tab.getAttribute('aria-selected') === 'true');
+    if (!selected || !indicator) return;
+    indicator.style.width = `${selected.offsetWidth}px`;
+    indicator.style.transform = `translateX(${selected.offsetLeft}px)`;
+  }
+  if (indicator && tablist) {
+    tablist.classList.add('has-indicator');
+    placeIndicator();
+    addEventListener('resize', placeIndicator, { passive: true });
+    document.fonts?.ready.then(placeIndicator);
+  }
   let shotRequest = 0;
   async function selectShot(button) {
     const shot = shots[button.dataset.shot];
     const request = ++shotRequest;
-    const preloaded = new Image();
-    preloaded.src = shot.src;
-    try { await preloaded.decode(); } catch { toast('This app image couldn’t load. Please try again.'); return; }
-    if (request !== shotRequest) return;
-    $$('.showcase-tabs button').forEach(candidate => {
+    tabs.forEach(candidate => {
       const selected = candidate === button;
       candidate.setAttribute('aria-selected', String(selected));
       candidate.tabIndex = selected ? 0 : -1;
     });
+    placeIndicator();
+    button.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: motionAllowed() ? 'smooth' : 'instant' });
+    const preloaded = new Image();
+    preloaded.src = shot.src;
+    try { await preloaded.decode(); } catch { toast('That screenshot couldn’t load. Please try again.'); return; }
+    if (request !== shotRequest) return;
     const image = $('#app-screenshot');
+    if (motionAllowed()) {
+      image.classList.add('leaving');
+      await new Promise(resolve => setTimeout(resolve, 200));
+      if (request !== shotRequest) return;
+    }
+    image.classList.remove('leaving', 'arriving');
     image.src = shot.src; image.alt = shot.alt; image.width = shot.width; image.height = shot.height;
+    if (motionAllowed()) { void image.offsetWidth; image.classList.add('arriving'); }
     $('#shot-caption').textContent = shot.caption;
     const panel = $('#app-shot-panel');
-    panel.className = `screenshot-stage reveal visible shot-${button.dataset.shot}`;
+    panel.className = `shot-stage reveal visible shot-${button.dataset.shot}`;
     panel.setAttribute('aria-labelledby', button.id);
-    const surface = $('.shot-surface');
-    surface.classList.remove('changing');
-    requestAnimationFrame(() => surface.classList.add('changing'));
   }
-  const tabs = $$('.showcase-tabs button');
   tabs.forEach((button, index) => {
     button.addEventListener('click', () => selectShot(button));
     button.addEventListener('keydown', event => {
-      const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null;
+      const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length
+        : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length
+        : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null;
       if (next === null) return;
-      event.preventDefault(); tabs[next].focus(); selectShot(tabs[next]);
+      event.preventDefault();
+      tabs[next].focus();
+      selectShot(tabs[next]);
     });
   });
+
+  /* ── Accent moods ────────────────────────────────────────────────────── */
   let vibe = 0;
   $('#theme-shift')?.addEventListener('click', () => {
     vibe = (vibe + 1) % 3;
     document.body.classList.toggle('vibe-lavender', vibe === 1);
     document.body.classList.toggle('vibe-peach', vibe === 2);
-    toast(['Electric mint. Fresh perspective.', 'Lavender. A little dreamier.', 'Peach. A warmer kind of flow.'][vibe]);
+    placeIndicator();
+    toast(['Blue — the FlyShelf default.', 'Lavender. The app has its own palettes, too.', 'Peach. Choose yours in the app’s Personalization page.'][vibe]);
   });
-  $('#drag-demo')?.addEventListener('click', () => {
-    const button = $('#drag-demo');
-    const scene = $('.drag-scene');
-    scene.classList.remove('delivered');
-    scene.classList.add('moving');
-    button.disabled = true;
-    $('#drag-status').textContent = 'From your shelf to your next project…';
-    setTimeout(() => {
-      scene.classList.remove('moving'); scene.classList.add('delivered');
-      $('.drop-target p').textContent = 'Right where you need it.';
-      $('#drag-status').textContent = 'Dropped. Back to your flow. (Illustrated demo)';
-      button.disabled = false;
-      button.textContent = 'Once more ↻';
-    }, reduced.matches ? 0 : 1700);
-  });
+
+  /* ── Lead with the download that fits this device ────────────────────── */
   if (/Android/i.test(navigator.userAgent)) {
     const android = $('#download-android');
     const windows = $('#download-windows');
-    android?.classList.replace('secondary', 'primary');
-    windows?.classList.replace('primary', 'secondary');
-    if (android && windows) android.parentNode.insertBefore(android, windows);
+    if (android && windows) {
+      android.classList.add('btn-primary');
+      windows.classList.remove('btn-primary');
+      android.parentNode.insertBefore(android, windows);
+    }
   }
-  if ($('#copyright-year')) $('#copyright-year').textContent = new Date().getFullYear();
 })();

@@ -70,7 +70,8 @@ async function pruneRateLimits() {
   // Prune advance-sync RTDB rate limits
   if (dbUrl) {
     const count = await pruneDb(dbUrl, firebaseFetch, 
-      ['verifyPayment', 'createOrder', 'activate', 'recovery', 'revalidate'], 
+      ['verifyPayment', 'createOrder', 'activate', 'recovery', 'revalidate',
+       'createSubscription', 'verifySubscription', 'manageSubscription', 'manageSubscriptionKey'],
       'advance-sync'
     );
     totalPruned += count;

@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { firebaseFetch, setSecurityHeaders } = require('./_firebaseAdmin');
+const { getSubscriptionRecord, refreshSubscriptionIfStale, evaluateSubscriptionAccess } = require('./_billing');
 
 // ═══════════════════════════════════════════════════════════════════
 // Server-side license key activation (security audit v2.1.0)
@@ -226,6 +227,37 @@ module.exports = async (req, res) => {
       return res.status(503).json({ success: false, error: 'License verification temporarily unavailable. Please try again.' });
     }
 
+    // ═══ Step 2.5: Subscription keys (v4.6.0) ═══
+    // No /subscriptions record = lifetime key (behaves exactly as before).
+    // With a record: refuse once the paid period + 3-day grace is over and the
+    // subscription isn't active; otherwise cap the token at period end + grace.
+    let subscription = null;
+    let subscriptionAccess = null;
+    try {
+      subscription = await getSubscriptionRecord(DB_URL, safeKey);
+    } catch (err) {
+      // Fail closed — same as the revocation check
+      console.error('[activate] Subscription lookup failed — blocking activation:', err.message);
+      return res.status(503).json({ success: false, error: 'License verification temporarily unavailable. Please try again.' });
+    }
+    if (subscription) {
+      subscription = await refreshSubscriptionIfStale(DB_URL, safeKey, subscription);
+      subscriptionAccess = evaluateSubscriptionAccess(subscription);
+      if (subscriptionAccess.revoked) {
+        return res.status(403).json({ success: false, error: 'revoked' });
+      }
+      if (subscriptionAccess.expired) {
+        console.log(`[activate] Subscription expired: ${safeKey.substring(0, 15)}... (${subscription.status}, ended ${subscription.currentPeriodEnd})`);
+        return res.status(403).json({
+          success: false,
+          error: 'subscription_expired',
+          plan: subscription.plan,
+          status: subscription.status,
+          currentPeriodEnd: subscription.currentPeriodEnd || ''
+        });
+      }
+    }
+
     // ═══ Step 3: Check device limit ═══
     let existingDeviceCount = 0;
     let thisDeviceAlreadyActivated = false;
@@ -269,28 +301,38 @@ module.exports = async (req, res) => {
     }
 
     // ═══ Step 5: Generate signed JWT activation token ═══
+    // Lifetime: 7 days, plan "lifetime". Subscription: min(7 days, currentPeriodEnd + 3 days),
+    // with plan/status/currentPeriodEnd in both the claims and the JSON response.
+    const planFields = subscription
+      ? { plan: subscription.plan, status: subscription.status, currentPeriodEnd: subscription.currentPeriodEnd || '' }
+      : { plan: 'lifetime' };
+    const expiresInSeconds = subscription
+      ? Math.max(60, Math.round((subscriptionAccess.tokenExpiresAtMs - Date.now()) / 1000))
+      : TOKEN_EXPIRY_DAYS * 86400;
     const token = jwt.sign(
       {
         key: encryptKeyForJwt(normalizedKey),
         keyVersion: 2, // marks this as encrypted format
         deviceId,
         tier: 'pro',
+        ...planFields,
         v: 2 // token version for future migrations
       },
       JWT_SECRET,
       {
         algorithm: 'HS256',
-        expiresIn: `${TOKEN_EXPIRY_DAYS}d`,
+        expiresIn: expiresInSeconds, // number = seconds
         issuer: 'flyshelf-license-server'
       }
     );
 
-    console.log(`[activate] ✅ Key activated: ${safeKey.substring(0, 15)}... on device ${deviceId}`);
+    console.log(`[activate] ✅ Key activated: ${safeKey.substring(0, 15)}... on device ${deviceId} (${planFields.plan})`);
 
     return res.status(200).json({
       success: true,
       token,
-      expiresIn: TOKEN_EXPIRY_DAYS * 86400 // seconds
+      expiresIn: expiresInSeconds, // seconds
+      ...planFields
     });
 
   } catch (err) {
