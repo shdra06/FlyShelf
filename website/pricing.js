@@ -8,10 +8,6 @@
 
   const tabInr = $('#tab-inr');
   const tabUsd = $('#tab-usd');
-  const priceUsd = $('#price-display-usd');
-  const priceInr = $('#price-display-inr');
-  const inrDetails = $('#razorpay-details');
-  const usdDetails = $('#paypal-details');
   const form = $('#checkout-form');
   const payButton = $('#btn-submit-payment');
   const payLabel = payButton.querySelector('span');
@@ -40,13 +36,19 @@
       INR: { amount: 199900, price: '₹1,999' }, USD: { amount: 5000, price: '$50' },
     },
   };
-  const METHODS = { subscription: 'UPI Autopay or cards', lifetime: 'UPI, cards or netbanking' };
+  const METHODS = {
+    INR: { subscription: 'UPI Autopay or cards', lifetime: 'UPI, cards or netbanking' },
+    USD: { subscription: 'Visa, Mastercard or Amex', lifetime: 'Visa, Mastercard or Amex' },
+  };
 
   let region = 'USD';
-  let plan = 'pro_yearly';
+  // Cheapest first, and preselected: most people try Pro for a month before committing.
+  let plan = 'pro_monthly';
   let generatedKey = '';
   let busy = false;
   let lastFocus = null;
+  // Plans the server can't sell in this currency yet (e.g. no USD subscription plan): hidden, never offered.
+  const unavailable = new Set();
 
   // The desktop app may pass its device id when it opens this page.
   const deviceId = new URLSearchParams(location.search).get('deviceId') || 'web_purchase';
@@ -72,6 +74,7 @@
 
   /* ── Plan and region ─────────────────────────────────────────────────── */
   function render() {
+    if (unavailable.has(plan)) plan = 'lifetime';
     const def = PLANS[plan];
     const india = region === 'INR';
     const sub = isSubscription(plan);
@@ -80,31 +83,23 @@
     tabInr.setAttribute('aria-pressed', String(india));
     tabUsd.setAttribute('aria-pressed', String(!india));
     for (const button of planButtons) {
+      button.hidden = unavailable.has(button.dataset.plan);
       const on = button.dataset.plan === plan;
       button.classList.toggle('active', on);
       button.setAttribute('aria-pressed', String(on));
     }
+    for (const node of document.querySelectorAll('[data-price]')) node.textContent = PLANS[node.dataset.price][region].price;
+    $('#hero-from').textContent = PLANS.pro_monthly[region].price;
     $('#yearly-savings').textContent = `Save ${yearlySavings(region)}%`;
-    $('#plan-title').textContent = def.title;
-    $('#plan-sub').textContent = def.sub;
-    priceInr.textContent = def.INR.price;
-    priceUsd.textContent = def.USD.price;
-    priceInr.hidden = !india;
-    priceUsd.hidden = india;
-    const cur = def[region];
-    $('#price-note').textContent = plan === 'pro_yearly' ? `a year · about ${cur.monthly} a month` : def.every || 'once, yours to keep';
-    $('#tab-inr-note').textContent = `${priceLabel(plan, 'INR')} · ${sub ? 'UPI Autopay, cards' : 'UPI, cards, netbanking'}`;
-    $('#tab-usd-note').textContent = `${priceLabel(plan, 'USD')} · Visa, Mastercard, Amex`;
-    $('#inr-methods').textContent = sub ? METHODS.subscription : METHODS.lifetime;
-    inrDetails.hidden = !india;
-    usdDetails.hidden = india;
+    $('#yearly-monthly').textContent = `About ${PLANS.pro_yearly[region].monthly} a month`;
     $('#renew-note').hidden = !sub;
-    if (sub) $('#renew-text').textContent = `Renews at ${priceLabel(plan, region)} until you cancel. Cancel any time under Manage subscription on this page — Pro stays on until the paid ${def.period} ends.`;
+    if (sub) $('#renew-text').textContent = `Renews at ${priceLabel(plan, region)} until you stop it — one click in FlyShelf Hub → Settings → License. Pro stays on until the paid ${def.period} ends.`;
+    $('#pay-methods').textContent = `Secure checkout by Razorpay: ${METHODS[region][sub ? 'subscription' : 'lifetime']}. FlyShelf never sees your card or UPI details.`;
     if (!busy) payLabel.textContent = `Pay ${priceLabel(plan, region)}`;
   }
   let regionLocked = false;
   function setRegion(next) { if (!regionLocked) { region = next; render(); } }
-  function setPlan(next) { if (PLANS[next]) { plan = next; render(); } }
+  function setPlan(next) { if (PLANS[next] && !unavailable.has(next)) { plan = next; render(); } }
   tabInr.addEventListener('click', () => setRegion('INR'));
   tabUsd.addEventListener('click', () => setRegion('USD'));
   for (const button of planButtons) button.addEventListener('click', () => setPlan(button.dataset.plan));
@@ -123,9 +118,12 @@
       region = info.currency;
       regionLocked = true;
       const india = region === 'INR';
+      // Currency follows the country, so the switch has nothing to offer: hide it.
       tabInr.hidden = !india;
       tabUsd.hidden = india;
+      $('.currency').hidden = true;
       $('#region-legend').textContent = india ? 'Prices for India, in rupees' : 'Prices in US dollars';
+      for (const [name, ok] of Object.entries(info.plans || {})) if (ok === false && PLANS[name]) unavailable.add(name);
       render();
     })
     .catch(() => { /* Preview servers have no /api/region: keep the manual switch. */ });
@@ -174,7 +172,7 @@
       if (isSubscription(chosen.plan)) {
         const { response, result } = await postJson('/api/createSubscription', { email: customerEmail, deviceId, region: chosen.region, plan: chosen.plan });
         const subscriptionId = result.subscription_id || result.subscriptionId;
-        if (!response.ok || !subscriptionId) throw new Error(result.error || 'We couldn’t start checkout. Please try again in a moment.');
+        if (!response.ok || !subscriptionId) throw new Error(result.message || result.error || 'We couldn’t start checkout. Please try again in a moment.');
         options = {
           key: result.key_id || result.keyId,
           subscription_id: subscriptionId,
@@ -223,22 +221,38 @@
     $('#loader-headline').textContent = 'Payment received';
     $('#loader-desc').textContent = 'Generating your license key. Please keep this tab open.';
     const subscription = isSubscription(chosen.plan);
-    try {
-      const { response, result } = subscription
-        ? await postJson('/api/verifySubscription', {
+    // The payment is already taken: a dropped connection or a busy server must not cost the buyer their key.
+    // Retry a few times (the server returns the same key every time), then fall back to the emailed key.
+    const verify = () => subscription
+        ? postJson('/api/verifySubscription', {
           razorpay_payment_id: payment.razorpay_payment_id,
           razorpay_subscription_id: payment.razorpay_subscription_id,
           razorpay_signature: payment.razorpay_signature,
           email: customerEmail,
           deviceId,
         })
-        : await postJson('/api/verifyPayment', {
+        : postJson('/api/verifyPayment', {
           razorpay_payment_id: payment.razorpay_payment_id,
           razorpay_order_id: payment.razorpay_order_id,
           razorpay_signature: payment.razorpay_signature,
           email: customerEmail,
           deviceId,
         });
+    try {
+      let attempt = 0;
+      let response;
+      let result;
+      for (;;) {
+        try {
+          ({ response, result } = await verify());
+          if (response.ok || (response.status < 500 && response.status !== 429) || attempt >= 4) break;
+        } catch (networkError) {
+          if (attempt >= 4) throw networkError;
+        }
+        attempt += 1;
+        $('#loader-desc').textContent = 'Still confirming your payment. Please keep this tab open.';
+        await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
+      }
       if (!response.ok || !result.success || !result.licenseKey) throw new Error(result.error || `Server returned ${response.status}`);
       generatedKey = result.licenseKey;
       try {
@@ -451,6 +465,7 @@
     lookup = data;
     accountResult.hidden = false;
     confirmBox.hidden = true;
+    if (resetBox) { resetBox.hidden = true; resetButton.hidden = data.status === 'revoked'; }
     $('#account-plan').textContent = data.planLabel || 'Pro';
     const lifetime = data.plan === 'lifetime';
     const ended = ['cancelled', 'completed', 'expired', 'revoked'].includes(data.status);
@@ -477,12 +492,15 @@
     }
     accountSubmit.disabled = true;
     confirmYes.disabled = true;
-    say(accountStatus, action === 'cancel' ? 'Stopping renewal…' : 'Looking up your plan…');
+    say(accountStatus, action === 'cancel' ? 'Stopping renewal…' : action === 'reset_devices' ? 'Signing out your PCs…' : 'Looking up your plan…');
     try {
       const { response, result } = await postJson('/api/manageSubscription', { key, email: value, action });
       if (response.ok && result.success) {
         showAccount(result);
-        if (action === 'cancel') {
+        if (action === 'reset_devices') {
+          say(accountStatus, 'All PCs are signed out. Activate the key again on each PC you still use.', 'success');
+          accountSubmit.focus();
+        } else if (action === 'cancel') {
           const until = formatDate(result.currentPeriodEnd);
           say(accountStatus, `Renewal stopped. You won’t be charged again${until ? `, and Pro stays on until ${until}` : ''}.`, 'success');
           accountSubmit.focus();
@@ -493,6 +511,7 @@
         accountResult.hidden = true;
         say(accountStatus, 'We couldn’t find a plan for that key and email. Check both and try again.', 'error');
       } else if (response.status === 429) {
+        if (result.error === 'reset_cooldown') { resetBox.hidden = true; resetButton.hidden = false; }
         say(accountStatus, result.message || 'Too many requests. Please try again later.', 'error');
       } else {
         say(accountStatus, result.message || 'We couldn’t reach the server just now. Please try again in a few minutes.', 'error');
@@ -518,4 +537,9 @@
     cancelButton.focus();
   });
   confirmYes?.addEventListener('click', () => manage('cancel'));
+  const resetButton = $('#account-reset');
+  const resetBox = $('#account-reset-confirm');
+  resetButton?.addEventListener('click', () => { resetBox.hidden = false; resetButton.hidden = true; $('#account-reset-no').focus(); });
+  $('#account-reset-no')?.addEventListener('click', () => { resetBox.hidden = true; resetButton.hidden = false; resetButton.focus(); });
+  $('#account-reset-yes')?.addEventListener('click', () => manage('reset_devices'));
 })();

@@ -62,7 +62,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'sha256-21ufT5X6pGJ4OsyKNcVWXbXKFEJSS5+n4z9U0vyOQR0=' 'sha256-5jVrTZqU0fE1VbqO1LnpuvVz7wMawOYnFFheq2DoqZI=' https://unpkg.com https://cdn.jsdelivr.net https://checkout.razorpay.com; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://api.razorpay.com https://lumberjack-cx.razorpay.com https://api.github.com https://flyshelf-1c8d2-default-rtdb.asia-southeast1.firebasedatabase.app; frame-src https://api.razorpay.com https://checkout.razorpay.com"
+          "value": "default-src 'self'; script-src 'self' 'sha256-5jVrTZqU0fE1VbqO1LnpuvVz7wMawOYnFFheq2DoqZI=' 'sha256-dTED3s8znqNftv5rAnyammxdJNv9D32ppsx08htJ1VI=' https://unpkg.com https://cdn.jsdelivr.net https://checkout.razorpay.com; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://api.razorpay.com https://lumberjack-cx.razorpay.com https://api.github.com https://flyshelf-1c8d2-default-rtdb.asia-southeast1.firebasedatabase.app; frame-src https://api.razorpay.com https://checkout.razorpay.com"
         }
       ]
     }

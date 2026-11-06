@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { firebaseFetch, setSecurityHeaders } = require('./_firebaseAdmin');
-const { getSubscriptionRecord, refreshSubscriptionIfStale, evaluateSubscriptionAccess } = require('./_billing');
+const { getSubscriptionRecord, refreshSubscriptionIfStale, evaluateSubscriptionAccess, appPlanFields, isRateLimited, hashId, clientIpHash } = require('./_billing');
 
 // ═══════════════════════════════════════════════════════════════════
 // Server-side license key activation (security audit v2.1.0)
@@ -17,7 +17,10 @@ const TOKEN_EXPIRY_DAYS = 7;
 
 // Rate limit constants
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const RATE_LIMIT_MAX = 10;
+// Per IP: loose, because many people share one IP (mobile carrier NAT, offices, colleges).
+// Per key: tight, so one key can't be hammered from many addresses.
+const RATE_LIMIT_MAX = 60;
+const KEY_RATE_LIMIT = { max: 10, windowMs: 15 * 60 * 1000 };
 
 // [SECURITY FIX v2.5.0]: Encrypt license key before embedding in JWT
 // JWTs are base64 (not encrypted) — without this, the key is trivially readable
@@ -85,31 +88,15 @@ module.exports = async (req, res) => {
 
   try {
     // [SECURITY FIX v2.5.0]: Firebase-based rate limiting (persistent across serverless cold starts)
-    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-    const ipHash = crypto.createHash('sha256').update(clientIp).digest('hex').substring(0, 16);
+    // Per-IP limit (loose; see RATE_LIMIT_MAX). Fails closed if the store can't be read.
     try {
-      const rlRes = await firebaseFetch(`${DB_URL}/rate_limits/activate/${ipHash}.json`);
-      if (rlRes.ok) {
-        const rlData = await rlRes.json();
-        if (rlData) {
-          const recentAttempts = Object.values(rlData).filter(
-            ts => (Date.now() - new Date(ts).getTime()) < RATE_LIMIT_WINDOW_MS
-          );
-          if (recentAttempts.length >= RATE_LIMIT_MAX) {
-            console.log(`[activate] Rate limit exceeded for IP: ${clientIp.substring(0, 12)}...`);
-            return res.status(429).json({ success: false, error: 'Too many activation attempts. Please try again in 15 minutes.' });
-          }
-        }
+      if (await isRateLimited(DB_URL, 'activate', clientIpHash(req), { max: RATE_LIMIT_MAX, windowMs: RATE_LIMIT_WINDOW_MS })) {
+        return res.status(429).json({ success: false, error: 'Too many activation attempts. Please try again in 15 minutes.' });
       }
     } catch (rlErr) {
       console.error('[activate] Rate limit check failed — blocking:', rlErr.message);
       return res.status(503).json({ success: false, error: 'Service temporarily unavailable.' });
     }
-    // Record this attempt (fire-and-forget)
-    firebaseFetch(`${DB_URL}/rate_limits/activate/${ipHash}/${Date.now()}.json`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(new Date().toISOString())
-    }).catch(() => {});
 
     // ═══ Validate environment ═══
     if (!HMAC_SECRET || !JWT_SECRET) {
@@ -142,6 +129,14 @@ module.exports = async (req, res) => {
     }
 
     const safeKey = normalizedKey.replace(/-/g, '_');
+    try {
+      if (await isRateLimited(DB_URL, 'activateKey', hashId(safeKey), KEY_RATE_LIMIT)) {
+        return res.status(429).json({ success: false, error: 'rate_limited', message: 'Too many attempts for this key. Please try again in 15 minutes.' });
+      }
+    } catch (rlErr) {
+      console.error('[activate] Key rate limit check failed — blocking:', rlErr.message);
+      return res.status(503).json({ success: false, error: 'Service temporarily unavailable.' });
+    }
 
     // ═══ Step 1.5: Verify key was legitimately purchased ═══
     // [SECURITY FIX v2.3.0]: Blocks forged keys — even with a valid HMAC checksum,
@@ -303,9 +298,7 @@ module.exports = async (req, res) => {
     // ═══ Step 5: Generate signed JWT activation token ═══
     // Lifetime: 7 days, plan "lifetime". Subscription: min(7 days, currentPeriodEnd + 3 days),
     // with plan/status/currentPeriodEnd in both the claims and the JSON response.
-    const planFields = subscription
-      ? { plan: subscription.plan, status: subscription.status, currentPeriodEnd: subscription.currentPeriodEnd || '' }
-      : { plan: 'lifetime' };
+    const planFields = appPlanFields(subscription);
     const expiresInSeconds = subscription
       ? Math.max(60, Math.round((subscriptionAccess.tokenExpiresAtMs - Date.now()) / 1000))
       : TOKEN_EXPIRY_DAYS * 86400;

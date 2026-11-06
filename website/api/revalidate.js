@@ -1,11 +1,15 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const appAccount = require('./_appAccount');
 const { firebaseFetch, setSecurityHeaders } = require('./_firebaseAdmin');
-const { getSubscriptionRecord, refreshSubscriptionIfStale, evaluateSubscriptionAccess } = require('./_billing');
+const { getSubscriptionRecord, refreshSubscriptionIfStale, evaluateSubscriptionAccess, appPlanFields, isRateLimited, hashId, clientIpHash } = require('./_billing');
 
 // Rate limit constants
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const RATE_LIMIT_MAX = 10;
+// Per IP: loose, because many people share one IP (mobile carrier NAT, offices, colleges).
+// Per key: tight, so one key can't be hammered from many addresses.
+const RATE_LIMIT_MAX = 60;
+const KEY_RATE_LIMIT = { max: 20, windowMs: 15 * 60 * 1000 };
 
 // ═══════════════════════════════════════════════════════════════════
 // Server-side license revalidation (security audit v2.1.0)
@@ -20,6 +24,9 @@ const MAX_DEVICES = 3;
 const TOKEN_EXPIRY_DAYS = 7;
 
 // [SECURITY FIX v2.5.0]: Decrypt/encrypt license key from/for JWT
+/** The device this token belongs to (older tokens carry none: use the request's). */
+function tokenDeviceIdFor(payload, deviceId) { return payload.deviceId || deviceId; }
+
 function decryptKeyFromJwt(encryptedKey) {
   const derivedKey = crypto.createHash('sha256').update(JWT_SECRET).digest();
   const [ivHex, encHex] = encryptedKey.split(':');
@@ -77,36 +84,24 @@ module.exports = async (req, res) => {
       return res.status(500).json({ valid: false, error: 'Server configuration error.' });
     }
 
+    // The app's account actions: free this PC's slot, show the plan, stop renewal (see _appAccount.js).
+    if (req.body && req.body.action) return appAccount(req, res);
+
     if (!DB_URL) {
       console.error('[revalidate] FIREBASE_RTDB_URL not configured');
       return res.status(500).json({ valid: false, error: 'Database not configured.' });
     }
 
     // [AUDIT FIX v3.8.0]: Firebase-based rate limiting (was missing from this endpoint)
-    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-    const ipHash = crypto.createHash('sha256').update(clientIp).digest('hex').substring(0, 16);
+    // Per-IP limit (loose; see RATE_LIMIT_MAX). Fails closed if the store can't be read.
     try {
-      const rlRes = await firebaseFetch(`${DB_URL}/rate_limits/revalidate/${ipHash}.json`);
-      if (rlRes.ok) {
-        const rlData = await rlRes.json();
-        if (rlData) {
-          const recentAttempts = Object.values(rlData).filter(
-            ts => (Date.now() - new Date(ts).getTime()) < RATE_LIMIT_WINDOW_MS
-          );
-          if (recentAttempts.length >= RATE_LIMIT_MAX) {
-            console.log(`[revalidate] Rate limit exceeded for IP: ${clientIp.substring(0, 12)}...`);
-            return res.status(429).json({ valid: false, error: 'Too many attempts. Please try again in 15 minutes.' });
-          }
-        }
+      if (await isRateLimited(DB_URL, 'revalidate', clientIpHash(req), { max: RATE_LIMIT_MAX, windowMs: RATE_LIMIT_WINDOW_MS })) {
+        return res.status(429).json({ valid: false, error: 'Too many attempts. Please try again in 15 minutes.' });
       }
     } catch (rlErr) {
       console.error('[revalidate] Rate limit check failed — blocking:', rlErr.message);
       return res.status(503).json({ valid: false, error: 'Service temporarily unavailable.' });
     }
-    firebaseFetch(`${DB_URL}/rate_limits/revalidate/${ipHash}/${Date.now()}.json`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(new Date().toISOString())
-    }).catch(() => {});
 
     const { token, deviceId } = req.body || {};
 
@@ -160,6 +155,14 @@ module.exports = async (req, res) => {
     }
 
     const safeKey = key.replace(/-/g, '_');
+    try {
+      if (await isRateLimited(DB_URL, 'revalidateKey', hashId(safeKey), KEY_RATE_LIMIT)) {
+        return res.status(429).json({ valid: false, error: 'rate_limited', message: 'Too many attempts for this key. Please try again in 15 minutes.' });
+      }
+    } catch (rlErr) {
+      console.error('[revalidate] Key rate limit check failed — blocking:', rlErr.message);
+      return res.status(503).json({ valid: false, error: 'Service temporarily unavailable.' });
+    }
 
     // ═══ Step 2: Check if key is revoked ═══
     try {
@@ -217,6 +220,12 @@ module.exports = async (req, res) => {
             console.log(`[revalidate] Device limit exceeded: ${deviceCount}/${MAX_DEVICES}`);
             return res.status(403).json({ valid: false, error: 'device_limit' });
           }
+          // This PC was signed out (from the app on another PC, or "Sign out all PCs" on the website)
+          // and its slot has been taken since: it stops here instead of pushing the key over the limit.
+          if (!Object.prototype.hasOwnProperty.call(activationsData, tokenDeviceIdFor(payload, deviceId)) && deviceCount >= MAX_DEVICES) {
+            console.log(`[revalidate] Device removed and slots full: ${safeKey.substring(0, 15)}...`);
+            return res.status(403).json({ valid: false, error: 'device_removed' });
+          }
         }
       }
     } catch (err) {
@@ -229,9 +238,7 @@ module.exports = async (req, res) => {
     // [SECURITY FIX v2.2.0]: Use token's deviceId, not request body, to prevent injection
     const tokenDeviceId = payload.deviceId || deviceId;
     // Lifetime: 7 days. Subscription: min(7 days, currentPeriodEnd + 3 days grace).
-    const planFields = subscription
-      ? { plan: subscription.plan, status: subscription.status, currentPeriodEnd: subscription.currentPeriodEnd || '' }
-      : { plan: 'lifetime' };
+    const planFields = appPlanFields(subscription);
     const expiresInSeconds = subscription
       ? Math.max(60, Math.round((subscriptionAccess.tokenExpiresAtMs - Date.now()) / 1000))
       : TOKEN_EXPIRY_DAYS * 86400;

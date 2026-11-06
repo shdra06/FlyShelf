@@ -28,10 +28,10 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&family=Instrument+Serif:ital@0;1&display=swap">
   <script src="appearance.js?v=20"></script>
   <link rel="stylesheet" href="site.css?v=20">
-  <link rel="stylesheet" href="checkout.css?v=21">
+  <link rel="stylesheet" href="checkout.css?v=22">
   <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
   <script src="site.js?v=20" defer></script>
-  <script src="pricing.js?v=21" defer></script>
+  <script src="pricing.js?v=22" defer></script>
   <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -105,8 +105,8 @@
   <main id="main">
     <section class="pro-hero wrap" aria-labelledby="pro-title">
       <p class="eyebrow">FlyShelf Pro</p>
-      <h1 id="pro-title" class="display pro-title">No daily limits. <span class="serif accent-text">Pay your way.</span></h1>
-      <p class="lead">Pro lifts every daily cap and adds Workflow Studio, watched folders, smart redaction and internet sync. Pay monthly, save with yearly, or buy it once — and use it on up to three of your devices.</p>
+      <h1 id="pro-title" class="display pro-title">No daily limits, <span class="serif accent-text">from <span id="hero-from">₹99</span> a month.</span></h1>
+      <p class="lead">Every tool without daily caps, plus Workflow Studio and internet sync. One key, up to 3 devices. Stop any time from inside FlyShelf.</p>
     </section>
 
     <!-- Shown for 15 minutes after a purchase in this tab -->
@@ -130,215 +130,183 @@
     </section>
 
     <section class="wrap checkout" aria-label="Buy FlyShelf Pro">
-      <div class="billing" role="group" aria-label="How would you like to pay?">
-        <button class="billing-option" id="plan-monthly" data-plan="pro_monthly" type="button" aria-pressed="false"><span class="billing-name">Monthly</span><small>Cancel any time</small></button>
-        <button class="billing-option active" id="plan-yearly" data-plan="pro_yearly" type="button" aria-pressed="true"><span class="billing-name">Yearly</span><small class="save-tag" id="yearly-savings">Save 44%</small></button>
-        <button class="billing-option" id="plan-lifetime" data-plan="lifetime" type="button" aria-pressed="false"><span class="billing-name">Lifetime</span><small>Pay once</small></button>
+      <div class="currency" role="group" aria-labelledby="region-legend">
+        <span id="region-legend" class="sr-only">Currency</span>
+        <button class="currency-option" id="tab-inr" type="button" aria-pressed="false">₹ India</button>
+        <button class="currency-option active" id="tab-usd" type="button" aria-pressed="true">$ International</button>
       </div>
-      <div class="checkout-grid">
-        <article class="summary-card">
-          <div class="summary-top">
-            <div>
-              <h2 class="summary-title" id="plan-title">FlyShelf Pro Yearly</h2>
-              <p class="summary-sub" id="plan-sub">Billed yearly · cancel any time</p>
-            </div>
-            <div class="summary-price" aria-live="polite">
-              <span id="price-display-usd" class="price">$19.99</span>
-              <span id="price-display-inr" class="price" hidden>₹799</span>
-              <span class="price-note" id="price-note">a year · about $1.67 a month</span>
-            </div>
-          </div>
-          <ul class="summary-list">
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span><strong>No daily limits</strong> on any tool — PDF, conversion, table extraction, QR and Magic edit</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span><strong>Workflow Studio</strong> and <strong>watched folders</strong> to automate repeat jobs</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Smart redaction, stamps and seals for documents</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span><strong>Internet sync</strong> and device groups</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Custom document folders and custom wallpaper</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span><strong>50,000</strong> history entries and <strong>100</strong> text shortcuts</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>One key activates <strong>up to 3</strong> of your devices</span></li>
-          </ul>
-          <p class="summary-free">Free stays free: unlimited clipboard capture, OCR, image tools, video compression and conversions, with daily limits on a few heavier tools. <a class="link" href="#compare">Compare Free and Pro</a></p>
-        </article>
 
-        <form class="pay-card" id="checkout-form" novalidate aria-labelledby="pay-title">
-          <h2 id="pay-title" class="pay-title"><svg aria-hidden="true"><use href="#i-lock"/></svg>Checkout</h2>
-          <fieldset class="region">
-            <legend id="region-legend">Where are you paying from?</legend>
-            <div class="region-options">
-              <button class="region-option" id="tab-inr" type="button" aria-pressed="false">
-                <svg aria-hidden="true"><use href="#i-pin"/></svg>
-                <span><strong>India</strong><small id="tab-inr-note">₹799 a year · UPI Autopay, cards</small></span>
-              </button>
-              <button class="region-option active" id="tab-usd" type="button" aria-pressed="true">
-                <svg aria-hidden="true"><use href="#i-globe"/></svg>
-                <span><strong>International</strong><small id="tab-usd-note">$19.99 a year · Visa, Mastercard, Amex</small></span>
-              </button>
-            </div>
-          </fieldset>
-          <div class="field">
-            <label for="customer-email">Email for your license key</label>
-            <input class="input" type="email" id="customer-email" name="email" autocomplete="email" inputmode="email" required placeholder="you@example.com" aria-describedby="email-hint email-error">
-            <p id="email-hint" class="hint">We’ll email your key here. You’ll also use it to recover the key or manage your plan.</p>
-            <p id="email-error" class="form-status" data-tone="error" aria-live="polite"></p>
-          </div>
-          <dl id="razorpay-details" class="pay-details" hidden>
-            <div><dt>Processed by</dt><dd>Razorpay</dd></div>
-            <div><dt>Pay with</dt><dd id="inr-methods">UPI Autopay or cards</dd></div>
-          </dl>
-          <dl id="paypal-details" class="pay-details">
-            <div><dt>Processed by</dt><dd>Razorpay International</dd></div>
-            <div><dt>Pay with</dt><dd>Visa, Mastercard or Amex</dd></div>
-          </dl>
-          <button class="btn btn-primary btn-lg pay-button" id="btn-submit-payment" type="submit"><svg aria-hidden="true"><use href="#i-lock"/></svg><span>Pay $19.99 a year</span></button>
-          <p id="checkout-status" class="form-status" role="status" aria-live="polite"></p>
-          <p class="pay-fine" id="renew-note"><svg aria-hidden="true"><use href="#i-repeat"/></svg><span id="renew-text">Renews at $19.99 a year until you cancel. Cancel any time under Manage subscription on this page — Pro stays on until the paid year ends.</span></p>
-          <p class="pay-fine"><svg aria-hidden="true"><use href="#i-shield"/></svg>A secure Razorpay window opens to take payment. FlyShelf never sees your card or UPI details.</p>
-        </form>
+      <div class="plans" role="group" aria-label="Choose a plan">
+        <button class="billing-option plan-card active" id="plan-monthly" data-plan="pro_monthly" type="button" aria-pressed="true">
+          <span class="billing-name">Monthly</span>
+          <span class="plan-price"><strong data-price="pro_monthly">$2.99</strong><small>/ month</small></span>
+          <small class="plan-note">Cancel any time</small>
+        </button>
+        <button class="billing-option plan-card" id="plan-yearly" data-plan="pro_yearly" type="button" aria-pressed="false">
+          <span class="billing-name">Yearly <span class="save-tag" id="yearly-savings">Save 44%</span></span>
+          <span class="plan-price"><strong data-price="pro_yearly">$19.99</strong><small>/ year</small></span>
+          <small class="plan-note" id="yearly-monthly">About $1.67 a month</small>
+        </button>
+        <button class="billing-option plan-card" id="plan-lifetime" data-plan="lifetime" type="button" aria-pressed="false">
+          <span class="billing-name">Lifetime</span>
+          <span class="plan-price"><strong data-price="lifetime">$50</strong><small>once</small></span>
+          <small class="plan-note">Pay once, keep it forever</small>
+        </button>
       </div>
-    </section>
 
-    <section id="compare" class="wrap compare" aria-labelledby="compare-title">
-      <h2 id="compare-title" class="h2 after-title">What’s free, and what Pro adds</h2>
-      <div class="compare-grid">
-        <article class="compare-card" aria-labelledby="free-title">
-          <div class="compare-head">
-            <h3 id="free-title">Free</h3>
-            <p>Generous limits that reset every day</p>
+      <form class="pay-card" id="checkout-form" novalidate aria-label="Checkout">
+        <div class="field">
+          <label for="customer-email">Email for your license key</label>
+          <div class="pay-row">
+            <input class="input" type="email" id="customer-email" name="email" autocomplete="email" inputmode="email" required placeholder="you@example.com" aria-describedby="email-error">
+            <button class="btn btn-primary btn-lg pay-button" id="btn-submit-payment" type="submit"><svg aria-hidden="true"><use href="#i-lock"/></svg><span>Pay $2.99 a month</span></button>
           </div>
-          <h4 class="compare-label">Unlimited</h4>
-          <ul class="compare-list">
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Clipboard capture</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Conversions to PDF, Markdown and spreadsheets</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>OCR</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Image tools and video compression</span></li>
-          </ul>
-          <h4 class="compare-label">Daily limits</h4>
-          <dl class="limit-list">
-            <div><dt>PDF merges</dt><dd>100 a day, up to 50 files each</dd></div>
-            <div><dt>QR scans</dt><dd>10 a day</dd></div>
-            <div><dt>PDF compressions</dt><dd>5 a day</dd></div>
-            <div><dt>PDF to Word</dt><dd>5 a day</dd></div>
-            <div><dt>Table extraction from PDFs</dt><dd>5 a day</dd></div>
-            <div><dt>Table extraction from images</dt><dd>5 a day</dd></div>
-            <div><dt>“Convert any file”</dt><dd>5 a day</dd></div>
-            <div><dt>PDF comparison</dt><dd>1 a day</dd></div>
-            <div><dt>Magic edit</dt><dd>5 images and 2 PDFs per 24 h</dd></div>
-          </dl>
-          <h4 class="compare-label">Capacity</h4>
-          <dl class="limit-list">
-            <div><dt>Clipboard history</dt><dd>5,000 entries</dd></div>
-            <div><dt>Synced devices</dt><dd>2</dd></div>
-            <div><dt>File transfers</dt><dd>2 GB each</dd></div>
-            <div><dt>Text shortcuts</dt><dd>20</dd></div>
-          </dl>
-        </article>
-        <article class="compare-card compare-pro" aria-labelledby="pro-col-title">
-          <div class="compare-head">
-            <h3 id="pro-col-title">Pro</h3>
-            <p>Everything in Free, with no daily limits</p>
-          </div>
-          <h4 class="compare-label">Unlimited</h4>
-          <ul class="compare-list">
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Every tool in Free, with no daily limits — including PDF merges, compression, PDF to Word, table extraction, QR scans, “Convert any file”, PDF comparison and Magic edit</span></li>
-          </ul>
-          <h4 class="compare-label">Only in Pro</h4>
-          <ul class="compare-list compare-cols">
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Workflow Studio</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Watched folders</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Smart redaction</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Stamps and seals</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Internet sync</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Device groups</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Custom document folders</span></li>
-            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Custom wallpaper</span></li>
-          </ul>
-          <h4 class="compare-label">Capacity</h4>
-          <dl class="limit-list">
-            <div><dt>Clipboard history</dt><dd>50,000 entries</dd></div>
-            <div><dt>Text shortcuts</dt><dd>100</dd></div>
-            <div><dt>Devices per key</dt><dd>Up to 3</dd></div>
-          </dl>
-        </article>
-      </div>
-    </section>
-
-    <section class="wrap after" aria-labelledby="after-title">
-      <h2 id="after-title" class="h2 after-title">After you pay</h2>
-      <ol class="after-steps">
-        <li><span class="after-num">1</span><h3>Your key appears</h3><p>It shows on this page as soon as payment is confirmed, and a copy goes to your email.</p></li>
-        <li><span class="after-num">2</span><h3>Activate FlyShelf</h3><p>With FlyShelf running, press <strong>Activate on this PC</strong>. Or paste the key into the license box in FlyShelf Hub → Settings.</p></li>
-        <li><span class="after-num">3</span><h3>Add your other devices</h3><p>Use the same key on up to three of your devices. Monthly and yearly plans renew on their own; the key never changes.</p></li>
-      </ol>
-    </section>
-
-    <section id="recover" class="wrap recover" aria-labelledby="recover-title">
-      <div class="recover-card">
-        <div class="recover-copy">
-          <span class="recover-icon" aria-hidden="true"><svg><use href="#i-key"/></svg></span>
-          <h2 id="recover-title">Lost your license key?</h2>
-          <p>Enter the email you used at checkout and we’ll send the key to that address again.</p>
+          <p id="email-error" class="form-status" data-tone="error" aria-live="polite"></p>
         </div>
-        <form id="recover-form" class="recover-form" novalidate>
-          <div class="field">
-            <label for="recover-email">Purchase email</label>
-            <div class="recover-row">
-              <input class="input" type="email" id="recover-email" name="email" autocomplete="email" inputmode="email" required placeholder="you@example.com" aria-describedby="recover-status">
-              <button class="btn btn-ink" id="recover-submit" type="submit"><span>Send my key</span></button>
-            </div>
-          </div>
-          <p id="recover-status" class="form-status" role="status" aria-live="polite"></p>
-        </form>
-      </div>
+        <p id="checkout-status" class="form-status" role="status" aria-live="polite"></p>
+        <p class="pay-fine" id="renew-note"><svg aria-hidden="true"><use href="#i-repeat"/></svg><span id="renew-text">Renews every month until you stop it.</span></p>
+        <p class="pay-fine"><svg aria-hidden="true"><use href="#i-shield"/></svg><span id="pay-methods">Secure checkout by Razorpay. FlyShelf never sees your card or UPI details.</span></p>
+      </form>
+
+      <ul class="perks" aria-label="What Pro adds">
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>No daily limits on any tool</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Unlimited Magic edit</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Workflow Studio and watched folders</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Internet sync and device groups</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>50,000 history entries</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Up to 3 devices per key</li>
+      </ul>
     </section>
 
-    <section id="account" class="wrap recover account" aria-labelledby="account-title">
-      <div class="recover-card">
-        <div class="recover-copy">
-          <span class="recover-icon" aria-hidden="true"><svg><use href="#i-card"/></svg></span>
-          <h2 id="account-title">Manage subscription</h2>
-          <p>Enter your license key and purchase email to see your plan and renewal date, or to stop renewal.</p>
+    <section id="compare" class="wrap compare" aria-label="Free and Pro">
+      <details class="fold">
+        <summary><span>Compare Free and Pro</span><small>Free stays free: clipboard, OCR, image tools and conversions have no limits</small></summary>
+        <div class="compare-grid">
+          <article class="compare-card" aria-labelledby="free-title">
+            <div class="compare-head">
+              <h3 id="free-title">Free</h3>
+              <p>Generous limits that reset every day</p>
+            </div>
+            <h4 class="compare-label">Unlimited</h4>
+            <ul class="compare-list">
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Clipboard capture</span></li>
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Conversions to PDF, Markdown and spreadsheets</span></li>
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>OCR</span></li>
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Image tools and video compression</span></li>
+            </ul>
+            <h4 class="compare-label">Daily limits</h4>
+            <dl class="limit-list">
+              <div><dt>PDF merges</dt><dd>100 a day, up to 50 files each</dd></div>
+              <div><dt>QR scans</dt><dd>10 a day</dd></div>
+              <div><dt>PDF compressions</dt><dd>5 a day</dd></div>
+              <div><dt>PDF to Word</dt><dd>5 a day</dd></div>
+              <div><dt>Table extraction from PDFs</dt><dd>5 a day</dd></div>
+              <div><dt>Table extraction from images</dt><dd>5 a day</dd></div>
+              <div><dt>“Convert any file”</dt><dd>5 a day</dd></div>
+              <div><dt>PDF comparison</dt><dd>1 a day</dd></div>
+              <div><dt>Magic edit</dt><dd>5 images and 2 PDFs per 24 h</dd></div>
+            </dl>
+            <h4 class="compare-label">Capacity</h4>
+            <dl class="limit-list">
+              <div><dt>Clipboard history</dt><dd>5,000 entries</dd></div>
+              <div><dt>Synced devices</dt><dd>2</dd></div>
+              <div><dt>File transfers</dt><dd>2 GB each</dd></div>
+              <div><dt>Text shortcuts</dt><dd>20</dd></div>
+            </dl>
+          </article>
+          <article class="compare-card compare-pro" aria-labelledby="pro-col-title">
+            <div class="compare-head">
+              <h3 id="pro-col-title">Pro</h3>
+              <p>Everything in Free, with no daily limits</p>
+            </div>
+            <h4 class="compare-label">Unlimited</h4>
+            <ul class="compare-list">
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Every tool in Free, with no daily limits — including PDF merges, compression, PDF to Word, table extraction, QR scans, “Convert any file”, PDF comparison and Magic edit</span></li>
+            </ul>
+            <h4 class="compare-label">Only in Pro</h4>
+            <ul class="compare-list compare-cols">
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Workflow Studio</span></li>
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Watched folders</span></li>
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Smart redaction</span></li>
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Stamps and seals</span></li>
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Internet sync</span></li>
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Device groups</span></li>
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Custom document folders</span></li>
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Custom wallpaper</span></li>
+            </ul>
+            <h4 class="compare-label">Capacity</h4>
+            <dl class="limit-list">
+              <div><dt>Clipboard history</dt><dd>50,000 entries</dd></div>
+              <div><dt>Text shortcuts</dt><dd>100</dd></div>
+              <div><dt>Devices per key</dt><dd>Up to 3</dd></div>
+            </dl>
+          </article>
         </div>
-        <form id="account-form" class="recover-form" novalidate>
-          <div class="field">
-            <label for="account-key">License key</label>
-            <input class="input input-key" type="text" id="account-key" name="key" autocomplete="off" autocapitalize="characters" spellcheck="false" required placeholder="FS-PRO-XXXX-XXXX-XXXX-XXXX" aria-describedby="account-status">
-          </div>
-          <div class="field">
-            <label for="account-email">Purchase email</label>
+      </details>
+    </section>
+
+    <section id="account" class="wrap help" aria-labelledby="help-title">
+      <h2 id="help-title" class="help-title">Already have Pro?</h2>
+      <div class="help-grid">
+        <div class="help-card" id="manage-card">
+          <h3><svg aria-hidden="true"><use href="#i-card"/></svg>Manage your plan</h3>
+          <p class="help-lead">Easiest in the app: <strong>FlyShelf Hub → Settings → License</strong> shows your plan and stops renewal in one click. Or look it up here:</p>
+          <form id="account-form" class="recover-form" novalidate>
+            <input class="input input-key" type="text" id="account-key" name="key" autocomplete="off" autocapitalize="characters" spellcheck="false" required placeholder="FS-PRO-XXXX-XXXX-XXXX-XXXX" aria-label="License key" aria-describedby="account-status">
             <div class="recover-row">
-              <input class="input" type="email" id="account-email" name="email" autocomplete="email" inputmode="email" required placeholder="you@example.com" aria-describedby="account-status">
+              <input class="input" type="email" id="account-email" name="email" autocomplete="email" inputmode="email" required placeholder="Purchase email" aria-label="Purchase email" aria-describedby="account-status">
               <button class="btn btn-ink" id="account-submit" type="submit"><span>Look up</span></button>
             </div>
-          </div>
-          <p id="account-status" class="form-status" role="status" aria-live="polite"></p>
-          <div id="account-result" class="account-result" hidden>
-            <dl class="pay-details">
-              <div><dt>Plan</dt><dd id="account-plan"></dd></div>
-              <div><dt>Status</dt><dd id="account-state"></dd></div>
-              <div id="account-date-row"><dt id="account-date-label">Renews on</dt><dd id="account-date"></dd></div>
-            </dl>
-            <button class="btn btn-sm" id="account-cancel" type="button" hidden><span>Stop renewal</span></button>
-            <div id="account-confirm" class="account-confirm" hidden>
-              <p>Stop renewal? You won’t be charged again, and Pro stays on until <strong id="account-confirm-date"></strong>.</p>
+            <p id="account-status" class="form-status" role="status" aria-live="polite"></p>
+            <div id="account-result" class="account-result" hidden>
+              <dl class="pay-details">
+                <div><dt>Plan</dt><dd id="account-plan"></dd></div>
+                <div><dt>Status</dt><dd id="account-state"></dd></div>
+                <div id="account-date-row"><dt id="account-date-label">Renews on</dt><dd id="account-date"></dd></div>
+              </dl>
               <div class="account-actions">
-                <button class="btn btn-sm btn-ink" id="account-confirm-yes" type="button"><span>Yes, stop renewal</span></button>
-                <button class="btn btn-sm btn-ghost" id="account-confirm-no" type="button"><span>Keep my plan</span></button>
+                <button class="btn btn-sm" id="account-cancel" type="button" hidden><span>Stop renewal</span></button>
+                <button class="btn btn-sm btn-ghost" id="account-reset" type="button"><span>Sign out all PCs</span></button>
+              </div>
+              <div id="account-confirm" class="account-confirm" hidden>
+                <p>Stop renewal? You won’t be charged again, and Pro stays on until <strong id="account-confirm-date"></strong>.</p>
+                <div class="account-actions">
+                  <button class="btn btn-sm btn-ink" id="account-confirm-yes" type="button"><span>Yes, stop renewal</span></button>
+                  <button class="btn btn-sm btn-ghost" id="account-confirm-no" type="button"><span>Keep my plan</span></button>
+                </div>
+              </div>
+              <div id="account-reset-confirm" class="account-confirm" hidden>
+                <p>Sign every PC out of this key? Use this when a PC is lost or replaced; activate the key again on each PC you still use (up to 3). Once every 30 days.</p>
+                <div class="account-actions">
+                  <button class="btn btn-sm btn-ink" id="account-reset-yes" type="button"><span>Sign out all PCs</span></button>
+                  <button class="btn btn-sm btn-ghost" id="account-reset-no" type="button"><span>Cancel</span></button>
+                </div>
               </div>
             </div>
-          </div>
-        </form>
+          </form>
+        </div>
+        <div class="help-card" id="recover">
+          <h3><svg aria-hidden="true"><use href="#i-key"/></svg>Lost your license key?</h3>
+          <p class="help-lead">We’ll email it to the address you used at checkout.</p>
+          <form id="recover-form" class="recover-form" novalidate>
+            <div class="recover-row">
+              <input class="input" type="email" id="recover-email" name="email" autocomplete="email" inputmode="email" required placeholder="Purchase email" aria-label="Purchase email" aria-describedby="recover-status">
+              <button class="btn btn-ink" id="recover-submit" type="submit"><span>Send my key</span></button>
+            </div>
+            <p id="recover-status" class="form-status" role="status" aria-live="polite"></p>
+          </form>
+        </div>
       </div>
     </section>
 
     <section class="wrap pro-faq" aria-labelledby="pro-faq-title">
-      <h2 id="pro-faq-title" class="h2 after-title">Questions about Pro</h2>
-      <div class="faq-cols">
-        <div><h3>Do monthly and yearly plans renew automatically?</h3><p>Yes, until you cancel. Stop renewal any time under <a class="link" href="#account">Manage subscription</a>. You won’t be charged again, and Pro stays on until the end of the period you’ve paid for.</p></div>
-        <div><h3>Can I still pay once?</h3><p>Yes. Lifetime is a one-time payment of ₹1,999 or $50, with nothing to renew. Keys bought at the earlier lifetime price stay Pro for life.</p></div>
-        <div><h3>What happens if a subscription ends?</h3><p>Pro stays on until the paid period ends, plus three days in case a renewal is late. After that FlyShelf goes back to the Free plan.</p></div>
-        <div><h3>Do I need an account?</h3><p>No account is needed — just an email address, so we can send your key.</p></div>
-        <div><h3>How many devices can I use?</h3><p>One key activates Pro on up to three of your devices, on any plan.</p></div>
-        <div><h3>What if I stay on Free?</h3><p>That’s fine. Clipboard capture, OCR, image tools, video compression and conversions are unlimited on Free; a few heavier tools have daily limits.</p></div>
+      <h2 id="pro-faq-title" class="help-title">Questions</h2>
+      <div class="faq-list">
+        <details class="fold"><summary><span>How do I cancel?</span></summary><p>Open FlyShelf Hub → Settings → License and press <strong>Stop renewal</strong>, or use Manage your plan above. You won’t be charged again, and Pro stays on until the end of the period you’ve paid for.</p></details>
+        <details class="fold"><summary><span>What happens when a subscription ends?</span></summary><p>Pro stays on until the paid period ends, plus three days in case a renewal is late. Then FlyShelf goes back to the Free plan. Nothing you saved is lost.</p></details>
+        <details class="fold"><summary><span>How do I activate Pro?</span></summary><p>Your key appears right after payment and is emailed to you. With FlyShelf running, press <strong>Activate on this PC</strong>, or paste the key in FlyShelf Hub → Settings → License.</p></details>
+        <details class="fold"><summary><span>How many devices can I use?</span></summary><p>One key turns on Pro on up to three of your devices, on any plan. Turning off Pro on a PC frees its place.</p></details>
+        <details class="fold"><summary><span>Do I need an account?</span></summary><p>No. Just an email address, so we can send your key.</p></details>
       </div>
       <p class="pro-contact">Need help with a purchase? Email <a class="link" href="mailto:shdra06@gmail.com">shdra06@gmail.com</a>.</p>
     </section>

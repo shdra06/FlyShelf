@@ -1,141 +1,233 @@
 <div align="center">
-
+ 
 # ⚡ FlyShelf
 
-### Everything you copy, within reach.
+### **The Ultimate Premium Cross-Device Clipboard & Productivity Ecosystem**
 
-**A fast, private clipboard manager for Windows — with PDF, image and file tools built in, and your Android phone one tap away.**
+*Copy on one device. Paste anywhere. Instantly. Secure peer-to-peer pipelines for Windows & Android.*
 
-[![Download for Windows](https://img.shields.io/badge/Download_for_Windows-v4.5.1-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/latest/download/FlyShelf.exe)
-[![Android companion](https://img.shields.io/badge/Android-v7.2.0-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v4.4.0/FlyShelf_Mobile_Device.apk)
-[![Website](https://img.shields.io/badge/Website-fly--shelf.vercel.app-111827?style=for-the-badge&logo=vercel&logoColor=white)](https://fly-shelf.vercel.app)
+[![Windows Desktop App](https://img.shields.io/badge/Windows_PC-v4.5.3-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/latest/download/FlyShelf.exe)
+[![Android Mobile Companion](https://img.shields.io/badge/Android_Mobile-v7.3.0-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/latest/download/FlyShelf_Mobile_Device.apk)
+[![Ecosystem License](https://img.shields.io/badge/License-Proprietary-FF007F?style=for-the-badge&logo=shield&logoColor=white)](LICENSE)
 
-**[⬇ Download FlyShelf.exe](https://github.com/shdra06/FlyShelf/releases/latest/download/FlyShelf.exe)** · [Website & live demo](https://fly-shelf.vercel.app) · [All releases](https://github.com/shdra06/FlyShelf/releases) · [Privacy](PRIVACY_POLICY.md)
+🚀 **Live Interactive Showcase**: [https://shdra06.github.io/FlyShelf](https://shdra06.github.io/FlyShelf)  
+📖 **Master Architecture & Context Manual**: [FLYSHELF_MASTER_ARCHITECTURE.md](FLYSHELF_MASTER_ARCHITECTURE.md)
 
-Free to use · Windows 10 & 11 · No installer, no .NET setup · Android 7.0+
+---
 
 </div>
 
----
+## 🎯 What is FlyShelf?
 
-## Why FlyShelf
+**FlyShelf** is an ultra-premium, zero-friction **cross-device clipboard manager** and real-time productivity ecosystem. Engineered specifically for developers, power users, and creators, it seamlessly unifies your clipboard history, local files, code snippets, and screenshots across all your Windows PCs and Android devices in real-time.
 
-You copy dozens of things a day — a link, a screenshot, a paragraph, a PDF, a folder path. Windows forgets all but the last one. **FlyShelf keeps every one of them** on a floating shelf you can open from any app with **Alt + C** (or by shaking your mouse mid-drag), then lets you search it, preview it, edit it, convert it and drag it straight back into your work.
-
-It runs quietly in the background, keeps your history on your own PC, and does the small jobs you'd normally open three other apps for.
+Unlike generic clipboard managers, FlyShelf works entirely **peer-to-peer (P2P)** where possible. It autodetects your network topology to route clipboard assets over the fastest path available—lightning-speed **WiFi LAN connections (100+ Mbps)**, firewalled secure **Cloudflare Tunnels**, or low-latency **Firebase Realtime Database** cloud relays. No advertising, no accounts to create, no spyware, and absolute privacy.
 
 ---
 
-## ✨ What it does
+## ⚡ Feature Highlights at a Glance
 
-| | Feature | What you get |
-|---|---|---|
-| 📑 | **Merge PDFs, images & more** | Merge PDFs (pick and reorder pages), turn images into a PDF, split or extract pages, compress, password-protect, sign or stamp, and compare two PDFs — all locally. |
-| 📷 | **QR scanning** | Copy a screenshot or photo with a QR code in it and FlyShelf reads it: *Scan QR Code* or *Extract QR Text & Copy*. |
-| ⌨️ | **Text shortcuts** | Type a trigger like `/sig`, select it, copy — FlyShelf pastes the full text in its place. Up to 100 shortcuts, stored encrypted. |
-| 📝 | **Notes & to-dos** | Daily notes and a to-do list right beside your clips, with images inside notes and search across every day. |
-| 🔍 | **Search the clipboard** | Start typing to narrow thousands of clips to the one you want. Pin what you paste every day so it never gets buried. |
-| ⏰ | **Reminders & timers** | Write *"remind me at 5 pm"* and it's set. Type `/5`, `timer 30 min` or `2:30` to start a countdown. |
-| 🗜️ | **Zip from a folder** | Copy a folder or a group of files and create a ZIP archive from the shelf in one click — the archive appears as its own card. |
-| 🗂️ | **Find files, PDFs, images & folders** | One-tap filters for Images, PDFs, Documents, Pins and Passwords show only that kind of clip, newest first. |
-| 🖱️ | **Drag & drop anything** | Drop files onto the shelf to keep them handy; drag any clip back out into an email, a chat, Explorer or a document. |
-| 🖼️ | **Edit images directly** | Rotate, draw and annotate, compress, and copy the result straight back to your clipboard — no image editor needed. Edit the text inside a screenshot too. |
-| 👁️ | **Quick preview of anything** | Press **Space** on any card for an instant Quick Look: images, PDFs (page by page), documents, code, Markdown, SVG, archives and folders. |
-| 🧰 | **Many file options** | Right-click any card for what that file needs: open, copy path, show in Explorer, image info & EXIF, extract embedded images, and more. |
-| 🔄 | **Convert anything to anything** | PDF → Word or Markdown, PDF pages → PNG, images & documents → PDF, tables in screenshots → Excel/TSV, text from images via OCR. |
-
-### Also built in
-
-- **Copy text out of any image (OCR)** — screenshots, scans and photos become text you can paste. Runs on your PC with Windows' built-in engine; tables come out as rows ready for Excel.
-- **Your Android phone, one tap away** — pair once with a QR code or a six-character code. On the same Wi-Fi, clips and files go straight between devices; away from home, remote sync connects them through a temporary Cloudflare tunnel.
-- **Make it yours** — six background styles including Mica, Acrylic and Paper, colour palettes, your own wallpaper, a taskbar widget and an optional desktop mascot.
-- **Smooth on any laptop** — custom smooth scrolling and an automatic low-end mode that pauses purely decorative effects on weaker hardware or Energy Saver.
-
----
-
-## 🆕 What's new in v4.5.1
-
-- **Cleaner right-click menus** — PDF actions in a clear order, one Convert menu, *Show in Explorer* at the top level
-- **PDF Compare** — pick the other PDF straight from your shelf, browse for it, or drop it in
-- **Faster PDF tools** — pick files from the shelf in one click; Stamp, Split, Redact and Password show quick toasts instead of popups
-- **Notes** keep the cursor in the card you click, so pastes land where you expect
-- **Virtual desktops** — switching desktops no longer changes your clipboard background
-- **Tidier default size** — the clipboard now opens at 310 × 355 (your saved size is kept)
-- **Folders** open in File Explorer from the Quick Look button; **Ctrl + W** closes Quick Look
-- **Big copies** — copying hundreds of files no longer freezes the shelf when you paste or open them
-- **More reliable LAN transfers** — idle timeouts, delivery tracking and correct queue order
-
-<details>
-<summary><b>v4.5.0 — Smoother Scrolling, Safer Updates & Faster Startup</b></summary>
-
-- Smoother scrolling: no more upward-scroll stutter or momentum jitter; new low-end mode
-- Faster startup, fewer UI freezes, instant tray quit
-- Safer auto-updates: resumable downloads, automatic rollback if a new version fails to start
-- Smarter shake-to-summon with fewer accidental triggers
-- Image-text editor fine-tuning, table recovery and PDF page previews
-- PDF/Markdown merge tools, Quick Look on Spacebar, OCR tools
-- More reliable LAN/cloud sync, delivery receipts and clipboard/paste sync
-
-</details>
+- 📋 **Smart Clipboard Capture** — Auto-captures text, images, files, URLs, code, PDFs, documents, and audio
+- 🔄 **Cross-Device Sync** — Real-time sync across Windows PCs and Android via LAN, Cloudflare Tunnel, or Firebase relay
+- 🔍 **Instant Search & Filters** — Full-text search (Ctrl+F) with category filters (Images, Pinned, PDF, Docs)
+- 📌 **Pin & Protect** — Pin important items to protect from auto-cleanup
+- 🖱️ **Drag & Drop** — Drag files into FlyShelf or drag clips out into any app (Outlook, Slack, Explorer)
+- 🎨 **7 Color Themes** — Default, Midnight, Ocean, Sunset, Emerald, Lavender, and Light
+- 🖼️ **Custom Wallpapers** — Set any image as your clipboard backdrop with frosted glass header
+- 📝 **Quick Notes** — Per-day bullet notes with image embeds and freeform mode
+- ✅ **To-Do Lists** — Daily task lists with done/undone toggle
+- 🔤 **Text Shortcuts** — Type `/trigger` abbreviations that auto-expand to full text snippets (50 max for Pro)
+- 📦 **PDF Merger** — Merge multiple PDFs with drag-to-reorder and page selection
+- 📊 **Table Extraction** — Extract tables from screenshots using local AI (Bradley-Roth + Projection-Profile) or Gemini API
+- 🔍 **AI OCR Text Extraction** — NPU-accelerated text extraction from images using Windows AI TextRecognizer (Win11 24H2+)
+- ⏰ **Natural Language Reminders** — Type naturally to create alerts ("remind me in 30 mins to check build")
+- 🎓 **First-Run Onboarding** — Interactive tutorial experience to get started seamlessly
+- 📷 **QR Code Scanner** — Decode QR codes from clipboard images
+- ⏱️ **Timer & Stopwatch** — Type `/5`, `timer 30 min`, or `2:30` into search to launch a countdown
+- 😊 **Emoji Picker** — Searchable floating panel with 800+ color emojis
+- 🔒 **Password Manager** — Mark any text as password (masked display), view/edit/rename
+- 🎵 **Audio Playback** — Play audio clipboard items with single-instance player
+- 🖥️ **macOS-style QuickLook** — Spacebar instant preview for any item
+- 🔗 **UTM Link Cleaner** — Strip marketing trackers (`utm_*`, `fbclid`) from URLs
+- 🧮 **Math Solver** — Auto-evaluates expressions like `(12 * 8) - 15`
+- 🔎 **Google Search** — Right-click any text to search on Google instantly
+- 💻 **Code Actions** — Open in VS Code, Run in Terminal, Compile C++ & Run
+- 🌐 **QR Quick Pair** — Scan QR code or enter 6-character code to pair devices instantly
+- 🔐 **PIN Security** — PIN-based authentication for web/device access
+- 🛡️ **Encrypted Sync** — End-to-end encrypted clipboard transfer
+- 📡 **Cloudflare Tunnels** — Auto-retry with QUIC/HTTP2 protocol switching for global sync
+- 🪟 **Taskbar Widget** — Embedded taskbar button with configurable positioning
+- 🤏 **Shake to Open** — Rapidly shake mouse while holding left-click to summon FlyShelf
+- ⌨️ **Global Hotkeys** — `Win + Shift + V` or `Alt + C` to summon dashboard
+- 📱 **Android Overlay Ball** — Physics-enabled floating bubble for clipboard access anywhere on Android
+- 🔔 **Update Manager** — Auto-update with SHA256 verification and in-app badge notification
+- 💎 **Freemium Model** — Generous free tier with Pro unlock (₹299 lifetime)
 
 ---
 
-## 🚀 Get started
+## ✨ Features in Detail
 
-1. **[Download FlyShelf.exe](https://github.com/shdra06/FlyShelf/releases/latest/download/FlyShelf.exe)** — a single self-contained file (~100 MB). No installer, nothing else to set up.
-2. **Run it.** FlyShelf lives in your system tray and starts capturing what you copy.
-3. **Press Alt + C** from any app to open your shelf (you can change the shortcut in Settings), or hold a mouse button and give the cursor a quick shake.
-4. **Optional:** install the [Android app](https://github.com/shdra06/FlyShelf/releases/download/v4.4.0/FlyShelf_Mobile_Device.apk) and pair it from *Network* in the FlyShelf Hub.
+### 📋 Universal Clipboard & File Sync
+- **Instantly Synchronize**: Copy text, hyperlinks, rich code blocks, screenshots, or raw files on any device and watch them appear globally in milliseconds.
+- **Dynamic Connection Routing**: Autodetects network environments to route heavy files locally over LAN, falling back to secure Cloudflare relays when remote.
+- **Intelligent Deduplication**: Smart memory caching prevents double clipboard writes and maintains strict chronological order.
+- **Multi-Select Operations**: Select multiple items for batch unpin or PDF merge workflows.
+- **Auto Cleanup**: Automatically purge unpinned entries after 7, 14, or 30 days (configurable).
 
-**Requirements:** Windows 10 or 11 (64-bit). OCR uses Windows' built-in text recognition, so results vary by Windows version and hardware. The Android companion needs Android 7.0 or later.
+### 🖥️ Mica Summon Dashboard (Windows PC)
+- **Summon Dashboard**: A global keyboard shortcut (`Win + Shift + V` or `Alt + C`) or a cursor shaking gesture summons a beautiful glassmorphic dashboard featuring deep Windows 11 Mica blur and Acrylic backdrops.
+- **Interactive Action Pills**: Context-aware buttons reveal themselves on hover with micro-animations and drop-shadows.
+- **Premium Chevron Control**: Sleek, high-contrast, glassmorphic expand/collapse buttons point down when collapsed (blue) and up when expanded (red) to maximize text space utilization.
 
-> **Windows SmartScreen:** because FlyShelf is a new independent app, Windows may show *"Windows protected your PC"* the first time. Choose **More info → Run anyway**. You can check the download against `FlyShelf.exe.sha256` on the [release page](https://github.com/shdra06/FlyShelf/releases/latest).
+### 📱 Android Foreground Service & Physics Overlay Ball
+- **Persistent Overlay**: Access your entire workspace history anywhere on Android with a premium, physics-enabled floating overlay bubble.
+- **Paste with a Single Tap**: Copy historical clips back into any active text input without shifting focus.
+- **Kotlin Foreground Service**: Backed by an energy-efficient native background service that survives Android's aggressive memory management and screen lock.
 
-### Staying up to date
+### 🎨 7 Premium Color Themes
+Match your focus with seven premium color schemes. Selecting a theme dynamically swaps accent colors, button chrome, text tones, and auto-applies matching wallpapers:
+- ⚙️ **Default**: Clean native dark look matching Windows 11 Mica system theme
+- 🌌 **Midnight**: Deep cybernetic dark blue with indigo and purple gradients
+- 🌊 **Ocean**: Glowing neon teal with cyan and aqua highlights
+- 🌅 **Sunset**: Warm orange/pink coral gradients with amber accents
+- 🌲 **Emerald**: Sleek mint green and emerald highlights
+- 🔮 **Lavender**: Pastel violet and magenta gradients
+- ☀️ **Light**: Clean light mode with white surfaces and dark text
 
-FlyShelf checks for new versions on its own and shows an update badge when one is ready. Updates download in the background, are verified with SHA-256 before anything is replaced, resume if your connection drops, and roll back automatically if a new version fails to start — so you're never left without a working FlyShelf.
+### 🖼️ Custom Wallpapers & Mascot Themes
+- **Custom Wallpaper**: Choose any image as your clipboard backdrop with a frosted glass header overlay.
+- **Mascot Theme Packs**: Install animated companion characters (GIF sprites) that react to clipboard actions — idle, delete, copy, search triggers.
+- **Theme Pack Import**: Drag `.flyshelf-theme` zip files onto FlyShelf to install community themes.
+- **Hot-Reload**: FileSystemWatcher monitors the themes folder for live changes.
+
+### 📝 Quick Notes
+- **Per-Day Bullet Notes**: Organized by date with sidebar navigation for browsing previous days.
+- **Bullet Mode**: Create structured notes with collapsible headers and timestamps.
+- **Freeform Mode**: Switch to a free-text editor with inline image embedding.
+- **Image Embeds**: Paste or drag images directly into note bullets.
+- **Search Notes**: Full-text search across all note days.
+- **Auto-Save**: Debounced 2-second save with atomic file writes.
+
+### ✅ To-Do Lists
+- **Daily Task Lists**: Organized by date with done/undone toggle per item.
+- **Quick Add**: Add tasks inline with auto-timestamp.
+- **Persistent**: Survives app restarts via JSON serialization.
+
+### 🔤 Text Shortcuts (Text Expander)
+- **Custom Triggers**: Define `/trigger` abbreviations that auto-expand to full text snippets.
+- **Auto-Paste**: Expansions are copied to clipboard and auto-pasted into active input fields.
+- **Encrypted Storage**: Shortcuts are stored with DPAPI encryption.
+
+### 📦 PDF Tools Suite
+- **PDF Merger**: Select multiple PDFs on the shelf, reorder them visually with drag handles, and merge into a single PDF.
+- **Page Selector**: Choose specific pages from each PDF to include in the merge.
+- **Page Reorder**: Drag-and-drop reordering of individual pages across documents.
+- **Image → PDF**: Convert any clipboard image to a PDF document.
+- **PDF → Word**: Convert PDF files to editable DOCX format.
+- **Document → PDF**: Convert Word, Excel, PowerPoint to PDF.
+
+### 📊 Advanced Table Extraction
+- **Local AI Engine**: Bradley-Roth adaptive thresholding + Projection-Profile column separation for accurate table detection from screenshots — entirely offline.
+- **Gemini AI Fallback**: Google Gemini 2.0 Flash API for complex table extraction.
+- **Table Editor**: Full-featured table editing window with column resize, cell editing, and export to CSV/JSON.
+
+### 🔀 Drag-and-Drop Workspace
+- **Drag-In Files**: Select folders or documents from your file manager and drag them directly onto the FlyShelf overlay to instantly add them to the clipboard stack.
+- **Drag-Out Clips**: Grab card thumbnails from the FlyShelf overlay and drop them directly into active applications (Outlook, Slack, Word, Explorer) to paste them instantly.
+
+### 📁 Universal File Extension Support
+FlyShelf classified badges adapt to **all file extensions** to sort and optimize your shelf history:
+- **Documents & PDFs**: `.pdf`, `.docx`, `.xlsx`, `.pptx`, `.txt`, `.csv`
+- **Media Assets**: Images (`.png`, `.jpg`, `.webp`, `.gif`), Audio (`.mp3`, `.wav`), Videos (`.mp4`, `.mkv`)
+- **Archives**: `.zip`, `.rar`, `.7z`, `.tar.gz`
+
+### 🔍 Contextual Smart Utilities
+Right-click any card to trigger contextual actions:
+- **🔎 Search on Google**: Query highlighted clips instantly.
+- **🔗 UTM URL Cleaner**: Strips marketing tracking parameters (`utm_*`, `fbclid`) from links.
+- 🧮 **Math Solver**: Auto-evaluates math equations like `(12 * 8) - 15` using a Shunting-yard algorithm.
+- 🔍 **AI OCR Text Extraction**: NPU-accelerated text extraction from images using Windows AI TextRecognizer.
+- ⏰ **Natural Language Reminders**: Type naturally in the search bar to set quick reminders.
+- **📊 Table Data Extraction**: Extract structured tables from screenshots.
+- **📷 QR Code Scanner**: Decode QR codes from clipboard images.
+- **🖥️ QuickLook Preview**: Tap Spacebar on any item to open a clean instant preview window.
+- **😊 Emoji Picker**: Floating category-filtered panel containing 800+ color emojis.
+- **💻 Open in VS Code / Run in Terminal**: Launch code snippets directly.
+- **🔒 Password Mode**: Mark any text as password with masked display.
+
+### ⏱️ Speed Timer Commands
+- **Command Triggers**: Type `/5`, `timer 30 min`, or `2:30` directly into the search bar to launch a timer.
+- **Visual Countdown**: A progress ring glows dynamically and transitions color (cyan ➔ amber ➔ warning red) as time ticks down.
+
+### 🔗 Network Sync & Device Pairing
+- **LAN Sync**: Direct IP clipboard sync over Wi-Fi for lightning-fast local transfers.
+- **Cloudflare Tunnel**: Auto-retry with QUIC/HTTP2 protocol switching for global internet sync.
+- **Firebase Cloud Relay**: Low-latency relay for text items when direct connections aren't available.
+- **QR Quick Pair**: Generate/scan QR codes for instant device pairing.
+- **6-Character Pairing Code**: Alphanumeric code alternative to QR.
+- **PIN Security**: PIN-based authentication for web/device access.
+- **Sync Direction Control**: Granular Incoming / Outgoing / Both toggle per connection.
+- **Encrypted Transfer**: End-to-end encrypted clipboard sync via `SyncCrypto`.
+- **Live Network Logs**: Real-time network event viewer for debugging.
+
+### 🪟 System Integration
+- **System Tray Icon**: Always-visible tray icon with quick-access menu.
+- **Taskbar Widget**: Embedded taskbar button with configurable positioning (Auto, Far Left, After Start, Before Tray, Custom offset).
+- **Run at Startup**: Auto-launch on Windows login.
+- **Shake to Open**: Rapidly shake mouse while holding left-click to summon FlyShelf.
+- **Toast Notifications**: Non-intrusive alerts for sync events, timer completion, and more.
+- **Smooth Scrolling**: Custom smooth scroll implementation for buttery-smooth list navigation.
+
+### 🔔 Auto-Update System
+- **Update Detection**: Checks GitHub releases for new versions.
+- **In-App Badge**: Update available indicator on the toolbar.
+- **Download & Install**: Download with progress bar, SHA256 hash verification, automatic restart.
+
+---
+
+## 🚀 Installation & Getting Started
+
+FlyShelf is distributed as fully self-contained, ready-to-run standalone binaries. No installer or runtime setup is required.
+
+- **Desktop (Windows 10/11)**: [Download FlyShelf.exe](https://github.com/shdra06/FlyShelf/releases/latest/download/FlyShelf.exe) (Single-file, self-contained release, no .NET install required).
+- **Microsoft Store**: Available soon! (Note: Global Transfer is disabled in the Microsoft Store version to comply with Store policies. Pro features are unlocked via an in-app add-on rather than a license key).
+- **Mobile (Android 8.0+)**: [Download FlyShelf_Mobile.apk](https://github.com/shdra06/FlyShelf/releases/latest/download/FlyShelf_Mobile_Device.apk) (Lightweight, single-architecture arm64 release).
 
 ---
 
 ## 💎 Free vs Pro
 
-Everything above is in the free app. Pro lifts the daily limits on the heavier document tools — one payment, no subscription.
-
-| | Free | Pro (lifetime) |
-|---|---|---|
-| Clipboard history, search, pins, filters | ✅ | ✅ |
-| Windows ↔ Android sync (home & away) | ✅ | ✅ |
-| Notes, to-dos, reminders, timers, 100 text shortcuts | ✅ | ✅ |
-| Background styles, palettes, your own wallpaper | ✅ | ✅ |
-| PDF tools, conversions, OCR, table extraction | 500 uses a day each | **No limits** |
-| History retention | 7, 14 or 30 days | **No expiry** option |
-| Custom theme packs | — | ✅ |
-| Devices per license | — | Up to 3 |
-| **Price** | **Free** | **₹299** in India · **$9.99** elsewhere, once |
-
-Get Pro from the [website](https://fly-shelf.vercel.app/#pricing). Checkout is handled by Razorpay; your license key is shown after payment and sent to your email.
-
----
-
-## 🛡️ Privacy
-
-- **Stored on your PC** — your clipboard history lives in your Windows user folder, not on our servers.
-- **No tracking** — no analytics, ads or crash-reporting services are built into the app.
-- **Secrets encrypted** — copied passwords and API keys are detected and encrypted with Windows DPAPI.
-- **Discovery, not storage** — Firebase only helps your devices find each other; your clips are never stored there. Pairing and discovery data is protected with AES-256-GCM.
-
-Read the full [privacy policy](PRIVACY_POLICY.md).
+| Feature | Free | Pro (₹299 Lifetime) |
+|---------|------|---------------------|
+| Clipboard History | 500 items | 2,500 items |
+| Note History | 30 days | Unlimited |
+| PDF Merges | 20/day | Unlimited |
+| OCR Extractions | 30/day | Unlimited |
+| Table Extractions | 15/day | Unlimited |
+| Pins | 20 max | Unlimited |
+| Color Themes | Default only | All 7 themes |
+| Custom Wallpaper | — | ✅ |
+| Text Shortcuts | 20 max | 50 max |
+| Clipboard Size | Fixed | Adjustable |
+| Cloudflare Tunnel | — | ✅ (Standalone only) |
+| Glass UI Theme | — | ✅ |
 
 ---
 
-## 💬 Support
-
-Questions, bugs or ideas: **shdra06@gmail.com**, or open an issue on this repository.
+## 🛡️ Privacy & Security Strategy
+- **No Cloud Data Retained**: Transferred files stream entirely peer-to-peer over your local networks.
+- **Zero Third-Party Storage**: Clipboard historical content is only cached locally in RAM/disk on your own machines.
+- **Auto-Purge Relays**: Signaling relays on Firebase are configured to auto-delete text items after 5 minutes and file indicators after 24 hours.
+- **DPAPI Encrypted Storage**: Sensitive data (shortcuts, passwords) are encrypted with Windows Data Protection API.
+- **HMAC License Validation**: License keys are cryptographically validated with checksum verification on every load.
+- **Assembly Integrity Check**: SHA-256 binary tamper detection on startup.
 
 ---
 
-## 🔒 License
+## 🔒 Proprietary Software & Licensing Notice
 
-**Copyright © 2026 FlyShelf. All rights reserved.**
+**Copyright © 2026 FlyShelf Ecosystem. All Rights Reserved.**
 
-FlyShelf is proprietary, closed-source software. The desktop app, the Android companion and their source code are private and copyrighted. The pre-built binaries published here are licensed for personal use; modification, reverse-engineering and redistribution are not permitted. See [LICENSE](LICENSE).
+FlyShelf is a **proprietary, copyrighted, closed-source** software application. 
+- The core execution source codes—including the C# WPF (.NET 10) desktop engine, the React Native Android companion workspace, and the native Kotlin foreground synchronization services—are strictly private, proprietary, and copyrighted.
+- Pre-compiled binaries are distributed officially under strict security compliance for end-user personal productivity. Modification, compilation from unauthorized sources, reverse-engineering, or unauthorized redistribution of the binaries is strictly prohibited.

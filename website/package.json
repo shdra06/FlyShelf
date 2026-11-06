@@ -5,6 +5,7 @@
   "scripts": {
     "preview": "node ../tools/serve_website.cjs",
     "check:ui": "node ../tools/verify_website.cjs",
+    "check:billing": "node ../tools/verify_billing.cjs",
     "prepare:metadata": "python ../tools/prepare_website.py"
   },
   "dependencies": {

@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { firebaseFetch, setSecurityHeaders } = require('./_firebaseAdmin');
 const { sendRecoveryEmail } = require('./_email');
+const { keyStanding, toSafeKey } = require('./_billing');
 
 // ═══════════════════════════════════════════════════════════════════
 // Key Recovery API — Lets users retrieve their license key by email
@@ -119,18 +120,8 @@ module.exports = async (req, res) => {
       return await fallbackSearch(dbUrl, normalizedEmail, res);
     }
 
-    // Find the most recent completed payment
-    let latestPayment = null;
-    let latestTime = '';
-
-    for (const [paymentId, record] of Object.entries(results)) {
-      if (record.status === 'completed' && record.licenseKey) {
-        if (!latestTime || record.timestamp > latestTime) {
-          latestPayment = record;
-          latestTime = record.timestamp;
-        }
-      }
-    }
+    // The newest key that still works (a refunded or ended plan's key is only sent if nothing else is left)
+    const latestPayment = await bestRecord(dbUrl, Object.values(results));
 
     if (!latestPayment) {
       // [SECURITY FIX v2.2.0]: Delay on 404 too, to prevent timing-based email enumeration
@@ -162,6 +153,22 @@ module.exports = async (req, res) => {
   }
 };
 
+/** Newest completed payment whose key still works; the newest of any as a last resort. */
+async function bestRecord(dbUrl, records) {
+  const candidates = records
+    .filter(r => r && r.status === 'completed' && typeof r.licenseKey === 'string' && /^FS-PRO-/.test(r.licenseKey))
+    .sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
+  const seen = new Set();
+  for (const record of candidates) {
+    if (seen.has(record.licenseKey)) continue;
+    seen.add(record.licenseKey);
+    try {
+      if (await keyStanding(dbUrl, toSafeKey(record.licenseKey)) === 'ok') return record;
+    } catch { return record; } // Can't tell: the newest is the best guess.
+  }
+  return candidates[0] || null;
+}
+
 // Subscription payments carry plan: 'pro_monthly' | 'pro_yearly'; lifetime records have none.
 function planLabelFor(record) {
   if (record && record.plan === 'pro_monthly') return 'Pro Monthly';
@@ -187,7 +194,7 @@ async function fallbackSearch(dbUrl, normalizedEmail, res) {
 
     // Search through recent payments (last 50 to limit reads)
     const recentIds = paymentIds.slice(-50);
-    let foundPayment = null;
+    const matches = [];
 
     for (const pid of recentIds) {
       try {
@@ -199,15 +206,13 @@ async function fallbackSearch(dbUrl, normalizedEmail, res) {
               pData.email.trim().toLowerCase() === normalizedEmail &&
               pData.status === 'completed' &&
               pData.licenseKey) {
-            // Keep searching for the most recent one
-            if (!foundPayment || pData.timestamp > foundPayment.timestamp) {
-              foundPayment = pData;
-            }
+            matches.push(pData);
           }
         }
       } catch { /* skip individual errors */ }
     }
 
+    const foundPayment = await bestRecord(dbUrl, matches);
     if (!foundPayment) {
       return res.status(404).json({
         error: 'No completed payment found for this email. If you just paid, please wait 2 minutes and try again — the webhook may still be processing.'

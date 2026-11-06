@@ -67,6 +67,22 @@ const LIFETIME_AMOUNTS = { INR: 199900, USD: 5000 };
 // Set ACCEPT_LEGACY_LIFETIME_AMOUNTS=false once the switch-over has settled.
 const LEGACY_LIFETIME_AMOUNTS = { INR: 29900, USD: 999 };
 
+/** True when this amount, in this currency, is a lifetime price (₹1,999 / $50, plus legacy ₹299 / $9.99). */
+function isLifetimeAmount(amount, currency) {
+  const cur = String(currency || '').toUpperCase();
+  if (LIFETIME_AMOUNTS[cur] === amount) return true;
+  return process.env.ACCEPT_LEGACY_LIFETIME_AMOUNTS !== 'false' && LEGACY_LIFETIME_AMOUNTS[cur] === amount;
+}
+
+/** Which plans can be bought in this currency right now (a subscription needs its Razorpay plan id). */
+function availablePlans(currency) {
+  return {
+    lifetime: true,
+    pro_monthly: Boolean(razorpayPlanId('pro_monthly', currency)),
+    pro_yearly: Boolean(razorpayPlanId('pro_yearly', currency))
+  };
+}
+
 function validLifetimeAmounts() {
   const amounts = Object.values(LIFETIME_AMOUNTS);
   if (process.env.ACCEPT_LEGACY_LIFETIME_AMOUNTS !== 'false') {
@@ -220,9 +236,19 @@ async function isRateLimited(dbUrl, bucket, id, { max = 10, windowMs = 15 * 60 *
   const rlData = await rlRes.json();
   if (rlData) {
     const recent = Object.values(rlData).filter(ts => (Date.now() - new Date(ts).getTime()) < windowMs);
+    // The daily cleanup cron can't run (Vercel doesn't serve _cleanup.js), so drop this
+    // bucket's expired entries here; otherwise every check reads an ever-growing list.
+    const stale = Object.entries(rlData).filter(([, ts]) => Date.now() - new Date(ts).getTime() >= Math.max(windowMs, 86400000));
+    if (stale.length) {
+      firebaseFetch(`${dbUrl}/rate_limits/${bucket}/${id}.json`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.fromEntries(stale.slice(0, 500).map(([k]) => [k, null])))
+      }).catch(() => {});
+    }
     if (recent.length >= max) return true;
   }
-  firebaseFetch(`${dbUrl}/rate_limits/${bucket}/${id}/${Date.now()}.json`, {
+  // Random suffix: two requests in the same millisecond must both count.
+  firebaseFetch(`${dbUrl}/rate_limits/${bucket}/${id}/${Date.now()}_${crypto.randomBytes(3).toString('hex')}.json`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(new Date().toISOString())
   }).catch(() => {});
@@ -434,7 +460,20 @@ const EMAIL_CLAIM_TTL_MS = 10 * 60 * 1000;
  * than 10 minutes without emailSentAt (sender crashed) can be taken over.
  */
 async function claimKeyEmail(dbUrl, safeKey) {
-  const claimUrl = `${dbUrl}/subscriptions/${safeKey}/emailClaimedAt.json`;
+  return claimEmailAt(dbUrl, `subscriptions/${safeKey}`);
+}
+
+/** The same once-only email claim for a lifetime purchase, on /payments/{paymentId}. */
+function claimPaymentEmail(dbUrl, paymentId) { return claimEmailAt(dbUrl, `payments/${paymentId}`); }
+async function releasePaymentEmail(dbUrl, paymentId) {
+  await firebaseFetch(`${dbUrl}/payments/${paymentId}/emailClaimedAt.json`, { method: 'DELETE' }).catch(() => {});
+}
+async function markPaymentEmailSent(dbUrl, paymentId) {
+  await dbWrite(dbUrl, `payments/${paymentId}`, 'PATCH', { emailSentAt: new Date().toISOString() }).catch(() => {});
+}
+
+async function claimEmailAt(dbUrl, basePath) {
+  const claimUrl = `${dbUrl}/${basePath}/emailClaimedAt.json`;
   try {
     const res = await firebaseFetch(claimUrl, { headers: { 'X-Firebase-ETag': 'true' } });
     if (!res.ok) return false;
@@ -503,6 +542,17 @@ function evaluateSubscriptionAccess(record, nowMs = Date.now()) {
 }
 
 /**
+ * Plan fields sent to the app. After "Stop renewal" Razorpay keeps the subscription
+ * 'active' until the period ends; the app is told 'cancelled' so it says
+ * "ends <date>" instead of "renews <date>". Pro stays on until then either way.
+ */
+function appPlanFields(record) {
+  if (!record) return { plan: 'lifetime' };
+  const status = record.status === 'active' && record.cancelAtPeriodEnd ? 'cancelled' : record.status;
+  return { plan: record.plan, status, currentPeriodEnd: record.currentPeriodEnd || '' };
+}
+
+/**
  * If the paid period has ended but no renewal webhook arrived, ask Razorpay
  * (at most once an hour per key). Best-effort: any failure keeps the record.
  */
@@ -521,6 +571,23 @@ async function refreshSubscriptionIfStale(dbUrl, safeKey, record, nowMs = Date.n
     console.warn('[billing] Subscription refresh failed (using stored record):', err.message);
     return record;
   }
+}
+
+/**
+ * Is this key still worth handing back to its owner? 'ok', 'revoked' or 'expired'
+ * (a subscription past its paid period + grace). Used by key recovery.
+ */
+async function keyStanding(dbUrl, safeKey, nowMs = Date.now()) {
+  if (await dbGet(dbUrl, `licenses/revoked/${safeKey}`)) return 'revoked';
+  const sub = await getSubscriptionRecord(dbUrl, safeKey);
+  if (!sub) return 'ok';
+  const access = evaluateSubscriptionAccess(sub, nowMs);
+  return access.revoked ? 'revoked' : access.expired ? 'expired' : 'ok';
+}
+
+/** Short stable hash for rate-limit buckets keyed by something other than the IP. */
+function hashId(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex').substring(0, 16);
 }
 
 // ═══ Currency by country ═══
@@ -547,6 +614,13 @@ module.exports = {
   LIFETIME_AMOUNTS,
   LEGACY_LIFETIME_AMOUNTS,
   validLifetimeAmounts,
+  isLifetimeAmount,
+  availablePlans,
+  keyStanding,
+  hashId,
+  claimPaymentEmail,
+  releasePaymentEmail,
+  markPaymentEmailSent,
   razorpayPlanId,
   planForRazorpayPlanId,
   mapSubscriptionStatus,
@@ -581,5 +655,6 @@ module.exports = {
   revokeLicense,
   GRACE_MS,
   evaluateSubscriptionAccess,
+  appPlanFields,
   refreshSubscriptionIfStale
 };

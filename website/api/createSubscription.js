@@ -80,7 +80,7 @@ module.exports = async (req, res) => {
     const plan_id = razorpayPlanId(plan, currency);
     if (!plan_id) {
       console.error(`[createSubscription] Missing env ${SUBSCRIPTION_PLANS[plan].planEnv[currency]}`);
-      return res.status(500).json({ error: 'Subscription plans are not configured on the server.' });
+      return res.status(503).json({ error: 'plan_unavailable', message: `Monthly and yearly plans aren’t available in ${currency} yet. Lifetime works today.` });
     }
 
     const razorpay = new Razorpay({ key_id, key_secret });

@@ -2,7 +2,10 @@ const crypto = require('crypto');
 const { firebaseFetch, setSecurityHeaders } = require('./_firebaseAdmin');
 const {
   SUBSCRIPTION_PLANS,
-  validLifetimeAmounts,
+  isLifetimeAmount,
+  claimPaymentEmail,
+  releasePaymentEmail,
+  markPaymentEmailSent,
   planForRazorpayPlanId,
   PAYMENT_ID_REGEX,
   SUBSCRIPTION_ID_REGEX,
@@ -143,7 +146,7 @@ module.exports = async (req, res) => {
       console.warn(`[webhook] Invalid payment ID format: ${String(paymentId).substring(0, 20)}`);
       return res.status(400).json({ error: 'Invalid payment ID format.' });
     }
-    const email = payment.notes?.email || payment.email || '';
+    const email = normalizeEmail(payment.notes?.email || payment.email || '');
     const deviceId = payment.notes?.deviceId || '';
     const amount = payment.amount; // in paise
     const currency = payment.currency;
@@ -159,126 +162,95 @@ module.exports = async (req, res) => {
     // Validate payment amount against known lifetime amounts (₹1,999 / $50 + legacy ₹299 / $9.99).
     // Anything else isn't a lifetime purchase: acknowledge with 200 so Razorpay doesn't
     // retry it for 24 h (a 4xx here can never succeed on retry), and mint nothing.
-    const VALID_AMOUNTS = validLifetimeAmounts();
-    if (!VALID_AMOUNTS.includes(amount)) {
+    if (!isLifetimeAmount(amount, currency)) {
       console.warn(`[webhook] Unexpected amount: ${amount} ${currency} — not a lifetime purchase, ignoring`);
       return res.status(200).json({ status: 'ignored', reason: 'not_lifetime_amount', paymentId });
     }
 
     console.log(`[webhook] payment.captured: ${paymentId} | ${amount / 100} ${currency}`);
 
-    // ─── Step 3: Check if already processed (idempotency) ───
     const dbUrl = process.env.FIREBASE_RTDB_URL;
     if (!dbUrl) {
       console.error('[webhook] FIREBASE_RTDB_URL not configured');
       return res.status(500).json({ error: 'Database not configured.' });
     }
 
-    try {
-      const existingRes = await firebaseFetch(`${dbUrl}/payments/${paymentId}.json`);
-      if (existingRes.ok) {
-        const existingData = await existingRes.json();
-        if (existingData && existingData.licenseKey && existingData.status === 'completed') {
-          console.log(`[webhook] Already processed ${paymentId} — skipping`);
-          return res.status(200).json({ status: 'already_processed', paymentId });
-        }
-      }
-    } catch (checkErr) {
-      console.warn('[webhook] Idempotency check failed:', checkErr.message);
-    }
-
-    // ─── Step 4: Generate license key ───
-    const licenseKey = generateProKey();
-    console.log(`[webhook] Generated key for payment ${paymentId}: ${licenseKey.substring(0, 11)}...`);
-
-    // ─── Step 5: Store in Firebase ───
-    const record = {
-      gateway: 'razorpay',
-      source: 'webhook',  // Distinguishes from frontend-triggered verification
-      paymentId,
-      orderId,
-      amount,
-      currency,
-      email,
-      deviceId,
-      licenseKey,
-      status: 'completed',
-      timestamp: new Date().toISOString()
-    };
-
-    // [SECURITY FIX v2.4.0]: Atomic conditional write to prevent race conditions
-    const etagRes = await firebaseFetch(`${dbUrl}/payments/${paymentId}.json`, {
-      headers: { 'X-Firebase-ETag': 'true' }
-    });
+    // ─── Step 3: claim the payment (atomic; verifyPayment may be doing the same) ───
+    const paymentPath = `${dbUrl}/payments/${paymentId}.json`;
+    const etagRes = await firebaseFetch(paymentPath, { headers: { 'X-Firebase-ETag': 'true' } });
+    if (!etagRes.ok) throw new Error(`payment read failed (${etagRes.status})`);
     const currentETag = etagRes.headers.get('etag');
     const currentData = await etagRes.json();
 
-    // Race condition: another request already wrote
+    let licenseKey;
+    let alreadyProcessed = false;
     if (currentData && currentData.licenseKey && currentData.status === 'completed') {
-      console.log(`[webhook] Race condition caught — payment already processed: ${paymentId}`);
-      return res.status(200).json({ status: 'already_processed', paymentId });
+      licenseKey = currentData.licenseKey;
+      alreadyProcessed = true;
+    } else {
+      const candidate = generateProKey();
+      const writeRes = await firebaseFetch(paymentPath, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'if-match': currentETag || 'null_etag' },
+        body: JSON.stringify({
+          gateway: 'razorpay',
+          source: 'webhook',  // Distinguishes from frontend-triggered verification
+          paymentId, orderId, amount, currency, email, deviceId,
+          licenseKey: candidate,
+          status: 'completed',
+          timestamp: new Date().toISOString()
+        })
+      });
+      if (writeRes.status === 412) {
+        const winner = await (await firebaseFetch(paymentPath)).json();
+        if (!winner?.licenseKey) throw new Error('payment claim lost but no stored key'); // 500 → Razorpay retries
+        licenseKey = winner.licenseKey;
+        alreadyProcessed = true;
+      } else if (!writeRes.ok) {
+        console.error('[webhook] Critical: payment record write failed');
+        return res.status(500).json({ error: 'Failed to store payment record.' });
+      } else {
+        licenseKey = candidate;
+        console.log(`[webhook] Generated key for payment ${paymentId}: ${licenseKey.substring(0, 11)}...`);
+      }
     }
 
-    const writeRes = await firebaseFetch(`${dbUrl}/payments/${paymentId}.json`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'if-match': currentETag || 'null_etag'
-      },
-      body: JSON.stringify(record)
-    });
-
-    if (writeRes.status === 412) {
-      // Another request won the race
-      console.log(`[webhook] Atomic write failed (race lost) for ${paymentId}`);
-      return res.status(200).json({ status: 'already_processed', paymentId });
-    }
-
-    if (!writeRes.ok) {
-      console.error('[webhook] Critical: payment record write failed');
-      return res.status(500).json({ error: 'Failed to store payment record.' });
-    }
-
-    // Also store under license keys index
-    // [SECURITY FIX v2.2.0]: Match activate.js sanitization (replace dashes, not dots/slashes)
-    // [FIX v3.7.0]: AWAIT this write — fire-and-forget failures cause key_not_found on activation
+    // ─── Step 4: purchase index read by activate.js (repaired, never overwritten) ───
     const safeKey = licenseKey.replace(/-/g, '_');
-    try {
-      const keyWriteRes = await firebaseFetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
+    const keyPath = `${dbUrl}/licenses/keys/${safeKey}.json`;
+    const indexed = await (await firebaseFetch(keyPath)).json().catch(() => null);
+    if (!indexed?.paymentId) {
+      const keyWriteRes = await firebaseFetch(keyPath, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, paymentId, generatedAt: new Date().toISOString() })
       });
-      if (!keyWriteRes.ok) {
-        console.error(`[webhook] License key index write failed (${keyWriteRes.status}) — retrying...`);
-        await firebaseFetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, paymentId, generatedAt: new Date().toISOString() })
-        });
-      }
-    } catch (keyWriteErr) {
-      console.error('[webhook] License key index write FAILED:', keyWriteErr.message);
+      if (!keyWriteRes.ok) throw new Error(`license index write failed (${keyWriteRes.status})`); // retried
     }
+    console.log(`[webhook] ✅ Key stored for ${paymentId}${alreadyProcessed ? ' (already processed)' : ''}`);
 
-    console.log(`[webhook] ✅ Key stored for ${paymentId}`);
-
-    // ─── Send confirmation email (with 1 retry for transient failures) ───
-    if (email) {
+    // ─── Step 5: email the key once (verifyPayment may already have) ───
+    const stored = await (await firebaseFetch(paymentPath)).json().catch(() => null);
+    const toEmail = normalizeEmail(stored?.email || email);
+    if (toEmail && !stored?.emailSentAt && await claimPaymentEmail(dbUrl, paymentId)) {
       try {
-        let emailResult = await sendPurchaseEmail(email, licenseKey, paymentId);
+        let emailResult = await sendPurchaseEmail(toEmail, licenseKey, paymentId);
         if (emailResult && emailResult.error) {
           console.warn('[webhook] Email attempt 1 failed, retrying in 1s...');
           await new Promise(r => setTimeout(r, 1000));
-          emailResult = await sendPurchaseEmail(email, licenseKey, paymentId);
+          emailResult = await sendPurchaseEmail(toEmail, licenseKey, paymentId);
         }
+        if (!emailResult?.error && !emailResult?.skipped) await markPaymentEmailSent(dbUrl, paymentId);
+        else await releasePaymentEmail(dbUrl, paymentId);
         console.log(`[webhook] 📧 Email result:`, JSON.stringify(emailResult));
       } catch (emailErr) {
         console.warn('[webhook] Email send failed (non-blocking):', emailErr.message);
+        await releasePaymentEmail(dbUrl, paymentId);
       }
-    } else {
+    } else if (!toEmail) {
       console.warn('[webhook] No email in payment notes — skipping email');
     }
+    if (alreadyProcessed) return res.status(200).json({ status: 'already_processed', paymentId });
 
     // Razorpay expects 200 OK to confirm receipt
     return res.status(200).json({ status: 'ok', paymentId });
